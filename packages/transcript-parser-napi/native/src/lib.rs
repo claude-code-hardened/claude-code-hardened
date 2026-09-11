@@ -118,7 +118,7 @@ pub fn has_native_transcript_parser() -> bool {
 /// Note: parentStart == u32::MAX in msg_index means null parent (JS uses -1).
 #[napi]
 pub fn scan_chain(buf: Buffer) -> Result<ChainScan> {
-  scan_chain_impl(buf.as_ref()).map_err(|e| Error::new(Status::GenericFailure, e))
+  scan_chain_impl(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))
 }
 
 fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
@@ -195,12 +195,16 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
         let mut uuid = [0u8; UUID_LEN];
         uuid.copy_from_slice(&buf[uuid_start..uuid_start + UUID_LEN]);
         uuid_to_slot.insert(uuid, msg_idx.len() / 3);
-        msg_idx.push(pos as u32, line_end as u32, parent_start as u32);
+        msg_idx.push(pos as u32);
+        msg_idx.push(line_end as u32);
+        msg_idx.push(parent_start as u32);
       } else {
-        meta_ranges.push(pos as u32, line_end as u32);
+        meta_ranges.push(pos as u32);
+        meta_ranges.push(line_end as u32);
       }
     } else {
-      meta_ranges.push(pos as u32, line_end as u32);
+      meta_ranges.push(pos as u32);
+      meta_ranges.push(line_end as u32);
     }
 
     pos = line_end;
@@ -271,20 +275,24 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
   }
 
   // Interleave chain lines with metadata in file order → kept_ranges.
-  let mut kept: Vec<u32> = Vec::with_capacity((msg_idx.len() / 3 + meta_ranges.len() / 2) * 2);
+  let mut kept: Vec<u32> =
+    Vec::with_capacity((msg_idx.len() / 3 + meta_ranges.len() / 2) * 2);
   let mut m = 0usize;
   for slot_i in 0..n_msgs {
     let start = msg_idx[slot_i * 3];
     while m < meta_ranges.len() && meta_ranges[m] < start {
-      kept.push(meta_ranges[m], meta_ranges[m + 1]);
+      kept.push(meta_ranges[m]);
+      kept.push(meta_ranges[m + 1]);
       m += 2;
     }
     if chain_slots.contains(&slot_i) {
-      kept.push(start, msg_idx[slot_i * 3 + 1]);
+      kept.push(start);
+      kept.push(msg_idx[slot_i * 3 + 1]);
     }
   }
   while m < meta_ranges.len() {
-    kept.push(meta_ranges[m], meta_ranges[m + 1]);
+    kept.push(meta_ranges[m]);
+    kept.push(meta_ranges[m + 1]);
     m += 2;
   }
 
