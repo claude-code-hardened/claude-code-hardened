@@ -8,7 +8,7 @@
  * and makes migration incremental.
  *
  * Locale resolution order:
- *   1. settings.json "language"
+ *   1. settings.json "uiLocale"
  *   2. CLAUDE_LANGUAGE env var
  *   3. LANG env var (first subtag matched against available locales)
  *   4. 'en' (strings in code — always available)
@@ -36,7 +36,7 @@ const RESOURCES: Record<string, { translation: Record<string, string> }> = {
 }
 
 export function resolveLocale(): Locale {
-  const setting = getInitialSettings().language
+  const setting = getInitialSettings().uiLocale
   if (setting) return normalizeTag(setting)
 
   const claudeLang = process.env.CLAUDE_LANGUAGE

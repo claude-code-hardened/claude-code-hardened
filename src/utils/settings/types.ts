@@ -722,7 +722,7 @@ export const SettingsSchema = lazySchema(() =>
         .boolean()
         .optional()
         .describe('Whether to show tips in the spinner'),
-      language: z
+      uiLocale: z
         .string()
         .optional()
         .describe(
