@@ -9,7 +9,7 @@
  *   bun run packages/transcript-parser-napi/scripts/differential.ts \
  *     <path-to-transcript-parser.node> [<jsonl-or-dir> ...]
  *
- * With no paths, scans ~/.claude/projects/**/*.jsonl.
+ * With no paths, scans all .jsonl files under ~/.claude/projects (recursive).
  * Exit 0 = 100% match. Any mismatch prints details and exits 1.
  */
 import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs'
@@ -232,18 +232,30 @@ function compareFile(path: string): { ok: boolean; detail: string } {
   }
   const jsMeta = js.metaRanges
   const rsMeta = Array.from(rs.metaRanges)
-  if (jsMeta.length !== rsMeta.length || jsMeta.some((v, i) => v !== rsMeta[i])) {
+  if (
+    jsMeta.length !== rsMeta.length ||
+    jsMeta.some((v, i) => v !== rsMeta[i])
+  ) {
     return { ok: false, detail: 'metaRanges mismatch' }
   }
   if (js.keepAll !== rs.keepAll) {
-    return { ok: false, detail: `keepAll mismatch js=${js.keepAll} rs=${rs.keepAll}` }
+    return {
+      ok: false,
+      detail: `keepAll mismatch js=${js.keepAll} rs=${rs.keepAll}`,
+    }
   }
   if (js.chainBytes !== rs.chainBytes) {
-    return { ok: false, detail: `chainBytes js=${js.chainBytes} rs=${rs.chainBytes}` }
+    return {
+      ok: false,
+      detail: `chainBytes js=${js.chainBytes} rs=${rs.chainBytes}`,
+    }
   }
   if (!rs.keepAll) {
     const rsKept = Array.from(rs.keptRanges)
-    if (js.kept.length !== rsKept.length || js.kept.some((v, i) => v !== rsKept[i])) {
+    if (
+      js.kept.length !== rsKept.length ||
+      js.kept.some((v, i) => v !== rsKept[i])
+    ) {
       return { ok: false, detail: 'keptRanges mismatch' }
     }
   }
@@ -275,6 +287,6 @@ for (const f of files) {
 }
 console.log(
   `differential: ${passed}/${passed + failed} files match` +
-    ` (js total ${totalJsMs.toFixed(0)}ms, rust total ${totalRsMs.toFixed(0)}ms)`,
+    ` (js ${totalJsMs.toFixed(0)}ms, rust ${totalRsMs.toFixed(0)}ms)`,
 )
 process.exit(failed === 0 ? 0 : 1)

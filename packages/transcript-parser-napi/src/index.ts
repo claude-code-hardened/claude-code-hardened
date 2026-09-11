@@ -17,11 +17,7 @@ function getVendorRoot(): string {
   return resolve(dir, '..', '..', '..', 'vendor')
 }
 
-type Uint32ArrayLike = {
-  // In napi object form the typed arrays arrive as real Uint32Array.
-}
-
-type ChainScan = Uint32ArrayLike & {
+type ChainScan = {
   msgIndex: Uint32Array
   metaRanges: Uint32Array
   keptRanges: Uint32Array
