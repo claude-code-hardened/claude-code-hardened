@@ -79,6 +79,7 @@ import { getWorktreePaths } from './getWorktreePaths.js'
 import { getBranch } from './git.js'
 import { gracefulShutdownSync, isShuttingDown } from './gracefulShutdown.js'
 import { parseJSONL } from './json.js'
+import { nativeScanChain } from 'transcript-parser-napi'
 import { logError } from './log.js'
 import { extractTag, isCompactBoundaryMessage } from './messages.js'
 import { sanitizePath } from './path.js'
@@ -3397,6 +3398,23 @@ function pickDepthOneUuidCandidate(
   return candidates.at(-1)!
 }
 
+/**
+ * Native (Rust) variant of {@link walkChainBeforeParse}. Returns null when
+ * the native module is unavailable — callers must fall back to the JS
+ * implementation. keepAll maps to "no stitching needed" (original buffer).
+ */
+function walkChainBeforeParseNative(buf: Buffer): Buffer | null {
+  const scan = nativeScanChain(buf)
+  if (scan === null) return null
+  if (scan.keepAll) return buf
+  const kept = scan.keptRanges
+  const parts: Buffer[] = []
+  for (let i = 0; i < kept.length; i += 2) {
+    parts.push(buf.subarray(kept[i]!, kept[i + 1]!))
+  }
+  return Buffer.concat(parts)
+}
+
 function walkChainBeforeParse(buf: Buffer): Buffer {
   const NEWLINE = 0x0a
   const OPEN_BRACE = 0x7b
@@ -3671,7 +3689,11 @@ export async function loadTranscriptFile(
       !isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_PRECOMPACT_SKIP) &&
       buf.length > SKIP_PRECOMPACT_THRESHOLD
     ) {
-      buf = walkChainBeforeParse(buf)
+      if (feature('TRANSCRIPT_NATIVE_SCAN')) {
+        buf = walkChainBeforeParseNative(buf) ?? walkChainBeforeParse(buf)
+      } else {
+        buf = walkChainBeforeParse(buf)
+      }
     }
 
     // First pass: process metadata-only lines collected during the boundary scan.
