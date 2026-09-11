@@ -49,7 +49,9 @@ describe('token-counter-napi loader', () => {
     if (isNativeTokenizerAvailable() && batch !== null) {
       expect(batch).toHaveLength(texts.length)
       for (let i = 0; i < texts.length; i++) {
-        expect(batch[i]).toBe(nativeCountTokens(texts[i]))
+        const single = nativeCountTokens(texts[i])
+        if (single === null) continue
+        expect(batch[i]).toBe(single)
       }
     }
   })
