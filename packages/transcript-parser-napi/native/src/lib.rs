@@ -227,9 +227,9 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
   }
   if leaf_slot < 0 {
     return Ok(ChainScan {
-      msg_index: Uint32Array::with_data_copied(&msg_idx)?,
-      meta_ranges: Uint32Array::with_data_copied(&meta_ranges)?,
-      kept_ranges: Uint32Array::with_data_copied(&[])?,
+      msg_index: Uint32Array::with_data_copied(&msg_idx),
+      meta_ranges: Uint32Array::with_data_copied(&meta_ranges),
+      kept_ranges: Uint32Array::with_data_copied(&[]),
       chain_bytes: 0f64,
       keep_all: true,
     });
@@ -266,9 +266,9 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
   // 50% stitch gate (see JS comment): only stitch when dropping ≥ half.
   if len - chain_bytes < (len >> 1) {
     return Ok(ChainScan {
-      msg_index: Uint32Array::with_data_copied(&msg_idx)?,
-      meta_ranges: Uint32Array::with_data_copied(&meta_ranges)?,
-      kept_ranges: Uint32Array::with_data_copied(&[])?,
+      msg_index: Uint32Array::with_data_copied(&msg_idx),
+      meta_ranges: Uint32Array::with_data_copied(&meta_ranges),
+      kept_ranges: Uint32Array::with_data_copied(&[]),
       chain_bytes: chain_bytes as f64,
       keep_all: true,
     });
@@ -297,9 +297,9 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
   }
 
   Ok(ChainScan {
-    msg_index: Uint32Array::with_data_copied(&msg_idx)?,
-    meta_ranges: Uint32Array::with_data_copied(&meta_ranges)?,
-    kept_ranges: Uint32Array::with_data_copied(&kept)?,
+    msg_index: Uint32Array::with_data_copied(&msg_idx),
+    meta_ranges: Uint32Array::with_data_copied(&meta_ranges),
+    kept_ranges: Uint32Array::with_data_copied(&kept),
     chain_bytes: chain_bytes as f64,
     keep_all: false,
   })
