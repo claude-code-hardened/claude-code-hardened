@@ -64,7 +64,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p stage/token-counter stage/transcript-parser
+          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}"
           for name in token-counter transcript-parser; do
             if [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$name_napi.so" ]; then
               cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$name_napi.so" "stage/$name/${{ matrix.target }}/$name.node"
@@ -72,6 +72,7 @@ jobs:
               cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$name_napi.dylib" "stage/$name/${{ matrix.target }}/$name.node"
             fi
           done
+          find stage -type f
 
       - name: Stage artifacts (windows)
         if: runner.os == 'Windows'
