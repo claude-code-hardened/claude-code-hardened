@@ -1,0 +1,15 @@
+[package]
+name = "token-counter-napi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", default-features = false, features = ["napi8"] }
+napi-derive = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
