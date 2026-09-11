@@ -722,6 +722,12 @@ export const SettingsSchema = lazySchema(() =>
         .boolean()
         .optional()
         .describe('Whether to show tips in the spinner'),
+      language: z
+        .string()
+        .optional()
+        .describe(
+          'UI language (BCP-47 tag): en, zh-CN, zh-TW, ja, ko. UI strings, command help, and error messages are translated when a locale pack exists.',
+        ),
       spinnerVerbs: z
         .object({
           mode: z.enum(['append', 'replace']),

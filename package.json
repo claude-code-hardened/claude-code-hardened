@@ -72,6 +72,7 @@
     "@agentclientprotocol/sdk": "^0.19.0",
     "@claude-code-best/mcp-chrome-bridge": "^3.0.1",
     "highlight.js": "^11.11.1",
+    "i18next": "^26.4.2",
     "ws": "^8.20.0"
   },
   "devDependencies": {
@@ -150,7 +151,7 @@
     "axios": "^1.15.2",
     "bidi-js": "^1.0.3",
     "cacache": "^20.0.4",
-    "chalk": "^5.6.2",
+    "chalk": "^6.0.0",
     "chokidar": "^5.0.0",
     "cli-boxes": "^4.0.1",
     "cli-highlight": "^2.1.11",
@@ -210,7 +211,7 @@
     "wrap-ansi": "^10.0.0",
     "xss": "^1.0.15",
     "yaml": "^2.8.3",
-    "zod": "^4.3.6"
+    "zod": "3.25.76"
   },
   "optionalDependencies": {
     "doubaoime-asr": "^0.1.0"

@@ -1,15 +1,21 @@
+import { currentLocale } from '../i18n/index.js'
+import { LOCALE_SPINNER_VERBS } from '../i18n/spinnerVerbs.js'
 import { getInitialSettings } from '../utils/settings/settings.js'
+
+function baseVerbs(): string[] {
+  return LOCALE_SPINNER_VERBS[currentLocale()] ?? SPINNER_VERBS
+}
 
 export function getSpinnerVerbs(): string[] {
   const settings = getInitialSettings()
   const config = settings.spinnerVerbs
   if (!config) {
-    return SPINNER_VERBS
+    return baseVerbs()
   }
   if (config.mode === 'replace') {
-    return config.verbs.length > 0 ? config.verbs : SPINNER_VERBS
+    return config.verbs.length > 0 ? config.verbs : baseVerbs()
   }
-  return [...SPINNER_VERBS, ...config.verbs]
+  return [...baseVerbs(), ...config.verbs]
 }
 
 // Spinner verbs for loading messages
