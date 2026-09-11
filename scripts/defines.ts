@@ -46,6 +46,7 @@ export const DEFAULT_BUILD_FEATURES = [
   'SHOT_STATS', // 单次请求统计信息收集
   'PROMPT_CACHE_BREAK_DETECTION', // 检测 prompt cache 是否被打破（有 10 条上限，可控）
   'TOKEN_BUDGET', // Token 预算管理与控制
+  'TOKEN_COUNT_NATIVE', // 本地 Rust BPE 精确 token 计数（native 缺失时自动回退 rough 估算）
   // P0: local features
   'AGENT_TRIGGERS', // 本地 Agent 触发器（工具调用时启动子代理）
   'ULTRATHINK', // 超深度思考模式，增加推理链长度

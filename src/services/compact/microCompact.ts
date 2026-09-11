@@ -19,7 +19,7 @@ import {
   logEvent,
 } from '../analytics/index.js'
 import { notifyCacheDeletion } from '../api/promptCacheBreakDetection.js'
-import { roughTokenCountEstimation } from '../tokenEstimation.js'
+import { countTokensPrecise } from '../tokenEstimation.js'
 import {
   clearCompactWarningSuppression,
   suppressCompactWarning,
@@ -141,13 +141,13 @@ function calculateToolResultTokens(block: ToolResultBlockParam): number {
   }
 
   if (typeof block.content === 'string') {
-    return roughTokenCountEstimation(block.content)
+    return countTokensPrecise(block.content)
   }
 
   // Array of TextBlockParam | ImageBlockParam | DocumentBlockParam
   return block.content.reduce((sum, item) => {
     if (item.type === 'text') {
-      return sum + roughTokenCountEstimation(item.text)
+      return sum + countTokensPrecise(item.text)
     } else if (item.type === 'image' || item.type === 'document') {
       // Images/documents are approximately 2000 tokens regardless of format
       return sum + IMAGE_MAX_TOKEN_SIZE
@@ -175,7 +175,7 @@ export function estimateMessageTokens(messages: Message[]): number {
 
     for (const block of message.message!.content) {
       if (block.type === 'text') {
-        totalTokens += roughTokenCountEstimation(block.text)
+        totalTokens += countTokensPrecise(block.text)
       } else if (block.type === 'tool_result') {
         totalTokens += calculateToolResultTokens(block)
       } else if (block.type === 'image' || block.type === 'document') {
@@ -184,18 +184,18 @@ export function estimateMessageTokens(messages: Message[]): number {
         // Match roughTokenCountEstimationForBlock: count only the thinking
         // text, not the JSON wrapper or signature (signature is metadata,
         // not model-tokenized content).
-        totalTokens += roughTokenCountEstimation(block.thinking)
+        totalTokens += countTokensPrecise(block.thinking)
       } else if (block.type === 'redacted_thinking') {
-        totalTokens += roughTokenCountEstimation(block.data)
+        totalTokens += countTokensPrecise(block.data)
       } else if (block.type === 'tool_use') {
         // Match roughTokenCountEstimationForBlock: count name + input,
         // not the JSON wrapper or id field.
-        totalTokens += roughTokenCountEstimation(
+        totalTokens += countTokensPrecise(
           block.name + jsonStringify(block.input ?? {}),
         )
       } else {
         // server_tool_use, web_search_tool_result, etc.
-        totalTokens += roughTokenCountEstimation(jsonStringify(block))
+        totalTokens += countTokensPrecise(jsonStringify(block))
       }
     }
   }

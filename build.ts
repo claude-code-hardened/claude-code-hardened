@@ -1,4 +1,5 @@
 import { readdir, readFile, writeFile, cp } from 'fs/promises'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { getMacroDefines } from './scripts/defines.ts'
 import { DEFAULT_BUILD_FEATURES } from './scripts/defines.ts'
@@ -87,6 +88,16 @@ console.log(
 const audioCaptureDir = join(outdir, 'vendor', 'audio-capture')
 await cp('vendor/audio-capture', audioCaptureDir, { recursive: true })
 console.log(`Copied vendor/audio-capture/ → ${audioCaptureDir}/`)
+
+// token-counter-napi: Rust BPE tokenizer built by .github/workflows/build-native.yml.
+// Copied only when the CI-produced .node artifacts are present locally
+// (vendor/token-counter/ is populated from workflow artifacts).
+const tokenCounterSrc = 'vendor/token-counter'
+if (existsSync(tokenCounterSrc)) {
+  const tokenCounterDir = join(outdir, 'vendor', 'token-counter')
+  await cp(tokenCounterSrc, tokenCounterDir, { recursive: true })
+  console.log(`Copied ${tokenCounterSrc}/ → ${tokenCounterDir}/`)
+}
 
 const ripgrepDir = join(outdir, 'vendor', 'ripgrep')
 await cp('src/utils/vendor/ripgrep', ripgrepDir, { recursive: true })

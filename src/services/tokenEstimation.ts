@@ -4,6 +4,8 @@ import type { BetaMessageParam as MessageParam } from '@anthropic-ai/sdk/resourc
 // to defer ~279KB of AWS SDK code until a Bedrock call is actually made
 import type { CountTokensCommandInput } from '@aws-sdk/client-bedrock-runtime'
 import { getAPIProvider } from 'src/utils/model/providers.js'
+import { feature } from 'bun:bundle'
+import { nativeCountTokens } from 'token-counter-napi'
 import { VERTEX_COUNT_TOKENS_ALLOWED_BETAS } from '../constants/betas.js'
 import type { Attachment } from '../utils/attachments.js'
 import { getModelBetas } from '../utils/betas.js'
@@ -219,6 +221,52 @@ export function roughTokenCountEstimation(
   return Math.round(content.length / bytesPerToken)
 }
 
+// --- Native precise token counting (Rust BPE via token-counter-napi) ---
+
+// Bounded FIFO cache: microCompact's estimateMessageTokens re-counts the same
+// block contents every turn. Map holds references to existing strings, so
+// overhead is pointer-sized per entry, not a copy of the content.
+const NATIVE_TOKEN_CACHE_LIMIT = 512
+const nativeTokenCache = new Map<string, number>()
+
+function nativeCountCached(content: string): number | null {
+  const cached = nativeTokenCache.get(content)
+  if (cached !== undefined) {
+    return cached
+  }
+  const count = nativeCountTokens(content)
+  if (count === null) return null
+  if (nativeTokenCache.size >= NATIVE_TOKEN_CACHE_LIMIT) {
+    // FIFO eviction — delete the oldest inserted key
+    const oldest = nativeTokenCache.keys().next().value
+    if (oldest !== undefined) nativeTokenCache.delete(oldest)
+  }
+  nativeTokenCache.set(content, count)
+  return count
+}
+
+/**
+ * Precise-ish token count using the local Rust BPE tokenizer
+ * (cl100k_base approximation of Anthropic's tokenizer) when available.
+ * Falls back to {@link roughTokenCountEstimation} when the native module is
+ * missing (other platforms) or FEATURE_TOKEN_COUNT_NATIVE is disabled.
+ */
+export function countTokensPrecise(content: string): number {
+  if (feature('TOKEN_COUNT_NATIVE')) {
+    const precise = nativeCountCached(content)
+    if (precise !== null) return precise
+  }
+  return roughTokenCountEstimation(content)
+}
+
+export function countTokensPreciseForMessages(
+  messages: readonly Parameters<
+    typeof roughTokenCountEstimationForMessages
+  >[0][number][],
+): number {
+  return roughTokenCountEstimationForMessages(messages, countTokensPrecise)
+}
+
 /**
  * Returns an estimated bytes-per-token ratio for a given file extension.
  * Dense JSON has many single-character tokens (`{`, `}`, `:`, `,`, `"`)
@@ -374,19 +422,23 @@ export function roughTokenCountEstimationForMessages(
     message?: { content?: unknown }
     attachment?: Attachment
   }[],
+  countFn: (content: string) => number = roughTokenCountEstimation,
 ): number {
   let totalTokens = 0
   for (const message of messages) {
-    totalTokens += roughTokenCountEstimationForMessage(message)
+    totalTokens += roughTokenCountEstimationForMessage(message, countFn)
   }
   return totalTokens
 }
 
-export function roughTokenCountEstimationForMessage(message: {
-  type: string
-  message?: { content?: unknown }
-  attachment?: Attachment
-}): number {
+export function roughTokenCountEstimationForMessage(
+  message: {
+    type: string
+    message?: { content?: unknown }
+    attachment?: Attachment
+  },
+  countFn: (content: string) => number = roughTokenCountEstimation,
+): number {
   if (
     (message.type === 'assistant' || message.type === 'user') &&
     message.message?.content
@@ -397,6 +449,7 @@ export function roughTokenCountEstimationForMessage(message: {
         | Array<Anthropic.ContentBlock>
         | Array<Anthropic.ContentBlockParam>
         | undefined,
+      countFn,
     )
   }
 
@@ -404,7 +457,10 @@ export function roughTokenCountEstimationForMessage(message: {
     const userMessages = normalizeAttachmentForAPI(message.attachment)
     let total = 0
     for (const userMsg of userMessages) {
-      total += roughTokenCountEstimationForContent(userMsg.message.content)
+      total += roughTokenCountEstimationForContent(
+        userMsg.message.content,
+        countFn,
+      )
     }
     return total
   }
@@ -418,16 +474,17 @@ function roughTokenCountEstimationForContent(
     | Array<Anthropic.ContentBlock>
     | Array<Anthropic.ContentBlockParam>
     | undefined,
+  countFn: (content: string) => number = roughTokenCountEstimation,
 ): number {
   if (!content) {
     return 0
   }
   if (typeof content === 'string') {
-    return roughTokenCountEstimation(content)
+    return countFn(content)
   }
   let totalTokens = 0
   for (const block of content) {
-    totalTokens += roughTokenCountEstimationForBlock(block)
+    totalTokens += roughTokenCountEstimationForBlock(block, countFn)
   }
   return totalTokens
 }
@@ -457,12 +514,13 @@ function roughTokenCountEstimationForAPIRequest(
 
 function roughTokenCountEstimationForBlock(
   block: string | Anthropic.ContentBlock | Anthropic.ContentBlockParam,
+  countFn: (content: string) => number = roughTokenCountEstimation,
 ): number {
   if (typeof block === 'string') {
-    return roughTokenCountEstimation(block)
+    return countFn(block)
   }
   if (block.type === 'text') {
-    return roughTokenCountEstimation(block.text)
+    return countFn(block.text)
   }
   if (block.type === 'image' || block.type === 'document') {
     // https://platform.claude.com/docs/en/build-with-claude/vision#calculate-image-costs
@@ -478,27 +536,25 @@ function roughTokenCountEstimationForBlock(
     return 2000
   }
   if (block.type === 'tool_result') {
-    return roughTokenCountEstimationForContent(block.content as any)
+    return roughTokenCountEstimationForContent(block.content as any, countFn)
   }
   if (block.type === 'tool_use') {
     // input is the JSON the model generated — arbitrarily large (bash
     // commands, Edit diffs, file contents).  Stringify once for the
     // char count; the API re-serializes anyway so this is what it sees.
-    return roughTokenCountEstimation(
-      block.name + jsonStringify(block.input ?? {}),
-    )
+    return countFn(block.name + jsonStringify(block.input ?? {}))
   }
   if (block.type === 'thinking') {
-    return roughTokenCountEstimation(block.thinking)
+    return countFn(block.thinking)
   }
   if (block.type === 'redacted_thinking') {
-    return roughTokenCountEstimation(block.data)
+    return countFn(block.data)
   }
   // server_tool_use, web_search_tool_result, mcp_tool_use, etc. —
   // text-like payloads (tool inputs, search results, no base64).
   // Stringify-length tracks the serialized form the API sees; the
   // key/bracket overhead is single-digit percent on real blocks.
-  return roughTokenCountEstimation(jsonStringify(block))
+  return countFn(jsonStringify(block))
 }
 
 async function countTokensWithBedrock({

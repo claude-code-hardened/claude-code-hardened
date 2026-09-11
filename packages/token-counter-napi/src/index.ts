@@ -47,7 +47,9 @@ function platformDirName(): string {
   const arch = process.arch // 'arm64' | 'x64'
   const platform = process.platform
   if (platform === 'linux') {
-    return arch === 'arm64' ? 'aarch64-unknown-linux-gnu' : 'x86_64-unknown-linux-gnu'
+    return arch === 'arm64'
+      ? 'aarch64-unknown-linux-gnu'
+      : 'x86_64-unknown-linux-gnu'
   }
   if (platform === 'darwin') {
     return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
@@ -74,7 +76,14 @@ function loadModule(): TokenCounterNapi | null {
   const candidates = [
     resolve(vendorRoot, 'token-counter', triple, 'token-counter.node'),
     // Relative fallbacks for non-standard checkout layouts.
-    resolve(vendorRoot, '..', 'vendor', 'token-counter', triple, 'token-counter.node'),
+    resolve(
+      vendorRoot,
+      '..',
+      'vendor',
+      'token-counter',
+      triple,
+      'token-counter.node',
+    ),
   ]
 
   for (const candidate of candidates) {

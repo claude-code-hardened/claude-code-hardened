@@ -112,6 +112,7 @@ import { notifyCompaction } from '../api/promptCacheBreakDetection.js'
 import { getRetryDelay } from '../api/withRetry.js'
 import { logPermissionContextForAnts } from '../internalLogging.js'
 import {
+  countTokensPreciseForMessages,
   roughTokenCountEstimation,
   roughTokenCountEstimationForMessages,
 } from '../tokenEstimation.js'
@@ -267,8 +268,8 @@ export function truncateHeadForPTLRetry(
     let acc = 0
     dropCount = 0
     for (const g of groups) {
-      acc += roughTokenCountEstimationForMessages(
-        g as Parameters<typeof roughTokenCountEstimationForMessages>[0],
+      acc += countTokensPreciseForMessages(
+        g as Parameters<typeof countTokensPreciseForMessages>[0],
       )
       dropCount++
       if (acc >= tokenGap) break
