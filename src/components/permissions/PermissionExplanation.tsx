@@ -2,6 +2,7 @@ import React, { Suspense, use, useState } from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { useKeybinding } from '../../keybindings/useKeybinding.js';
 import { logEvent } from '../../services/analytics/index.js';
+import { t } from '../../i18n/index.js';
 import type { Message } from '../../types/message.js';
 import {
   generatePermissionExplanation,
@@ -123,7 +124,7 @@ function ExplanationResult({ promise }: { promise: Promise<PermissionExplanation
   if (!explanation) {
     return (
       <Box marginTop={1}>
-        <Text dimColor>Explanation unavailable</Text>
+        <Text dimColor>{t('Explanation unavailable')}</Text>
       </Box>
     );
   }

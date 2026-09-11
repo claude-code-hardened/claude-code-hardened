@@ -2,6 +2,7 @@ import React, { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { Box, Text } from '@anthropic/ink';
 import type { KeybindingAction } from '../../keybindings/types.js';
 import { useKeybindings } from '../../keybindings/useKeybinding.js';
+import { t } from '../../i18n/index.js';
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
@@ -222,7 +223,11 @@ export function PermissionPrompt<T extends string>({
 
   return (
     <Box flexDirection="column">
-      {typeof question === 'string' ? <Text>{question}</Text> : question}
+      {typeof question === 'string' ? (
+        <Text>{t(question)}</Text>
+      ) : (
+        question
+      )}
       <Select
         options={selectOptions}
         inlineDescriptions

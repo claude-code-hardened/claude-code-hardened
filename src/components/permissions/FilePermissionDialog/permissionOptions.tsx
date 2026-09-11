@@ -3,6 +3,7 @@ import { basename, join, sep } from 'path';
 import { type ReactNode } from 'react';
 import { getOriginalCwd } from '../../../bootstrap/state.js';
 import { Text } from '@anthropic/ink';
+import { t } from '../../../i18n/index.js';
 import { getShortcutDisplay } from '../../../keybindings/shortcutFormat.js';
 import type { ToolPermissionContext } from '../../../Tool.js';
 import { expandPath, getDirectoryForPath } from '../../../utils/path.js';
@@ -81,16 +82,16 @@ export function getFilePermissionOptions({
   if (yesInputMode && onAcceptFeedbackChange) {
     options.push({
       type: 'input',
-      label: 'Yes',
+      label: t('Yes'),
       value: 'yes',
-      placeholder: 'and tell Claude what to do next',
+      placeholder: t('and tell Claude what to do next'),
       onChange: onAcceptFeedbackChange,
       allowEmptySubmitToCancel: true,
       option: { type: 'accept-once' },
     });
   } else {
     options.push({
-      label: 'Yes',
+      label: t('Yes'),
       value: 'yes',
       option: { type: 'accept-once' },
     });
@@ -108,7 +109,7 @@ export function getFilePermissionOptions({
   // persisted permission rules.
   if ((inClaudeFolder || inGlobalClaudeFolder) && operationType !== 'read') {
     options.push({
-      label: 'Yes, allow edits to .claude/ config for this session',
+      label: t('Yes, allow edits to .claude/ config for this session'),
       value: 'yes-claude-folder',
       option: {
         type: 'accept-session',
@@ -122,11 +123,11 @@ export function getFilePermissionOptions({
     if (inAllowedPath) {
       // Inside working directory
       if (operationType === 'read') {
-        sessionLabel = 'Yes, during this session';
+        sessionLabel = t('Yes, during this session');
       } else {
         sessionLabel = (
           <Text>
-            Yes, allow all edits during this session <Text bold>({modeCycleShortcut})</Text>
+            {t('Yes, allow all edits during this session')} <Text bold>({modeCycleShortcut})</Text>
           </Text>
         );
       }
@@ -162,9 +163,9 @@ export function getFilePermissionOptions({
   if (noInputMode && onRejectFeedbackChange) {
     options.push({
       type: 'input',
-      label: 'No',
+      label: t('No'),
       value: 'no',
-      placeholder: 'and tell Claude what to do differently',
+      placeholder: t('and tell Claude what to do differently'),
       onChange: onRejectFeedbackChange,
       allowEmptySubmitToCancel: true,
       option: { type: 'reject' },
@@ -172,7 +173,7 @@ export function getFilePermissionOptions({
   } else {
     // Not in input mode - simple option
     options.push({
-      label: 'No',
+      label: t('No'),
       value: 'no',
       option: { type: 'reject' },
     });
