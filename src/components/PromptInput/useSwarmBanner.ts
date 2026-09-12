@@ -93,7 +93,7 @@ export function useSwarmBanner(): SwarmBannerInfo {
               'View teammates in the Windows Terminal tabs spawned for each teammate',
             )
           : t('View teammates: {{command}}', {
-              command: `tmux -L ${getSwarmSocketName()} a`,
+              command: `\`tmux -L ${getSwarmSocketName()} a\``,
             })
       return {
         text: hint,
