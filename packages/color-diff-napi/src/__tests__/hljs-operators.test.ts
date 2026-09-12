@@ -8,11 +8,7 @@ type Color = { r: number; g: number; b: number; a: number }
 type Block = [{ foreground: Color; background: Color }, string]
 
 // Light theme → GITHUB_SCOPES (operator rgb(167,29,93) = #a71d5d)
-const theme = buildTheme('light', 'color256') as unknown as {
-  scopes: Record<string, Color>
-  tm: null
-  foreground: Color
-}
+const theme = buildTheme('light', 'color256')
 const OPERATOR = theme.scopes['operator']!
 
 function flattenCode(code: string, lang: string): Block[] {
