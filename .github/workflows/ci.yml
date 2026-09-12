@@ -193,25 +193,46 @@ jobs:
       - name: One-shot build (bundle + npm tarball)
         run: node scripts/build-all.mjs --skip-native
 
-      # 产物架构断言：e_machine（ELF offset 0x12）必须与目标一致。
+      # 产物架构断言：ELF 查 e_machine（offset 0x12），Mach-O 查 magic，PE 查 machine 字段。
       # 此前 compile.targets 被 Bun 静默忽略，x86 host 曾把 arm64 名字编成 x86_64 ELF。
       - name: Verify artifact architectures
         run: |
-          check() {
+          check_elf() {
             local file="$1" expect="$2"
             local machine
             machine=$(od -A n -t u1 -j 18 -N 2 "$file" | tr -s ' ' | sed 's/^ //;s/ .*$//')
-            if [ "$machine" = "$expect" ]; then
-              echo "  ✓ $file (e_machine=$machine)"
+            [ "$machine" = "$expect" ] || { echo "  ✗ $file e_machine=$machine, expected $expect"; exit 1; }
+            echo "  ✓ $file (ELF e_machine=$machine)"
+          }
+          check_macho() {
+            local file="$1" expect="$2"  # expect: 498676446 (0x1dba1 = cffaedfe LE as u32... use bytes)
+            local magic
+            magic=$(od -A n -t x1 -N 4 "$file" | tr -d ' \n')
+            [ "$magic" = "cffaedfe" ] || { echo "  ✗ $file Mach-O magic=$magic, expected cffaedfe"; exit 1; }
+            # CPU type at offset 4: 0100000c LE = 12 00 00 01 → arm64; 07000001 → x86_64
+            local cputype
+            cputype=$(od -A n -t u1 -j 4 -N 4 "$file" | tr -s ' ' | sed 's/^ //;s/ .*$//')
+            if [ "$cputype" = "$expect" ]; then
+              echo "  ✓ $file (Mach-O cputype bytes=$cputype)"
             else
-              echo "  ✗ $file e_machine=$machine, expected $expect"; exit 1
+              echo "  ✗ $file cputype bytes=$cputype, expected $expect"; exit 1
             fi
           }
-          check dist/ccb-linux-x64        62   # EM_X86_64
-          check dist/ccb-linux-arm64     183   # EM_AARCH64
-          check dist/ccb-darwin-x64       62
-          check dist/ccb-darwin-arm64    183
-          check dist/ccb-windows-x64.exe  62
+          check_pe() {
+            local file="$1"
+            local mz lf machine
+            mz=$(od -A n -t x1 -N 2 "$file" | tr -d ' ')
+            [ "$mz" = "4d5a" ] || { echo "  ✗ $file missing MZ signature"; exit 1; }
+            lf=$(od -A n -t u4 -j 60 -N 4 "$file" | tr -d ' ')
+            machine=$(od -A n -t u2 -j $((lf + 4)) -N 2 "$file" | tr -d ' ')
+            [ "$machine" = "34404" ] || { echo "  ✗ $file PE machine=$machine, expected 34404 (0x8664)"; exit 1; }
+            echo "  ✓ $file (PE machine=0x8664)"
+          }
+          check_elf dist/ccb-linux-x64        62   # EM_X86_64
+          check_elf dist/ccb-linux-arm64     183   # EM_AARCH64
+          check_macho dist/ccb-darwin-x64     "7 0 0 0"     # x86_64 LE bytes
+          check_macho dist/ccb-darwin-arm64  "12 0 0 1"    # arm64 LE bytes
+          check_pe dist/ccb-windows-x64.exe
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
