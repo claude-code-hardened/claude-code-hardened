@@ -2,6 +2,7 @@ import React, { Suspense, use, useMemo } from 'react';
 import { useSettings } from '../../../hooks/useSettings.js';
 import { useTerminalSize } from '../../../hooks/useTerminalSize.js';
 import { Ansi, Box, Text, stringWidth, useTheme } from '@anthropic/ink';
+import { t } from '../../../i18n/index.js';
 import { type CliHighlight, getCliHighlightPromise } from '../../../utils/cliHighlight.js';
 import { applyMarkdown } from '../../../utils/markdown.js';
 import sliceAnsi from '../../../utils/sliceAnsi.js';
@@ -100,7 +101,7 @@ function PreviewBoxBody({
   const truncationBar = isTruncated
     ? (() => {
         const hiddenCount = contentLines.length - effectiveMaxLines;
-        const label = `${BOX_CHARS.horizontal.repeat(3)} \u2702 ${BOX_CHARS.horizontal.repeat(3)} ${hiddenCount} lines hidden `;
+        const label = `${BOX_CHARS.horizontal.repeat(3)} \u2702 ${BOX_CHARS.horizontal.repeat(3)} ${t('{{count}} lines hidden', { count: hiddenCount })} `;
         const labelWidth = stringWidth(label);
         const fillWidth = Math.max(0, boxWidth - 2 - labelWidth);
         return `${BOX_CHARS.teeLeft}${label}${BOX_CHARS.horizontal.repeat(fillWidth)}${BOX_CHARS.teeRight}`;

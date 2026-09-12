@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DeepImmutable } from 'src/types/utils.js';
 import { useElapsedTime } from '../../hooks/useElapsedTime.js';
+import { t } from '../../i18n/index.js';
 import { Box, Text, type KeyboardEvent } from '@anthropic/ink';
 import { useKeybindings } from '../../keybindings/useKeybinding.js';
 import type { MonitorMcpTaskState } from '../../tasks/MonitorMcpTask/MonitorMcpTask.js';
@@ -37,7 +38,7 @@ export function MonitorMcpDetailDialog({ task, onBack, onKill }: Props): React.R
   return (
     <Box flexDirection="column" tabIndex={0} borderStyle="round" onKeyDown={handleKeyDown}>
       <Dialog
-        title="MCP Monitor"
+        title={t('MCP Monitor')}
         subtitle={
           <Text dimColor>
             {elapsedTime} · {task.serverName}:{task.resourceUri}
@@ -54,9 +55,9 @@ export function MonitorMcpDetailDialog({ task, onBack, onKill }: Props): React.R
       >
         <Box flexDirection="column" gap={1}>
           <Text>
-            <Text bold>Status:</Text>{' '}
+            <Text bold>{t('Status:')}</Text>{' '}
             {task.status === 'running' ? (
-              <Text color="ansi:green">running</Text>
+              <Text color="ansi:green">{t('running')}</Text>
             ) : task.status === 'completed' ? (
               <Text color="ansi:green">{task.status}</Text>
             ) : (
@@ -64,17 +65,17 @@ export function MonitorMcpDetailDialog({ task, onBack, onKill }: Props): React.R
             )}
           </Text>
           <Text>
-            <Text bold>Description:</Text> {task.description}
+            <Text bold>{t('Description:')}</Text> {task.description}
           </Text>
           <Text>
-            <Text bold>Server:</Text> {task.serverName}
+            <Text bold>{t('Server:')}</Text> {task.serverName}
           </Text>
           <Text>
-            <Text bold>Resource:</Text> {task.resourceUri}
+            <Text bold>{t('Resource:')}</Text> {task.resourceUri}
           </Text>
           {task.command && (
             <Text>
-              <Text bold>Command:</Text> {task.command}
+              <Text bold>{t('Command:')}</Text> {task.command}
             </Text>
           )}
         </Box>

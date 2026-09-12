@@ -9,6 +9,7 @@ import type { IDESelection } from '../../hooks/useIdeSelection.js';
 import { useSettings } from '../../hooks/useSettings.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import { Box, Text, useInput } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import type { MCPServerConnection } from '../../services/mcp/types.js';
 import { useRegisterOverlay } from '../../context/overlayContext.js';
 import { useAppState, useSetAppState } from '../../state/AppState.js';
@@ -237,7 +238,7 @@ function BridgeStatusIndicator({ bridgeSelected }: BridgeStatusProps): React.Rea
   return (
     <Text color={bridgeSelected ? 'background' : status.color} inverse={bridgeSelected} wrap="truncate">
       {status.label}
-      {bridgeSelected && <Text dimColor> · Enter to view</Text>}
+      {bridgeSelected && <Text dimColor>{t(' · Enter to view')}</Text>}
     </Text>
   );
 }
@@ -341,7 +342,7 @@ function PipeStatusInline(): React.ReactNode {
         {pipeIpc.localIp && <Text dimColor>{pipeIpc.localIp}</Text>}
         {allPipes.length > 0 && (
           <Text color={selectedRouteActive ? 'success' : undefined} dimColor={selectedPipes.length === 0}>
-            {selectedPipes.length}/{allPipes.length} selected
+            {t('{{selected}}/{{total}} selected', { selected: selectedPipes.length, total: allPipes.length })}
           </Text>
         )}
         {pipeIpc && isPipeControlled(pipeIpc) && pipeIpc.attachedBy && (
@@ -353,8 +354,8 @@ function PipeStatusInline(): React.ReactNode {
         {allPipes.length > 0 && (
           <Text color={selectedRouteActive ? 'success' : undefined} dimColor={!selectedRouteActive}>
             {selectedPipes.length > 0
-              ? `${routeMode === 'local' ? 'local main' : 'selected pipes only'} · ←/→ switch · Shift+↓ edit`
-              : 'local main · Shift+↓ select'}
+              ? `${t(routeMode === 'local' ? 'local main' : 'selected pipes only')} · ${t('←/→ switch')} · ${t('Shift+↓ edit')}`
+              : `${t('local main')} · ${t('Shift+↓ select')}`}
           </Text>
         )}
       </Box>
@@ -369,7 +370,7 @@ function PipeStatusInline(): React.ReactNode {
         <Text bold>{pipeIpc.serverName}</Text>
         <Text dimColor>({displayRole})</Text>
         {pipeIpc.localIp && <Text dimColor>{pipeIpc.localIp}</Text>}
-        <Text color="warning">↑↓ move Space select ←/→ or m route Enter/Esc close Shift+↓ toggle</Text>
+        <Text color="warning">{t('↑↓ move Space select ←/→ or m route Enter/Esc close Shift+↓ toggle')}</Text>
       </Box>
       <Box height={1} paddingLeft={2}>
         <Text dimColor>
@@ -393,7 +394,7 @@ function PipeStatusInline(): React.ReactNode {
               dimColor={!isConnected && !isCursor}
             >
               {isSelected ? '☑' : '☐'} {name}
-              {isConnected ? '' : ' [offline]'}
+              {isConnected ? '' : t(' [offline]')}
               {label ? ` (${label})` : ''}
             </Text>
           </Box>
@@ -401,7 +402,7 @@ function PipeStatusInline(): React.ReactNode {
       })}
       {allPipes.length === 0 && (
         <Box height={1} paddingLeft={2}>
-          <Text dimColor>No other pipes found. Start another instance.</Text>
+          <Text dimColor>{t('No other pipes found. Start another instance.')}</Text>
         </Box>
       )}
     </Box>

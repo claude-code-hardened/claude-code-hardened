@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Markdown } from '../../components/Markdown.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { jsonParse } from '../../utils/slowOperations.js';
 import {
   type IdleNotificationMessage,
@@ -27,7 +28,7 @@ export function PlanApprovalRequestDisplay({ request }: PlanApprovalRequestProps
       <Box borderStyle="round" borderColor="planMode" flexDirection="column" paddingX={1}>
         <Box marginBottom={1}>
           <Text color="planMode" bold>
-            Plan Approval Request from {request.from}
+            {t('Plan Approval Request from {{from}}', { from: request.from })}
           </Text>
         </Box>
         <Box
@@ -41,7 +42,7 @@ export function PlanApprovalRequestDisplay({ request }: PlanApprovalRequestProps
         >
           <Markdown>{request.planContent}</Markdown>
         </Box>
-        <Text dimColor>Plan file: {request.planFilePath}</Text>
+        <Text dimColor>{t('Plan file: {{path}}', { path: request.planFilePath })}</Text>
       </Box>
     </Box>
   );
@@ -62,11 +63,11 @@ export function PlanApprovalResponseDisplay({ response, senderName }: PlanApprov
         <Box borderStyle="round" borderColor="success" flexDirection="column" paddingX={1} paddingY={1}>
           <Box>
             <Text color="success" bold>
-              ✓ Plan Approved by {senderName}
+              {t('✓ Plan Approved by {{name}}', { name: senderName })}
             </Text>
           </Box>
           <Box marginTop={1}>
-            <Text>You can now proceed with implementation. Your plan mode restrictions have been lifted.</Text>
+            <Text>{t('You can now proceed with implementation. Your plan mode restrictions have been lifted.')}</Text>
           </Box>
         </Box>
       </Box>
@@ -78,7 +79,7 @@ export function PlanApprovalResponseDisplay({ response, senderName }: PlanApprov
       <Box borderStyle="round" borderColor="error" flexDirection="column" paddingX={1} paddingY={1}>
         <Box>
           <Text color="error" bold>
-            ✗ Plan Rejected by {senderName}
+            {t('✗ Plan Rejected by {{name}}', { name: senderName })}
           </Text>
         </Box>
         {response.feedback && (
@@ -90,11 +91,11 @@ export function PlanApprovalResponseDisplay({ response, senderName }: PlanApprov
             borderRight={false}
             paddingX={1}
           >
-            <Text>Feedback: {response.feedback}</Text>
+            <Text>{t('Feedback: {{feedback}}', { feedback: response.feedback })}</Text>
           </Box>
         )}
         <Box marginTop={1}>
-          <Text dimColor>Please revise your plan based on the feedback and call ExitPlanMode again.</Text>
+          <Text dimColor>{t('Please revise your plan based on the feedback and call ExitPlanMode again.')}</Text>
         </Box>
       </Box>
     </Box>
@@ -127,15 +128,15 @@ export function tryRenderPlanApprovalMessage(content: string, senderName: string
 function getPlanApprovalSummary(content: string): string | null {
   const request = isPlanApprovalRequest(content);
   if (request) {
-    return `[Plan Approval Request from ${request.from}]`;
+    return t('[Plan Approval Request from {{from}}]', { from: request.from });
   }
 
   const response = isPlanApprovalResponse(content);
   if (response) {
     if (response.approved) {
-      return '[Plan Approved] You can now proceed with implementation';
+      return t('[Plan Approved] You can now proceed with implementation');
     } else {
-      return `[Plan Rejected] ${response.feedback || 'Please revise your plan'}`;
+      return t('[Plan Rejected] {{feedback}}', { feedback: response.feedback || t('Please revise your plan') });
     }
   }
 
@@ -146,13 +147,13 @@ function getPlanApprovalSummary(content: string): string | null {
  * Get a brief summary text for an idle notification.
  */
 function getIdleNotificationSummary(msg: IdleNotificationMessage): string {
-  const parts: string[] = ['Agent idle'];
+  const parts: string[] = [t('Agent idle')];
   if (msg.completedTaskId) {
     const status = msg.completedStatus || 'completed';
-    parts.push(`Task ${msg.completedTaskId} ${status}`);
+    parts.push(t('Task {{id}} {{status}}', { id: msg.completedTaskId, status }));
   }
   if (msg.summary) {
-    parts.push(`Last DM: ${msg.summary}`);
+    parts.push(t('Last DM: {{summary}}', { summary: msg.summary }));
   }
   return parts.join(' · ');
 }

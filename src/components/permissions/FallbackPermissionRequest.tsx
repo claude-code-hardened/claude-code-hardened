@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { getOriginalCwd } from '../../bootstrap/state.js';
 import { Box, Text, useTheme } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { sanitizeToolNameForAnalytics } from '../../services/analytics/metadata.js';
 import { env } from '../../utils/env.js';
 import { shouldShowAlwaysAllowOptions } from '../../utils/permissions/permissionsLoader.js';
@@ -119,7 +120,7 @@ export function FallbackPermissionRequest({
   const options = useMemo((): PermissionPromptOption<FallbackOptionValue>[] => {
     const result: PermissionPromptOption<FallbackOptionValue>[] = [
       {
-        label: 'Yes',
+        label: t('Yes'),
         value: 'yes',
         feedbackConfig: { type: 'accept' },
       },
@@ -129,7 +130,9 @@ export function FallbackPermissionRequest({
       result.push({
         label: (
           <Text>
-            Yes, and don&apos;t ask again for <Text bold>{userFacingName}</Text> commands in{' '}
+            {t("Yes, and don't ask again for ")}
+            <Text bold>{userFacingName}</Text>
+            {t(' commands in ')}
             <Text bold>{originalCwd}</Text>
           </Text>
         ),
@@ -138,7 +141,7 @@ export function FallbackPermissionRequest({
     }
 
     result.push({
-      label: 'No',
+      label: t('No'),
       value: 'no',
       feedbackConfig: { type: 'reject' },
     });
@@ -155,7 +158,7 @@ export function FallbackPermissionRequest({
   );
 
   return (
-    <PermissionDialog title="Tool use" workerBadge={workerBadge}>
+    <PermissionDialog title={t('Tool use')} workerBadge={workerBadge}>
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Text>
           {userFacingName}(

@@ -10,6 +10,7 @@ import {
 } from '../bootstrap/state.js';
 import { parseTokenBudget } from '../utils/tokenBudget.js';
 import { count } from '../utils/array.js';
+import { t } from '../i18n/index.js';
 import { dirname, join } from 'path';
 import { tmpdir } from 'os';
 import figures from 'figures';
@@ -708,11 +709,11 @@ function TranscriptSearchBar({
       {off < query.length && <Text>{query.slice(off + 1)}</Text>}
       <Box flexGrow={1} />
       {indexStatus === 'building' ? (
-        <Text dimColor>indexing… </Text>
+        <Text dimColor>{t('indexing… ')}</Text>
       ) : indexStatus ? (
-        <Text dimColor>indexed in {indexStatus.ms}ms </Text>
+        <Text dimColor>{t('indexed in {{ms}}ms ', { ms: indexStatus.ms })}</Text>
       ) : count === 0 && query ? (
-        <Text color="error">no matches </Text>
+        <Text color="error">{t('no matches ')}</Text>
       ) : count > 0 ? (
         // Engine-counted (indexOf on extractSearchText). May drift from
         // render-count for ghost/phantom messages — badge is a rough
@@ -4464,7 +4465,7 @@ export function REPL({
             logForDebugging(`resumeAgentBackground failed: ${errorMessage(err)}`);
             addNotification({
               key: `resume-agent-failed-${task.id}`,
-              jsx: <Text color="error">Failed to resume agent: {errorMessage(err)}</Text>,
+              jsx: <Text color="error">{t('Failed to resume agent: {{msg}}', { msg: errorMessage(err) })}</Text>,
               priority: 'low',
             });
           });

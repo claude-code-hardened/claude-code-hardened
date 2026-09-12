@@ -36,6 +36,7 @@ import { usePromptSuggestion } from '../../hooks/usePromptSuggestion.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import { useTypeahead } from '../../hooks/useTypeahead.js';
 import { Box, type BorderTextOptions, type ClickEvent, type Key, stringWidth, Text, useInput } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useOptionalKeybindingContext } from '../../keybindings/KeybindingContext.js';
 import { getShortcutDisplay } from '../../keybindings/shortcutFormat.js';
 import { useKeybinding, useKeybindings } from '../../keybindings/useKeybinding.js';
@@ -882,7 +883,7 @@ function PromptInput({
     if (thinkTriggers.length && isUltrathinkEnabled()) {
       addNotification({
         key: 'ultrathink-active',
-        text: 'Effort set to high for this turn',
+        text: t('Effort set to high for this turn'),
         priority: 'immediate',
         timeoutMs: 5000,
       });
@@ -895,7 +896,7 @@ function PromptInput({
     if (feature('ULTRAPLAN') && ultraplanTriggers.length) {
       addNotification({
         key: 'ultraplan-active',
-        text: 'This prompt will launch an ultraplan session in Claude Code on the web',
+        text: t('This prompt will launch an ultraplan session in Claude Code on the web'),
         priority: 'immediate',
         timeoutMs: 5000,
       });
@@ -908,7 +909,7 @@ function PromptInput({
     if (isUltrareviewEnabled() && ultrareviewTriggers.length) {
       addNotification({
         key: 'ultrareview-active',
-        text: 'Run /ultrareview after Claude finishes to review these changes in the cloud',
+        text: t('Run /ultrareview after Claude finishes to review these changes in the cloud'),
         priority: 'immediate',
         timeoutMs: 5000,
       });
@@ -955,7 +956,8 @@ function PromptInput({
           key: 'stash-hint',
           jsx: (
             <Text dimColor>
-              Tip: <ConfigurableShortcutHint action="chat:stash" context="Chat" fallback="ctrl+s" description="stash" />
+              {t('Tip: ')}
+              <ConfigurableShortcutHint action="chat:stash" context="Chat" fallback="ctrl+s" description={t('stash')} />
             </Text>
           ),
           priority: 'immediate',
@@ -1197,7 +1199,7 @@ function PromptInput({
           if (result.success) {
             addNotification({
               key: 'direct-message-sent',
-              text: `Sent to @${result.recipientName}`,
+              text: t('Sent to @{{name}}', { name: result.recipientName }),
               priority: 'immediate',
               timeoutMs: 3000,
             });
@@ -1532,7 +1534,7 @@ function PromptInput({
       }
       addNotification({
         key: 'external-editor-error',
-        text: `External editor failed: ${errorMessage(err)}`,
+        text: t('External editor failed: {{error}}', { error: errorMessage(err) }),
         color: 'warning',
         priority: 'high',
       });
@@ -1682,8 +1684,8 @@ function PromptInput({
       } else {
         const shortcutDisplay = getShortcutDisplay('chat:imagePaste', 'Chat', 'ctrl+v');
         const message = env.isSSH()
-          ? "No image found in clipboard. You're SSH'd; try scp?"
-          : `No image found in clipboard. Use ${shortcutDisplay} to paste images.`;
+          ? t("No image found in clipboard. You're SSH'd; try scp?")
+          : t('No image found in clipboard. Use {{shortcut}} to paste images.', { shortcut: shortcutDisplay });
         addNotification({
           key: 'no-image-in-clipboard',
           text: message,
@@ -1996,10 +1998,11 @@ function PromptInput({
       const terminalName = getNativeCSIuTerminalDisplayName();
       const jsx = terminalName ? (
         <Text dimColor>
-          To enable {shortcut}, set <Text bold>Option as Meta</Text> in {terminalName} preferences (⌘,)
+          {t('To enable {{shortcut}}, set', { shortcut })} <Text bold>{t('Option as Meta')}</Text>{' '}
+          {t('in {{terminal}} preferences (⌘,)', { terminal: terminalName })}
         </Text>
       ) : (
-        <Text dimColor>To enable {shortcut}, run /terminal-setup</Text>
+        <Text dimColor>{t('To enable {{shortcut}}, run /terminal-setup', { shortcut })}</Text>
       );
       addNotification({
         key: 'option-meta-hint',
@@ -2171,12 +2174,12 @@ function PromptInput({
       });
       setShowModelPicker(false);
       const effectiveFastMode = (isFastMode ?? false) && !wasFastModeDisabled;
-      let message = `Model set to ${modelDisplayString(model)}`;
+      let message = t('Model set to {{model}}', { model: modelDisplayString(model) });
       if (isBilledAsExtraUsage(model, effectiveFastMode, isOpus1mMergeEnabled())) {
-        message += ' · Billed as extra usage';
+        message += t(' · Billed as extra usage');
       }
       if (wasFastModeDisabled) {
-        message += ' · Fast mode OFF';
+        message += t(' · Fast mode OFF');
       }
       addNotification({
         key: 'model-switched',
@@ -2253,7 +2256,7 @@ function PromptInput({
         key: 'thinking-toggled-hotkey',
         jsx: (
           <Text color={enabled ? 'suggestion' : undefined} dimColor={!enabled}>
-            Thinking {enabled ? 'on' : 'off'}
+            {t(enabled ? 'Thinking on' : 'Thinking off')}
           </Text>
         ),
         priority: 'immediate',
@@ -2445,7 +2448,7 @@ function PromptInput({
         width="100%"
       >
         <Text dimColor italic>
-          Save and close editor to continue...
+          {t('Save and close editor to continue...')}
         </Text>
       </Box>
     );
@@ -2462,7 +2465,7 @@ function PromptInput({
       {!isFullscreenEnvEnabled() && <PromptInputQueuedCommands />}
       {hasSuppressedDialogs && (
         <Box marginTop={1} marginLeft={2}>
-          <Text dimColor>Waiting for permission…</Text>
+          <Text dimColor>{t('Waiting for permission…')}</Text>
         </Box>
       )}
       <PromptInputStashNotice hasStash={stashedPrompt !== undefined} />

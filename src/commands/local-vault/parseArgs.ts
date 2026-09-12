@@ -11,6 +11,8 @@
  *   anything else                → { action: 'invalid', reason }
  */
 
+import { t } from '../../i18n/index.js'
+
 export type LocalVaultArgs =
   | { action: 'list' }
   | { action: 'set'; key: string; value: string }
@@ -53,6 +55,7 @@ export function parseLocalVaultArgs(args: string): LocalVaultArgs {
 
   const tokens = trimmed.split(/\s+/)
   const subCmd = tokens[0]
+  const usage = t(USAGE)
 
   // ── list ──────────────────────────────────────────────────────────────────
   if (subCmd === 'list') {
@@ -63,7 +66,10 @@ export function parseLocalVaultArgs(args: string): LocalVaultArgs {
   if (subCmd === 'set') {
     const key = tokens[1]
     if (!key) {
-      return { action: 'invalid', reason: `set requires a key name. ${USAGE}` }
+      return {
+        action: 'invalid',
+        reason: t('set requires a key name. {{usage}}', { usage }),
+      }
     }
     // D3 + M1: reject keys that start with '-' or any hyphen-like Unicode
     // character. ASCII '-' would be mistaken for a flag; non-ASCII hyphen
@@ -73,7 +79,12 @@ export function parseLocalVaultArgs(args: string): LocalVaultArgs {
     if (HYPHEN_LIKE_PREFIX_REGEX.test(key)) {
       return {
         action: 'invalid',
-        reason: `Key name must not start with "-" or a hyphen-like character (reserved for flags). ${USAGE}`,
+        reason: t(
+          'Key name must not start with "-" or a hyphen-like character (reserved for flags). {{usage}}',
+          {
+            usage,
+          },
+        ),
       }
     }
     // D4: value is tokens[2..] joined, not substring math (handles keys with repeated substrings)
@@ -81,7 +92,7 @@ export function parseLocalVaultArgs(args: string): LocalVaultArgs {
     if (!rest) {
       return {
         action: 'invalid',
-        reason: `set requires a value. ${USAGE}`,
+        reason: t('set requires a value. {{usage}}', { usage }),
       }
     }
     return { action: 'set', key, value: rest }
@@ -95,7 +106,10 @@ export function parseLocalVaultArgs(args: string): LocalVaultArgs {
     const argsWithoutFlags = tokens.filter(t => !flags.includes(t))
     const key = argsWithoutFlags[1] // argsWithoutFlags[0] is 'get'
     if (!key) {
-      return { action: 'invalid', reason: `get requires a key name. ${USAGE}` }
+      return {
+        action: 'invalid',
+        reason: t('get requires a key name. {{usage}}', { usage }),
+      }
     }
     const reveal = tokens.includes('--reveal')
     return { action: 'get', key, reveal }
@@ -107,7 +121,7 @@ export function parseLocalVaultArgs(args: string): LocalVaultArgs {
     if (!key) {
       return {
         action: 'invalid',
-        reason: `delete requires a key name. ${USAGE}`,
+        reason: t('delete requires a key name. {{usage}}', { usage }),
       }
     }
     return { action: 'delete', key }
@@ -115,6 +129,9 @@ export function parseLocalVaultArgs(args: string): LocalVaultArgs {
 
   return {
     action: 'invalid',
-    reason: `Unknown sub-command "${subCmd}". ${USAGE}`,
+    reason: t('Unknown sub-command "{{sub}}". {{usage}}', {
+      sub: subCmd,
+      usage,
+    }),
   }
 }

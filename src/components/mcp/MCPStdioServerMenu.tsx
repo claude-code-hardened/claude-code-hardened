@@ -2,6 +2,7 @@ import figures from 'figures';
 import React, { useState } from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
 import { useExitOnCtrlCDWithKeybindings } from '../../hooks/useExitOnCtrlCDWithKeybindings.js';
+import { t } from '../../i18n/index.js';
 import { Box, color, Text, useTheme } from '@anthropic/ink';
 import { getMcpConfigByName } from '../../services/mcp/config.js';
 import { useMcpReconnect, useMcpToggleEnabled } from '../../services/mcp/MCPConnectionManager.js';
@@ -49,8 +50,14 @@ export function MCPStdioServerMenu({
       // Return to the server list so user can continue managing other servers
       onCancel();
     } catch (err) {
-      const action = wasEnabled ? 'disable' : 'enable';
-      onComplete(`Failed to ${action} MCP server '${server.name}': ${errorMessage(err)}`);
+      const action = wasEnabled ? t('disable') : t('enable');
+      onComplete(
+        t("Failed to {{action}} MCP server '{{name}}': {{error}}", {
+          action,
+          name: server.name,
+          error: errorMessage(err),
+        }),
+      );
     }
   }, [server.client.type, server.name, toggleMcpServer, onCancel, onComplete]);
 
@@ -64,7 +71,7 @@ export function MCPStdioServerMenu({
   // Only show "View tools" if server is not disabled and has tools
   if (server.client.type !== 'disabled' && serverToolsCount > 0) {
     menuOptions.push({
-      label: 'View tools',
+      label: t('View tools'),
       value: 'tools',
     });
   }
@@ -72,20 +79,20 @@ export function MCPStdioServerMenu({
   // Only show reconnect option if the server is not disabled
   if (server.client.type !== 'disabled') {
     menuOptions.push({
-      label: 'Reconnect',
+      label: t('Reconnect'),
       value: 'reconnectMcpServer',
     });
   }
 
   menuOptions.push({
-    label: server.client.type !== 'disabled' ? 'Disable' : 'Enable',
+    label: server.client.type !== 'disabled' ? t('Disable') : t('Enable'),
     value: 'toggle-enabled',
   });
 
   // If there are no other options, add a back option so Select handles escape
   if (menuOptions.length === 0) {
     menuOptions.push({
-      label: 'Back',
+      label: t('Back'),
       value: 'back',
     });
   }
@@ -94,13 +101,13 @@ export function MCPStdioServerMenu({
     return (
       <Box flexDirection="column" gap={1} padding={1}>
         <Text color="text">
-          Reconnecting to <Text bold>{server.name}</Text>
+          {t('Reconnecting to')} <Text bold>{server.name}</Text>
         </Text>
         <Box>
           <Spinner />
-          <Text> Restarting MCP server process</Text>
+          <Text>{t(' Restarting MCP server process')}</Text>
         </Box>
-        <Text dimColor>This may take a few moments.</Text>
+        <Text dimColor>{t('This may take a few moments.')}</Text>
       </Box>
     );
   }
@@ -109,40 +116,46 @@ export function MCPStdioServerMenu({
     <Box flexDirection="column">
       <Box flexDirection="column" paddingX={1} borderStyle={borderless ? undefined : 'round'}>
         <Box marginBottom={1}>
-          <Text bold>{capitalizedServerName} MCP Server</Text>
+          <Text bold>{t('{{name}} MCP Server', { name: capitalizedServerName })}</Text>
         </Box>
 
         <Box flexDirection="column" gap={0}>
           <Box>
-            <Text bold>Status: </Text>
+            <Text bold>{t('Status: ')}</Text>
             {server.client.type === 'disabled' ? (
-              <Text>{color('inactive', theme)(figures.radioOff)} disabled</Text>
+              <Text>
+                {color('inactive', theme)(figures.radioOff)} {t('disabled')}
+              </Text>
             ) : server.client.type === 'connected' ? (
-              <Text>{color('success', theme)(figures.tick)} connected</Text>
+              <Text>
+                {color('success', theme)(figures.tick)} {t('connected')}
+              </Text>
             ) : server.client.type === 'pending' ? (
               <>
                 <Text dimColor>{figures.radioOff}</Text>
-                <Text> connecting…</Text>
+                <Text>{t(' connecting…')}</Text>
               </>
             ) : (
-              <Text>{color('error', theme)(figures.cross)} failed</Text>
+              <Text>
+                {color('error', theme)(figures.cross)} {t('failed')}
+              </Text>
             )}
           </Box>
 
           <Box>
-            <Text bold>Command: </Text>
+            <Text bold>{t('Command: ')}</Text>
             <Text dimColor>{server.config.command}</Text>
           </Box>
 
           {server.config.args && server.config.args.length > 0 && (
             <Box>
-              <Text bold>Args: </Text>
+              <Text bold>{t('Args: ')}</Text>
               <Text dimColor>{server.config.args.join(' ')}</Text>
             </Box>
           )}
 
           <Box>
-            <Text bold>Config location: </Text>
+            <Text bold>{t('Config location: ')}</Text>
             <Text dimColor>{describeMcpConfigFilePath(getMcpConfigByName(server.name)?.scope ?? 'dynamic')}</Text>
           </Box>
 
@@ -156,8 +169,8 @@ export function MCPStdioServerMenu({
 
           {server.client.type === 'connected' && serverToolsCount > 0 && (
             <Box>
-              <Text bold>Tools: </Text>
-              <Text dimColor>{serverToolsCount} tools</Text>
+              <Text bold>{t('Tools: ')}</Text>
+              <Text dimColor>{t('{{n}} tools', { n: serverToolsCount })}</Text>
             </Box>
           )}
         </Box>
@@ -195,7 +208,7 @@ export function MCPStdioServerMenu({
       <Box marginTop={1}>
         <Text dimColor italic>
           {exitState.pending ? (
-            <>Press {exitState.keyName} again to exit</>
+            <>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</>
           ) : (
             <Byline>
               <KeyboardShortcutHint shortcut="↑↓" action="navigate" />

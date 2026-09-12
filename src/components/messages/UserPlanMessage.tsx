@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { Markdown } from '../Markdown.js';
 
 type Props = {
@@ -12,7 +13,7 @@ export function UserPlanMessage({ addMargin, planContent }: Props): React.ReactN
     <Box flexDirection="column" borderStyle="round" borderColor="planMode" marginTop={addMargin ? 1 : 0} paddingX={1}>
       <Box marginBottom={1}>
         <Text bold color="planMode">
-          Plan to implement
+          {t('Plan to implement')}
         </Text>
       </Box>
       <Markdown>{planContent}</Markdown>

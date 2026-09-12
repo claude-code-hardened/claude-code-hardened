@@ -8,6 +8,7 @@ import type {
   McpStdioServerConfig,
 } from '../../services/mcp/types.js';
 import { extractAgentMcpServers, filterToolsByServer } from '../../services/mcp/utils.js';
+import { t } from '../../i18n/index.js';
 import { useAppState } from '../../state/AppState.js';
 import { getSessionIngressAuthToken } from '../../utils/sessionIngressAuth.js';
 import { MCPAgentServerMenu } from './MCPAgentServerMenu.js';
@@ -125,7 +126,9 @@ export function MCPSettings({ onComplete }: Props): React.ReactNode {
     // Only show "no servers" message if no regular servers AND no agent servers
     if (servers.length === 0 && agentMcpServers.length === 0) {
       onComplete(
-        'No MCP servers configured. Please run /doctor if this is unexpected. Otherwise, run `claude mcp --help` or visit https://code.claude.com/docs/en/mcp to learn more.',
+        t(
+          'No MCP servers configured. Please run /doctor if this is unexpected. Otherwise, run `claude mcp --help` or visit https://code.claude.com/docs/en/mcp to learn more.',
+        ),
       );
     }
   }, [servers.length, filteredClients.length, agentMcpServers.length, onComplete]);

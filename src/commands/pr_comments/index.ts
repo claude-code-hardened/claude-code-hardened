@@ -1,9 +1,10 @@
 import { createMovedToPluginCommand } from '../createMovedToPluginCommand.js'
+import { t } from '../i18n/index.js'
 
 export default createMovedToPluginCommand({
   name: 'pr-comments',
   description: 'Get comments from a GitHub pull request',
-  progressMessage: 'fetching PR comments',
+  progressMessage: t('fetching PR comments'),
   pluginName: 'pr-comments',
   pluginCommand: 'pr-comments',
   async getPromptWhileMarketplaceIsPrivate(args) {

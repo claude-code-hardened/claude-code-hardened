@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { errorMessage } from '../../utils/errors.js';
 import { logError } from '../../utils/log.js';
+import { t } from '../../i18n/index.js';
 import { validateManifest } from '../../utils/plugins/validatePlugin.js';
 import { plural } from '../../utils/stringUtils.js';
 
@@ -18,16 +19,9 @@ export function ValidatePlugin({ onComplete, path }: Props): React.ReactNode {
       // If no path provided, show usage
       if (!path) {
         onComplete(
-          'Usage: /plugin validate <path>\n\n' +
-            'Validate a plugin or marketplace manifest file or directory.\n\n' +
-            'Examples:\n' +
-            '  /plugin validate .claude-plugin/plugin.json\n' +
-            '  /plugin validate /path/to/plugin-directory\n' +
-            '  /plugin validate .\n\n' +
-            'When given a directory, automatically validates .claude-plugin/marketplace.json\n' +
-            'or .claude-plugin/plugin.json (prefers marketplace if both exist).\n\n' +
-            'Or from the command line:\n' +
-            '  claude plugin validate <path>',
+          t(
+            'Usage: /plugin validate <path>\n\nValidate a plugin or marketplace manifest file or directory.\n\nExamples:\n  /plugin validate .claude-plugin/plugin.json\n  /plugin validate /path/to/plugin-directory\n  /plugin validate .\n\nWhen given a directory, automatically validates .claude-plugin/marketplace.json\nor .claude-plugin/plugin.json (prefers marketplace if both exist).\n\nOr from the command line:\n  claude plugin validate <path>',
+          ),
         );
         return;
       }
@@ -38,11 +32,17 @@ export function ValidatePlugin({ onComplete, path }: Props): React.ReactNode {
         let output = '';
 
         // Add header
-        output += `Validating ${result.fileType} manifest: ${result.filePath}\n\n`;
+        output += t('Validating {{type}} manifest: {{path}}\n\n', {
+          type: result.fileType,
+          path: result.filePath,
+        });
 
         // Show errors
         if (result.errors.length > 0) {
-          output += `${figures.cross} Found ${result.errors.length} ${plural(result.errors.length, 'error')}:\n\n`;
+          output += `${figures.cross} ${t('Found {{count}} {{unit}}:\n\n', {
+            count: result.errors.length,
+            unit: t(plural(result.errors.length, 'error')),
+          })}`;
 
           result.errors.forEach(error => {
             output += `  ${figures.pointer} ${error.path}: ${error.message}\n`;
@@ -53,7 +53,10 @@ export function ValidatePlugin({ onComplete, path }: Props): React.ReactNode {
 
         // Show warnings
         if (result.warnings.length > 0) {
-          output += `${figures.warning} Found ${result.warnings.length} ${plural(result.warnings.length, 'warning')}:\n\n`;
+          output += `${figures.warning} ${t('Found {{count}} {{unit}}:\n\n', {
+            count: result.warnings.length,
+            unit: t(plural(result.warnings.length, 'warning')),
+          })}`;
 
           result.warnings.forEach(warning => {
             output += `  ${figures.pointer} ${warning.path}: ${warning.message}\n`;
@@ -65,15 +68,15 @@ export function ValidatePlugin({ onComplete, path }: Props): React.ReactNode {
         // Show success or failure
         if (result.success) {
           if (result.warnings.length > 0) {
-            output += `${figures.tick} Validation passed with warnings\n`;
+            output += `${figures.tick} ${t('Validation passed with warnings')}\n`;
           } else {
-            output += `${figures.tick} Validation passed\n`;
+            output += `${figures.tick} ${t('Validation passed')}\n`;
           }
 
           // Exit with code 0 (success)
           process.exitCode = 0;
         } else {
-          output += `${figures.cross} Validation failed\n`;
+          output += `${figures.cross} ${t('Validation failed')}\n`;
 
           // Exit with code 1 (validation failure)
           process.exitCode = 1;
@@ -86,7 +89,9 @@ export function ValidatePlugin({ onComplete, path }: Props): React.ReactNode {
 
         logError(error);
 
-        onComplete(`${figures.cross} Unexpected error during validation: ${errorMessage(error)}`);
+        onComplete(
+          `${figures.cross} ${t('Unexpected error during validation: {{error}}', { error: errorMessage(error) })}`,
+        );
       }
     }
 
@@ -95,7 +100,7 @@ export function ValidatePlugin({ onComplete, path }: Props): React.ReactNode {
 
   return (
     <Box flexDirection="column">
-      <Text>Running validation...</Text>
+      <Text>{t('Running validation...')}</Text>
     </Box>
   );
 }

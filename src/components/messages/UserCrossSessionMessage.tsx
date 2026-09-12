@@ -5,6 +5,7 @@
 import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs';
 import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { extractTag } from '../../utils/messages.js';
 
 type Props = {
@@ -20,7 +21,7 @@ export function UserCrossSessionMessage({ param, addMargin }: Props): React.Reac
   }
 
   const fromMatch = text.match(/from="([^"]*)"/);
-  const from = fromMatch?.[1] ?? 'another session';
+  const from = fromMatch?.[1] ?? t('another session');
 
   return (
     <Box flexDirection="row" marginTop={addMargin ? 1 : 0}>

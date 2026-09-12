@@ -6,6 +6,7 @@ import { toInkColor } from '../../utils/ink.js';
 import type { Attachment } from 'src/utils/attachments.js';
 import type { NullRenderingAttachmentType } from './nullRenderingAttachments.js';
 import { useAppState } from '../../state/AppState.js';
+import { t } from '../../i18n/index.js';
 import { getDisplayPath } from 'src/utils/file.js';
 import { formatFileSize } from 'src/utils/format.js';
 import { MessageResponse } from '../MessageResponse.js';
@@ -80,10 +81,10 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
             return (
               <Box key={idx} paddingLeft={2}>
                 <Text>{BLACK_CIRCLE} </Text>
-                <Text>Task assigned: </Text>
+                <Text>{t('Task assigned: ')}</Text>
                 <Text bold>#{parsedMsg.taskId}</Text>
                 <Text> - {parsedMsg.subject}</Text>
-                <Text dimColor> (from {parsedMsg.assignedBy || msg.from})</Text>
+                <Text dimColor>{t(' (from {{name}})', { name: parsedMsg.assignedBy || msg.from })}</Text>
               </Box>
             );
           }
@@ -127,11 +128,15 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       const firstId = attachment.skills[0]?.shortId;
       const hint =
         process.env.USER_TYPE === 'ant' && !isDemoEnv && firstId
-          ? ` · /skill-feedback ${firstId} 1=wrong 2=noisy 3=good [comment]`
+          ? t(' · /skill-feedback {{id}} 1=wrong 2=noisy 3=good [comment]', { id: firstId })
           : '';
       return (
         <Line>
-          <Text bold>{attachment.skills.length}</Text> relevant {plural(attachment.skills.length, 'skill')}: {names}
+          <Text bold>{attachment.skills.length}</Text>
+          {t(' relevant {{unit}}: {{names}}', {
+            unit: t(plural(attachment.skills.length, 'skill')),
+            names,
+          })}
           {hint && <Text dimColor>{hint}</Text>}
         </Line>
       );
@@ -146,7 +151,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       const names = attachment.tools.map(t => t.name).join(', ');
       return (
         <Line>
-          <Text dimColor>Discovered tools: </Text>
+          <Text dimColor>{t('Discovered tools: ')}</Text>
           <Text>{names}</Text>
         </Line>
       );
@@ -158,7 +163,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
     case 'directory':
       return (
         <Line>
-          Listed directory <Text bold>{attachment.displayPath + sep}</Text>
+          {t('Listed directory')} <Text bold>{attachment.displayPath + sep}</Text>
         </Line>
       );
     case 'file':
@@ -166,22 +171,25 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       if (attachment.content.type === 'notebook') {
         return (
           <Line>
-            Read <Text bold>{attachment.displayPath}</Text> ({attachment.content.file.cells.length} cells)
+            {t('Read')} <Text bold>{attachment.displayPath}</Text>{' '}
+            {t('({{count}} cells)', { count: attachment.content.file.cells.length })}
           </Line>
         );
       }
       if (attachment.content.type === 'file_unchanged') {
         return (
           <Line>
-            Read <Text bold>{attachment.displayPath}</Text> (unchanged)
+            {t('Read')} <Text bold>{attachment.displayPath}</Text> {t('(unchanged)')}
           </Line>
         );
       }
       return (
         <Line>
-          Read <Text bold>{attachment.displayPath}</Text> (
+          {t('Read')} <Text bold>{attachment.displayPath}</Text> (
           {attachment.content.type === 'text'
-            ? `${attachment.content.file.numLines}${attachment.truncated ? '+' : ''} lines`
+            ? t('{{count}} lines', {
+                count: `${attachment.content.file.numLines}${attachment.truncated ? '+' : ''}`,
+              })
             : formatFileSize(attachment.content.file.originalSize)}
           )
         </Line>
@@ -189,26 +197,27 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
     case 'compact_file_reference':
       return (
         <Line>
-          Referenced file <Text bold>{attachment.displayPath}</Text>
+          {t('Referenced file')} <Text bold>{attachment.displayPath}</Text>
         </Line>
       );
     case 'pdf_reference':
       return (
         <Line>
-          Referenced PDF <Text bold>{attachment.displayPath}</Text> ({attachment.pageCount} pages)
+          {t('Referenced PDF')} <Text bold>{attachment.displayPath}</Text>{' '}
+          {t('({{count}} pages)', { count: attachment.pageCount })}
         </Line>
       );
     case 'selected_lines_in_ide':
       return (
         <Line>
-          ⧉ Selected <Text bold>{attachment.lineEnd - attachment.lineStart + 1}</Text> lines from{' '}
-          <Text bold>{attachment.displayPath}</Text> in {attachment.ideName}
+          ⧉ {t('Selected')} <Text bold>{attachment.lineEnd - attachment.lineStart + 1}</Text>{' '}
+          {t('lines from {{path}} in {{ide}}', { path: attachment.displayPath, ide: attachment.ideName })}
         </Line>
       );
     case 'nested_memory':
       return (
         <Line>
-          Loaded <Text bold>{attachment.displayPath}</Text>
+          {t('Loaded')} <Text bold>{attachment.displayPath}</Text>
         </Line>
       );
     case 'relevant_memories':
@@ -221,8 +230,8 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
           <Box flexDirection="row">
             <Box minWidth={2} />
             <Text dimColor>
-              Recalled <Text bold>{attachment.memories.length}</Text>{' '}
-              {attachment.memories.length === 1 ? 'memory' : 'memories'}
+              {t('Recalled')} <Text bold>{attachment.memories.length}</Text>{' '}
+              {attachment.memories.length === 1 ? t('memory') : t('memories')}
               {!isTranscriptMode && (
                 <>
                   {' '}
@@ -254,11 +263,11 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       const skillCount = attachment.skillNames.length;
       return (
         <Line>
-          Loaded{' '}
+          {t('Loaded')}{' '}
           <Text bold>
-            {skillCount} {plural(skillCount, 'skill')}
+            {skillCount} {t(plural(skillCount, 'skill'))}
           </Text>{' '}
-          from <Text bold>{attachment.displayPath}</Text>
+          {t('from')} <Text bold>{attachment.displayPath}</Text>
         </Line>
       );
     }
@@ -268,7 +277,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       }
       return (
         <Line>
-          <Text bold>{attachment.skillCount}</Text> {plural(attachment.skillCount, 'skill')} available
+          <Text bold>{attachment.skillCount}</Text> {t(plural(attachment.skillCount, 'skill'))} {t('available')}
         </Line>
       );
     }
@@ -278,9 +287,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       }
       const count = attachment.addedTypes.length;
       return (
-        <Line>
-          <Text bold>{count}</Text> agent {plural(count, 'type')} available
-        </Line>
+        <Line>{t(count === 1 ? '{{count}} agent type available' : '{{count}} agent types available', { count })}</Line>
       );
     }
     case 'queued_command': {
@@ -299,20 +306,28 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       );
     }
     case 'plan_file_reference':
-      return <Line>Plan file referenced ({getDisplayPath(attachment.planFilePath)})</Line>;
+      return (
+        <Line>
+          {t('Plan file referenced')} ({getDisplayPath(attachment.planFilePath)})
+        </Line>
+      );
     case 'invoked_skills': {
       if (attachment.skills.length === 0) {
         return null;
       }
       const skillNames = attachment.skills.map(s => s.name).join(', ');
-      return <Line>Skills restored ({skillNames})</Line>;
+      return (
+        <Line>
+          {t('Skills restored')} ({skillNames})
+        </Line>
+      );
     }
     case 'diagnostics':
       return <DiagnosticsDisplay attachment={attachment} verbose={verbose} />;
     case 'mcp_resource':
       return (
         <Line>
-          Read MCP resource <Text bold>{attachment.name}</Text> from {attachment.server}
+          {t('Read MCP resource')} <Text bold>{attachment.name}</Text> {t('from')} {attachment.server}
         </Line>
       );
     case 'command_permissions':
@@ -330,7 +345,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       }
       return (
         <Line>
-          Async hook <Text bold>{attachment.hookEvent}</Text> completed
+          {t('Async hook')} <Text bold>{attachment.hookEvent}</Text> {t('completed')}
         </Line>
       );
     }
@@ -343,7 +358,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       const stderr = attachment.blockingError.blockingError.trim();
       return (
         <>
-          <Line color="error">{attachment.hookName} hook returned blocking error</Line>
+          <Line color="error">{t('{{name}} hook returned blocking error', { name: attachment.hookName })}</Line>
           {stderr ? <Line color="error">{stderr}</Line> : null}
         </>
       );
@@ -354,7 +369,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
         return null;
       }
       // Full hook output is logged to debug log via hookEvents.ts
-      return <Line color="error">{attachment.hookName} hook error</Line>;
+      return <Line color="error">{t('{{name}} hook error', { name: attachment.hookName })}</Line>;
     }
     case 'hook_error_during_execution':
       // Stop hooks are rendered as a summary in SystemStopHookSummaryMessage
@@ -362,7 +377,7 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
         return null;
       }
       // Full hook output is logged to debug log via hookEvents.ts
-      return <Line>{attachment.hookName} hook warning</Line>;
+      return <Line>{t('{{name}} hook warning', { name: attachment.hookName })}</Line>;
     case 'hook_success':
       // Full hook output is logged to debug log via hookEvents.ts
       return null;
@@ -373,22 +388,17 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
       }
       return (
         <Line color="warning">
-          {attachment.hookName} hook stopped continuation: {attachment.message}
+          {t('{{name}} hook stopped continuation: {{message}}', {
+            name: attachment.hookName,
+            message: attachment.message,
+          })}
         </Line>
       );
     case 'hook_system_message':
-      return (
-        <Line>
-          {attachment.hookName} says: {attachment.content}
-        </Line>
-      );
+      return <Line>{t('{{name}} says: {{content}}', { name: attachment.hookName, content: attachment.content })}</Line>;
     case 'hook_permission_decision': {
       const action = attachment.decision === 'allow' ? 'Allowed' : 'Denied';
-      return (
-        <Line>
-          {action} by <Text bold>{attachment.hookEvent}</Text> hook
-        </Line>
-      );
+      return <Line>{t('{{action}} by {{event}} hook', { action: t(action), event: attachment.hookEvent })}</Line>;
     }
     case 'task_status':
       return <TaskStatusMessage attachment={attachment} />;
@@ -397,7 +407,12 @@ export function AttachmentMessage({ attachment, addMargin, verbose, isTranscript
         <Box flexDirection="row" width="100%" marginTop={1} backgroundColor={bg}>
           <Text dimColor>{BLACK_CIRCLE} </Text>
           <Text dimColor>
-            {attachment.count} {plural(attachment.count, 'teammate')} shut down gracefully
+            {t(
+              attachment.count === 1
+                ? '{{count}} teammate shut down gracefully'
+                : '{{count}} teammates shut down gracefully',
+              { count: attachment.count },
+            )}
           </Text>
         </Box>
       );
@@ -444,17 +459,17 @@ function GenericTaskStatus({ attachment }: { attachment: TaskStatusAttachment })
   const bg = useSelectedMessageBg();
   const statusText =
     attachment.status === 'completed'
-      ? 'completed in background'
+      ? t('completed in background')
       : attachment.status === 'killed'
-        ? 'stopped'
+        ? t('stopped')
         : attachment.status === 'running'
-          ? 'still running in background'
+          ? t('still running in background')
           : attachment.status;
   return (
     <Box flexDirection="row" width="100%" marginTop={1} backgroundColor={bg}>
       <Text dimColor>{BLACK_CIRCLE} </Text>
       <Text dimColor>
-        Task &quot;<Text bold>{attachment.description}</Text>&quot; {statusText}
+        {t('Task')} &quot;<Text bold>{attachment.description}</Text>&quot; {statusText}
       </Text>
     </Box>
   );
@@ -469,12 +484,12 @@ function TeammateTaskStatus({ attachment }: { attachment: TaskStatusAttachment }
     return <GenericTaskStatus attachment={attachment} />;
   }
   const agentColor = toInkColor(task.identity.color);
-  const statusText = attachment.status === 'completed' ? 'shut down gracefully' : attachment.status;
+  const statusText = attachment.status === 'completed' ? t('shut down gracefully') : attachment.status;
   return (
     <Box flexDirection="row" width="100%" marginTop={1} backgroundColor={bg}>
       <Text dimColor>{BLACK_CIRCLE} </Text>
       <Text dimColor>
-        Teammate{' '}
+        {t('Teammate')}{' '}
         <Text color={agentColor} bold dimColor={false}>
           @{task.identity.agentName}
         </Text>{' '}

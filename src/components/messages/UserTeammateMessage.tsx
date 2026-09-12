@@ -3,6 +3,7 @@ import figures from 'figures';
 import * as React from 'react';
 import { TEAMMATE_MESSAGE_TAG } from '../../constants/xml.js';
 import { Ansi, Box, Text, type TextProps } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { toInkColor } from '../../utils/ink.js';
 
 import { jsonParse } from '../../utils/slowOperations.js';
@@ -130,7 +131,7 @@ export function UserTeammateMessage({ addMargin, param: { text }, isTranscriptMo
                 <Text color="success">✓</Text>
                 <Text>
                   {' '}
-                  Completed task #{taskCompleted.taskId}
+                  {t('Completed task #{{id}}', { id: taskCompleted.taskId })}
                   {taskCompleted.taskSubject && <Text dimColor> ({taskCompleted.taskSubject})</Text>}
                 </Text>
               </MessageResponse>

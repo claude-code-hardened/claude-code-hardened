@@ -57,6 +57,7 @@ import { initSentry } from '../utils/sentry.js'
 import { initUser } from '../utils/user.js'
 import { initLangfuse, shutdownLangfuse } from '../services/langfuse/index.js'
 import { setThemeConfigCallbacks } from '@anthropic/ink'
+import { t } from '../i18n/index.js'
 
 // initialize1PEventLogging is dynamically imported to defer OpenTelemetry sdk-logs/resources
 
@@ -261,7 +262,10 @@ export const init = memoize(async (): Promise<void> => {
       // manager running `plugin marketplace list --json` in a VM sandbox).
       if (getIsNonInteractiveSession()) {
         process.stderr.write(
-          `Configuration error in ${error.filePath}: ${error.message}\n`,
+          t('Configuration error in {{path}}: {{msg}}', {
+            path: error.filePath,
+            msg: error.message,
+          }) + '\n',
         )
         gracefulShutdownSync(1)
         return

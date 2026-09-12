@@ -9,6 +9,7 @@ import { useKeybinding, useKeybindings } from '../../keybindings/useKeybinding.j
 import { useAppState, useSetAppState } from '../../state/AppState.js';
 import type { PluginError } from '../../types/plugin.js';
 import { errorMessage } from '../../utils/errors.js';
+import { t } from '../../i18n/index.js';
 import { clearAllCaches } from '../../utils/plugins/cacheUtils.js';
 import { loadMarketplacesWithGracefulDegradation } from '../../utils/plugins/marketplaceHelpers.js';
 import { loadKnownMarketplacesConfig, removeMarketplaceSource } from '../../utils/plugins/marketplaceManager.js';
@@ -35,19 +36,19 @@ function MarketplaceList({ onComplete }: { onComplete: (result?: string) => void
         const names = Object.keys(config);
 
         if (names.length === 0) {
-          onComplete('No marketplaces configured');
+          onComplete(t('No marketplaces configured'));
         } else {
-          onComplete(`Configured marketplaces:\n${names.map(n => `  • ${n}`).join('\n')}`);
+          onComplete(t('Configured marketplaces:\n{{list}}', { list: names.map(n => `  • ${n}`).join('\n') }));
         }
       } catch (err) {
-        onComplete(`Error loading marketplaces: ${errorMessage(err)}`);
+        onComplete(t('Error loading marketplaces: {{error}}', { error: errorMessage(err) }));
       }
     }
 
     void loadList();
   }, [onComplete]);
 
-  return <Text>Loading marketplaces...</Text>;
+  return <Text>{t('Loading marketplaces...')}</Text>;
 }
 
 function McpRedirectBanner(): React.ReactNode {
@@ -73,7 +74,7 @@ function McpRedirectBanner(): React.ReactNode {
           i{' '}
         </Text>
       </Box>
-      <Text>[ANT-ONLY] MCP servers are now managed in /plugins. Use /mcp no-redirect to test old UI</Text>
+      <Text>{t('[ANT-ONLY] MCP servers are now managed in /plugins. Use /mcp no-redirect to test old UI')}</Text>
     </Box>
   );
 }
@@ -204,7 +205,7 @@ function buildErrorRows(
     rows.push({
       label: pluginName ?? error.source,
       message: formatErrorMessage(error),
-      guidance: 'Restart to retry loading plugins',
+      guidance: t('Restart to retry loading plugins'),
       action: { kind: 'none' },
     });
   }
@@ -220,8 +221,8 @@ function buildErrorRows(
     const scope = sourceInfo.isInPolicy ? 'managed' : sourceInfo.editableSources[0]?.scope;
     rows.push({
       label: m.name,
-      message: m.error ?? 'Installation failed',
-      guidance: action.kind === 'managed-only' ? 'Managed by your organization — contact your admin' : undefined,
+      message: m.error ?? t('Installation failed'),
+      guidance: action.kind === 'managed-only' ? t('Managed by your organization — contact your admin') : undefined,
       action,
       scope,
     });
@@ -238,7 +239,7 @@ function buildErrorRows(
       label: marketplace,
       message: formatErrorMessage(e),
       guidance:
-        action.kind === 'managed-only' ? 'Managed by your organization — contact your admin' : getErrorGuidance(e),
+        action.kind === 'managed-only' ? t('Managed by your organization — contact your admin') : getErrorGuidance(e),
       action,
       scope,
     });
@@ -446,7 +447,9 @@ function ErrorsTabContent({
             },
           },
         }));
-        setActionMessage(`${figures.tick} Removed "${action.name}" from ${scopes} settings`);
+        setActionMessage(
+          `${figures.tick} ${t('Removed "{{name}}" from {{scopes}} settings', { name: action.name, scopes })}`,
+        );
         markPluginsChanged();
         break;
       }
@@ -456,10 +459,15 @@ function ErrorsTabContent({
             await removeMarketplaceSource(action.name);
             clearAllCaches();
             setMarketplaceLoadFailures(prev => prev.filter(f => f.name !== action.name));
-            setActionMessage(`${figures.tick} Removed marketplace "${action.name}"`);
+            setActionMessage(`${figures.tick} ${t('Removed marketplace "{{name}}"', { name: action.name })}`);
             markPluginsChanged();
           } catch (err) {
-            setActionMessage(`Failed to remove "${action.name}": ${err instanceof Error ? err.message : String(err)}`);
+            setActionMessage(
+              t('Failed to remove "{{name}}": {{error}}', {
+                name: action.name,
+                error: err instanceof Error ? err.message : String(err),
+              }),
+            );
           }
         })();
         break;
@@ -494,11 +502,16 @@ function ErrorsTabContent({
     return (
       <Box flexDirection="column">
         <Box marginLeft={1}>
-          <Text dimColor>No plugin errors</Text>
+          <Text dimColor>{t('No plugin errors')}</Text>
         </Box>
         <Box marginTop={1}>
           <Text dimColor italic>
-            <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="back" />
+            <ConfigurableShortcutHint
+              action="confirm:no"
+              context="Confirmation"
+              fallback="Esc"
+              description={t('back')}
+            />
           </Text>
         </Box>
       </Box>
@@ -539,16 +552,26 @@ function ErrorsTabContent({
       <Box marginTop={1}>
         <Text dimColor italic>
           <Byline>
-            <ConfigurableShortcutHint action="select:previous" context="Select" fallback="↑" description="navigate" />
+            <ConfigurableShortcutHint
+              action="select:previous"
+              context="Select"
+              fallback="↑"
+              description={t('navigate')}
+            />
             {hasAction && (
               <ConfigurableShortcutHint
                 action="select:accept"
                 context="Select"
                 fallback="Enter"
-                description="resolve"
+                description={t('resolve')}
               />
             )}
-            <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="back" />
+            <ConfigurableShortcutHint
+              action="confirm:no"
+              context="Confirmation"
+              fallback="Esc"
+              description={t('back')}
+            />
           </Byline>
         </Text>
       </Box>
@@ -661,7 +684,7 @@ export function PluginSettings({ onComplete, args, showMcpRedirectMessage }: Plu
     }
     return count;
   });
-  const errorsTabTitle = pluginErrorCount > 0 ? `Errors (${pluginErrorCount})` : 'Errors';
+  const errorsTabTitle = pluginErrorCount > 0 ? t('Errors ({{count}})', { count: pluginErrorCount }) : t('Errors');
 
   const exitState = useExitOnCtrlCDWithKeybindings();
 
@@ -757,37 +780,37 @@ export function PluginSettings({ onComplete, args, showMcpRedirectMessage }: Plu
   if (viewState.type === 'help') {
     return (
       <Box flexDirection="column">
-        <Text bold>Plugin Command Usage:</Text>
+        <Text bold>{t('Plugin Command Usage:')}</Text>
         <Text> </Text>
-        <Text dimColor>Installation:</Text>
-        <Text> /plugin install - Browse and install plugins</Text>
-        <Text> /plugin install &lt;marketplace&gt; - Install from specific marketplace</Text>
-        <Text> /plugin install &lt;plugin&gt; - Install specific plugin</Text>
-        <Text> /plugin install &lt;plugin&gt;@&lt;market&gt; - Install plugin from marketplace</Text>
+        <Text dimColor>{t('Installation:')}</Text>
+        <Text>{t(' /plugin install - Browse and install plugins')}</Text>
+        <Text>{t(' /plugin install <marketplace> - Install from specific marketplace')}</Text>
+        <Text>{t(' /plugin install <plugin> - Install specific plugin')}</Text>
+        <Text>{t(' /plugin install <plugin>@<market> - Install plugin from marketplace')}</Text>
         <Text> </Text>
-        <Text dimColor>Management:</Text>
-        <Text> /plugin manage - Manage installed plugins</Text>
-        <Text> /plugin enable &lt;plugin&gt; - Enable a plugin</Text>
-        <Text> /plugin disable &lt;plugin&gt; - Disable a plugin</Text>
-        <Text> /plugin uninstall &lt;plugin&gt; - Uninstall a plugin</Text>
+        <Text dimColor>{t('Management:')}</Text>
+        <Text>{t(' /plugin manage - Manage installed plugins')}</Text>
+        <Text>{t(' /plugin enable <plugin> - Enable a plugin')}</Text>
+        <Text>{t(' /plugin disable <plugin> - Disable a plugin')}</Text>
+        <Text>{t(' /plugin uninstall <plugin> - Uninstall a plugin')}</Text>
         <Text> </Text>
-        <Text dimColor>Marketplaces:</Text>
-        <Text> /plugin marketplace - Marketplace management menu</Text>
-        <Text> /plugin marketplace add - Add a marketplace</Text>
-        <Text> /plugin marketplace add &lt;path/url&gt; - Add marketplace directly</Text>
-        <Text> /plugin marketplace update - Update marketplaces</Text>
-        <Text> /plugin marketplace update &lt;name&gt; - Update specific marketplace</Text>
-        <Text> /plugin marketplace remove - Remove a marketplace</Text>
-        <Text> /plugin marketplace remove &lt;name&gt; - Remove specific marketplace</Text>
-        <Text> /plugin marketplace list - List all marketplaces</Text>
+        <Text dimColor>{t('Marketplaces:')}</Text>
+        <Text>{t(' /plugin marketplace - Marketplace management menu')}</Text>
+        <Text>{t(' /plugin marketplace add - Add a marketplace')}</Text>
+        <Text>{t(' /plugin marketplace add <path/url> - Add marketplace directly')}</Text>
+        <Text>{t(' /plugin marketplace update - Update marketplaces')}</Text>
+        <Text>{t(' /plugin marketplace update <name> - Update specific marketplace')}</Text>
+        <Text>{t(' /plugin marketplace remove - Remove a marketplace')}</Text>
+        <Text>{t(' /plugin marketplace remove <name> - Remove specific marketplace')}</Text>
+        <Text>{t(' /plugin marketplace list - List all marketplaces')}</Text>
         <Text> </Text>
-        <Text dimColor>Validation:</Text>
-        <Text> /plugin validate &lt;path&gt; - Validate a manifest file or directory</Text>
+        <Text dimColor>{t('Validation:')}</Text>
+        <Text>{t(' /plugin validate <path> - Validate a manifest file or directory')}</Text>
         <Text> </Text>
-        <Text dimColor>Other:</Text>
-        <Text> /plugin - Main plugin menu</Text>
-        <Text> /plugin help - Show this help</Text>
-        <Text> /plugins - Alias for /plugin</Text>
+        <Text dimColor>{t('Other:')}</Text>
+        <Text>{t(' /plugin - Main plugin menu')}</Text>
+        <Text>{t(' /plugin help - Show this help')}</Text>
+        <Text>{t(' /plugins - Alias for /plugin')}</Text>
       </Box>
     );
   }
@@ -827,14 +850,14 @@ export function PluginSettings({ onComplete, args, showMcpRedirectMessage }: Plu
   return (
     <Pane color="suggestion">
       <Tabs
-        title="Plugins"
+        title={t('Plugins')}
         selectedTab={activeTab}
         onTabChange={handleTabChange}
         color="suggestion"
         disableNavigation={childSearchActive}
         banner={showMcpRedirectMessage && activeTab === 'installed' ? <McpRedirectBanner /> : undefined}
       >
-        <Tab id="discover" title="Discover">
+        <Tab id="discover" title={t('Discover')}>
           {viewState.type === 'browse-marketplace' ? (
             <BrowseMarketplace
               error={error}
@@ -859,7 +882,7 @@ export function PluginSettings({ onComplete, args, showMcpRedirectMessage }: Plu
             />
           )}
         </Tab>
-        <Tab id="installed" title="Installed">
+        <Tab id="installed" title={t('Installed')}>
           <ManagePlugins
             setViewState={setViewState}
             setResult={setResult}
@@ -870,7 +893,7 @@ export function PluginSettings({ onComplete, args, showMcpRedirectMessage }: Plu
             action={viewState.type === 'manage-plugins' ? viewState.action : undefined}
           />
         </Tab>
-        <Tab id="marketplaces" title="Marketplaces">
+        <Tab id="marketplaces" title={t('Marketplaces')}>
           <ManageMarketplaces
             setViewState={setViewState}
             error={error}

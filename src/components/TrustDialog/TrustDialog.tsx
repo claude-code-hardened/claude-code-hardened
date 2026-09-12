@@ -4,6 +4,7 @@ import { logEvent } from 'src/services/analytics/index.js';
 import { setSessionTrustAccepted } from '../../bootstrap/state.js';
 import type { Command } from '../../commands.js';
 import { useExitOnCtrlCDWithKeybindings } from '../../hooks/useExitOnCtrlCDWithKeybindings.js';
+import { t } from '../../i18n/index.js';
 import { Box, Link, Text } from '@anthropic/ink';
 import { useKeybinding } from '../../keybindings/useKeybinding.js';
 import { getMcpConfigsByScope } from '../../services/mcp/config.js';
@@ -195,30 +196,34 @@ export function TrustDialog({ onDone, commands }: Props): React.ReactNode {
   }
 
   return (
-    <PermissionDialog color="warning" titleColor="warning" title="Accessing workspace:">
+    <PermissionDialog color="warning" titleColor="warning" title={t('Accessing workspace:')}>
       <Box flexDirection="column" gap={1} paddingTop={1}>
         <Text bold>{getFsImplementation().cwd()}</Text>
 
         <Text>
-          Is this a project you trust? (Your own code, a well-known open source project, or work from your team).
+          {t('Is this a project you trust? (Your own code, a well-known open source project, or work from your team).')}
         </Text>
-        <Text>Once trusted, Claude Code can read, edit, and run commands in this folder.</Text>
+        <Text>{t('Once trusted, Claude Code can read, edit, and run commands in this folder.')}</Text>
 
         <Text dimColor>
-          <Link url="https://code.claude.com/docs/en/security">Security guide</Link>
+          <Link url="https://code.claude.com/docs/en/security">{t('Security guide')}</Link>
         </Text>
 
         <Select
           options={[
-            { label: 'Yes, I trust this folder', value: 'enable_all' },
-            { label: 'No, exit', value: 'exit' },
+            { label: t('Yes, I trust this folder'), value: 'enable_all' },
+            { label: t('No, exit'), value: 'exit' },
           ]}
           onChange={value => onChange(value as 'enable_all' | 'exit')}
           onCancel={() => onChange('exit')}
         />
 
         <Text dimColor>
-          {exitState.pending ? <>Press {exitState.keyName} again to exit</> : <>Enter to confirm · Esc to cancel</>}
+          {exitState.pending ? (
+            <>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</>
+          ) : (
+            <>{t('Enter to confirm · Esc to cancel')}</>
+          )}
         </Text>
       </Box>
     </PermissionDialog>

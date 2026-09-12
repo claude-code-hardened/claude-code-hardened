@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { isTaskAssignment, type TaskAssignmentMessage } from '../../utils/teammateMailbox.js';
 
 type Props = {
@@ -15,7 +16,7 @@ export function TaskAssignmentDisplay({ assignment }: Props): React.ReactNode {
       <Box borderStyle="round" borderColor="cyan_FOR_SUBAGENTS_ONLY" flexDirection="column" paddingX={1} paddingY={1}>
         <Box marginBottom={1}>
           <Text color="cyan_FOR_SUBAGENTS_ONLY" bold>
-            Task #{assignment.taskId} assigned by {assignment.assignedBy}
+            {t('Task #{{id}} assigned by {{name}}', { id: assignment.taskId, name: assignment.assignedBy })}
           </Text>
         </Box>
         <Box>
@@ -48,7 +49,7 @@ export function tryRenderTaskAssignmentMessage(content: string): React.ReactNode
 export function getTaskAssignmentSummary(content: string): string | null {
   const assignment = isTaskAssignment(content);
   if (assignment) {
-    return `[Task Assigned] #${assignment.taskId} - ${assignment.subject}`;
+    return t('[Task Assigned] #{{id}} - {{subject}}', { id: assignment.taskId, subject: assignment.subject });
   }
   return null;
 }

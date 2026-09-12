@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import type { DeepImmutable } from 'src/types/utils.js';
 import { useElapsedTime } from '../../hooks/useElapsedTime.js';
+import { t } from '../../i18n/index.js';
 import { type KeyboardEvent, Box, Text, useTheme } from '@anthropic/ink';
 import { useKeybindings } from '../../keybindings/useKeybinding.js';
 import { getEmptyToolPermissionContext } from '../../Tool.js';
@@ -66,7 +67,7 @@ export function AsyncAgentDetailDialog({ agent, onDone, onKillAgent, onBack }: P
 
   const title = (
     <Text>
-      {agent.selectedAgent?.agentType ?? 'agent'} › {agent.description || 'Async agent'}
+      {agent.selectedAgent?.agentType ?? 'agent'} › {agent.description || t('Async agent')}
     </Text>
   );
 
@@ -76,17 +77,21 @@ export function AsyncAgentDetailDialog({ agent, onDone, onKillAgent, onBack }: P
       {agent.status !== 'running' && (
         <Text color={getTaskStatusColor(agent.status)}>
           {getTaskStatusIcon(agent.status)}{' '}
-          {agent.status === 'completed' ? 'Completed' : agent.status === 'failed' ? 'Failed' : 'Stopped'}
+          {agent.status === 'completed' ? t('Completed') : agent.status === 'failed' ? t('Failed') : t('Stopped')}
           {' · '}
         </Text>
       )}
       <Text dimColor>
         {elapsedTime}
-        {tokenCount !== undefined && tokenCount > 0 && <> · {formatNumber(tokenCount)} tokens</>}
+        {tokenCount !== undefined && tokenCount > 0 && <> · {t('{{n}} tokens', { n: formatNumber(tokenCount) })}</>}
         {toolUseCount !== undefined && toolUseCount > 0 && (
           <>
             {' '}
-            · {toolUseCount} {toolUseCount === 1 ? 'tool' : 'tools'}
+            ·{' '}
+            {t('{{n}} tool{{s}}', {
+              n: toolUseCount,
+              s: toolUseCount === 1 ? '' : 's',
+            })}
           </>
         )}
       </Text>
@@ -102,7 +107,7 @@ export function AsyncAgentDetailDialog({ agent, onDone, onKillAgent, onBack }: P
         color="background"
         inputGuide={exitState =>
           exitState.pending ? (
-            <Text>Press {exitState.keyName} again to exit</Text>
+            <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
           ) : (
             <Byline>
               {onBack && <KeyboardShortcutHint shortcut="←" action="go back" />}
@@ -119,7 +124,7 @@ export function AsyncAgentDetailDialog({ agent, onDone, onKillAgent, onBack }: P
             agent.progress.recentActivities.length > 0 && (
               <Box flexDirection="column">
                 <Text bold dimColor>
-                  Progress
+                  {t('Progress')}
                 </Text>
                 {agent.progress.recentActivities.map((activity, i) => (
                   <Text key={i} dimColor={i < agent.progress!.recentActivities!.length - 1} wrap="truncate-end">
@@ -139,7 +144,7 @@ export function AsyncAgentDetailDialog({ agent, onDone, onKillAgent, onBack }: P
             /* Prompt section - only shown when no plan */
             <Box flexDirection="column" marginTop={1}>
               <Text bold dimColor>
-                Prompt
+                {t('Prompt')}
               </Text>
               <Text wrap="wrap">{displayPrompt}</Text>
             </Box>
@@ -149,7 +154,7 @@ export function AsyncAgentDetailDialog({ agent, onDone, onKillAgent, onBack }: P
           {agent.status === 'failed' && agent.error && (
             <Box flexDirection="column" marginTop={1}>
               <Text bold color="error">
-                Error
+                {t('Error')}
               </Text>
               <Text color="error" wrap="wrap">
                 {agent.error}

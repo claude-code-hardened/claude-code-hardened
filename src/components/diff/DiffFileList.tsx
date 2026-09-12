@@ -2,6 +2,7 @@ import figures from 'figures';
 import React, { useMemo } from 'react';
 import type { DiffFile } from '../../hooks/useDiffData.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
+import { t } from '../../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import { truncateStartToWidth } from '../../utils/format.js';
 import { plural } from '../../utils/stringUtils.js';
@@ -36,7 +37,7 @@ export function DiffFileList({ files, selectedIndex }: Props): React.ReactNode {
   }, [files.length, selectedIndex]);
 
   if (files.length === 0) {
-    return <Text dimColor>No changed files</Text>;
+    return <Text dimColor>{t('No changed files')}</Text>;
   }
 
   const visibleFiles = files.slice(startIndex, endIndex);
@@ -51,7 +52,9 @@ export function DiffFileList({ files, selectedIndex }: Props): React.ReactNode {
   return (
     <Box flexDirection="column">
       {needsPagination && (
-        <Text dimColor>{hasMoreAbove ? ` ↑ ${startIndex} more ${plural(startIndex, 'file')}` : ' '}</Text>
+        <Text dimColor>
+          {hasMoreAbove ? t(' ↑ {{n}} more {{unit}}', { n: startIndex, unit: plural(startIndex, 'file') }) : ' '}
+        </Text>
       )}
       {visibleFiles.map((file, index) => (
         <FileItem
@@ -63,7 +66,9 @@ export function DiffFileList({ files, selectedIndex }: Props): React.ReactNode {
       ))}
       {needsPagination && (
         <Text dimColor>
-          {hasMoreBelow ? ` ↓ ${files.length - endIndex} more ${plural(files.length - endIndex, 'file')}` : ' '}
+          {hasMoreBelow
+            ? t(' ↓ {{n}} more {{unit}}', { n: files.length - endIndex, unit: plural(files.length - endIndex, 'file') })
+            : ' '}
         </Text>
       )}
     </Box>
@@ -99,21 +104,21 @@ function FileStats({ file, isSelected }: { file: DiffFile; isSelected: boolean }
   if (file.isUntracked) {
     return (
       <Text dimColor={!isSelected} italic>
-        untracked
+        {t('untracked')}
       </Text>
     );
   }
   if (file.isBinary) {
     return (
       <Text dimColor={!isSelected} italic>
-        Binary file
+        {t('Binary file')}
       </Text>
     );
   }
   if (file.isLargeFile) {
     return (
       <Text dimColor={!isSelected} italic>
-        Large file modified
+        {t('Large file modified')}
       </Text>
     );
   }
@@ -131,7 +136,7 @@ function FileStats({ file, isSelected }: { file: DiffFile; isSelected: boolean }
           -{file.linesRemoved}
         </Text>
       )}
-      {file.isTruncated && <Text dimColor={!isSelected}> (truncated)</Text>}
+      {file.isTruncated && <Text dimColor={!isSelected}>{t(' (truncated)')}</Text>}
     </Text>
   );
 }

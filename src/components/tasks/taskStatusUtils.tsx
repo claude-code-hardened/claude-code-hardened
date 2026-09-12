@@ -9,6 +9,7 @@ import { isPanelAgentTask } from 'src/tasks/LocalAgentTask/LocalAgentTask.js';
 import { isBackgroundTask, type TaskState } from 'src/tasks/types.js';
 import type { DeepImmutable } from 'src/types/utils.js';
 import { summarizeRecentActivities } from 'src/utils/collapseReadSearch.js';
+import { t as i18nT } from '../../i18n/index.js';
 
 /**
  * Returns true if the given task status represents a terminal (finished) state.
@@ -75,13 +76,13 @@ export function getTaskStatusColor(
  * recent-activity summary → last activity description → 'working'.
  */
 export function describeTeammateActivity(t: DeepImmutable<InProcessTeammateTaskState>): string {
-  if (t.shutdownRequested) return 'stopping';
-  if (t.awaitingPlanApproval) return 'awaiting approval';
-  if (t.isIdle) return 'idle';
+  if (t.shutdownRequested) return i18nT('stopping');
+  if (t.awaitingPlanApproval) return i18nT('awaiting approval');
+  if (t.isIdle) return i18nT('idle');
   return (
     (t.progress?.recentActivities && summarizeRecentActivities(t.progress.recentActivities)) ??
     t.progress?.lastActivity?.activityDescription ??
-    'working'
+    i18nT('working')
   );
 }
 

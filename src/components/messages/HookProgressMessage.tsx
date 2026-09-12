@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { HookEvent } from 'src/entrypoints/agentSdkTypes.js';
 import type { buildMessageLookups } from 'src/utils/messages.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { MessageResponse } from '../MessageResponse.js';
 
 type Props = {
@@ -30,7 +31,9 @@ export function HookProgressMessage({ hookEvent, lookups, toolUseID, isTranscrip
             <Text dimColor bold>
               {hookEvent}
             </Text>
-            <Text dimColor>{inProgressHookCount === 1 ? ' hook' : ' hooks'} ran</Text>
+            <Text dimColor>
+              {inProgressHookCount === 1 ? t(' hook') : t(' hooks')} {t('ran')}
+            </Text>
           </Box>
         </MessageResponse>
       );
@@ -47,11 +50,11 @@ export function HookProgressMessage({ hookEvent, lookups, toolUseID, isTranscrip
   return (
     <MessageResponse>
       <Box flexDirection="row">
-        <Text dimColor>Running </Text>
+        <Text dimColor>{t('Running')} </Text>
         <Text dimColor bold>
           {hookEvent}
         </Text>
-        <Text dimColor>{inProgressHookCount === 1 ? ' hook…' : ' hooks…'}</Text>
+        <Text dimColor>{inProgressHookCount === 1 ? t(' hook…') : t(' hooks…')}</Text>
       </Box>
     </MessageResponse>
   );

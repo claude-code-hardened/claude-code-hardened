@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { pathToFileURL } from 'url';
 import { Box, Link, supportsHyperlinks, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { getStoredImagePath } from '../../utils/imageStore.js';
 import { MessageResponse } from '../MessageResponse.js';
 
@@ -16,7 +17,7 @@ type Props = {
  * unless addMargin is true (image starts a new user turn without text).
  */
 export function UserImageMessage({ imageId, addMargin }: Props): React.ReactNode {
-  const label = imageId ? `[Image #${imageId}]` : '[Image]';
+  const label = imageId ? t('[Image #{{id}}]', { id: imageId }) : t('[Image]');
   const imagePath = imageId ? getStoredImagePath(imageId) : null;
 
   const content =

@@ -28,6 +28,7 @@ import {
   toIDEDisplayName,
 } from '../../utils/ide.js';
 import { getCurrentWorktreeSession } from '../../utils/worktree.js';
+import { t } from '../../i18n/index.js';
 
 type IDEScreenProps = {
   availableIDEs: DetectedIDEInfo[];
@@ -97,8 +98,8 @@ function IDEScreen({
 
   return (
     <Dialog
-      title="Select IDE"
-      subtitle="Connect to an IDE for integrated development features."
+      title={t('Select IDE')}
+      subtitle={t('Connect to an IDE for integrated development features.')}
       onCancel={onClose}
       color="ide"
     >
@@ -106,9 +107,11 @@ function IDEScreen({
         {availableIDEs.length === 0 && (
           <Text dimColor>
             {isSupportedJetBrainsTerminal()
-              ? 'No available IDEs detected. Please install the plugin and restart your IDE:\n' +
+              ? t('No available IDEs detected. Please install the plugin and restart your IDE:\n') +
                 'https://docs.claude.com/s/claude-code-jetbrains'
-              : 'No available IDEs detected. Make sure your IDE has the Claude Code extension or plugin installed and is running.'}
+              : t(
+                  'No available IDEs detected. Make sure your IDE has the Claude Code extension or plugin installed and is running.',
+                )}
           </Text>
         )}
 
@@ -126,20 +129,26 @@ function IDEScreen({
         {availableIDEs.length !== 0 &&
           availableIDEs.some(ide => ide.name === 'VS Code' || ide.name === 'Visual Studio Code') && (
             <Box marginTop={1}>
-              <Text color="warning">Note: Only one Claude Code instance can be connected to VS Code at a time.</Text>
+              <Text color="warning">
+                {t('Note: Only one Claude Code instance can be connected to VS Code at a time.')}
+              </Text>
             </Box>
           )}
         {availableIDEs.length !== 0 && !isSupportedTerminal() && (
           <Box marginTop={1}>
-            <Text dimColor>Tip: You can enable auto-connect to IDE in /config or with the --ide flag</Text>
+            <Text dimColor>{t('Tip: You can enable auto-connect to IDE in /config or with the --ide flag')}</Text>
           </Box>
         )}
 
         {unavailableIDEs.length > 0 && (
           <Box marginTop={1} flexDirection="column">
             <Text dimColor>
-              Found {unavailableIDEs.length} other running IDE(s). However, their workspace/project directories do not
-              match the current cwd.
+              {t(
+                'Found {{count}} other running IDE(s). However, their workspace/project directories do not match the current cwd.',
+                {
+                  count: unavailableIDEs.length,
+                },
+              )}
             </Text>
             <Box marginTop={1} flexDirection="column">
               {unavailableIDEs.map((ide, index) => (
@@ -196,11 +205,11 @@ function IDEOpenSelection({ availableIDEs, onSelectIDE, onDone }: IDEOpenSelecti
   }));
 
   function handleCancel(): void {
-    onDone('IDE selection cancelled', { display: 'system' });
+    onDone(t('IDE selection cancelled'), { display: 'system' });
   }
 
   return (
-    <Dialog title="Select an IDE to open the project" onCancel={handleCancel} color="ide">
+    <Dialog title={t('Select an IDE to open the project')} onCancel={handleCancel} color="ide">
       <Select
         defaultValue={selectedValue}
         defaultFocusValue={selectedValue}
@@ -238,11 +247,11 @@ function RunningIDESelector({
   }));
 
   function handleCancel(): void {
-    onDone('IDE selection cancelled', { display: 'system' });
+    onDone(t('IDE selection cancelled'), { display: 'system' });
   }
 
   return (
-    <Dialog title="Select IDE to install extension" onCancel={handleCancel} color="ide">
+    <Dialog title={t('Select IDE to install extension')} onCancel={handleCancel} color="ide">
       <Select
         defaultFocusValue={selectedValue}
         options={options}
@@ -283,7 +292,7 @@ export async function call(
     const availableIDEs = detectedIDEs.filter(ide => ide.isValid);
 
     if (availableIDEs.length === 0) {
-      onDone('No IDEs with Claude Code extension detected.');
+      onDone(t('No IDEs with Claude Code extension detected.'));
       return null;
     }
 
@@ -293,7 +302,7 @@ export async function call(
         availableIDEs={availableIDEs}
         onSelectIDE={async (selectedIDE?: DetectedIDEInfo) => {
           if (!selectedIDE) {
-            onDone('No IDE selected.');
+            onDone(t('No IDE selected.'));
             return;
           }
 
@@ -306,23 +315,41 @@ export async function call(
             // VS Code-based IDEs
             const { code } = await execFileNoThrow('code', [targetPath]);
             if (code === 0) {
-              onDone(`Opened ${worktreeSession ? 'worktree' : 'project'} in ${chalk.bold(selectedIDE.name)}`);
+              onDone(
+                t('Opened {{target}} in {{name}}', {
+                  target: worktreeSession ? t('worktree') : t('project'),
+                  name: chalk.bold(selectedIDE.name),
+                }),
+              );
             } else {
-              onDone(`Failed to open in ${selectedIDE.name}. Try opening manually: ${targetPath}`);
+              onDone(
+                t('Failed to open in {{name}}. Try opening manually: {{path}}', {
+                  name: selectedIDE.name,
+                  path: targetPath,
+                }),
+              );
             }
           } else if (isSupportedJetBrainsTerminal()) {
             // JetBrains IDEs - they usually open via their CLI tools
             onDone(
-              `Please open the ${worktreeSession ? 'worktree' : 'project'} manually in ${chalk.bold(selectedIDE.name)}: ${targetPath}`,
+              t('Please open the {{target}} manually in {{name}}: {{path}}', {
+                target: worktreeSession ? t('worktree') : t('project'),
+                name: chalk.bold(selectedIDE.name),
+                path: targetPath,
+              }),
             );
           } else {
             onDone(
-              `Please open the ${worktreeSession ? 'worktree' : 'project'} manually in ${chalk.bold(selectedIDE.name)}: ${targetPath}`,
+              t('Please open the {{target}} manually in {{name}}: {{path}}', {
+                target: worktreeSession ? t('worktree') : t('project'),
+                name: chalk.bold(selectedIDE.name),
+                path: targetPath,
+              }),
             );
           }
         }}
         onDone={() => {
-          onDone('Exited without opening IDE', { display: 'system' });
+          onDone(t('Exited without opening IDE'), { display: 'system' });
         }}
       />
     );
@@ -340,11 +367,13 @@ export async function call(
         // The completion message will be shown after installation
         if (isJetBrainsIde(ide)) {
           onDone(
-            `Installed plugin to ${chalk.bold(toIDEDisplayName(ide))}\n` +
-              `Please ${chalk.bold('restart your IDE')} completely for it to take effect`,
+            `${t('Installed plugin to {{name}}', { name: chalk.bold(toIDEDisplayName(ide)) })}\n${t(
+              'Please {{action}} completely for it to take effect',
+              { action: chalk.bold(t('restart your IDE')) },
+            )}`,
           );
         } else {
-          onDone(`Installed extension to ${chalk.bold(toIDEDisplayName(ide))}`);
+          onDone(t('Installed extension to {{name}}', { name: chalk.bold(toIDEDisplayName(ide)) }));
         }
       }
     };
@@ -356,7 +385,7 @@ export async function call(
           runningIDEs={runningIDEs}
           onSelectIDE={onInstall}
           onDone={() => {
-            onDone('No IDE selected.', { display: 'system' });
+            onDone(t('No IDE selected.'), { display: 'system' });
           }}
         />
       );
@@ -418,23 +447,27 @@ function IDECommandFlow({
     }
     if (!ideClient || ideClient.type === 'pending') return;
     if (ideClient.type === 'connected') {
-      onDone(`Connected to ${connectingIDE.name}.`);
+      onDone(t('Connected to {{name}}.', { name: connectingIDE.name }));
     } else if (ideClient.type === 'failed') {
-      onDone(`Failed to connect to ${connectingIDE.name}.`);
+      onDone(t('Failed to connect to {{name}}.', { name: connectingIDE.name }));
     }
   }, [ideClient, connectingIDE, onDone]);
 
   // Timeout fallback
   useEffect(() => {
     if (!connectingIDE) return;
-    const timer = setTimeout(onDone, IDE_CONNECTION_TIMEOUT_MS, `Connection to ${connectingIDE.name} timed out.`);
+    const timer = setTimeout(
+      onDone,
+      IDE_CONNECTION_TIMEOUT_MS,
+      t('Connection to {{name}} timed out.', { name: connectingIDE.name }),
+    );
     return () => clearTimeout(timer);
   }, [connectingIDE, onDone]);
 
   const handleSelectIDE = useCallback(
     (selectedIDE?: DetectedIDEInfo) => {
       if (!onChangeDynamicMcpConfig) {
-        onDone('Error connecting to IDE.');
+        onDone(t('Error connecting to IDE.'));
         return;
       }
       const newConfig = { ...(dynamicMcpConfig || {}) };
@@ -458,7 +491,7 @@ function IDECommandFlow({
           }));
         }
         onChangeDynamicMcpConfig(newConfig);
-        onDone(currentIDE ? `Disconnected from ${currentIDE.name}.` : 'No IDE selected.');
+        onDone(currentIDE ? t('Disconnected from {{name}}.', { name: currentIDE.name }) : t('No IDE selected.'));
         return;
       }
       const url = selectedIDE.url;
@@ -478,7 +511,7 @@ function IDECommandFlow({
   );
 
   if (connectingIDE) {
-    return <Text dimColor>Connecting to {connectingIDE.name}…</Text>;
+    return <Text dimColor>{t('Connecting to {{name}}…', { name: connectingIDE.name })}</Text>;
   }
 
   return (
@@ -486,7 +519,7 @@ function IDECommandFlow({
       availableIDEs={availableIDEs}
       unavailableIDEs={unavailableIDEs}
       selectedIDE={currentIDE}
-      onClose={() => onDone('IDE selection cancelled', { display: 'system' })}
+      onClose={() => onDone(t('IDE selection cancelled'), { display: 'system' })}
       onSelect={handleSelectIDE}
     />
   );

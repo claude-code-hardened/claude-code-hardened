@@ -1,6 +1,7 @@
 import figures from 'figures';
 import React from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import type { AdvisorBlock } from '../../utils/advisor.js';
 import { renderModelName } from '../../utils/model/model.js';
 import { jsonStringify } from '../../utils/slowOperations.js';
@@ -36,8 +37,8 @@ export function AdvisorMessage({
           isUnresolved={!resolvedToolUseIDs.has(block.id)}
           isError={erroredToolUseIDs.has(block.id)}
         />
-        <Text bold>Advising</Text>
-        {advisorModel ? <Text dimColor> using {renderModelName(advisorModel)}</Text> : null}
+        <Text bold>{t('Advising')}</Text>
+        {advisorModel ? <Text dimColor>{t(' using {{model}}', { model: renderModelName(advisorModel) })}</Text> : null}
         {input ? <Text dimColor> · {input}</Text> : null}
       </Box>
     );
@@ -46,19 +47,23 @@ export function AdvisorMessage({
   let body: React.ReactNode;
   switch (block.content.type) {
     case 'advisor_tool_result_error':
-      body = <Text color="error">Advisor unavailable ({block.content.error_code})</Text>;
+      body = <Text color="error">{t('Advisor unavailable ({{code}})', { code: block.content.error_code })}</Text>;
       break;
     case 'advisor_result':
       body = verbose ? (
         <Text dimColor>{block.content.text}</Text>
       ) : (
         <Text dimColor>
-          {figures.tick} Advisor has reviewed the conversation and will apply the feedback <CtrlOToExpand />
+          {figures.tick} {t('Advisor has reviewed the conversation and will apply the feedback')} <CtrlOToExpand />
         </Text>
       );
       break;
     case 'advisor_redacted_result':
-      body = <Text dimColor>{figures.tick} Advisor has reviewed the conversation and will apply the feedback</Text>;
+      body = (
+        <Text dimColor>
+          {figures.tick} {t('Advisor has reviewed the conversation and will apply the feedback')}
+        </Text>
+      );
       break;
   }
 

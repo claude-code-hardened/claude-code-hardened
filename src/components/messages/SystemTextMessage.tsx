@@ -1,5 +1,6 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import { Box, Link, Text, type TextProps } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { FilePathLink } from '../FilePathLink.js';
 import { feature } from 'bun:bundle';
 import * as React from 'react';
@@ -70,7 +71,7 @@ export function SystemTextMessage({ message, addMargin, verbose, isTranscriptMod
         <Box minWidth={2}>
           <Text color="error">{BLACK_CIRCLE}</Text>
         </Box>
-        <Text dimColor>All background agents stopped</Text>
+        <Text dimColor>{t('All background agents stopped')}</Text>
       </Box>
     );
   }
@@ -101,7 +102,7 @@ export function SystemTextMessage({ message, addMargin, verbose, isTranscriptMod
     return (
       <Box marginTop={addMargin ? 1 : 0} backgroundColor={bg} width="100%">
         <Text dimColor>{TEARDROP_ASTERISK} </Text>
-        <Text>Allowed </Text>
+        <Text>{t('Allowed ')}</Text>
         <Text bold>{(message.commands as string[]).join(', ')}</Text>
       </Box>
     );
@@ -185,7 +186,9 @@ function StopHookSummaryMessage({
     return (
       <Box flexDirection="column" width="100%">
         <Text dimColor>
-          {'  ⎿  '}Ran {hookCount} {message.hookLabel} {hookCount === 1 ? 'hook' : 'hooks'}
+          {'  ⎿  '}
+          {t('Ran')} {hookCount}{' '}
+          {t(hookCount === 1 ? '{{label}} hook' : '{{label}} hooks', { label: message.hookLabel })}
           {totalStr}
         </Text>
         {isTranscriptMode &&
@@ -195,7 +198,7 @@ function StopHookSummaryMessage({
             return (
               <Text key={`cmd-${idx}`} dimColor>
                 {'     ⎿ '}
-                {info.command === 'prompt' ? `prompt: ${info.promptText || ''}` : info.command}
+                {info.command === 'prompt' ? t('prompt: {{text}}', { text: info.promptText || '' }) : info.command}
                 {durationStr}
               </Text>
             );
@@ -211,7 +214,8 @@ function StopHookSummaryMessage({
       </Box>
       <Box flexDirection="column" width={columns - 10}>
         <Text>
-          Ran <Text bold>{hookCount}</Text> {message.hookLabel ?? 'stop'} {hookCount === 1 ? 'hook' : 'hooks'}
+          {t('Ran')} <Text bold>{hookCount}</Text>{' '}
+          {t(hookCount === 1 ? '{{label}} hook' : '{{label}} hooks', { label: message.hookLabel ?? 'stop' })}
           {totalStr}
           {!verbose && hookInfos.length > 0 && (
             <>
@@ -228,7 +232,7 @@ function StopHookSummaryMessage({
             return (
               <Text key={`cmd-${idx}`} dimColor>
                 ⎿ &nbsp;
-                {info.command === 'prompt' ? `prompt: ${info.promptText || ''}` : info.command}
+                {info.command === 'prompt' ? t('prompt: {{text}}', { text: info.promptText || '' }) : info.command}
                 {durationStr}
               </Text>
             );
@@ -243,7 +247,7 @@ function StopHookSummaryMessage({
           hookErrors.map((err, idx) => (
             <Text key={idx}>
               <Text dimColor>⎿ &nbsp;</Text>
-              {message.hookLabel ?? 'Stop'} hook error: {err}
+              {t('{{label}} hook error: {{error}}', { label: message.hookLabel ?? 'Stop', error: err })}
             </Text>
           ))}
       </Box>
@@ -311,11 +315,16 @@ function TurnDurationMessage({
     const limit = message.budgetLimit as number;
     const usage =
       tokens >= limit
-        ? `${formatNumber(tokens)} used (${formatNumber(limit)} min ${figures.tick})`
+        ? t('{{used}} used ({{limit}} min {{tick}})', {
+            used: formatNumber(tokens),
+            limit: formatNumber(limit),
+            tick: figures.tick,
+          })
         : `${formatNumber(tokens)} / ${formatNumber(limit)} (${Math.round((tokens / limit) * 100)}%)`;
+    const nudgeCount = message.budgetNudges as number;
     const nudges =
-      (message.budgetNudges as number) > 0
-        ? ` \u00B7 ${message.budgetNudges as number} ${(message.budgetNudges as number) === 1 ? 'nudge' : 'nudges'}`
+      nudgeCount > 0
+        ? ` \u00B7 ${t(nudgeCount === 1 ? '{{count}} nudge' : '{{count}} nudges', { count: nudgeCount })}`
         : '';
     return `${showTurnDuration ? ' \u00B7 ' : ''}${usage}${nudges}`;
   })();
@@ -330,9 +339,9 @@ function TurnDurationMessage({
         <Text dimColor>{TEARDROP_ASTERISK}</Text>
       </Box>
       <Text dimColor>
-        {showTurnDuration && `${verb} for ${duration}`}
+        {showTurnDuration && t('{{verb}} for {{duration}}', { verb, duration })}
         {budgetSuffix}
-        {backgroundTaskSummary && ` \u00B7 ${backgroundTaskSummary} still running`}
+        {backgroundTaskSummary && ` \u00B7 ${t('{{label}} still running', { label: backgroundTaskSummary })}`}
       </Text>
     </Box>
   );
@@ -350,7 +359,9 @@ function MemorySavedMessage({
   const team = feature('TEAMMEM') ? teamMemSaved!.teamMemSavedPart(message) : null;
   const privateCount = writtenPaths.length - (team?.count ?? 0);
   const parts = [
-    privateCount > 0 ? `${privateCount} ${privateCount === 1 ? 'memory' : 'memories'}` : null,
+    privateCount > 0
+      ? t(privateCount === 1 ? '{{count}} memory' : '{{count}} memories', { count: privateCount })
+      : null,
     team?.segment as React.ReactNode,
   ].filter(Boolean);
   return (
@@ -360,7 +371,7 @@ function MemorySavedMessage({
           <Text dimColor>{BLACK_CIRCLE}</Text>
         </Box>
         <Text>
-          {(message.verb as string) ?? 'Saved'} {parts.join(' \u00B7 ')}
+          {(message.verb as string) ?? t('Saved')} {parts.join(' \u00B7 ')}
         </Text>
       </Box>
       {writtenPaths.map(p => (
@@ -416,7 +427,7 @@ function BridgeStatusMessage({
       <Box minWidth={2} />
       <Box flexDirection="column">
         <Text>
-          <ThemedText color="suggestion">/remote-control</ThemedText> is active. Code in CLI or at
+          <ThemedText color="suggestion">/remote-control</ThemedText> {t('is active. Code in CLI or at')}
         </Text>
         <Link url={url}>{url}</Link>
         {upgradeNudge && <Text dimColor>⎿ {upgradeNudge}</Text>}

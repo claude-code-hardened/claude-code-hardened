@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import type { CollapsedReadSearchGroup } from '../../types/message.js';
 
 /**
@@ -41,13 +42,19 @@ export function TeamMemCountParts({
   let count = hasPrecedingParts ? 1 : 0;
 
   if (tmReadCount > 0) {
-    const verb = isActiveGroup ? (count === 0 ? 'Recalling' : 'recalling') : count === 0 ? 'Recalled' : 'recalled';
+    const verb = isActiveGroup
+      ? count === 0
+        ? t('Recalling')
+        : t('recalling')
+      : count === 0
+        ? t('Recalled')
+        : t('recalled');
     if (count > 0) {
       nodes.push(<Text key="comma-tmr">, </Text>);
     }
     nodes.push(
       <Text key="team-mem-read">
-        {verb} <Text bold>{tmReadCount}</Text> team {tmReadCount === 1 ? 'memory' : 'memories'}
+        {verb} <Text bold>{tmReadCount}</Text> {tmReadCount === 1 ? t('team memory') : t('team memories')}
       </Text>,
     );
     count++;
@@ -58,18 +65,18 @@ export function TeamMemCountParts({
     if (count > 0) {
       nodes.push(<Text key="comma-tms">, </Text>);
     }
-    nodes.push(<Text key="team-mem-search">{`${verb} team memories`}</Text>);
+    nodes.push(<Text key="team-mem-search">{t(`${verb} team memories`)}</Text>);
     count++;
   }
 
   if (tmWriteCount > 0) {
-    const verb = isActiveGroup ? (count === 0 ? 'Writing' : 'writing') : count === 0 ? 'Wrote' : 'wrote';
+    const verb = isActiveGroup ? (count === 0 ? t('Writing') : t('writing')) : count === 0 ? t('Wrote') : t('wrote');
     if (count > 0) {
       nodes.push(<Text key="comma-tmw">, </Text>);
     }
     nodes.push(
       <Text key="team-mem-write">
-        {verb} <Text bold>{tmWriteCount}</Text> team {tmWriteCount === 1 ? 'memory' : 'memories'}
+        {verb} <Text bold>{tmWriteCount}</Text> {tmWriteCount === 1 ? t('team memory') : t('team memories')}
       </Text>,
     );
   }

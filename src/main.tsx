@@ -33,6 +33,7 @@ import { getRemoteSessionUrl } from './constants/product.js';
 import { getSystemContext, getUserContext } from './context.js';
 import { init, initializeTelemetryAfterTrust } from './entrypoints/init.js';
 import { addToHistory } from './history.js';
+import { t } from './i18n/index.js';
 import type { Root } from '@anthropic/ink';
 import { launchRepl } from './replLauncher.js';
 import {
@@ -590,7 +591,7 @@ function loadSettingsFromFlag(settingsFile: string): void {
       // It's a JSON string - validate and create temp file
       const parsedJson = safeParseJSON(trimmedSettings);
       if (!parsedJson) {
-        process.stderr.write(chalk.red('Error: Invalid JSON provided to --settings\n'));
+        process.stderr.write(chalk.red(t('Error: Invalid JSON provided to --settings') + '\n'));
         process.exit(1);
       }
 
@@ -614,7 +615,9 @@ function loadSettingsFromFlag(settingsFile: string): void {
         readFileSync(resolvedSettingsPath, 'utf8');
       } catch (e) {
         if (isENOENT(e)) {
-          process.stderr.write(chalk.red(`Error: Settings file not found: ${resolvedSettingsPath}\n`));
+          process.stderr.write(
+            chalk.red(t('Error: Settings file not found: {{path}}', { path: resolvedSettingsPath }) + '\n'),
+          );
           process.exit(1);
         }
         throw e;
@@ -628,7 +631,7 @@ function loadSettingsFromFlag(settingsFile: string): void {
     if (error instanceof Error) {
       logError(error);
     }
-    process.stderr.write(chalk.red(`Error processing settings: ${errorMessage(error)}\n`));
+    process.stderr.write(chalk.red(t('Error processing settings: {{error}}', { error: errorMessage(error) }) + '\n'));
     process.exit(1);
   }
 }
@@ -642,7 +645,9 @@ function loadSettingSourcesFromFlag(settingSourcesArg: string): void {
     if (error instanceof Error) {
       logError(error);
     }
-    process.stderr.write(chalk.red(`Error processing --setting-sources: ${errorMessage(error)}\n`));
+    process.stderr.write(
+      chalk.red(t('Error processing --setting-sources: {{error}}', { error: errorMessage(error) }) + '\n'),
+    );
     process.exit(1);
   }
 }
@@ -945,7 +950,7 @@ export async function main() {
       // Headless (-p) mode is not supported with SSH in v1 — reject early
       // so the flag doesn't silently cause local execution.
       if (rest.includes('-p') || rest.includes('--print')) {
-        process.stderr.write('Error: headless (-p/--print) mode is not supported with claude ssh\n');
+        process.stderr.write(t('Error: headless (-p/--print) mode is not supported with claude ssh') + '\n');
         gracefulShutdownSync(1);
         return;
       }
@@ -1054,8 +1059,10 @@ async function getInputPrompt(
     process.stdin.off('data', onData);
     if (timedOut) {
       process.stderr.write(
-        'Warning: no stdin data received in 3s, proceeding without it. ' +
-          'If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n',
+        t(
+          'Warning: no stdin data received in 3s, proceeding without it. ' +
+            'If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.',
+        ) + '\n',
       );
     }
     return [prompt, data].filter(Boolean).join('\n');
@@ -1444,7 +1451,7 @@ async function run(): Promise<CommanderCommand> {
       // Ignore "code" as a prompt - treat it the same as no prompt
       if (prompt === 'code') {
         logEvent('tengu_code_prompt_ignored', {});
-        console.warn(chalk.yellow('Tip: You can launch Claude Code with just `claude`'));
+        console.warn(chalk.yellow(t('Tip: You can launch Claude Code with just `claude`')));
         prompt = undefined;
       }
 
@@ -1492,7 +1499,7 @@ async function run(): Promise<CommanderCommand> {
       ) {
         if (!checkHasTrustDialogAccepted()) {
           console.warn(
-            chalk.yellow('Assistant mode disabled: directory is not trusted. Accept the trust dialog and restart.'),
+            chalk.yellow(t('Assistant mode disabled: directory is not trusted. Accept the trust dialog and restart.')),
           );
         } else {
           // Blocking gate check — returns cached `true` instantly; if disk
@@ -1596,15 +1603,17 @@ async function run(): Promise<CommanderCommand> {
       // Validate tmux option
       if (tmuxEnabled) {
         if (!worktreeEnabled) {
-          process.stderr.write(chalk.red('Error: --tmux requires --worktree\n'));
+          process.stderr.write(chalk.red(t('Error: --tmux requires --worktree') + '\n'));
           process.exit(1);
         }
         if (getPlatform() === 'windows') {
-          process.stderr.write(chalk.red('Error: --tmux is not supported on Windows\n'));
+          process.stderr.write(chalk.red(t('Error: --tmux is not supported on Windows') + '\n'));
           process.exit(1);
         }
         if (!(await isTmuxAvailable())) {
-          process.stderr.write(chalk.red(`Error: tmux is not installed.\n${getTmuxInstallInstructions()}\n`));
+          process.stderr.write(
+            chalk.red(t('Error: tmux is not installed.') + '\n' + getTmuxInstallInstructions() + '\n'),
+          );
           process.exit(1);
         }
       }
@@ -1624,7 +1633,7 @@ async function run(): Promise<CommanderCommand> {
 
         if (hasAnyTeammateOpt && !hasAllRequiredTeammateOpts) {
           process.stderr.write(
-            chalk.red('Error: --agent-id, --agent-name, and --team-name must all be provided together\n'),
+            chalk.red(t('Error: --agent-id, --agent-name, and --team-name must all be provided together') + '\n'),
           );
           process.exit(1);
         }
@@ -1705,7 +1714,9 @@ async function run(): Promise<CommanderCommand> {
         if ((options.continue || options.resume) && !options.forkSession) {
           process.stderr.write(
             chalk.red(
-              'Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.\n',
+              t(
+                'Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.',
+              ) + '\n',
             ),
           );
           process.exit(1);
@@ -1717,13 +1728,15 @@ async function run(): Promise<CommanderCommand> {
         if (!sdkUrl) {
           const validatedSessionId = validateUuid(sessionId);
           if (!validatedSessionId) {
-            process.stderr.write(chalk.red('Error: Invalid session ID. Must be a valid UUID.\n'));
+            process.stderr.write(chalk.red(t('Error: Invalid session ID. Must be a valid UUID.') + '\n'));
             process.exit(1);
           }
 
           // Check if session ID already exists
           if (sessionIdExists(validatedSessionId)) {
-            process.stderr.write(chalk.red(`Error: Session ID ${validatedSessionId} is already in use.\n`));
+            process.stderr.write(
+              chalk.red(t('Error: Session ID {{id}} is already in use.', { id: validatedSessionId }) + '\n'),
+            );
             process.exit(1);
           }
         }
@@ -1737,7 +1750,8 @@ async function run(): Promise<CommanderCommand> {
         if (!sessionToken) {
           process.stderr.write(
             chalk.red(
-              'Error: Session token required for file downloads. CLAUDE_CODE_SESSION_ACCESS_TOKEN must be set.\n',
+              t('Error: Session token required for file downloads. CLAUDE_CODE_SESSION_ACCESS_TOKEN must be set.') +
+                '\n',
             ),
           );
           process.exit(1);
@@ -1768,7 +1782,9 @@ async function run(): Promise<CommanderCommand> {
       if (fallbackModel && options.model && fallbackModel === options.model) {
         process.stderr.write(
           chalk.red(
-            'Error: Fallback model cannot be the same as the main model. Please specify a different model for --fallback-model.\n',
+            t(
+              'Error: Fallback model cannot be the same as the main model. Please specify a different model for --fallback-model.',
+            ) + '\n',
           ),
         );
         process.exit(1);
@@ -1779,7 +1795,9 @@ async function run(): Promise<CommanderCommand> {
       if (options.systemPromptFile) {
         if (options.systemPrompt) {
           process.stderr.write(
-            chalk.red('Error: Cannot use both --system-prompt and --system-prompt-file. Please use only one.\n'),
+            chalk.red(
+              t('Error: Cannot use both --system-prompt and --system-prompt-file. Please use only one.') + '\n',
+            ),
           );
           process.exit(1);
         }
@@ -1791,11 +1809,15 @@ async function run(): Promise<CommanderCommand> {
           const code = getErrnoCode(error);
           if (code === 'ENOENT') {
             process.stderr.write(
-              chalk.red(`Error: System prompt file not found: ${resolve(options.systemPromptFile)}\n`),
+              chalk.red(
+                t('Error: System prompt file not found: {{path}}', { path: resolve(options.systemPromptFile) }) + '\n',
+              ),
             );
             process.exit(1);
           }
-          process.stderr.write(chalk.red(`Error reading system prompt file: ${errorMessage(error)}\n`));
+          process.stderr.write(
+            chalk.red(t('Error reading system prompt file: {{error}}', { error: errorMessage(error) }) + '\n'),
+          );
           process.exit(1);
         }
       }
@@ -1806,7 +1828,8 @@ async function run(): Promise<CommanderCommand> {
         if (options.appendSystemPrompt) {
           process.stderr.write(
             chalk.red(
-              'Error: Cannot use both --append-system-prompt and --append-system-prompt-file. Please use only one.\n',
+              t('Error: Cannot use both --append-system-prompt and --append-system-prompt-file. Please use only one.') +
+                '\n',
             ),
           );
           process.exit(1);
@@ -1819,11 +1842,17 @@ async function run(): Promise<CommanderCommand> {
           const code = getErrnoCode(error);
           if (code === 'ENOENT') {
             process.stderr.write(
-              chalk.red(`Error: Append system prompt file not found: ${resolve(options.appendSystemPromptFile)}\n`),
+              chalk.red(
+                t('Error: Append system prompt file not found: {{path}}', {
+                  path: resolve(options.appendSystemPromptFile),
+                }) + '\n',
+              ),
             );
             process.exit(1);
           }
-          process.stderr.write(chalk.red(`Error reading append system prompt file: ${errorMessage(error)}\n`));
+          process.stderr.write(
+            chalk.red(t('Error reading append system prompt file: {{error}}', { error: errorMessage(error) }) + '\n'),
+          );
           process.exit(1);
         }
       }
@@ -1929,7 +1958,7 @@ async function run(): Promise<CommanderCommand> {
           logForDebugging(`--mcp-config validation failed (${allErrors.length} errors): ${formattedErrors}`, {
             level: 'error',
           });
-          process.stderr.write(`Error: Invalid MCP configuration:\n${formattedErrors}\n`);
+          process.stderr.write(t('Error: Invalid MCP configuration:') + '\n' + formattedErrors + '\n');
           process.exit(1);
         }
 
@@ -1942,19 +1971,23 @@ async function run(): Promise<CommanderCommand> {
 
           let reservedNameError: string | null = null;
           if (nonSdkConfigNames.some(isClaudeInChromeMCPServer)) {
-            reservedNameError = `Invalid MCP configuration: "${CLAUDE_IN_CHROME_MCP_SERVER_NAME}" is a reserved MCP name.`;
+            reservedNameError = t('Invalid MCP configuration: "{{name}}" is a reserved MCP name.', {
+              name: CLAUDE_IN_CHROME_MCP_SERVER_NAME,
+            });
           } else if (feature('CHICAGO_MCP')) {
             const { isComputerUseMCPServer, COMPUTER_USE_MCP_SERVER_NAME } = await import(
               'src/utils/computerUse/common.js'
             );
             if (nonSdkConfigNames.some(isComputerUseMCPServer)) {
-              reservedNameError = `Invalid MCP configuration: "${COMPUTER_USE_MCP_SERVER_NAME}" is a reserved MCP name.`;
+              reservedNameError = t('Invalid MCP configuration: "{{name}}" is a reserved MCP name.', {
+                name: COMPUTER_USE_MCP_SERVER_NAME,
+              });
             }
           }
           if (reservedNameError) {
             // stderr+exit(1) — a throw here becomes a silent unhandled
             // rejection in stream-json mode (void main() in cli.tsx).
-            process.stderr.write(`Error: ${reservedNameError}\n`);
+            process.stderr.write(t('Error: {{msg}}', { msg: reservedNameError }) + '\n');
             process.exit(1);
           }
 
@@ -1979,7 +2012,10 @@ async function run(): Promise<CommanderCommand> {
           const { allowed, blocked } = filterMcpServersByPolicy(scopedConfigs);
           if (blocked.length > 0) {
             process.stderr.write(
-              `Warning: MCP ${plural(blocked.length, 'server')} blocked by enterprise policy: ${blocked.join(', ')}\n`,
+              t('Warning: MCP {{servers}} blocked by enterprise policy: {{names}}', {
+                servers: plural(blocked.length, 'server'),
+                names: blocked.join(', '),
+              }) + '\n',
             );
           }
           dynamicMcpConfig = { ...dynamicMcpConfig, ...(allowed as Record<string, ScopedMcpServerConfig>) };
@@ -2022,7 +2058,7 @@ async function run(): Promise<CommanderCommand> {
           });
           logForDebugging(`[Claude in Chrome] Error: ${error}`);
           logError(error);
-          console.error(`Error: Failed to run with Claude in Chrome.`);
+          console.error(t('Error: Failed to run with Claude in Chrome.'));
           process.exit(1);
         }
       } else if (autoEnableClaudeInChrome) {
@@ -2051,16 +2087,14 @@ async function run(): Promise<CommanderCommand> {
       // configs that contain special server types (sdk)
       if (doesEnterpriseMcpConfigExist()) {
         if (strictMcpConfig) {
-          process.stderr.write(
-            chalk.red('You cannot use --strict-mcp-config when an enterprise MCP config is present'),
-          );
+          process.stderr.write(t('You cannot use --strict-mcp-config when an enterprise MCP config is present'));
           process.exit(1);
         }
 
         // For --mcp-config, allow if all servers are internal types (sdk)
         if (dynamicMcpConfig && !areMcpConfigsAllowedWithEnterpriseMcpConfig(dynamicMcpConfig)) {
           process.stderr.write(
-            chalk.red('You cannot dynamically configure MCP servers when an enterprise MCP config is present'),
+            t('You cannot dynamically configure MCP servers when an enterprise MCP config is present'),
           );
           process.exit(1);
         }
@@ -2136,9 +2170,12 @@ async function run(): Promise<CommanderCommand> {
         if (bad.length > 0) {
           process.stderr.write(
             chalk.red(
-              `${flag} entries must be tagged: ${bad.join(', ')}\n` +
-                `  plugin:<name>@<marketplace>  — plugin-provided channel (allowlist enforced)\n` +
-                `  server:<name>                — manually configured MCP server\n`,
+              t('{{flag}} entries must be tagged: {{list}}', { flag, list: bad.join(', ') }) +
+                '\n' +
+                t('  plugin:<name>@<marketplace>  — plugin-provided channel (allowlist enforced)') +
+                '\n' +
+                t('  server:<name>                — manually configured MCP server') +
+                '\n',
             ),
           );
           process.exit(1);
@@ -2256,7 +2293,10 @@ async function run(): Promise<CommanderCommand> {
               const { allowed, blocked } = filterMcpServersByPolicy(configs);
               if (blocked.length > 0) {
                 process.stderr.write(
-                  `Warning: claude.ai MCP ${plural(blocked.length, 'server')} blocked by enterprise policy: ${blocked.join(', ')}\n`,
+                  t('Warning: claude.ai MCP {{servers}} blocked by enterprise policy: {{names}}', {
+                    servers: plural(blocked.length, 'server'),
+                    names: blocked.join(', '),
+                  }) + '\n',
                 );
               }
               return allowed;
@@ -2287,18 +2327,20 @@ async function run(): Promise<CommanderCommand> {
       // NOTE: We do NOT call prefetchAllMcpResources here - that's deferred until after trust dialog
 
       if (inputFormat && inputFormat !== 'text' && inputFormat !== 'stream-json') {
-        console.error(`Error: Invalid input format "${inputFormat}".`);
+        console.error(t('Error: Invalid input format "{{format}}".', { format: inputFormat }));
         process.exit(1);
       }
       if (inputFormat === 'stream-json' && outputFormat !== 'stream-json') {
-        console.error(`Error: --input-format=stream-json requires output-format=stream-json.`);
+        console.error(t('Error: --input-format=stream-json requires output-format=stream-json.'));
         process.exit(1);
       }
 
       // Validate sdkUrl is only used with appropriate formats (formats are auto-set above)
       if (sdkUrl) {
         if (inputFormat !== 'stream-json' || outputFormat !== 'stream-json') {
-          console.error(`Error: --sdk-url requires both --input-format=stream-json and --output-format=stream-json.`);
+          console.error(
+            t('Error: --sdk-url requires both --input-format=stream-json and --output-format=stream-json.'),
+          );
           process.exit(1);
         }
       }
@@ -2307,7 +2349,9 @@ async function run(): Promise<CommanderCommand> {
       if (options.replayUserMessages) {
         if (inputFormat !== 'stream-json' || outputFormat !== 'stream-json') {
           console.error(
-            `Error: --replay-user-messages requires both --input-format=stream-json and --output-format=stream-json.`,
+            t(
+              'Error: --replay-user-messages requires both --input-format=stream-json and --output-format=stream-json.',
+            ),
           );
           process.exit(1);
         }
@@ -2316,14 +2360,14 @@ async function run(): Promise<CommanderCommand> {
       // Validate includePartialMessages is only used with print mode and stream-json output
       if (effectiveIncludePartialMessages) {
         if (!isNonInteractiveSession || outputFormat !== 'stream-json') {
-          writeToStderr(`Error: --include-partial-messages requires --print and --output-format=stream-json.`);
+          writeToStderr(t('Error: --include-partial-messages requires --print and --output-format=stream-json.'));
           process.exit(1);
         }
       }
 
       // Validate --no-session-persistence is only used with print mode
       if (options.sessionPersistence === false && !isNonInteractiveSession) {
-        writeToStderr(`Error: --no-session-persistence can only be used with --print mode.`);
+        writeToStderr(t('Error: --no-session-persistence can only be used with --print mode.'));
         process.exit(1);
       }
 
@@ -2626,13 +2670,20 @@ async function run(): Promise<CommanderCommand> {
           logForDebugging(`[AdvisorTool] --advisor ${advisorOption}`);
           if (!modelSupportsAdvisor(resolvedInitialModel)) {
             process.stderr.write(
-              chalk.red(`Error: The model "${resolvedInitialModel}" does not support the advisor tool.\n`),
+              chalk.red(
+                t('Error: The model "{{model}}" does not support the advisor tool.', { model: resolvedInitialModel }) +
+                  '\n',
+              ),
             );
             process.exit(1);
           }
           const normalizedAdvisorModel = normalizeModelStringForAPI(parseUserSpecifiedModel(advisorOption));
           if (!isValidAdvisorModel(normalizedAdvisorModel)) {
-            process.stderr.write(chalk.red(`Error: The model "${advisorOption}" cannot be used as an advisor.\n`));
+            process.stderr.write(
+              chalk.red(
+                t('Error: The model "{{model}}" cannot be used as an advisor.', { model: advisorOption }) + '\n',
+              ),
+            );
             process.exit(1);
           }
         }
@@ -2786,7 +2837,7 @@ async function run(): Promise<CommanderCommand> {
           const disabledReason = await getBridgeDisabledReason();
           remoteControl = disabledReason === null;
           if (disabledReason) {
-            process.stderr.write(chalk.yellow(`${disabledReason}\n--rc flag ignored.\n`));
+            process.stderr.write(chalk.yellow(`${disabledReason}\n${t('--rc flag ignored.')}\n`));
           }
         }
 
@@ -3452,7 +3503,10 @@ async function run(): Promise<CommanderCommand> {
         const n = displayList.length;
         initialNotifications.push({
           key: 'overly-broad-bash-notification',
-          text: `${displays} allow ${plural(n, 'rule')} from ${sources} ${plural(n, 'was', 'were')} ignored \u2014 not available for Ants, please use auto-mode instead`,
+          text: t(
+            '{{rules}} allow {{rule}} from {{sources}} {{was}} ignored — not available for Ants, please use auto-mode instead',
+            { rules: displays, rule: plural(n, 'rule'), sources, was: plural(n, 'was', 'were') },
+          ),
           color: 'warning',
           priority: 'high',
         });
@@ -3681,7 +3735,7 @@ async function run(): Promise<CommanderCommand> {
             logEvent('tengu_continue', {
               success: false,
             });
-            return await exitWithError(root, 'No conversation found to continue');
+            return await exitWithError(root, t('No conversation found to continue'));
           }
 
           const loaded = await processResumedConversation(
@@ -3757,7 +3811,9 @@ async function run(): Promise<CommanderCommand> {
         }
 
         const connectInfoMessage = createSystemMessage(
-          `Connected to server at ${_pendingConnect.url}\nSession: ${directConnectConfig.sessionId}`,
+          t('Connected to server at {{url}}', { url: _pendingConnect.url }) +
+            '\n' +
+            t('Session: {{id}}', { id: directConnectConfig.sessionId }),
           'info',
         );
 
@@ -3789,14 +3845,14 @@ async function run(): Promise<CommanderCommand> {
         let sshSession: import('./ssh/createSSHSession.js').SSHSession | undefined;
         try {
           if (_pendingSSH.local) {
-            process.stderr.write('Starting local ssh-proxy test session...\n');
+            process.stderr.write(t('Starting local ssh-proxy test session...') + '\n');
             sshSession = await createLocalSSHSession({
               cwd: _pendingSSH.cwd,
               permissionMode: _pendingSSH.permissionMode,
               dangerouslySkipPermissions: _pendingSSH.dangerouslySkipPermissions,
             });
           } else {
-            process.stderr.write(`Connecting to ${_pendingSSH.host}…\n`);
+            process.stderr.write(t('Connecting to {{host}}…', { host: _pendingSSH.host }) + '\n');
             // In-place progress: \r + EL0 (erase to end of line). Final \n on
             // success so the next message lands on a fresh line. No-op when
             // stderr isn't a TTY (piped/redirected) — \r would just emit noise.
@@ -3834,8 +3890,16 @@ async function run(): Promise<CommanderCommand> {
 
         const sshInfoMessage = createSystemMessage(
           _pendingSSH.local
-            ? `Local ssh-proxy test session\ncwd: ${sshSession.remoteCwd}\nAuth: unix socket → local proxy`
-            : `SSH session to ${_pendingSSH.host}\nRemote cwd: ${sshSession.remoteCwd}\nAuth: unix socket -R → local proxy`,
+            ? t('Local ssh-proxy test session') +
+                '\n' +
+                t('cwd: {{cwd}}', { cwd: sshSession.remoteCwd }) +
+                '\n' +
+                t('Auth: unix socket → local proxy')
+            : t('SSH session to {{host}}', { host: _pendingSSH.host }) +
+                '\n' +
+                t('Remote cwd: {{cwd}}', { cwd: sshSession.remoteCwd }) +
+                '\n' +
+                t('Auth: unix socket -R → local proxy'),
           'info',
         );
 
@@ -3876,7 +3940,8 @@ async function run(): Promise<CommanderCommand> {
           try {
             sessions = await discoverAssistantSessions();
           } catch (e) {
-            return await exitWithError(root, `Failed to discover sessions: ${e instanceof Error ? e.message : e}`, () =>
+            const detail = e instanceof Error ? e.message : e;
+            return await exitWithError(root, t('Failed to discover sessions: {{msg}}', { msg: detail }), () =>
               gracefulShutdown(1),
             );
           }
@@ -3885,10 +3950,9 @@ async function run(): Promise<CommanderCommand> {
             try {
               installedDir = await launchAssistantInstallWizard(root);
             } catch (e) {
-              return await exitWithError(
-                root,
-                `Assistant installation failed: ${e instanceof Error ? e.message : e}`,
-                () => gracefulShutdown(1),
+              const detail = e instanceof Error ? e.message : e;
+              return await exitWithError(root, t('Assistant installation failed: {{msg}}', { msg: detail }), () =>
+                gracefulShutdown(1),
               );
             }
             if (installedDir === null) {
@@ -3899,7 +3963,10 @@ async function run(): Promise<CommanderCommand> {
             // establish a bridge session before discovery will find it.
             return await exitWithMessage(
               root,
-              `Assistant installed in ${installedDir}. The daemon is starting up — run \`claude assistant\` again in a few seconds to connect.`,
+              t(
+                'Assistant installed in {{dir}}. The daemon is starting up — run `claude assistant` again in a few seconds to connect.',
+                { dir: installedDir },
+              ),
               {
                 exitCode: 0,
                 beforeExit: () => gracefulShutdown(0),
@@ -3928,9 +3995,8 @@ async function run(): Promise<CommanderCommand> {
         try {
           apiCreds = await prepareApiRequest();
         } catch (e) {
-          return await exitWithError(root, `Error: ${e instanceof Error ? e.message : 'Failed to authenticate'}`, () =>
-            gracefulShutdown(1),
-          );
+          const detail = e instanceof Error ? e.message : t('Failed to authenticate');
+          return await exitWithError(root, t('Error: {{msg}}', { msg: detail }), () => gracefulShutdown(1));
         }
         const getAccessToken = (): string => getClaudeAIOAuthTokens()?.accessToken ?? apiCreds.accessToken;
 
@@ -3949,7 +4015,7 @@ async function run(): Promise<CommanderCommand> {
         );
 
         const infoMessage = createSystemMessage(
-          `Attached to assistant session ${targetSessionId.slice(0, 8)}…`,
+          t('Attached to assistant session {{id}}…', { id: targetSessionId.slice(0, 8) }),
           'info',
         );
 
@@ -4035,8 +4101,10 @@ async function run(): Promise<CommanderCommand> {
         if (remote !== null || teleport) {
           await waitForPolicyLimitsToLoad();
           if (!isPolicyAllowed('allow_remote_sessions')) {
-            return await exitWithError(root, "Error: Remote sessions are disabled by your organization's policy.", () =>
-              gracefulShutdown(1),
+            return await exitWithError(
+              root,
+              t("Error: Remote sessions are disabled by your organization's policy."),
+              () => gracefulShutdown(1),
             );
           }
         }
@@ -4050,7 +4118,7 @@ async function run(): Promise<CommanderCommand> {
           if (!isRemoteTuiEnabled && !hasInitialPrompt) {
             return await exitWithError(
               root,
-              'Error: --remote requires a description.\nUsage: claude --remote "your task description"',
+              t('Error: --remote requires a description.') + '\n' + t('Usage: claude --remote "your task description"'),
               () => gracefulShutdown(1),
             );
           }
@@ -4071,7 +4139,7 @@ async function run(): Promise<CommanderCommand> {
             logEvent('tengu_remote_create_session_error', {
               error: 'unable_to_create_session' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
             });
-            return await exitWithError(root, 'Error: Unable to create remote session', () => gracefulShutdown(1));
+            return await exitWithError(root, t('Error: Unable to create remote session'), () => gracefulShutdown(1));
           }
           logEvent('tengu_remote_create_session_success', {
             session_id: createdSession.id as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -4080,9 +4148,10 @@ async function run(): Promise<CommanderCommand> {
           // Check if new remote TUI mode is enabled via feature gate
           if (!isRemoteTuiEnabled) {
             // Original behavior: print session info and exit
-            process.stdout.write(`Created remote session: ${createdSession.title}\n`);
-            process.stdout.write(`View: ${getRemoteSessionUrl(createdSession.id)}?m=0\n`);
-            process.stdout.write(`Resume with: claude --teleport ${createdSession.id}\n`);
+            const viewUrl = `${getRemoteSessionUrl(createdSession.id)}?m=0`;
+            process.stdout.write(t('Created remote session: {{title}}', { title: createdSession.title }) + '\n');
+            process.stdout.write(t('View: {{url}}', { url: viewUrl }) + '\n');
+            process.stdout.write(t('Resume with: claude --teleport {{id}}', { id: createdSession.id }) + '\n');
             await gracefulShutdown(0);
             process.exit(0);
           }
@@ -4098,9 +4167,8 @@ async function run(): Promise<CommanderCommand> {
             apiCreds = await prepareApiRequest();
           } catch (error) {
             logError(toError(error));
-            return await exitWithError(root, `Error: ${errorMessage(error) || 'Failed to authenticate'}`, () =>
-              gracefulShutdown(1),
-            );
+            const detail = errorMessage(error) || t('Failed to authenticate');
+            return await exitWithError(root, t('Error: {{msg}}', { msg: detail }), () => gracefulShutdown(1));
           }
 
           // Create remote session config for the REPL
@@ -4116,7 +4184,7 @@ async function run(): Promise<CommanderCommand> {
           // Add remote session info as initial system message
           const remoteSessionUrl = `${getRemoteSessionUrl(createdSession.id)}?m=0`;
           const remoteInfoMessage = createSystemMessage(
-            `/remote-control is active. Code in CLI or at ${remoteSessionUrl}`,
+            t('/remote-control is active. Code in CLI or at {{url}}', { url: remoteSessionUrl }),
             'info',
           );
 
@@ -4203,17 +4271,24 @@ async function run(): Promise<CommanderCommand> {
                   } else {
                     // No known paths - show original error
                     throw new TeleportOperationError(
-                      `You must run claude --teleport ${teleport} from a checkout of ${sessionRepo}.`,
+                      t('You must run claude --teleport {{session}} from a checkout of {{repo}}.', {
+                        session: teleport,
+                        repo: sessionRepo,
+                      }),
                       chalk.red(
-                        `You must run claude --teleport ${teleport} from a checkout of ${chalk.bold(sessionRepo)}.\n`,
+                        t('You must run claude --teleport {{session}} from a checkout of {{repo}}.', {
+                          session: teleport,
+                          repo: chalk.bold(sessionRepo),
+                        }) + '\n',
                       ),
                     );
                   }
                 }
               } else if (repoValidation.status === 'error') {
+                const validationError = repoValidation.errorMessage || t('Failed to validate session');
                 throw new TeleportOperationError(
-                  repoValidation.errorMessage || 'Failed to validate session',
-                  chalk.red(`Error: ${repoValidation.errorMessage || 'Failed to validate session'}\n`),
+                  validationError,
+                  chalk.red(t('Error: {{msg}}', { msg: validationError }) + '\n'),
                 );
               }
 
@@ -4230,7 +4305,7 @@ async function run(): Promise<CommanderCommand> {
                 process.stderr.write(error.formattedMessage + '\n');
               } else {
                 logError(error);
-                process.stderr.write(chalk.red(`Error: ${errorMessage(error)}\n`));
+                process.stderr.write(chalk.red(t('Error: {{msg}}', { msg: errorMessage(error) }) + '\n'));
               }
               await gracefulShutdown(1);
             }
@@ -4281,8 +4356,10 @@ async function run(): Promise<CommanderCommand> {
                 success: false,
               });
               logError(error);
-              await exitWithError(root, `Unable to load transcript from file: ${options.resume}`, () =>
-                gracefulShutdown(1),
+              await exitWithError(
+                root,
+                t('Unable to load transcript from file: {{file}}', { file: options.resume }),
+                () => gracefulShutdown(1),
               );
             }
           }
@@ -4303,7 +4380,7 @@ async function run(): Promise<CommanderCommand> {
                 entrypoint: 'cli_flag' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
                 success: false,
               });
-              return await exitWithError(root, `No conversation found with session ID: ${sessionId}`);
+              return await exitWithError(root, t('No conversation found with session ID: {{id}}', { id: sessionId }));
             }
 
             const fullPath = matchedLog?.fullPath ?? result.fullPath;
@@ -4331,7 +4408,7 @@ async function run(): Promise<CommanderCommand> {
               success: false,
             });
             logError(error);
-            await exitWithError(root, `Failed to resume session ${sessionId}`);
+            await exitWithError(root, t('Failed to resume session {{id}}', { id: sessionId }));
           }
         }
 
@@ -4342,11 +4419,16 @@ async function run(): Promise<CommanderCommand> {
             const failedCount = count(results, r => !r.success);
             if (failedCount > 0) {
               process.stderr.write(
-                chalk.yellow(`Warning: ${failedCount}/${results.length} file(s) failed to download.\n`),
+                chalk.yellow(
+                  t('Warning: {{failed}}/{{total}} file(s) failed to download.', {
+                    failed: failedCount,
+                    total: results.length,
+                  }) + '\n',
+                ),
               );
             }
           } catch (error) {
-            return await exitWithError(root, `Error downloading files: ${errorMessage(error)}`);
+            return await exitWithError(root, t('Error downloading files: {{msg}}', { msg: errorMessage(error) }));
           }
         }
 
@@ -4435,7 +4517,7 @@ async function run(): Promise<CommanderCommand> {
             );
           } else if (options.prefill) {
             deepLinkBanner = createSystemMessage(
-              'Launched with a pre-filled prompt — review it before pressing Enter.',
+              t('Launched with a pre-filled prompt — review it before pressing Enter.'),
               'warning',
             );
           }
@@ -4725,7 +4807,12 @@ async function run(): Promise<CommanderCommand> {
 
           const existing = await probeRunningServer();
           if (existing) {
-            process.stderr.write(`A claude server is already running (pid ${existing.pid}) at ${existing.httpUrl}\n`);
+            process.stderr.write(
+              t('A claude server is already running (pid {{pid}}) at {{url}}', {
+                pid: existing.pid,
+                url: existing.httpUrl,
+              }) + '\n',
+            );
             process.exit(1);
           }
 
@@ -4805,10 +4892,12 @@ async function run(): Promise<CommanderCommand> {
         // commander runs. Reaching here means host was missing or the
         // rewrite predicate didn't match.
         process.stderr.write(
-          'Usage: claude ssh <user@host | ssh-config-alias> [dir]\n\n' +
-            "Runs Claude Code on a remote Linux host. You don't need to install\n" +
-            'anything on the remote or run `claude auth login` there — the binary is\n' +
-            'deployed over SSH and API auth tunnels back through your local machine.\n',
+          t(
+            'Usage: claude ssh <user@host | ssh-config-alias> [dir]\n\n' +
+              "Runs Claude Code on a remote Linux host. You don't need to install\n" +
+              'anything on the remote or run `claude auth login` there — the binary is\n' +
+              'deployed over SSH and API auth tunnels back through your local machine.\n',
+          ),
         );
         process.exit(1);
       });
@@ -5226,9 +5315,11 @@ async function run(): Promise<CommanderCommand> {
         // (e.g. `--debug assistant`) and the position-0 predicate
         // didn't match. Print usage like the ssh stub does.
         process.stderr.write(
-          'Usage: claude assistant [sessionId]\n\n' +
-            'Attach the REPL as a viewer client to a running bridge session.\n' +
-            'Omit sessionId to discover and pick from available sessions.\n',
+          t(
+            'Usage: claude assistant [sessionId]\n\n' +
+              'Attach the REPL as a viewer client to a running bridge session.\n' +
+              'Omit sessionId to discover and pick from available sessions.\n',
+          ),
         );
         process.exit(1);
       });

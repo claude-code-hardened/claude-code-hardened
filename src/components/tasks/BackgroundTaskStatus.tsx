@@ -16,6 +16,7 @@ import {
   type AgentColorName,
 } from '@claude-code-best/builtin-tools/tools/AgentTool/agentColorManager.js';
 import type { Theme } from '../../utils/theme.js';
+import { t } from '../../i18n/index.js';
 import { KeyboardShortcutHint } from '@anthropic/ink';
 import { shouldHideTasksFooter } from './taskStatusUtils.js';
 
@@ -180,7 +181,7 @@ export function BackgroundTaskStatus({
       <SummaryPill selected={tasksSelected} onClick={onOpenDialog}>
         {getPillLabel(runningTasks)}
       </SummaryPill>
-      {pillNeedsCta(runningTasks) && <Text dimColor> · {figures.arrowDown} to view</Text>}
+      {pillNeedsCta(runningTasks) && <Text dimColor>{t(' · {{arrow}} to view', { arrow: figures.arrowDown })}</Text>}
     </>
   );
 }

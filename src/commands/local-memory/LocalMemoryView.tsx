@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from '@anthropic/ink';
 import type { Theme } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 export type LocalMemoryViewProps =
   | { mode: 'list'; stores: string[] }
@@ -17,14 +18,14 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
     if (props.stores.length === 0) {
       return (
         <Box>
-          <Text dimColor>No memory stores found. Use /local-memory create &lt;store&gt; to create one.</Text>
+          <Text dimColor>{t('No memory stores found. Use /local-memory create <store> to create one.')}</Text>
         </Box>
       );
     }
     return (
       <Box flexDirection="column">
         <Box marginBottom={1}>
-          <Text bold>Local Memory Stores ({props.stores.length})</Text>
+          <Text bold>{t('Local Memory Stores ({{count}})', { count: props.stores.length })}</Text>
         </Box>
         {props.stores.map(s => (
           <Box key={s}>
@@ -41,7 +42,7 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
     return (
       <Box>
         <Text color={'success' as keyof Theme}>✓</Text>
-        <Text> Store created: </Text>
+        <Text>{t(' Store created: ')}</Text>
         <Text bold>{props.store}</Text>
       </Box>
     );
@@ -51,9 +52,9 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
     return (
       <Box>
         <Text color={'success' as keyof Theme}>✓</Text>
-        <Text> Stored entry </Text>
+        <Text>{t(' Stored entry ')}</Text>
         <Text bold>{props.key}</Text>
-        <Text> in </Text>
+        <Text>{t(' in ')}</Text>
         <Text bold>{props.store}</Text>
       </Box>
     );
@@ -77,7 +78,7 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
   if (props.mode === 'not-found') {
     return (
       <Box>
-        <Text color={'error' as keyof Theme}>Not found: </Text>
+        <Text color={'error' as keyof Theme}>{t('Not found: ')}</Text>
         <Text bold>{props.store}</Text>
         {props.key ? (
           <>
@@ -93,9 +94,11 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
     if (props.keys.length === 0) {
       return (
         <Box>
-          <Text dimColor>No entries in </Text>
+          <Text dimColor>{t('No entries in ')}</Text>
           <Text bold>{props.store}</Text>
-          <Text dimColor>. Use /local-memory store {props.store} &lt;key&gt; &lt;value&gt; to add one.</Text>
+          <Text dimColor>
+            {t('. Use /local-memory store {{store}} <key> <value> to add one.', { store: props.store })}
+          </Text>
         </Box>
       );
     }
@@ -103,7 +106,7 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
       <Box flexDirection="column">
         <Box marginBottom={1}>
           <Text bold>{props.store}</Text>
-          <Text dimColor> ({props.keys.length} entries)</Text>
+          <Text dimColor>{t(' ({{count}} entries)', { count: props.keys.length })}</Text>
         </Box>
         {props.keys.map(k => (
           <Box key={k}>
@@ -120,9 +123,9 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
     return (
       <Box>
         <Text color={'success' as keyof Theme}>✓</Text>
-        <Text> Archived store: </Text>
+        <Text>{t(' Archived store: ')}</Text>
         <Text bold>{props.store}</Text>
-        <Text dimColor> (renamed to {props.store}.archived)</Text>
+        <Text dimColor>{t(' (renamed to {{store}}.archived)', { store: props.store })}</Text>
       </Box>
     );
   }
@@ -130,7 +133,7 @@ export function LocalMemoryView(props: LocalMemoryViewProps): React.ReactNode {
   // mode === 'error'
   return (
     <Box>
-      <Text color={'error' as keyof Theme}>Error: {props.message}</Text>
+      <Text color={'error' as keyof Theme}>{t('Error: {{message}}', { message: props.message })}</Text>
     </Box>
   );
 }

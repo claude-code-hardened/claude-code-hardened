@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import type { SystemMemorySavedMessage } from '../../types/message.js'
 
 /**
@@ -13,7 +14,10 @@ export function teamMemSavedPart(
   const count = (message.teamCount as number | undefined) ?? 0
   if (count === 0) return null
   return {
-    segment: `${count} team ${count === 1 ? 'memory' : 'memories'}`,
+    segment: t(
+      count === 1 ? '{{count}} team memory' : '{{count}} team memories',
+      { count },
+    ),
     count,
   }
 }

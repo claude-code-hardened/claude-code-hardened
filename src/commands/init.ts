@@ -1,5 +1,6 @@
 import { feature } from 'bun:bundle'
 import type { Command } from '../commands.js'
+import { t } from '../i18n/index.js'
 import { maybeMarkProjectOnboardingComplete } from '../projectOnboardingState.js'
 import { AUTONOMY_AGENTS_PATH_POSIX } from '../utils/autonomyAuthority.js'
 import { isEnvTruthy } from '../utils/envUtils.js'
@@ -235,7 +236,7 @@ const command = {
       : 'Initialize a new CLAUDE.md file with codebase documentation'
   },
   contentLength: 0, // Dynamic content
-  progressMessage: 'analyzing your codebase',
+  progressMessage: t('analyzing your codebase'),
   source: 'builtin',
   async getPromptForCommand() {
     maybeMarkProjectOnboardingComplete()

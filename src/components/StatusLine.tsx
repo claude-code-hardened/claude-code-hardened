@@ -27,6 +27,7 @@ import { useMainLoopModel } from '../hooks/useMainLoopModel.js';
 import { type ReadonlySettings, useSettings } from '../hooks/useSettings.js';
 import { Ansi, Box, Text } from '@anthropic/ink';
 import { getRawUtilization } from '../services/claudeAiLimits.js';
+import { t } from '../i18n/index.js';
 import type { Message } from '../types/message.js';
 import type { StatusLineCommandInput } from '../types/statusLine.js';
 import type { VimMode } from '../types/textInputTypes.js';
@@ -123,7 +124,7 @@ function CachePill({ messages }: CachePillProps): React.ReactNode {
 
   // No data yet — show placeholder
   if (displayHitRate === null && lastResetAt === null) {
-    return <Text dimColor>{' Cache --% --:--'}</Text>;
+    return <Text dimColor>{t(' Cache --% --:--')}</Text>;
   }
 
   const countdownText = remaining !== null ? formatCountdown(remaining) : '--:--';
@@ -147,7 +148,7 @@ function CachePill({ messages }: CachePillProps): React.ReactNode {
 
   return (
     <Text>
-      <Text dimColor>{' Cache '}</Text>
+      <Text dimColor>{t(' Cache ')}</Text>
       <Text color={hitRateColor}>{hitRateText}</Text>
       <Text color={timerColor} dimColor={inFlashZone && !isFlashOn}>
         {' '}
@@ -488,7 +489,7 @@ function StatusLineInner({ messagesRef, lastAssistantMessageId, vimMode }: Props
       if (!checkHasTrustDialogAccepted()) {
         addNotification({
           key: 'statusline-trust-blocked',
-          text: 'statusline skipped · restart to fix',
+          text: t('statusline skipped · restart to fix'),
           color: 'warning',
           priority: 'low',
         });

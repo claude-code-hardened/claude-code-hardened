@@ -2,6 +2,7 @@ import { feature } from 'bun:bundle';
 import * as React from 'react';
 import { useMemo } from 'react';
 import { Box } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useAppState } from 'src/state/AppState.js';
 import { STATUS_TAG, SUMMARY_TAG, TASK_NOTIFICATION_TAG } from '../../constants/xml.js';
 import { QueuedMessageProvider } from '../../context/QueuedMessageContext.js';
@@ -35,7 +36,7 @@ const MAX_VISIBLE_NOTIFICATIONS = 3;
  */
 function createOverflowNotificationMessage(count: number): string {
   return `<${TASK_NOTIFICATION_TAG}>
-<${SUMMARY_TAG}>+${count} more tasks completed</${SUMMARY_TAG}>
+<${SUMMARY_TAG}>${t('+{{count}} more tasks completed', { count })}</${SUMMARY_TAG}>
 <${STATUS_TAG}>completed</${STATUS_TAG}>
 </${TASK_NOTIFICATION_TAG}>`;
 }

@@ -9,6 +9,7 @@ const coordinatorModule = feature('COORDINATOR_MODE')
 import { Box, Text, Link } from '@anthropic/ink';
 import * as React from 'react';
 import figures from 'figures';
+import { t } from '../../i18n/index.js';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { VimMode, PromptInputMode } from '../../types/textInputTypes.js';
 import type { ToolPermissionContext } from '../../Tool.js';
@@ -125,7 +126,11 @@ function ProactiveCountdown(): React.ReactNode {
 
   if (remainingSeconds === null) return null;
 
-  return <Text dimColor>waiting {formatDuration(remainingSeconds * 1000, { mostSignificantOnly: true })}</Text>;
+  return (
+    <Text dimColor>
+      {t('waiting {{time}}', { time: formatDuration(remainingSeconds * 1000, { mostSignificantOnly: true }) })}
+    </Text>
+  );
 }
 
 /** Compact "goal (1h22min)" pill for the footer — colored by status. */
@@ -174,7 +179,11 @@ function GoalElapsedIndicator(): React.ReactNode {
       break;
   }
 
-  return <Text color={color as 'ansi:green'}>goal ({timeStr})</Text>;
+  return (
+    <Text color={color as 'ansi:green'}>
+      {t('goal')} ({timeStr})
+    </Text>
+  );
 }
 
 export function PromptInputFooterLeftSide({
@@ -198,14 +207,14 @@ export function PromptInputFooterLeftSide({
   if (exitMessage.show) {
     return (
       <Text dimColor key="exit-message">
-        Press {exitMessage.key} again to exit
+        {t('Press {{key}} again to exit', { key: exitMessage.key })}
       </Text>
     );
   }
   if (isPasting) {
     return (
       <Text dimColor key="pasting-message">
-        Pasting text…
+        {t('Pasting text…')}
       </Text>
     );
   }
@@ -341,7 +350,7 @@ function ModeIndicator({
     count(Object.values(teamContext.teammates), t => t.name !== 'team-lead') > 0;
 
   if (mode === 'bash') {
-    return <Text color="bashBorder">! for bash mode</Text>;
+    return <Text color="bashBorder">{t('! for bash mode')}</Text>;
   }
 
   const currentMode = toolPermissionContext?.mode;
@@ -382,7 +391,8 @@ function ModeIndicator({
   const modePart =
     currentMode && hasActiveMode && !getIsRemoteMode() ? (
       <Text color={getModeColor(currentMode)} key="mode">
-        {permissionModeSymbol(currentMode)} {permissionModeTitle(currentMode).toLowerCase()} on
+        {permissionModeSymbol(currentMode)} {permissionModeTitle(currentMode).toLowerCase()}
+        {t(' on')}
         {shouldShowModeHint && (
           <Text dimColor>
             {' '}
@@ -399,7 +409,9 @@ function ModeIndicator({
     ...(remoteSessionUrl
       ? [
           <Link url={remoteSessionUrl} key="remote">
-            <Text color="ide">{figures.circleDouble} remote</Text>
+            <Text color="ide">
+              {figures.circleDouble} {t('remote')}
+            </Text>
           </Link>,
         ]
       : []),
@@ -457,7 +469,7 @@ function ModeIndicator({
   if (isViewingCompletedTeammate) {
     parts.push(
       <Text dimColor key="esc-return">
-        <KeyboardShortcutHint shortcut={escShortcut} action="return to team lead" />
+        <KeyboardShortcutHint shortcut={escShortcut} action={t('return to team lead')} />
       </Text>,
     );
   } else if ((feature('PROACTIVE') || feature('KAIROS')) && hasNextTick) {
@@ -512,7 +524,7 @@ function ModeIndicator({
   if (parts.length === 0 && !tasksPart && !modePart && showHint) {
     parts.push(
       <Text dimColor key="shortcuts-hint">
-        ? for shortcuts
+        {t('? for shortcuts')}
       </Text>,
     );
   }
@@ -544,12 +556,12 @@ function ModeIndicator({
     parts.push(
       <Text dimColor key="selection-copy">
         <Byline>
-          {!copyOnSelect && <KeyboardShortcutHint shortcut="ctrl+c" action="copy" />}
+          {!copyOnSelect && <KeyboardShortcutHint shortcut="ctrl+c" action={t('copy')} />}
           {isXtermJs() &&
             (altClickFailed ? (
-              <Text>set macOptionClickForcesSelection in VS Code settings</Text>
+              <Text>{t('set macOptionClickForcesSelection in VS Code settings')}</Text>
             ) : (
-              <KeyboardShortcutHint shortcut={isMac ? 'option+click' : 'shift+click'} action="native select" />
+              <KeyboardShortcutHint shortcut={isMac ? 'option+click' : 'shift+click'} action={t('native select')} />
             ))}
         </Byline>
       </Text>,
@@ -565,7 +577,7 @@ function ModeIndicator({
   ) {
     parts.push(
       <Text dimColor key="voice-hint">
-        hold {voiceKeyShortcut} to speak
+        {t('hold {{key}} to speak', { key: voiceKeyShortcut })}
       </Text>,
     );
   }
@@ -574,9 +586,9 @@ function ModeIndicator({
     parts.push(
       <Text dimColor key="manage-tasks">
         {tasksSelected ? (
-          <KeyboardShortcutHint shortcut="Enter" action="view tasks" />
+          <KeyboardShortcutHint shortcut="Enter" action={t('view tasks')} />
         ) : (
-          <KeyboardShortcutHint shortcut="↓" action="manage" />
+          <KeyboardShortcutHint shortcut="↓" action={t('manage')} />
         )}
       </Text>,
     );
@@ -635,17 +647,17 @@ function getSpinnerHintParts(
     // Cycling: none → tasks → teammates → none
     switch (expandedView) {
       case 'none':
-        toggleAction = 'show tasks';
+        toggleAction = t('show tasks');
         break;
       case 'tasks':
-        toggleAction = 'show teammates';
+        toggleAction = t('show teammates');
         break;
       case 'teammates':
-        toggleAction = 'hide';
+        toggleAction = t('hide');
         break;
     }
   } else {
-    toggleAction = expandedView === 'tasks' ? 'hide tasks' : 'show tasks';
+    toggleAction = expandedView === 'tasks' ? t('hide tasks') : t('show tasks');
   }
 
   // Show the toggle hint only when there are task items to display or
@@ -656,14 +668,14 @@ function getSpinnerHintParts(
     ...(isLoading
       ? [
           <Text dimColor key="esc">
-            <KeyboardShortcutHint shortcut={escShortcut} action="interrupt" />
+            <KeyboardShortcutHint shortcut={escShortcut} action={t('interrupt')} />
           </Text>,
         ]
       : []),
     ...(!isLoading && hasRunningAgentTasks && !isKillAgentsConfirmShowing
       ? [
           <Text dimColor key="kill-agents">
-            <KeyboardShortcutHint shortcut={killAgentsShortcut} action="stop agents" />
+            <KeyboardShortcutHint shortcut={killAgentsShortcut} action={t('stop agents')} />
           </Text>,
         ]
       : []),

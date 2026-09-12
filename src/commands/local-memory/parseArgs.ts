@@ -12,6 +12,8 @@
  *   anything else                  → { action: 'invalid', reason }
  */
 
+import { t } from '../../i18n/index.js'
+
 export type LocalMemoryArgs =
   | { action: 'list' }
   | { action: 'create'; store: string }
@@ -36,6 +38,7 @@ export function parseLocalMemoryArgs(args: string): LocalMemoryArgs {
 
   const tokens = trimmed.split(/\s+/)
   const subCmd = tokens[0]
+  const usage = t(USAGE)
 
   // ── list ──────────────────────────────────────────────────────────────────
   if (subCmd === 'list') {
@@ -48,7 +51,7 @@ export function parseLocalMemoryArgs(args: string): LocalMemoryArgs {
     if (!store) {
       return {
         action: 'invalid',
-        reason: `create requires a store name. ${USAGE}`,
+        reason: t('create requires a store name. {{usage}}', { usage }),
       }
     }
     return { action: 'create', store }
@@ -61,16 +64,22 @@ export function parseLocalMemoryArgs(args: string): LocalMemoryArgs {
     if (!store) {
       return {
         action: 'invalid',
-        reason: `store requires a store name. ${USAGE}`,
+        reason: t('store requires a store name. {{usage}}', { usage }),
       }
     }
     if (!key) {
-      return { action: 'invalid', reason: `store requires a key. ${USAGE}` }
+      return {
+        action: 'invalid',
+        reason: t('store requires a key. {{usage}}', { usage }),
+      }
     }
     // D6: value is tokens[3..] joined, not substring math (handles store/key with repeated substrings)
     const rest = tokens.slice(3).join(' ')
     if (!rest) {
-      return { action: 'invalid', reason: `store requires a value. ${USAGE}` }
+      return {
+        action: 'invalid',
+        reason: t('store requires a value. {{usage}}', { usage }),
+      }
     }
     return { action: 'store', store, key, value: rest }
   }
@@ -82,11 +91,14 @@ export function parseLocalMemoryArgs(args: string): LocalMemoryArgs {
     if (!store) {
       return {
         action: 'invalid',
-        reason: `fetch requires a store name. ${USAGE}`,
+        reason: t('fetch requires a store name. {{usage}}', { usage }),
       }
     }
     if (!key) {
-      return { action: 'invalid', reason: `fetch requires a key. ${USAGE}` }
+      return {
+        action: 'invalid',
+        reason: t('fetch requires a key. {{usage}}', { usage }),
+      }
     }
     return { action: 'fetch', store, key }
   }
@@ -97,7 +109,7 @@ export function parseLocalMemoryArgs(args: string): LocalMemoryArgs {
     if (!store) {
       return {
         action: 'invalid',
-        reason: `entries requires a store name. ${USAGE}`,
+        reason: t('entries requires a store name. {{usage}}', { usage }),
       }
     }
     return { action: 'entries', store }
@@ -109,7 +121,7 @@ export function parseLocalMemoryArgs(args: string): LocalMemoryArgs {
     if (!store) {
       return {
         action: 'invalid',
-        reason: `archive requires a store name. ${USAGE}`,
+        reason: t('archive requires a store name. {{usage}}', { usage }),
       }
     }
     return { action: 'archive', store }
@@ -117,6 +129,9 @@ export function parseLocalMemoryArgs(args: string): LocalMemoryArgs {
 
   return {
     action: 'invalid',
-    reason: `Unknown sub-command "${subCmd}". ${USAGE}`,
+    reason: t('Unknown sub-command "{{sub}}". {{usage}}', {
+      sub: subCmd,
+      usage,
+    }),
   }
 }

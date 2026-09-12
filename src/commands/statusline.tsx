@@ -1,6 +1,7 @@
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs';
 import type { Command } from '../commands.js';
 import { AGENT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/AgentTool/constants.js';
+import { t } from '../i18n/index.js';
 
 const statusline = {
   type: 'prompt',
@@ -8,7 +9,7 @@ const statusline = {
   contentLength: 0, // Dynamic content
   aliases: [],
   name: 'statusline',
-  progressMessage: 'setting up statusLine',
+  progressMessage: t('setting up statusLine'),
   allowedTools: [AGENT_TOOL_NAME, 'Read(~/**)', 'Edit(~/.claude/settings.json)'],
   source: 'builtin',
   disableNonInteractive: true,

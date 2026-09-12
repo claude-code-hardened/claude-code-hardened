@@ -243,7 +243,10 @@ export function PermissionPrompt<T extends string>({
         onInputModeToggle={handleInputModeToggle}
       />
       <Box marginTop={1}>
-        <Text dimColor>Esc to cancel{showTabHint && ' · Tab to amend'}</Text>
+        <Text dimColor>
+          {t('Esc to cancel')}
+          {showTabHint && t(' · Tab to amend')}
+        </Text>
       </Box>
     </Box>
   );

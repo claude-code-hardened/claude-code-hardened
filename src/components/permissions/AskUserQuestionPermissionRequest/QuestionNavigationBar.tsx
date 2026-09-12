@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { useTerminalSize } from '../../../hooks/useTerminalSize.js';
 import { Box, Text, stringWidth } from '@anthropic/ink';
 import type { Question } from '@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js';
+import { t } from '../../../i18n/index.js';
 import { truncateToWidth } from '../../../utils/format.js';
 
 type Props = {
@@ -25,7 +26,7 @@ export function QuestionNavigationBar({
     // Calculate fixed width elements
     const leftArrow = '← ';
     const rightArrow = ' →';
-    const submitText = hideSubmitTab ? '' : ` ${figures.tick} Submit `;
+    const submitText = hideSubmitTab ? '' : ` ${figures.tick} ${t('Submit')} `;
     const checkboxWidth = 2; // checkbox + space
     const paddingPerTab = 2; // space before and after each tab text
 
@@ -114,10 +115,13 @@ export function QuestionNavigationBar({
           {currentQuestionIndex === questions.length ? (
             <Text backgroundColor="permission" color="inverseText">
               {' '}
-              {figures.tick} Submit{' '}
+              {figures.tick} {t('Submit')}{' '}
             </Text>
           ) : (
-            <Text> {figures.tick} Submit </Text>
+            <Text>
+              {' '}
+              {figures.tick} {t('Submit')}{' '}
+            </Text>
           )}
         </Box>
       )}

@@ -2,6 +2,7 @@ import figures from 'figures';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
 import { Box, color, Link, Text, useTheme } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useKeybinding } from '../../keybindings/useKeybinding.js';
 import { AuthenticationCancelledError, performMCPOAuthFlow } from '../../services/mcp/auth.js';
 import { capitalize } from '../../utils/stringUtils.js';
@@ -68,7 +69,11 @@ export function MCPAgentServerMenu({ agentServer, onCancel, onComplete }: Props)
 
       await performMCPOAuthFlow(agentServer.name, tempConfig, setAuthorizationUrl, controller.signal);
 
-      onComplete?.(`Authentication successful for ${agentServer.name}. The server will connect when the agent runs.`);
+      onComplete?.(
+        t('Authentication successful for {{name}}. The server will connect when the agent runs.', {
+          name: agentServer.name,
+        }),
+      );
     } catch (err) {
       // Don't show error if it was a cancellation
       if (err instanceof Error && !(err instanceof AuthenticationCancelledError)) {
@@ -85,20 +90,20 @@ export function MCPAgentServerMenu({ agentServer, onCancel, onComplete }: Props)
   if (isAuthenticating) {
     return (
       <Box flexDirection="column" gap={1} padding={1}>
-        <Text color="claude">Authenticating with {agentServer.name}…</Text>
+        <Text color="claude">{t('Authenticating with {{name}}…', { name: agentServer.name })}</Text>
         <Box>
           <Spinner />
-          <Text> A browser window will open for authentication</Text>
+          <Text>{t(' A browser window will open for authentication')}</Text>
         </Box>
         {authorizationUrl && (
           <Box flexDirection="column">
-            <Text dimColor>If your browser doesn&apos;t open automatically, copy this URL manually:</Text>
+            <Text dimColor>{t("If your browser doesn't open automatically, copy this URL manually:")}</Text>
             <Link url={authorizationUrl} />
           </Box>
         )}
         <Box marginLeft={3}>
           <Text dimColor>
-            Return here after authenticating in your browser.{' '}
+            {t('Return here after authenticating in your browser.')}{' '}
             <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="go back" />
           </Text>
         </Box>
@@ -111,24 +116,24 @@ export function MCPAgentServerMenu({ agentServer, onCancel, onComplete }: Props)
   // Only show authenticate option for HTTP/SSE servers
   if (agentServer.needsAuth) {
     menuOptions.push({
-      label: agentServer.isAuthenticated ? 'Re-authenticate' : 'Authenticate',
+      label: agentServer.isAuthenticated ? t('Re-authenticate') : t('Authenticate'),
       value: 'auth',
     });
   }
 
   menuOptions.push({
-    label: 'Back',
+    label: t('Back'),
     value: 'back',
   });
 
   return (
     <Dialog
-      title={`${capitalizedServerName} MCP Server`}
-      subtitle="agent-only"
+      title={t('{{name}} MCP Server', { name: capitalizedServerName })}
+      subtitle={t('agent-only')}
       onCancel={onCancel}
       inputGuide={exitState =>
         exitState.pending ? (
-          <Text>Press {exitState.keyName} again to exit</Text>
+          <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
         ) : (
           <Byline>
             <KeyboardShortcutHint shortcut="↑↓" action="navigate" />
@@ -140,53 +145,59 @@ export function MCPAgentServerMenu({ agentServer, onCancel, onComplete }: Props)
     >
       <Box flexDirection="column" gap={0}>
         <Box>
-          <Text bold>Type: </Text>
+          <Text bold>{t('Type: ')}</Text>
           <Text dimColor>{agentServer.transport}</Text>
         </Box>
 
         {agentServer.url && (
           <Box>
-            <Text bold>URL: </Text>
+            <Text bold>{t('URL: ')}</Text>
             <Text dimColor>{agentServer.url}</Text>
           </Box>
         )}
 
         {agentServer.command && (
           <Box>
-            <Text bold>Command: </Text>
+            <Text bold>{t('Command: ')}</Text>
             <Text dimColor>{agentServer.command}</Text>
           </Box>
         )}
 
         <Box>
-          <Text bold>Used by: </Text>
+          <Text bold>{t('Used by: ')}</Text>
           <Text dimColor>{agentServer.sourceAgents.join(', ')}</Text>
         </Box>
 
         <Box marginTop={1}>
-          <Text bold>Status: </Text>
-          <Text>{color('inactive', theme)(figures.radioOff)} not connected (agent-only)</Text>
+          <Text bold>{t('Status: ')}</Text>
+          <Text>
+            {color('inactive', theme)(figures.radioOff)} {t('not connected (agent-only)')}
+          </Text>
         </Box>
 
         {agentServer.needsAuth && (
           <Box>
-            <Text bold>Auth: </Text>
+            <Text bold>{t('Auth: ')}</Text>
             {agentServer.isAuthenticated ? (
-              <Text>{color('success', theme)(figures.tick)} authenticated</Text>
+              <Text>
+                {color('success', theme)(figures.tick)} {t('authenticated')}
+              </Text>
             ) : (
-              <Text>{color('warning', theme)(figures.triangleUpOutline)} may need authentication</Text>
+              <Text>
+                {color('warning', theme)(figures.triangleUpOutline)} {t('may need authentication')}
+              </Text>
             )}
           </Box>
         )}
       </Box>
 
       <Box>
-        <Text dimColor>This server connects only when running the agent.</Text>
+        <Text dimColor>{t('This server connects only when running the agent.')}</Text>
       </Box>
 
       {error && (
         <Box>
-          <Text color="error">Error: {error}</Text>
+          <Text color="error">{t('Error: {{error}}', { error })}</Text>
         </Box>
       )}
 

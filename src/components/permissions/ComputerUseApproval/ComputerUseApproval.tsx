@@ -5,6 +5,7 @@ import figures from 'figures';
 import * as React from 'react';
 import { useMemo, useState } from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../../i18n/index.js';
 import { execFileNoThrow } from '../../../utils/execFileNoThrow.js';
 import { plural } from '../../../utils/stringUtils.js';
 import type { OptionWithDescription } from '../../CustomSelect/select.js';
@@ -51,17 +52,17 @@ function ComputerUseTccPanel({
     const opts: OptionWithDescription<TccOption>[] = [];
     if (!tccState.accessibility) {
       opts.push({
-        label: 'Open System Settings → Accessibility',
+        label: t('Open System Settings → Accessibility'),
         value: 'open_accessibility',
       });
     }
     if (!tccState.screenRecording) {
       opts.push({
-        label: 'Open System Settings → Screen Recording',
+        label: t('Open System Settings → Screen Recording'),
         value: 'open_screen_recording',
       });
     }
-    opts.push({ label: 'Try again', value: 'retry' });
+    opts.push({ label: t('Try again'), value: 'retry' });
     return opts;
   }, [tccState.accessibility, tccState.screenRecording]);
 
@@ -90,19 +91,22 @@ function ComputerUseTccPanel({
   }
 
   return (
-    <Dialog title="Computer Use needs macOS permissions" onCancel={onDone}>
+    <Dialog title={t('Computer Use needs macOS permissions')} onCancel={onDone}>
       <Box flexDirection="column" paddingX={1} paddingY={1} gap={1}>
         <Box flexDirection="column">
           <Text>
-            Accessibility: {tccState.accessibility ? `${figures.tick} granted` : `${figures.cross} not granted`}
+            {t('Accessibility: ')}
+            {tccState.accessibility ? `${figures.tick} ${t('granted')}` : `${figures.cross} ${t('not granted')}`}
           </Text>
           <Text>
-            Screen Recording: {tccState.screenRecording ? `${figures.tick} granted` : `${figures.cross} not granted`}
+            {t('Screen Recording: ')}
+            {tccState.screenRecording ? `${figures.tick} ${t('granted')}` : `${figures.cross} ${t('not granted')}`}
           </Text>
         </Box>
         <Text dimColor>
-          Grant the missing permissions in System Settings, then select &quot;Try again&quot;. macOS may require you to
-          restart Claude Code after granting Screen Recording.
+          {t(
+            'Grant the missing permissions in System Settings, then select "Try again". macOS may require you to restart Claude Code after granting Screen Recording.',
+          )}
         </Text>
         <Select options={options} onChange={onChange} onCancel={onDone} />
       </Box>
@@ -114,11 +118,16 @@ function ComputerUseTccPanel({
 
 type AppListOption = 'allow_all' | 'deny';
 
-const SENTINEL_WARNING: Record<NonNullable<ReturnType<typeof getSentinelCategory>>, string> = {
-  shell: 'equivalent to shell access',
-  filesystem: 'can read/write any file',
-  system_settings: 'can change system settings',
-};
+function sentinelWarningLabel(sentinel: NonNullable<ReturnType<typeof getSentinelCategory>>): string {
+  switch (sentinel) {
+    case 'shell':
+      return t('equivalent to shell access');
+    case 'filesystem':
+      return t('can read/write any file');
+    case 'system_settings':
+      return t('can change system settings');
+  }
+}
 
 function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps): React.ReactNode {
   // Pre-check every resolved, not-yet-granted app. Sentinels stay checked
@@ -139,13 +148,17 @@ function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps):
   const options = useMemo<OptionWithDescription<AppListOption>[]>(
     () => [
       {
-        label: `Allow for this session (${checked.size} ${plural(checked.size, 'app')})`,
+        label: t('Allow for this session ({{count}} {{unit}})', {
+          count: checked.size,
+          unit: plural(checked.size, 'app'),
+        }),
         value: 'allow_all',
       },
       {
         label: (
           <Text>
-            Deny, and tell Claude what to do differently <Text bold>(esc)</Text>
+            {t('Deny, and tell Claude what to do differently ')}
+            <Text bold>(esc)</Text>
           </Text>
         ),
         value: 'deny',
@@ -186,7 +199,7 @@ function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps):
   }
 
   return (
-    <Dialog title="Computer Use wants to control these apps" onCancel={() => respond(false)}>
+    <Dialog title={t('Computer Use wants to control these apps')} onCancel={() => respond(false)}>
       <Box flexDirection="column" paddingX={1} paddingY={1} gap={1}>
         {request.reason ? <Text dimColor>{request.reason}</Text> : null}
 
@@ -197,7 +210,7 @@ function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps):
               return (
                 <Text key={a.requestedName} dimColor>
                   {'  '}
-                  {figures.circle} {a.requestedName} <Text dimColor>(not installed)</Text>
+                  {figures.circle} {a.requestedName} <Text dimColor>{t('(not installed)')}</Text>
                 </Text>
               );
             }
@@ -205,7 +218,7 @@ function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps):
               return (
                 <Text key={resolved.bundleId} dimColor>
                   {'  '}
-                  {figures.tick} {resolved.displayName} <Text dimColor>(already granted)</Text>
+                  {figures.tick} {resolved.displayName} <Text dimColor>{t('(already granted)')}</Text>
                 </Text>
               );
             }
@@ -220,7 +233,7 @@ function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps):
                 {sentinel ? (
                   <Text bold>
                     {'    '}
-                    {figures.warning} {SENTINEL_WARNING[sentinel]}
+                    {figures.warning} {sentinelWarningLabel(sentinel)}
                   </Text>
                 ) : null}
               </Box>
@@ -230,7 +243,7 @@ function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps):
 
         {requestedFlagKeys.length > 0 ? (
           <Box flexDirection="column">
-            <Text dimColor>Also requested:</Text>
+            <Text dimColor>{t('Also requested:')}</Text>
             {requestedFlagKeys.map(flag => (
               <Text key={flag} dimColor>
                 {'  '}· {flag}
@@ -241,7 +254,10 @@ function ComputerUseAppListPanel({ request, onDone }: ComputerUseApprovalProps):
 
         {request.willHide && request.willHide.length > 0 ? (
           <Text dimColor>
-            {request.willHide.length} other {plural(request.willHide.length, 'app')} will be hidden while Claude works.
+            {t('{{count}} other {{unit}} will be hidden while Claude works.', {
+              count: request.willHide.length,
+              unit: plural(request.willHide.length, 'app'),
+            })}
           </Text>
         ) : null}
 

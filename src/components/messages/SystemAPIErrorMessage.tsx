@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { formatAPIError } from '@ant/model-provider';
 import type { SystemAPIErrorMessage } from 'src/types/message.js';
 import { useInterval } from 'usehooks-ts';
@@ -45,9 +46,15 @@ export function SystemAPIErrorMessage({
         <Text color="error">{truncated ? formatted.slice(0, MAX_API_ERROR_CHARS) + '…' : formatted}</Text>
         {truncated && <CtrlOToExpand />}
         <Text dimColor>
-          Retrying in {retryInSecondsLive} {retryInSecondsLive === 1 ? 'second' : 'seconds'}… (attempt {_retryAttempt}/
-          {_maxRetries})
-          {process.env.API_TIMEOUT_MS ? ` · API_TIMEOUT_MS=${process.env.API_TIMEOUT_MS}ms, try increasing it` : ''}
+          {t(
+            retryInSecondsLive === 1
+              ? 'Retrying in {{count}} second… (attempt {{attempt}}/{{max}})'
+              : 'Retrying in {{count}} seconds… (attempt {{attempt}}/{{max}})',
+            { count: retryInSecondsLive, attempt: _retryAttempt, max: _maxRetries },
+          )}
+          {process.env.API_TIMEOUT_MS
+            ? ` · ${t('API_TIMEOUT_MS={{ms}}ms, try increasing it', { ms: process.env.API_TIMEOUT_MS })}`
+            : ''}
         </Text>
       </Box>
     </MessageResponse>

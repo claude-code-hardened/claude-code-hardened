@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { type NetworkHostPattern, shouldAllowManagedSandboxDomainsOnly } from 'src/utils/sandbox/sandbox-adapter.js';
+import { t } from '../../i18n/index.js';
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
@@ -44,13 +45,14 @@ export function SandboxPermissionRequest({
   const managedDomainsOnly = shouldAllowManagedSandboxDomainsOnly();
 
   const options = [
-    { label: 'Yes', value: 'yes' },
+    { label: t('Yes'), value: 'yes' },
     ...(!managedDomainsOnly
       ? [
           {
             label: (
               <Text>
-                Yes, and don&apos;t ask again for <Text bold>{host}</Text>
+                {t("Yes, and don't ask again for ")}
+                <Text bold>{host}</Text>
               </Text>
             ),
             value: 'yes-dont-ask-again',
@@ -60,7 +62,8 @@ export function SandboxPermissionRequest({
     {
       label: (
         <Text>
-          No, and tell Claude what to do differently <Text bold>(esc)</Text>
+          {t('No, and tell Claude what to do differently ')}
+          <Text bold>(esc)</Text>
         </Text>
       ),
       value: 'no',
@@ -68,14 +71,14 @@ export function SandboxPermissionRequest({
   ];
 
   return (
-    <PermissionDialog title="Network request outside of sandbox">
+    <PermissionDialog title={t('Network request outside of sandbox')}>
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Box>
-          <Text dimColor>Host:</Text>
+          <Text dimColor>{t('Host:')}</Text>
           <Text> {host}</Text>
         </Box>
         <Box marginTop={1}>
-          <Text>Do you want to allow this connection?</Text>
+          <Text>{t('Do you want to allow this connection?')}</Text>
         </Box>
         <Box>
           <Select

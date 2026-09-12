@@ -3,6 +3,7 @@ import TextInput from '../../components/TextInput.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import { Box, Text } from '@anthropic/ink';
 import { useKeybindings } from '../../keybindings/useKeybinding.js';
+import { t } from '../../i18n/index.js';
 
 interface ChooseRepoStepProps {
   currentRepo: string | null;
@@ -68,14 +69,14 @@ export function ChooseRepoStep({
     <>
       <Box flexDirection="column" borderStyle="round" paddingX={1}>
         <Box flexDirection="column" marginBottom={1}>
-          <Text bold>Install GitHub App</Text>
-          <Text dimColor>Select GitHub repository</Text>
+          <Text bold>{t('Install GitHub App')}</Text>
+          <Text dimColor>{t('Select GitHub repository')}</Text>
         </Box>
         {currentRepo && (
           <Box marginBottom={1}>
             <Text bold={useCurrentRepo} color={useCurrentRepo ? 'permission' : undefined}>
               {useCurrentRepo ? '> ' : '  '}
-              Use current repository: {currentRepo}
+              {t('Use current repository: {{repo}}', { repo: currentRepo })}
             </Text>
           </Box>
         )}
@@ -85,7 +86,7 @@ export function ChooseRepoStep({
             color={!useCurrentRepo || !currentRepo ? 'permission' : undefined}
           >
             {!useCurrentRepo || !currentRepo ? '> ' : '  '}
-            {currentRepo ? 'Enter a different repository' : 'Enter repository'}
+            {currentRepo ? t('Enter a different repository') : t('Enter repository')}
           </Text>
         </Box>
         {(!useCurrentRepo || !currentRepo) && (
@@ -98,7 +99,7 @@ export function ChooseRepoStep({
               }}
               onSubmit={handleSubmit}
               focus={true}
-              placeholder="Enter a repo as owner/repo or https://github.com/owner/repo…"
+              placeholder={t('Enter a repo as owner/repo or https://github.com/owner/repo…')}
               columns={textInputColumns}
               cursorOffset={cursorOffset}
               onChangeCursorOffset={setCursorOffset}
@@ -109,11 +110,14 @@ export function ChooseRepoStep({
       </Box>
       {showEmptyError && (
         <Box marginLeft={3} marginBottom={1}>
-          <Text color="error">Please enter a repository name to continue</Text>
+          <Text color="error">{t('Please enter a repository name to continue')}</Text>
         </Box>
       )}
       <Box marginLeft={3}>
-        <Text dimColor>{currentRepo ? '↑/↓ to select · ' : ''}Enter to continue</Text>
+        <Text dimColor>
+          {currentRepo ? t('↑/↓ to select · ') : ''}
+          {t('Enter to continue')}
+        </Text>
       </Box>
     </>
   );

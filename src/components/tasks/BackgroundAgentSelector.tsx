@@ -1,4 +1,5 @@
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useBackgroundAgentTasks } from '../../hooks/useBackgroundAgentTasks.js';
 import { useElapsedTime } from '../../hooks/useElapsedTime.js';
 import { useAppState } from '../../state/AppState.js';
@@ -19,7 +20,7 @@ function AgentRow({ task, selected }: { task: LocalAgentTaskState; selected: boo
       </Box>
       <Box flexShrink={0}>
         <Text dimColor>
-          {elapsed} · ↓ {formatTokens(tokens)} tokens
+          {elapsed} · {t('↓ {{n}} tokens', { n: formatTokens(tokens) })}
         </Text>
       </Box>
     </Box>
@@ -27,9 +28,9 @@ function AgentRow({ task, selected }: { task: LocalAgentTaskState; selected: boo
 }
 
 function getHint(pillFocused: boolean, viewedTask: LocalAgentTaskState | null): string {
-  if (pillFocused) return '↑/↓ to select · Enter to view';
-  if (!viewedTask) return 'shift+↓ to manage background agents';
-  return viewedTask.status === 'running' ? 'shift+↓ to manage · x to stop' : 'shift+↓ to manage · x to clear';
+  if (pillFocused) return t('↑/↓ to select · Enter to view');
+  if (!viewedTask) return t('shift+↓ to manage background agents');
+  return viewedTask.status === 'running' ? t('shift+↓ to manage · x to stop') : t('shift+↓ to manage · x to clear');
 }
 
 export function BackgroundAgentSelector(): React.ReactNode {

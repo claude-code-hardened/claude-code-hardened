@@ -1,6 +1,7 @@
 import figures from 'figures';
 import React, { useCallback, useState } from 'react';
 import { type KeyboardEvent, Box, Text } from '@anthropic/ink';
+import { t } from '../../../i18n/index.js';
 import { useAppState } from '../../../state/AppState.js';
 import type {
   Question,
@@ -174,8 +175,8 @@ export function QuestionView({
   const otherOption: OptionWithDescription<string> = {
     type: 'input' as const,
     value: '__other__',
-    label: 'Other',
-    placeholder: question.multiSelect ? 'Type something' : 'Type something.',
+    label: t('Other'),
+    placeholder: question.multiSelect ? t('Type something') : t('Type something.'),
     initialValue: questionState?.textInputValue ?? '',
     onChange: (value: string) => {
       onUpdateQuestionState(questionText, { textInputValue: value }, question.multiSelect ?? false);
@@ -218,7 +219,8 @@ export function QuestionView({
         <Box flexDirection="column" gap={0}>
           <Divider color="inactive" />
           <Text color="inactive">
-            Planning: <FilePathLink filePath={planFilePath} />
+            {t('Planning: ')}
+            <FilePathLink filePath={planFilePath} />
           </Text>
         </Box>
       )}
@@ -251,7 +253,7 @@ export function QuestionView({
                 }}
                 onFocus={handleFocus}
                 onCancel={onCancel}
-                submitButtonText={currentQuestionIndex === questions.length - 1 ? 'Submit' : 'Next'}
+                submitButtonText={currentQuestionIndex === questions.length - 1 ? t('Submit') : t('Next')}
                 onSubmit={onSubmit}
                 onDownFromLastItem={handleDownFromLastItem}
                 isDisabled={isFooterFocused}
@@ -292,7 +294,7 @@ export function QuestionView({
                 <Text> </Text>
               )}
               <Text color={isFooterFocused && footerIndex === 0 ? 'suggestion' : undefined}>
-                {options.length + 1}. Chat about this
+                {options.length + 1}. {t('Chat about this')}
               </Text>
             </Box>
             {isInPlanMode && (
@@ -303,22 +305,21 @@ export function QuestionView({
                   <Text> </Text>
                 )}
                 <Text color={isFooterFocused && footerIndex === 1 ? 'suggestion' : undefined}>
-                  {options.length + 2}. Skip interview and plan immediately
+                  {options.length + 2}. {t('Skip interview and plan immediately')}
                 </Text>
               </Box>
             )}
           </Box>
           <Box marginTop={1}>
             <Text color="inactive" dimColor>
-              Enter to select ·{' '}
+              {t('Enter to select · ')}
               {questions.length === 1 ? (
-                <>
-                  {figures.arrowUp}/{figures.arrowDown} to navigate
-                </>
+                <>{t('{{up}}/{{down}} to navigate', { up: figures.arrowUp, down: figures.arrowDown })}</>
               ) : (
-                'Tab/Arrow keys to navigate'
+                t('Tab/Arrow keys to navigate')
               )}
-              {isOtherFocused && editorName && <> · ctrl+g to edit in {editorName}</>} · Esc to cancel
+              {isOtherFocused && editorName && <>{t(' · ctrl+g to edit in {{editor}}', { editor: editorName })}</>}
+              {t(' · Esc to cancel')}
             </Text>
           </Box>
         </Box>

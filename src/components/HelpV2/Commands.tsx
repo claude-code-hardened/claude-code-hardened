@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useMemo } from 'react';
 import { type Command, formatDescriptionWithSource } from '../../commands.js';
+import { t } from '../../i18n/index.js';
 import { truncate } from '../../utils/truncate.js';
 import { Box, Text, useTabHeaderFocus } from '@anthropic/ink';
 import { Select } from '../CustomSelect/select.js';
@@ -33,7 +34,7 @@ export function Commands({ commands, maxHeight, columns, title, onCancel, emptyM
       .map(cmd => ({
         label: `/${cmd.name}`,
         value: cmd.name,
-        description: truncate(formatDescriptionWithSource(cmd), maxWidth, true),
+        description: truncate(t(formatDescriptionWithSource(cmd)), maxWidth, true),
       }));
   }, [commands, maxWidth]);
 

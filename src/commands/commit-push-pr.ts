@@ -4,6 +4,7 @@ import {
   getEnhancedPRAttribution,
 } from '../utils/attribution.js'
 import { getDefaultBranch } from '../utils/git.js'
+import { t } from '../i18n/index.js'
 import { executeShellCommandsInPrompt } from '../utils/promptShellExecution.js'
 import { getUndercoverInstructions, isUndercover } from '../utils/undercover.js'
 
@@ -114,7 +115,7 @@ const command = {
     // Use 'main' as estimate for content length calculation
     return getPromptContent('main').length
   },
-  progressMessage: 'creating commit and PR',
+  progressMessage: t('creating commit and PR'),
   source: 'builtin',
   async getPromptForCommand(args, context) {
     // Get default branch and enhanced PR attribution

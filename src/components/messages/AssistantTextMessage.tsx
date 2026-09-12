@@ -4,6 +4,7 @@ import { ERROR_MESSAGE_USER_ABORT } from 'src/services/compact/compact.js';
 import { isRateLimitErrorMessage } from 'src/services/rateLimitMessages.js';
 import { BLACK_CIRCLE } from '../../constants/figures.js';
 import { Box, NoSelect, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import {
   API_ERROR_MESSAGE_PREFIX,
   API_TIMEOUT_ERROR_MESSAGE,
@@ -46,7 +47,7 @@ function InvalidApiKeyMessage(): React.ReactNode {
     <MessageResponse>
       <Box flexDirection="column">
         <Text color="error">{INVALID_API_KEY_ERROR_MESSAGE}</Text>
-        {isKeychainLocked && <Text dimColor>· Run in another terminal: security unlock-keychain</Text>}
+        {isKeychainLocked && <Text dimColor>{t('· Run in another terminal: security unlock-keychain')}</Text>}
       </Box>
     </MessageResponse>
   );
@@ -81,7 +82,7 @@ export function AssistantTextMessage({
       return (
         <MessageResponse height={1}>
           <Text color="error">
-            Context limit reached · /compact or /clear to continue
+            {t('Context limit reached · /compact or /clear to continue')}
             {upgradeHint ? ` · ${upgradeHint}` : ''}
           </Text>
         </MessageResponse>
@@ -92,7 +93,7 @@ export function AssistantTextMessage({
       return (
         <MessageResponse height={1}>
           <Text color="error">
-            Credit balance too low &middot; Add funds: https://platform.claude.com/settings/billing
+            {t('Credit balance too low · Add funds: https://platform.claude.com/settings/billing')}
           </Text>
         </MessageResponse>
       );
@@ -127,7 +128,9 @@ export function AssistantTextMessage({
         <MessageResponse height={1}>
           <Text color="error">
             {API_TIMEOUT_ERROR_MESSAGE}
-            {process.env.API_TIMEOUT_MS && <> (API_TIMEOUT_MS={process.env.API_TIMEOUT_MS}ms, try increasing it)</>}
+            {process.env.API_TIMEOUT_MS && (
+              <> ({t('API_TIMEOUT_MS={{ms}}ms, try increasing it', { ms: process.env.API_TIMEOUT_MS })})</>
+            )}
           </Text>
         </MessageResponse>
       );
@@ -136,10 +139,11 @@ export function AssistantTextMessage({
       return (
         <MessageResponse>
           <Box flexDirection="column" gap={1}>
-            <Text color="error">We are experiencing high demand for Opus 4.</Text>
+            <Text color="error">{t('We are experiencing high demand for Opus 4.')}</Text>
             <Text>
-              To continue immediately, use /model to switch to {renderModelName(getDefaultSonnetModel())} and continue
-              coding.
+              {t('To continue immediately, use /model to switch to {{model}} and continue coding.', {
+                model: renderModelName(getDefaultSonnetModel()),
+              })}
             </Text>
           </Box>
         </MessageResponse>
@@ -161,7 +165,7 @@ export function AssistantTextMessage({
             <Box flexDirection="column">
               <Text color="error">
                 {text === API_ERROR_MESSAGE_PREFIX
-                  ? `${API_ERROR_MESSAGE_PREFIX}: Please wait a moment and try again.`
+                  ? t('{{prefix}}: Please wait a moment and try again.', { prefix: API_ERROR_MESSAGE_PREFIX })
                   : truncated
                     ? text.slice(0, MAX_API_ERROR_CHARS) + '…'
                     : text}

@@ -11,6 +11,7 @@ import {
   isValidStoreName,
 } from '../../services/SessionMemory/multiStore.js';
 import { isValidKey } from '../../utils/localValidate.js';
+import { t } from '../../i18n/index.js';
 import TextInput from '../../components/TextInput.js';
 import { LocalMemoryView } from './LocalMemoryView.js';
 import { parseLocalMemoryArgs } from './parseArgs.js';
@@ -31,16 +32,16 @@ const ACTION_LABEL_COLUMN_WIDTH = 26;
 
 function formatStoreList(stores: string[]): string {
   if (stores.length === 0) {
-    return 'No memory stores found.';
+    return t('No memory stores found.');
   }
-  return ['Local Memory Stores', ...stores.map(store => `- ${store}`)].join('\n');
+  return [t('Local Memory Stores'), ...stores.map(store => `- ${store}`)].join('\n');
 }
 
 function formatEntryList(store: string, keys: string[]): string {
   if (keys.length === 0) {
-    return `No entries in "${store}".`;
+    return t('No entries in "{{store}}".', { store });
   }
-  return [`Entries in "${store}"`, ...keys.map(key => `- ${key}`)].join('\n');
+  return [t('Entries in "{{store}}"', { store }), ...keys.map(key => `- ${key}`)].join('\n');
 }
 
 // ── Interactive multi-step panel ───────────────────────────────────────────
@@ -145,12 +146,12 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
           return;
         }
         if (!store) {
-          setError('Internal: missing store');
+          setError(t('Internal: missing store'));
           return;
         }
         if (action === 'create') {
           createStore(store);
-          closeWith(`Store created: ${store}`);
+          closeWith(t('Store created: {{store}}', { store }));
           return;
         }
         if (action === 'entries') {
@@ -160,25 +161,25 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
         }
         if (action === 'archive') {
           archiveStore(store);
-          closeWith(`Archived store: ${store}`);
+          closeWith(t('Archived store: {{store}}', { store }));
           return;
         }
         if (action === 'fetch') {
           if (!key) {
-            setError('Internal: missing key');
+            setError(t('Internal: missing key'));
             return;
           }
           const v = getEntry(store, key);
           if (v === null) {
-            closeWith(`Entry not found: ${store}/${key}`);
+            closeWith(t('Entry not found: {{store}}/{{key}}', { store, key }));
             return;
           }
-          closeWith(`Entry fetched: ${store}/${key}\n\n${v}`);
+          closeWith(t('Entry fetched: {{store}}/{{key}}\n\n{{value}}', { store, key, value: v }));
           return;
         }
         if (action === 'store') {
           if (!key || value === undefined) {
-            setError('Internal: missing key or value');
+            setError(t('Internal: missing key or value'));
             return;
           }
           // Confirm overwrite if key already exists (safety prompt)
@@ -192,7 +193,7 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
             return;
           }
           setEntry(store, key, value);
-          closeWith(`Stored ${store}/${key} (${value.length} chars)`);
+          closeWith(t('Stored {{store}}/{{key}} ({{count}} chars)', { store, key, count: value.length }));
           return;
         }
       } catch (e) {
@@ -295,21 +296,21 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
   if (step.kind === 'menu') {
     return (
       <Dialog
-        title="Local Memory"
-        subtitle={`${MENU.length} actions`}
-        onCancel={() => closeWith('Local memory panel dismissed')}
+        title={t('Local Memory')}
+        subtitle={t('{{count}} actions', { count: MENU.length })}
+        onCancel={() => closeWith(t('Local memory panel dismissed'))}
         color="background"
         hideInputGuide
       >
         <Box flexDirection="column">
           {MENU.map((m, i) => (
             <Box key={m.kind} flexDirection="row">
-              <Text>{`${i === selectedIndex ? '›' : ' '} ${m.label}`.padEnd(ACTION_LABEL_COLUMN_WIDTH)}</Text>
-              <Text dimColor>{m.description}</Text>
+              <Text>{`${i === selectedIndex ? '›' : ' '} ${t(m.label)}`.padEnd(ACTION_LABEL_COLUMN_WIDTH)}</Text>
+              <Text dimColor>{t(m.description)}</Text>
             </Box>
           ))}
           <Box marginTop={1}>
-            <Text dimColor>↑/↓ or 1-7 select · Enter run · Esc close</Text>
+            <Text dimColor>{t('↑/↓ or 1-7 select · Enter run · Esc close')}</Text>
           </Box>
         </Box>
       </Dialog>
@@ -319,11 +320,11 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
   // Confirmation prompts
   if (step.kind === 'confirm-archive') {
     return (
-      <Dialog title="Confirm Archive" onCancel={() => transition({ kind: 'menu' })} color="warning" hideInputGuide>
+      <Dialog title={t('Confirm Archive')} onCancel={() => transition({ kind: 'menu' })} color="warning" hideInputGuide>
         <Box flexDirection="column">
-          <Text>Archive store "{step.store}"? This renames it to *.archived.</Text>
+          <Text>{t('Archive store "{{store}}"? This renames it to *.archived.', { store: step.store })}</Text>
           <Box marginTop={1}>
-            <Text dimColor>y/Enter = archive · n/Esc = cancel</Text>
+            <Text dimColor>{t('y/Enter = archive · n/Esc = cancel')}</Text>
           </Box>
         </Box>
       </Dialog>
@@ -331,13 +332,22 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
   }
   if (step.kind === 'confirm-overwrite') {
     return (
-      <Dialog title="Confirm Overwrite" onCancel={() => transition({ kind: 'menu' })} color="warning" hideInputGuide>
+      <Dialog
+        title={t('Confirm Overwrite')}
+        onCancel={() => transition({ kind: 'menu' })}
+        color="warning"
+        hideInputGuide
+      >
         <Box flexDirection="column">
           <Text>
-            Entry "{step.store}/{step.key}" already exists. Overwrite with new value ({step.value.length} chars)?
+            {t('Entry "{{store}}/{{key}}" already exists. Overwrite with new value ({{count}} chars)?', {
+              store: step.store,
+              key: step.key,
+              count: step.value.length,
+            })}
           </Text>
           <Box marginTop={1}>
-            <Text dimColor>y/Enter = overwrite · n/Esc = cancel</Text>
+            <Text dimColor>{t('y/Enter = overwrite · n/Esc = cancel')}</Text>
           </Box>
         </Box>
       </Dialog>
@@ -345,22 +355,23 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
   }
 
   // collect-* steps share the same TextInput render
-  const fieldLabel = step.kind === 'collect-store' ? 'STORE NAME' : step.kind === 'collect-key' ? 'KEY NAME' : 'VALUE';
+  const fieldLabel =
+    step.kind === 'collect-store' ? t('STORE NAME') : step.kind === 'collect-key' ? t('KEY NAME') : t('VALUE');
   const placeholder =
     step.kind === 'collect-store'
-      ? 'e.g. my-notes'
+      ? t('e.g. my-notes')
       : step.kind === 'collect-key'
-        ? 'e.g. todo-2026-05-08'
-        : 'free text';
+        ? t('e.g. todo-2026-05-08')
+        : t('free text');
   const validateAndAdvance = (raw: string) => {
     const trimmed = raw.trim();
     if (step.kind === 'collect-store') {
       if (!trimmed) {
-        setError('Store name required');
+        setError(t('Store name required'));
         return;
       }
       if (!isValidStoreName(trimmed)) {
-        setError('Invalid store name (no /, \\, :, null byte, or leading dot; max 255 chars)');
+        setError(t('Invalid store name (no /, \\, :, null byte, or leading dot; max 255 chars)'));
         return;
       }
       // Action-specific completion
@@ -382,11 +393,11 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
     }
     if (step.kind === 'collect-key') {
       if (!trimmed) {
-        setError('Key required');
+        setError(t('Key required'));
         return;
       }
       if (!isValidKey(trimmed)) {
-        setError('Invalid key (allowed: letters/digits/._- only; no leading dot; not a Windows reserved name)');
+        setError(t('Invalid key (allowed: letters/digits/._- only; no leading dot; not a Windows reserved name)'));
         return;
       }
       if (step.action === 'fetch') {
@@ -410,7 +421,7 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
 
   return (
     <Dialog
-      title={`Local Memory · ${step.kind.replace('collect-', '').toUpperCase()}`}
+      title={t('Local Memory · {{step}}', { step: step.kind.replace('collect-', '').toUpperCase() })}
       onCancel={() => transition({ kind: 'menu' })}
       color="background"
       hideInputGuide
@@ -441,7 +452,7 @@ function LocalMemoryPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
           </Box>
         )}
         <Box marginTop={1}>
-          <Text dimColor>Enter = next · Esc = back</Text>
+          <Text dimColor>{t('Enter = next · Esc = back')}</Text>
         </Box>
       </Box>
     </Dialog>
@@ -461,14 +472,14 @@ async function dispatchLocalMemory(
   if (parsed.action === 'create') {
     const { store } = parsed;
     createStore(store);
-    onDone(`Store created: ${store}`, { display: 'system' });
+    onDone(t('Store created: {{store}}', { store }), { display: 'system' });
     return null;
   }
 
   if (parsed.action === 'store') {
     const { store, key, value } = parsed;
     setEntry(store, key, value);
-    onDone(`Stored entry "${key}" in store "${store}".`, { display: 'system' });
+    onDone(t('Stored entry "{{key}}" in store "{{store}}".', { key, store }), { display: 'system' });
     return null;
   }
 
@@ -476,10 +487,10 @@ async function dispatchLocalMemory(
     const { store, key } = parsed;
     const value = getEntry(store, key);
     if (value === null) {
-      onDone(`Entry not found: ${store}/${key}`, { display: 'system' });
+      onDone(t('Entry not found: {{store}}/{{key}}', { store, key }), { display: 'system' });
       return null;
     }
-    onDone(`Entry fetched: ${store}/${key}\n${value}`, { display: 'system' });
+    onDone(t('Entry fetched: {{store}}/{{key}}\n{{value}}', { store, key, value }), { display: 'system' });
     return null;
   }
 
@@ -493,7 +504,7 @@ async function dispatchLocalMemory(
   if (parsed.action === 'archive') {
     const { store } = parsed;
     archiveStore(store);
-    onDone(`Archived store: ${store}`, { display: 'system' });
+    onDone(t('Archived store: {{store}}', { store }), { display: 'system' });
     return null;
   }
 

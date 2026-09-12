@@ -1,4 +1,5 @@
 import { parseFrontmatter } from '../utils/frontmatterParser.js'
+import { t } from '../i18n/index.js'
 import { parseSlashCommandToolsFromFrontmatter } from '../utils/markdownConfigLoader.js'
 import { executeShellCommandsInPrompt } from '../utils/promptShellExecution.js'
 import { createMovedToPluginCommand } from './createMovedToPluginCommand.js'
@@ -199,7 +200,7 @@ export default createMovedToPluginCommand({
   name: 'security-review',
   description:
     'Complete a security review of the pending changes on the current branch',
-  progressMessage: 'analyzing code changes for security risks',
+  progressMessage: t('analyzing code changes for security risks'),
   pluginName: 'security-review',
   pluginCommand: 'security-review',
   async getPromptWhileMarketplaceIsPrivate(_args, context) {

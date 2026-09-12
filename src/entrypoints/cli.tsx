@@ -207,7 +207,8 @@ async function main(): Promise<void> {
     }
     const disabledReason = await getBridgeDisabledReason();
     if (disabledReason) {
-      exitWithError(`Error: ${disabledReason}`);
+      const { t } = await import('../i18n/index.js');
+      exitWithError(t('Error: {{msg}}', { msg: disabledReason }));
     }
     const versionError = checkBridgeMinVersion();
     if (versionError) {
@@ -218,7 +219,8 @@ async function main(): Promise<void> {
     const { waitForPolicyLimitsToLoad, isPolicyAllowed } = await import('../services/policyLimits/index.js');
     await waitForPolicyLimitsToLoad();
     if (!isPolicyAllowed('allow_remote_control')) {
-      exitWithError("Error: Remote Control is disabled by your organization's policy.");
+      const { t } = await import('../i18n/index.js');
+      exitWithError(t("Error: Remote Control is disabled by your organization's policy."));
     }
 
     await bridgeMain(args.slice(1));
@@ -280,7 +282,8 @@ async function main(): Promise<void> {
     (args[0] === 'ps' || args[0] === 'logs' || args[0] === 'attach' || args[0] === 'kill')
   ) {
     const mapped = args[0] === 'ps' ? 'status' : args[0];
-    console.error(`[deprecated] Use: claude daemon ${mapped}${args[1] ? ' ' + args[1] : ''}`);
+    const { t } = await import('../i18n/index.js');
+    console.error(t('[deprecated] Use: claude daemon {{cmd}}', { cmd: mapped + (args[1] ? ` ${args[1]}` : '') }));
     profileCheckpoint('cli_daemon_path');
     const { enableConfigs } = await import('../utils/config.js');
     enableConfigs();
@@ -306,7 +309,8 @@ async function main(): Promise<void> {
 
   // Backward-compat: new/list/reply → job <sub> (deprecated)
   if (feature('TEMPLATES') && (args[0] === 'new' || args[0] === 'list' || args[0] === 'reply')) {
-    console.error(`[deprecated] Use: claude job ${args[0]} ${args.slice(1).join(' ')}`.trim());
+    const { t } = await import('../i18n/index.js');
+    console.error(t('[deprecated] Use: claude job {{cmd}}', { cmd: `${args[0]} ${args.slice(1).join(' ')}`.trim() }));
     profileCheckpoint('cli_templates_path');
     const { templatesMain } = await import('../cli/handlers/templateJobs.js');
     await templatesMain(args);

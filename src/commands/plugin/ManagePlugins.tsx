@@ -14,6 +14,7 @@ import type { ClaudeAIServerInfo, HTTPServerInfo, SSEServerInfo, StdioServerInfo
 import { SearchBox } from '../../components/SearchBox.js';
 import { useSearchInput } from '../../hooks/useSearchInput.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
+import { t } from '../../i18n/index.js';
 // eslint-disable-next-line custom-rules/prefer-use-keybindings -- useInput needed for raw search mode text input
 import { Box, Text, useInput, useTerminalFocus } from '@anthropic/ink';
 import { useKeybinding, useKeybindings } from '../../keybindings/useKeybinding.js';
@@ -242,7 +243,7 @@ function PluginComponentsDisplay({
               mcpServers: mcpServerNames.length > 0 ? mcpServerNames : null,
             });
           } else {
-            setError(`Built-in plugin ${plugin.name} not found`);
+            setError(t('Built-in plugin {{name}} not found', { name: plugin.name }));
           }
           setLoading(false);
           return;
@@ -336,10 +337,10 @@ function PluginComponentsDisplay({
             mcpServers: mcpServersList.length > 0 ? mcpServersList : null,
           });
         } else {
-          setError(`Plugin ${plugin.name} not found in marketplace`);
+          setError(t('Plugin {{name}} not found in marketplace', { name: plugin.name }));
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load components');
+        setError(err instanceof Error ? err.message : t('Failed to load components'));
       } finally {
         setLoading(false);
       }
@@ -365,8 +366,8 @@ function PluginComponentsDisplay({
   if (error) {
     return (
       <Box flexDirection="column" marginBottom={1}>
-        <Text bold>Components:</Text>
-        <Text dimColor>Error: {error}</Text>
+        <Text bold>{t('Components:')}</Text>
+        <Text dimColor>{t('Error: {{error}}', { error })}</Text>
       </Box>
     );
   }
@@ -384,10 +385,10 @@ function PluginComponentsDisplay({
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text bold>Installed components:</Text>
+      <Text bold>{t('Installed components:')}</Text>
       {components.commands ? (
         <Text dimColor>
-          • Commands:{' '}
+          {t('• Commands: ')}
           {typeof components.commands === 'string'
             ? components.commands
             : Array.isArray(components.commands)
@@ -397,7 +398,7 @@ function PluginComponentsDisplay({
       ) : null}
       {components.agents ? (
         <Text dimColor>
-          • Agents:{' '}
+          {t('• Agents: ')}
           {typeof components.agents === 'string'
             ? components.agents
             : Array.isArray(components.agents)
@@ -407,7 +408,7 @@ function PluginComponentsDisplay({
       ) : null}
       {components.skills ? (
         <Text dimColor>
-          • Skills:{' '}
+          {t('• Skills: ')}
           {typeof components.skills === 'string'
             ? components.skills
             : Array.isArray(components.skills)
@@ -417,7 +418,7 @@ function PluginComponentsDisplay({
       ) : null}
       {components.hooks ? (
         <Text dimColor>
-          • Hooks:{' '}
+          {t('• Hooks: ')}
           {typeof components.hooks === 'string'
             ? components.hooks
             : Array.isArray(components.hooks)
@@ -429,7 +430,7 @@ function PluginComponentsDisplay({
       ) : null}
       {components.mcpServers ? (
         <Text dimColor>
-          • MCP Servers:{' '}
+          {t('• MCP Servers: ')}
           {typeof components.mcpServers === 'string'
             ? components.mcpServers
             : Array.isArray(components.mcpServers)
@@ -452,7 +453,9 @@ async function checkIfLocalPlugin(pluginName: string, marketplaceName: string): 
   const entry = marketplace?.plugins.find(p => p.name === pluginName);
 
   if (entry && typeof entry.source === 'string') {
-    return `Local plugins cannot be updated remotely. To update, modify the source at: ${entry.source}`;
+    return t('Local plugins cannot be updated remotely. To update, modify the source at: {{source}}', {
+      source: entry.source,
+    });
   }
 
   return null;
@@ -550,7 +553,7 @@ export function ManagePlugins({
       // User can configure later via the Configure options menu if they want.
       setViewState('plugin-list');
       setSelectedPlugin(null);
-      setResult('Plugin enabled. Configuration skipped — run /reload-plugins to apply.');
+      setResult(t('Plugin enabled. Configuration skipped — run /reload-plugins to apply.'));
       if (onManageComplete) {
         void onManageComplete();
       }
@@ -566,7 +569,7 @@ export function ManagePlugins({
       setViewState({ type: 'mcp-tools', client: viewState.client });
     } else {
       if (pendingToggles.size > 0) {
-        setResult('Run /reload-plugins to apply plugin changes.');
+        setResult(t('Run /reload-plugins to apply plugin changes.'));
         return;
       }
       setParentViewState({ type: 'menu' });
@@ -795,7 +798,7 @@ export function ManagePlugins({
         marketplace,
         scope: 'flagged',
         reason: 'delisted',
-        text: 'Removed from marketplace',
+        text: t('Removed from marketplace'),
         flaggedAt: entry.flaggedAt,
       });
     }
@@ -1075,7 +1078,7 @@ export function ManagePlugins({
       // plain navigation (/plugin manage) should still just show the list.
       if (!hasAutoNavigated.current && action) {
         hasAutoNavigated.current = true;
-        setResult(`Plugin "${targetPlugin}" is not installed in this project`);
+        setResult(t('Plugin "{{plugin}}" is not installed in this project', { plugin: targetPlugin }));
       }
     }
   }, [targetPlugin, targetMarketplace, marketplaces, loading, unifiedItems, action, setResult]);
@@ -1089,13 +1092,13 @@ export function ManagePlugins({
 
     // Built-in plugins can only be enabled/disabled, not updated/uninstalled.
     if (isBuiltin && (operation === 'update' || operation === 'uninstall')) {
-      setProcessError('Built-in plugins cannot be updated or uninstalled.');
+      setProcessError(t('Built-in plugins cannot be updated or uninstalled.'));
       return;
     }
 
     // Managed scope plugins can only be updated, not enabled/disabled/uninstalled
     if (!isBuiltin && !isInstallableScope(pluginScope) && operation !== 'update') {
-      setProcessError('This plugin is managed by your organization. Contact your admin to disable it.');
+      setProcessError(t('This plugin is managed by your organization. Contact your admin to disable it.'));
       return;
     }
 
@@ -1168,7 +1171,12 @@ export function ManagePlugins({
           }
           // If already up to date, show message and exit
           if (result.alreadyUpToDate) {
-            setResult(`${selectedPlugin.plugin.name} is already at the latest version (${result.newVersion}).`);
+            setResult(
+              t('{{name}} is already at the latest version ({{version}}).', {
+                name: selectedPlugin.plugin.name,
+                version: result.newVersion,
+              }),
+            );
             if (onManageComplete) {
               await onManageComplete();
             }
@@ -1200,18 +1208,24 @@ export function ManagePlugins({
 
       const operationName =
         operation === 'enable'
-          ? 'Enabled'
+          ? t('Enabled')
           : operation === 'disable'
-            ? 'Disabled'
+            ? t('Disabled')
             : operation === 'update'
-              ? 'Updated'
-              : 'Uninstalled';
+              ? t('Updated')
+              : t('Uninstalled');
 
       // Single-line warning — notification timeout is ~8s, multi-line would scroll off.
       // The persistent record is in the Errors tab (dependency-unsatisfied after reload).
       const depWarn =
-        reverseDependents && reverseDependents.length > 0 ? ` · required by ${reverseDependents.join(', ')}` : '';
-      const message = `✓ ${operationName} ${selectedPlugin.plugin.name}${depWarn}. Run /reload-plugins to apply.`;
+        reverseDependents && reverseDependents.length > 0
+          ? t(' · required by {{names}}', { names: reverseDependents.join(', ') })
+          : '';
+      const message = t('✓ {{operation}} {{name}}{{deps}}. Run /reload-plugins to apply.', {
+        operation: operationName,
+        name: selectedPlugin.plugin.name,
+        deps: depWarn,
+      });
       setResult(message);
 
       if (onManageComplete) {
@@ -1222,7 +1236,15 @@ export function ManagePlugins({
     } catch (error) {
       setIsProcessing(false);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      setProcessError(`Failed to ${operation}: ${errorMessage}`);
+      const operationLabel =
+        operation === 'enable'
+          ? t('enable')
+          : operation === 'disable'
+            ? t('disable')
+            : operation === 'update'
+              ? t('update')
+              : t('uninstall');
+      setProcessError(t('Failed to {{operation}}: {{error}}', { operation: operationLabel, error: errorMessage }));
       logError(toError(error));
     }
   };
@@ -1396,14 +1418,14 @@ export function ManagePlugins({
     const menuItems: Array<{ label: string; action: () => void }> = [];
 
     menuItems.push({
-      label: isEnabled ? 'Disable plugin' : 'Enable plugin',
+      label: isEnabled ? t('Disable plugin') : t('Enable plugin'),
       action: () => void handleSingleOperation(isEnabled ? 'disable' : 'enable'),
     });
 
     // Update/Uninstall options — not available for built-in plugins
     if (!isBuiltin) {
       menuItems.push({
-        label: selectedPlugin.pendingUpdate ? 'Unmark for update' : 'Mark for update',
+        label: selectedPlugin.pendingUpdate ? t('Unmark for update') : t('Mark for update'),
         action: async () => {
           try {
             const localError = await checkIfLocalPlugin(selectedPlugin.plugin.name, selectedPlugin.marketplace);
@@ -1426,14 +1448,14 @@ export function ManagePlugins({
               });
             }
           } catch (error) {
-            setProcessError(error instanceof Error ? error.message : 'Failed to check plugin update availability');
+            setProcessError(error instanceof Error ? error.message : t('Failed to check plugin update availability'));
           }
         },
       });
 
       if (selectedPluginHasMcpb) {
         menuItems.push({
-          label: 'Configure',
+          label: t('Configure'),
           action: async () => {
             setIsLoadingConfig(true);
             try {
@@ -1452,7 +1474,7 @@ export function ManagePlugins({
               }
 
               if (!mcpbPath) {
-                setProcessError('No MCPB file found in plugin');
+                setProcessError(t('No MCPB file found in plugin'));
                 setIsLoadingConfig(false);
                 return;
               }
@@ -1471,11 +1493,11 @@ export function ManagePlugins({
                 setConfigNeeded(result);
                 setViewState('configuring');
               } else {
-                setProcessError('Failed to load MCPB for configuration');
+                setProcessError(t('Failed to load MCPB for configuration'));
               }
             } catch (err) {
               const errorMsg = errorMessage(err);
-              setProcessError(`Failed to load configuration: ${errorMsg}`);
+              setProcessError(t('Failed to load configuration: {{error}}', { error: errorMsg }));
             } finally {
               setIsLoadingConfig(false);
             }
@@ -1488,7 +1510,7 @@ export function ManagePlugins({
         Object.keys(selectedPlugin.plugin.manifest.userConfig).length > 0
       ) {
         menuItems.push({
-          label: 'Configure options',
+          label: t('Configure options'),
           action: () => {
             setViewState({
               type: 'configuring-options',
@@ -1499,19 +1521,19 @@ export function ManagePlugins({
       }
 
       menuItems.push({
-        label: 'Update now',
+        label: t('Update now'),
         action: () => void handleSingleOperation('update'),
       });
 
       menuItems.push({
-        label: 'Uninstall',
+        label: t('Uninstall'),
         action: () => void handleSingleOperation('uninstall'),
       });
     }
 
     if (selectedPlugin.plugin.manifest.homepage) {
       menuItems.push({
-        label: 'Open homepage',
+        label: t('Open homepage'),
         action: () => void openBrowser(selectedPlugin.plugin.manifest.homepage!),
       });
     }
@@ -1521,13 +1543,13 @@ export function ManagePlugins({
         // Generic label — manifest.repository can be GitLab, Bitbucket,
         // Azure DevOps, etc. (gh-31598). pluginDetailsHelpers.tsx:74 keeps
         // 'View on GitHub' because that path has an explicit isGitHub check.
-        label: 'View repository',
+        label: t('View repository'),
         action: () => void openBrowser(selectedPlugin.plugin.manifest.repository!),
       });
     }
 
     menuItems.push({
-      label: 'Back to plugin list',
+      label: t('Back to plugin list'),
       action: () => {
         setViewState('plugin-list');
         setSelectedPlugin(null);
@@ -1646,12 +1668,14 @@ export function ManagePlugins({
         });
         if (error) {
           setIsProcessing(false);
-          setProcessError(`Failed to write settings: ${error.message}`);
+          setProcessError(t('Failed to write settings: {{error}}', { error: error.message }));
           return;
         }
         clearAllCaches();
         setResult(
-          `✓ Disabled ${selectedPlugin.plugin.name} in .claude/settings.local.json. Run /reload-plugins to apply.`,
+          t('✓ Disabled {{name}} in .claude/settings.local.json. Run /reload-plugins to apply.', {
+            name: selectedPlugin.plugin.name,
+          }),
         );
         if (onManageComplete) void onManageComplete();
         setParentViewState({ type: 'menu' });
@@ -1690,7 +1714,7 @@ export function ManagePlugins({
           const result = await uninstallPluginOp(pluginId, pluginScope, deleteDataDir);
           if (!result.success) throw new Error(result.message);
           clearAllCaches();
-          const suffix = deleteDataDir ? '' : ' · data preserved';
+          const suffix = deleteDataDir ? '' : t(' · data preserved');
           setResult(`${figures.tick} ${result.message}${suffix}`);
           if (onManageComplete) void onManageComplete();
           setParentViewState({ type: 'menu' });
@@ -1752,7 +1776,7 @@ export function ManagePlugins({
 
   // Loading state
   if (loading) {
-    return <Text>Loading installed plugins…</Text>;
+    return <Text>{t('Loading installed plugins…')}</Text>;
   }
 
   // No plugins or MCPs installed
@@ -1760,11 +1784,11 @@ export function ManagePlugins({
     return (
       <Box flexDirection="column">
         <Box marginBottom={1}>
-          <Text bold>Manage plugins</Text>
+          <Text bold>{t('Manage plugins')}</Text>
         </Box>
-        <Text>No plugins or MCP servers installed.</Text>
+        <Text>{t('No plugins or MCP servers installed.')}</Text>
         <Box marginTop={1}>
-          <Text dimColor>Esc to go back</Text>
+          <Text dimColor>{t('Esc to go back')}</Text>
         </Box>
       </Box>
     );
@@ -1789,13 +1813,17 @@ export function ManagePlugins({
         onDone={(outcome, detail) => {
           switch (outcome) {
             case 'configured':
-              finish(`✓ Enabled and configured ${selectedPlugin.plugin.name}. Run /reload-plugins to apply.`);
+              finish(
+                t('✓ Enabled and configured {{name}}. Run /reload-plugins to apply.', {
+                  name: selectedPlugin.plugin.name,
+                }),
+              );
               break;
             case 'skipped':
-              finish(`✓ Enabled ${selectedPlugin.plugin.name}. Run /reload-plugins to apply.`);
+              finish(t('✓ Enabled {{name}}. Run /reload-plugins to apply.', { name: selectedPlugin.plugin.name }));
               break;
             case 'error':
-              finish(`Failed to save configuration: ${detail}`);
+              finish(t('Failed to save configuration: {{error}}', { error: detail }));
               break;
           }
         }}
@@ -1808,17 +1836,17 @@ export function ManagePlugins({
     const pluginId = `${selectedPlugin.plugin.name}@${selectedPlugin.marketplace}`;
     return (
       <PluginOptionsDialog
-        title={`Configure ${selectedPlugin.plugin.name}`}
-        subtitle="Plugin options"
+        title={t('Configure {{name}}', { name: selectedPlugin.plugin.name })}
+        subtitle={t('Plugin options')}
         configSchema={viewState.schema}
         initialValues={loadPluginOptions(pluginId)}
         onSave={values => {
           try {
             savePluginOptions(pluginId, values, viewState.schema);
             clearAllCaches();
-            setResult('Configuration saved. Run /reload-plugins for changes to take effect.');
+            setResult(t('Configuration saved. Run /reload-plugins for changes to take effect.'));
           } catch (err) {
-            setProcessError(`Failed to save configuration: ${errorMessage(err)}`);
+            setProcessError(t('Failed to save configuration: {{error}}', { error: errorMessage(err) }));
           }
           setViewState('plugin-details');
         }}
@@ -1851,7 +1879,7 @@ export function ManagePlugins({
         }
 
         if (!mcpbPath) {
-          setProcessError('No MCPB file found');
+          setProcessError(t('No MCPB file found'));
           setViewState('plugin-details');
           return;
         }
@@ -1863,10 +1891,10 @@ export function ManagePlugins({
         setProcessError(null);
         setConfigNeeded(null);
         setViewState('plugin-details');
-        setResult('Configuration saved. Run /reload-plugins for changes to take effect.');
+        setResult(t('Configuration saved. Run /reload-plugins for changes to take effect.'));
       } catch (err) {
         const errorMsg = errorMessage(err);
-        setProcessError(`Failed to save configuration: ${errorMsg}`);
+        setProcessError(t('Failed to save configuration: {{error}}', { error: errorMsg }));
         setViewState('plugin-details');
       }
     }
@@ -1878,8 +1906,8 @@ export function ManagePlugins({
 
     return (
       <PluginOptionsDialog
-        title={`Configure ${configNeeded.manifest.name}`}
-        subtitle={`Plugin: ${selectedPlugin.plugin.name}`}
+        title={t('Configure {{name}}', { name: configNeeded.manifest.name })}
+        subtitle={t('Plugin: {{name}}', { name: selectedPlugin.plugin.name })}
         configSchema={configNeeded.configSchema}
         initialValues={configNeeded.existingConfig}
         onSave={handleSave}
@@ -1900,26 +1928,31 @@ export function ManagePlugins({
         </Box>
 
         <Box marginBottom={1}>
-          <Text dimColor>Status: </Text>
-          <Text color="error">Removed</Text>
+          <Text dimColor>{t('Status: ')}</Text>
+          <Text color="error">{t('Removed')}</Text>
         </Box>
 
         <Box marginBottom={1} flexDirection="column">
-          <Text color="error">Removed from marketplace · reason: {fp.reason}</Text>
+          <Text color="error">{t('Removed from marketplace · reason: {{reason}}', { reason: fp.reason })}</Text>
           <Text>{fp.text}</Text>
-          <Text dimColor>Flagged on {new Date(fp.flaggedAt).toLocaleDateString()}</Text>
+          <Text dimColor>{t('Flagged on {{date}}', { date: new Date(fp.flaggedAt).toLocaleDateString() })}</Text>
         </Box>
 
         <Box marginTop={1} flexDirection="column">
           <Box>
             <Text>{figures.pointer} </Text>
-            <Text color="suggestion">Dismiss</Text>
+            <Text color="suggestion">{t('Dismiss')}</Text>
           </Box>
         </Box>
 
         <Byline>
-          <ConfigurableShortcutHint action="select:accept" context="Select" fallback="Enter" description="dismiss" />
-          <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="back" />
+          <ConfigurableShortcutHint
+            action="select:accept"
+            context="Select"
+            fallback="Enter"
+            description={t('dismiss')}
+          />
+          <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description={t('back')} />
         </Byline>
       </Box>
     );
@@ -1931,11 +1964,13 @@ export function ManagePlugins({
     return (
       <Box flexDirection="column">
         <Text bold color="warning">
-          {selectedPlugin.plugin.name} is enabled in .claude/settings.json (shared with your team)
+          {t('{{name}} is enabled in .claude/settings.json (shared with your team)', {
+            name: selectedPlugin.plugin.name,
+          })}
         </Text>
         <Box marginTop={1} flexDirection="column">
-          <Text>Disable it just for you in .claude/settings.local.json?</Text>
-          <Text dimColor>This has the same effect as uninstalling, without affecting other contributors.</Text>
+          <Text>{t('Disable it just for you in .claude/settings.local.json?')}</Text>
+          <Text dimColor>{t('This has the same effect as uninstalling, without affecting other contributors.')}</Text>
         </Box>
         {processError && (
           <Box marginTop={1}>
@@ -1944,20 +1979,20 @@ export function ManagePlugins({
         )}
         <Box marginTop={1}>
           {isProcessing ? (
-            <Text dimColor>Disabling…</Text>
+            <Text dimColor>{t('Disabling…')}</Text>
           ) : (
             <Byline>
               <ConfigurableShortcutHint
                 action="confirm:yes"
                 context="Confirmation"
                 fallback="y"
-                description="disable"
+                description={t('disable')}
               />
               <ConfigurableShortcutHint
                 action="confirm:no"
                 context="Confirmation"
                 fallback="Esc"
-                description="cancel"
+                description={t('cancel')}
               />
             </Byline>
           )}
@@ -1971,10 +2006,13 @@ export function ManagePlugins({
     return (
       <Box flexDirection="column">
         <Text bold>
-          {selectedPlugin.plugin.name} has {viewState.size.human} of persistent data
+          {t('{{name}} has {{size}} of persistent data', {
+            name: selectedPlugin.plugin.name,
+            size: viewState.size.human,
+          })}
         </Text>
         <Box marginTop={1} flexDirection="column">
-          <Text>Delete it along with the plugin?</Text>
+          <Text>{t('Delete it along with the plugin?')}</Text>
           <Text dimColor>{pluginDataDirPath(`${selectedPlugin.plugin.name}@${selectedPlugin.marketplace}`)}</Text>
         </Box>
         {processError && (
@@ -1984,10 +2022,15 @@ export function ManagePlugins({
         )}
         <Box marginTop={1}>
           {isProcessing ? (
-            <Text dimColor>Uninstalling…</Text>
+            <Text dimColor>{t('Uninstalling…')}</Text>
           ) : (
             <Text>
-              <Text bold>y</Text> to delete · <Text bold>n</Text> to keep · <Text bold>esc</Text> to cancel
+              <Text bold>y</Text>
+              {t(' to delete · ')}
+              <Text bold>n</Text>
+              {t(' to keep · ')}
+              <Text bold>esc</Text>
+              {t(' to cancel')}
             </Text>
           )}
         </Box>
@@ -2012,7 +2055,10 @@ export function ManagePlugins({
       filteredPluginErrors.length === 0 ? null : (
         <Box flexDirection="column" marginBottom={1}>
           <Text bold color="error">
-            {filteredPluginErrors.length} {plural(filteredPluginErrors.length, 'error')}:
+            {t('{{count}} {{unit}}:', {
+              count: filteredPluginErrors.length,
+              unit: t(plural(filteredPluginErrors.length, 'error')),
+            })}
           </Text>
           {filteredPluginErrors.map((error, i) => {
             const guidance = getErrorGuidance(error);
@@ -2040,14 +2086,14 @@ export function ManagePlugins({
 
         {/* Scope */}
         <Box>
-          <Text dimColor>Scope: </Text>
+          <Text dimColor>{t('Scope: ')}</Text>
           <Text>{selectedPlugin.scope || 'user'}</Text>
         </Box>
 
         {/* Plugin details */}
         {selectedPlugin.plugin.manifest.version && (
           <Box>
-            <Text dimColor>Version: </Text>
+            <Text dimColor>{t('Version: ')}</Text>
             <Text>{selectedPlugin.plugin.manifest.version}</Text>
           </Box>
         )}
@@ -2060,16 +2106,16 @@ export function ManagePlugins({
 
         {selectedPlugin.plugin.manifest.author && (
           <Box>
-            <Text dimColor>Author: </Text>
+            <Text dimColor>{t('Author: ')}</Text>
             <Text>{selectedPlugin.plugin.manifest.author.name}</Text>
           </Box>
         )}
 
         {/* Current status */}
         <Box marginBottom={1}>
-          <Text dimColor>Status: </Text>
-          <Text color={isEnabled ? 'success' : 'warning'}>{isEnabled ? 'Enabled' : 'Disabled'}</Text>
-          {selectedPlugin.pendingUpdate && <Text color="suggestion"> · Marked for update</Text>}
+          <Text dimColor>{t('Status: ')}</Text>
+          <Text color={isEnabled ? 'success' : 'warning'}>{isEnabled ? t('Enabled') : t('Disabled')}</Text>
+          {selectedPlugin.pendingUpdate && <Text color="suggestion">{t(' · Marked for update')}</Text>}
         </Box>
 
         {/* Installed components */}
@@ -2090,9 +2136,9 @@ export function ManagePlugins({
                 <Text
                   bold={isSelected}
                   color={
-                    item.label.includes('Uninstall')
+                    item.label.includes(t('Uninstall'))
                       ? 'error'
-                      : item.label.includes('Update')
+                      : item.label.includes(t('Update'))
                         ? 'suggestion'
                         : undefined
                   }
@@ -2107,7 +2153,7 @@ export function ManagePlugins({
         {/* Processing state */}
         {isProcessing && (
           <Box marginTop={1}>
-            <Text>Processing…</Text>
+            <Text>{t('Processing…')}</Text>
           </Box>
         )}
 
@@ -2121,9 +2167,24 @@ export function ManagePlugins({
         <Box marginTop={1}>
           <Text dimColor italic>
             <Byline>
-              <ConfigurableShortcutHint action="select:previous" context="Select" fallback="↑" description="navigate" />
-              <ConfigurableShortcutHint action="select:accept" context="Select" fallback="Enter" description="select" />
-              <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="back" />
+              <ConfigurableShortcutHint
+                action="select:previous"
+                context="Select"
+                fallback="↑"
+                description={t('navigate')}
+              />
+              <ConfigurableShortcutHint
+                action="select:accept"
+                context="Select"
+                fallback="Enter"
+                description={t('select')}
+              />
+              <ConfigurableShortcutHint
+                action="confirm:no"
+                context="Confirmation"
+                fallback="Esc"
+                description={t('back')}
+              />
             </Byline>
           </Text>
         </Box>
@@ -2136,7 +2197,7 @@ export function ManagePlugins({
     const failedPlugin = viewState.plugin;
 
     const firstError = failedPlugin.errors[0];
-    const errorMessage = firstError ? formatErrorMessage(firstError) : 'Failed to load';
+    const errorMessage = firstError ? formatErrorMessage(firstError) : t('Failed to load');
 
     return (
       <Box flexDirection="column">
@@ -2149,16 +2210,16 @@ export function ManagePlugins({
 
         {failedPlugin.scope === 'managed' ? (
           <Box marginTop={1}>
-            <Text dimColor>Managed by your organization — contact your admin</Text>
+            <Text dimColor>{t('Managed by your organization — contact your admin')}</Text>
           </Box>
         ) : (
           <Box marginTop={1}>
             <Text color="suggestion">{figures.pointer} </Text>
-            <Text bold>Remove</Text>
+            <Text bold>{t('Remove')}</Text>
           </Box>
         )}
 
-        {isProcessing && <Text>Processing…</Text>}
+        {isProcessing && <Text>{t('Processing…')}</Text>}
         {processError && <Text color="error">{processError}</Text>}
 
         <Box marginTop={1}>
@@ -2169,10 +2230,15 @@ export function ManagePlugins({
                   action="select:accept"
                   context="Select"
                   fallback="Enter"
-                  description="remove"
+                  description={t('remove')}
                 />
               )}
-              <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="back" />
+              <ConfigurableShortcutHint
+                action="confirm:no"
+                context="Confirmation"
+                fallback="Esc"
+                description={t('back')}
+              />
             </Byline>
           </Text>
         </Box>
@@ -2410,14 +2476,18 @@ export function ManagePlugins({
       {/* No search results */}
       {filteredItems.length === 0 && searchQuery && (
         <Box marginBottom={1}>
-          <Text dimColor>No items match &quot;{searchQuery}&quot;</Text>
+          <Text dimColor>{t('No items match "{{query}}"', { query: searchQuery })}</Text>
         </Box>
       )}
 
       {/* Scroll up indicator */}
       {pagination.scrollPosition.canScrollUp && (
         <Box>
-          <Text dimColor> {figures.arrowUp} more above</Text>
+          <Text dimColor>
+            {' '}
+            {figures.arrowUp}
+            {t(' more above')}
+          </Text>
         </Box>
       )}
 
@@ -2434,21 +2504,21 @@ export function ManagePlugins({
         const getScopeLabel = (scope: string): string => {
           switch (scope) {
             case 'flagged':
-              return 'Flagged';
+              return t('Flagged');
             case 'project':
-              return 'Project';
+              return t('Project');
             case 'local':
-              return 'Local';
+              return t('Local');
             case 'user':
-              return 'User';
+              return t('User');
             case 'enterprise':
-              return 'Enterprise';
+              return t('Enterprise');
             case 'managed':
-              return 'Managed';
+              return t('Managed');
             case 'builtin':
-              return 'Built-in';
+              return t('Built-in');
             case 'dynamic':
-              return 'Built-in';
+              return t('Built-in');
             default:
               return scope;
           }
@@ -2475,7 +2545,11 @@ export function ManagePlugins({
       {/* Scroll down indicator */}
       {pagination.scrollPosition.canScrollDown && (
         <Box>
-          <Text dimColor> {figures.arrowDown} more below</Text>
+          <Text dimColor>
+            {' '}
+            {figures.arrowDown}
+            {t(' more below')}
+          </Text>
         </Box>
       )}
 
@@ -2483,10 +2557,25 @@ export function ManagePlugins({
       <Box marginTop={1} marginLeft={1}>
         <Text dimColor italic>
           <Byline>
-            <Text>type to search</Text>
-            <ConfigurableShortcutHint action="plugin:toggle" context="Plugin" fallback="Space" description="toggle" />
-            <ConfigurableShortcutHint action="select:accept" context="Select" fallback="Enter" description="details" />
-            <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="back" />
+            <Text>{t('type to search')}</Text>
+            <ConfigurableShortcutHint
+              action="plugin:toggle"
+              context="Plugin"
+              fallback="Space"
+              description={t('toggle')}
+            />
+            <ConfigurableShortcutHint
+              action="select:accept"
+              context="Select"
+              fallback="Enter"
+              description={t('details')}
+            />
+            <ConfigurableShortcutHint
+              action="confirm:no"
+              context="Confirmation"
+              fallback="Esc"
+              description={t('back')}
+            />
           </Byline>
         </Text>
       </Box>
@@ -2495,7 +2584,7 @@ export function ManagePlugins({
       {pendingToggles.size > 0 && (
         <Box marginLeft={1}>
           <Text dimColor italic>
-            Run /reload-plugins to apply changes
+            {t('Run /reload-plugins to apply changes')}
           </Text>
         </Box>
       )}

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { toInkColor } from '../../utils/ink.js';
 import type { BackgroundTaskState } from 'src/tasks/types.js';
 import type { DeepImmutable } from 'src/types/utils.js';
@@ -52,8 +53,8 @@ export function BackgroundTask({ task, maxActivityWidth }: Props): React.ReactNo
           {truncate(task.description, activityLimit, true)}{' '}
           <TaskStatusText
             status={task.status}
-            label={task.status === 'completed' ? 'done' : undefined}
-            suffix={task.status === 'completed' && !task.notified ? ', unread' : undefined}
+            label={task.status === 'completed' ? t('done') : undefined}
+            suffix={task.status === 'completed' && !task.notified ? t(', unread') : undefined}
           />
         </Text>
       );
@@ -79,12 +80,15 @@ export function BackgroundTask({ task, maxActivityWidth }: Props): React.ReactNo
             status={task.status}
             label={
               task.status === 'running'
-                ? `${_task.agentCount as number} ${plural(_task.agentCount as number, 'agent')}`
+                ? t('{{n}} agent{{s}}', {
+                    n: _task.agentCount as number,
+                    s: (_task.agentCount as number) === 1 ? '' : 's',
+                  })
                 : task.status === 'completed'
-                  ? 'done'
+                  ? t('done')
                   : undefined
             }
-            suffix={task.status === 'completed' && !task.notified ? ', unread' : undefined}
+            suffix={task.status === 'completed' && !task.notified ? t(', unread') : undefined}
           />
         </Text>
       );
@@ -95,8 +99,8 @@ export function BackgroundTask({ task, maxActivityWidth }: Props): React.ReactNo
           {truncate(task.description, activityLimit, true)}{' '}
           <TaskStatusText
             status={task.status}
-            label={task.status === 'completed' ? 'done' : undefined}
-            suffix={task.status === 'completed' && !task.notified ? ', unread' : undefined}
+            label={task.status === 'completed' ? t('done') : undefined}
+            suffix={task.status === 'completed' && !task.notified ? t(', unread') : undefined}
           />
         </Text>
       );
@@ -114,8 +118,8 @@ export function BackgroundTask({ task, maxActivityWidth }: Props): React.ReactNo
           </Text>{' '}
           <TaskStatusText
             status={task.status}
-            label={task.status === 'completed' ? 'done' : undefined}
-            suffix={task.status === 'completed' && !task.notified ? ', unread' : undefined}
+            label={task.status === 'completed' ? t('done') : undefined}
+            suffix={task.status === 'completed' && !task.notified ? t(', unread') : undefined}
           />
         </Text>
       );

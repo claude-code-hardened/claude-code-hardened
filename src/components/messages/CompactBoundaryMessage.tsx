@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useShortcutDisplay } from '../../keybindings/useShortcutDisplay.js';
 
 export function CompactBoundaryMessage(): React.ReactNode {
@@ -7,7 +8,9 @@ export function CompactBoundaryMessage(): React.ReactNode {
 
   return (
     <Box marginY={1}>
-      <Text dimColor>✻ Conversation compacted ({historyShortcut} for history)</Text>
+      <Text dimColor>
+        ✻ {t('Conversation compacted')} ({historyShortcut} {t('for history')})
+      </Text>
     </Box>
   );
 }

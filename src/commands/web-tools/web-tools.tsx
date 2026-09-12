@@ -5,6 +5,7 @@ import { useExitOnCtrlCDWithKeybindings } from '../../hooks/useExitOnCtrlCDWithK
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import { useIsInsideModal } from '../../context/modalContext.js';
 import { getSettings_DEPRECATED, updateSettingsForSource } from '../../utils/settings/settings.js';
+import { t } from '../../i18n/index.js';
 import type { LocalJSXCommandCall, LocalJSXCommandContext } from '../../types/command.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -138,14 +139,14 @@ function MainView({
                 {adapter.label}
               </Text>
               <Text> </Text>
-              <Text dimColor={!isSelected}>{adapter.description}</Text>
+              <Text dimColor={!isSelected}>{t(adapter.description)}</Text>
             </Box>
           );
         })}
       </Box>
       <Box marginTop={1} flexDirection="row" gap={2}>
-        <Text dimColor>{'\u2191\u2193'} navigate · Space select · Enter config · Esc close</Text>
-        <Text dimColor>Tab switch tab</Text>
+        <Text dimColor>{t('\u2191\u2193 navigate · Space select · Enter config · Esc close')}</Text>
+        <Text dimColor>{t('Tab switch tab')}</Text>
       </Box>
     </Box>
   );
@@ -249,7 +250,7 @@ function NoConfigView({
       onBack();
     } else if (key.return) {
       if (cursor === 0) {
-        onSelect(`Selected ${adapter.label}.`);
+        onSelect(t('Selected {{name}}.', { name: adapter.label }));
       } else {
         onBack();
       }
@@ -262,7 +263,7 @@ function NoConfigView({
       <Box flexDirection="column" marginTop={1}>
         <Text>{adapter.description}</Text>
         <Box marginTop={1}>
-          <Text dimColor>No additional configuration needed.</Text>
+          <Text dimColor>{t('No additional configuration needed.')}</Text>
         </Box>
       </Box>
       <Box flexDirection="column" marginTop={1}>
@@ -273,7 +274,7 @@ function NoConfigView({
             color={cursor === 0 ? 'inverseText' : undefined}
             bold
           >
-            [ Select & Close ]
+            {t('[ Select & Close ]')}
           </Text>
         </Box>
         <Box>
@@ -282,12 +283,12 @@ function NoConfigView({
             backgroundColor={cursor === 1 ? 'suggestion' : undefined}
             color={cursor === 1 ? 'inverseText' : undefined}
           >
-            [ Back ]
+            {t('[ Back ]')}
           </Text>
         </Box>
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>{'\u2191\u2193'} navigate · Enter confirm · Esc back</Text>
+        <Text dimColor>{t('\u2191\u2193 navigate · Enter confirm · Esc back')}</Text>
       </Box>
     </Box>
   );
@@ -331,7 +332,7 @@ function ConfigFieldsEditor({
       updated = f.setValue(updated, currentVal);
     }
     updateSettingsForSource('userSettings', updated as Record<string, unknown> & SettingsJson);
-    onSave(`Configuration saved for ${adapter.label}.`);
+    onSave(t('Configuration saved for {{name}}.', { name: adapter.label }));
   }, [fields, settings, adapter.label, onSave]);
 
   const handleFieldEdit = useCallback(() => {
@@ -401,7 +402,7 @@ function ConfigFieldsEditor({
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Text bold>{adapter.label} Configuration</Text>
+      <Text bold>{t('{{name}} Configuration', { name: adapter.label })}</Text>
       <Box flexDirection="column" marginTop={1}>
         {fields.map((field, idx) => {
           const isCursor = idx === cursor && !editing;
@@ -418,16 +419,16 @@ function ConfigFieldsEditor({
           return (
             <Box key={field.key} flexDirection="row">
               <Text>{isCursor ? '›' : ' '} </Text>
-              <Text dimColor>{field.label}: </Text>
+              <Text dimColor>{t(field.label)}: </Text>
               <Text
                 backgroundColor={isCursor ? 'suggestion' : undefined}
                 color={editing && idx === cursor ? 'success' : isCursor ? 'inverseText' : undefined}
               >
-                {displayVal || <Text dimColor>(empty)</Text>}
+                {displayVal || <Text dimColor>{t('(empty)')}</Text>}
               </Text>
               {editing && idx === cursor && (
                 <Text dimColor>
-                  {' |'} pos {editCursor}/{editValue.length}
+                  {t(' | pos {{cursor}}/{{total}}', { cursor: editCursor, total: editValue.length })}
                 </Text>
               )}
             </Box>
@@ -440,7 +441,7 @@ function ConfigFieldsEditor({
             color={cursor === saveRow ? 'inverseText' : undefined}
             bold
           >
-            [ Save ]
+            {t('[ Save ]')}
           </Text>
         </Box>
         <Box>
@@ -449,15 +450,15 @@ function ConfigFieldsEditor({
             backgroundColor={cursor === backRow ? 'suggestion' : undefined}
             color={cursor === backRow ? 'inverseText' : undefined}
           >
-            [ Back ]
+            {t('[ Back ]')}
           </Text>
         </Box>
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
           {editing
-            ? '\u2190\u2192 move cursor · Type to edit · Enter confirm · Esc cancel edit'
-            : '\u2191\u2193 navigate · Enter edit field · Esc go back'}
+            ? t('\u2190\u2192 move cursor · Type to edit · Enter confirm · Esc cancel edit')
+            : t('\u2191\u2193 navigate · Enter edit field · Esc go back')}
         </Text>
       </Box>
     </Box>
@@ -488,12 +489,17 @@ function WebToolsPanel({
 
   const handleSelectAdapter = useCallback(
     (key: string) => {
-      const t = currentTab;
-      const field = t === 'search' ? 'webSearchAdapter' : ('webFetchAdapter' as keyof SettingsJson);
+      const tab = currentTab;
+      const field = tab === 'search' ? 'webSearchAdapter' : ('webFetchAdapter' as keyof SettingsJson);
       updateSettingsForSource('userSettings', { [field]: key } as SettingsJson);
-      const adapters = t === 'search' ? SEARCH_ADAPTERS : FETCH_ADAPTERS;
+      const adapters = tab === 'search' ? SEARCH_ADAPTERS : FETCH_ADAPTERS;
       const label = adapters.find(a => a.key === key)?.label ?? key;
-      onClose(`${t === 'search' ? 'Web search' : 'Web fetch'} backend set to ${label}.`);
+      onClose(
+        t('{{backend}} backend set to {{name}}.', {
+          backend: tab === 'search' ? t('Web search') : t('Web fetch'),
+          name: label,
+        }),
+      );
     },
     [currentTab, onClose],
   );
@@ -542,30 +548,30 @@ function WebToolsPanel({
   const current = currentTab === 'search' ? currentSearch : currentFetch;
 
   return (
-    <Tabs title="Web Tools" contentHeight={contentHeight}>
-      <Tab key="search" title="Search">
+    <Tabs title={t('Web Tools')} contentHeight={contentHeight}>
+      <Tab key="search" title={t('Search')}>
         <MainView
           tab={currentTab}
           adapters={SEARCH_ADAPTERS}
           current={currentSearch}
-          fieldLabel="Choose a web search backend:"
+          fieldLabel={t('Choose a web search backend:')}
           onConfigure={handleConfigure}
           onSwitchTab={setCurrentTab}
           onSelectAdapter={handleSelectAdapter}
-          onClose={() => onClose('Web tools panel dismissed')}
+          onClose={() => onClose(t('Web tools panel dismissed'))}
           contentHeight={contentHeight}
         />
       </Tab>
-      <Tab key="fetch" title="Fetch">
+      <Tab key="fetch" title={t('Fetch')}>
         <MainView
           tab={currentTab}
           adapters={FETCH_ADAPTERS}
           current={currentFetch}
-          fieldLabel="Choose a web fetch backend:"
+          fieldLabel={t('Choose a web fetch backend:')}
           onConfigure={handleConfigure}
           onSwitchTab={setCurrentTab}
           onSelectAdapter={handleSelectAdapter}
-          onClose={() => onClose('Web tools panel dismissed')}
+          onClose={() => onClose(t('Web tools panel dismissed'))}
           contentHeight={contentHeight}
         />
       </Tab>

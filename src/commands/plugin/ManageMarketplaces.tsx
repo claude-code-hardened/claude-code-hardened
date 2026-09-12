@@ -14,6 +14,7 @@ import type { LoadedPlugin } from '../../types/plugin.js';
 import { count } from '../../utils/array.js';
 import { shouldSkipPluginAutoupdate } from '../../utils/config.js';
 import { errorMessage } from '../../utils/errors.js';
+import { t } from '../../i18n/index.js';
 import { clearAllCaches } from '../../utils/plugins/cacheUtils.js';
 import {
   createPluginId,
@@ -155,14 +156,14 @@ export function ManageMarketplaces({
               setInternalView('details');
             }
           } else if (setError) {
-            setError(`Marketplace not found: ${targetMarketplace}`);
+            setError(t('Marketplace not found: {{name}}', { name: targetMarketplace }));
           }
         }
       } catch (err) {
         if (setError) {
-          setError(err instanceof Error ? err.message : 'Failed to load marketplaces');
+          setError(err instanceof Error ? err.message : t('Failed to load marketplaces'));
         }
-        setProcessError(err instanceof Error ? err.message : 'Failed to load marketplaces');
+        setProcessError(err instanceof Error ? err.message : t('Failed to load marketplaces'));
       } finally {
         setLoading(false);
       }
@@ -305,11 +306,27 @@ export function ManageMarketplaces({
       const actions: string[] = [];
       if (updatedCount > 0) {
         const pluginPart =
-          updatedPluginCount > 0 ? ` (${updatedPluginCount} ${plural(updatedPluginCount, 'plugin')} bumped)` : '';
-        actions.push(`Updated ${updatedCount} ${plural(updatedCount, 'marketplace')}${pluginPart}`);
+          updatedPluginCount > 0
+            ? t(' ({{count}} {{unit}} bumped)', {
+                count: updatedPluginCount,
+                unit: t(plural(updatedPluginCount, 'plugin')),
+              })
+            : '';
+        actions.push(
+          t('Updated {{count}} {{unit}}{{plugins}}', {
+            count: updatedCount,
+            unit: t(plural(updatedCount, 'marketplace')),
+            plugins: pluginPart,
+          }),
+        );
       }
       if (removedCount > 0) {
-        actions.push(`Removed ${removedCount} ${plural(removedCount, 'marketplace')}`);
+        actions.push(
+          t('Removed {{count}} {{unit}}', {
+            count: removedCount,
+            unit: t(plural(removedCount, 'marketplace')),
+          }),
+        );
       }
 
       if (actions.length > 0) {
@@ -361,13 +378,13 @@ export function ManageMarketplaces({
       value: string;
     }> = [
       {
-        label: `Browse plugins (${marketplace.pluginCount ?? 0})`,
+        label: t('Browse plugins ({{count}})', { count: marketplace.pluginCount ?? 0 }),
         value: 'browse',
       },
       {
-        label: 'Update marketplace',
+        label: t('Update marketplace'),
         secondaryLabel: marketplace.lastUpdated
-          ? `(last updated ${new Date(marketplace.lastUpdated).toLocaleDateString()})`
+          ? t('(last updated {{date}})', { date: new Date(marketplace.lastUpdated).toLocaleDateString() })
           : undefined,
         value: 'update',
       },
@@ -376,12 +393,12 @@ export function ManageMarketplaces({
     // Only show auto-update toggle if auto-updater is not globally disabled
     if (!shouldSkipPluginAutoupdate()) {
       options.push({
-        label: marketplace.autoUpdate ? 'Disable auto-update' : 'Enable auto-update',
+        label: marketplace.autoUpdate ? t('Disable auto-update') : t('Enable auto-update'),
         value: 'toggle-auto-update',
       });
     }
 
-    options.push({ label: 'Remove marketplace', value: 'remove' });
+    options.push({ label: t('Remove marketplace'), value: 'remove' });
 
     return options;
   };
@@ -400,7 +417,7 @@ export function ManageMarketplaces({
       // Update selected marketplace reference
       setSelectedMarketplace(prev => (prev ? { ...prev, autoUpdate: newAutoUpdate } : prev));
     } catch (err) {
-      setProcessError(err instanceof Error ? err.message : 'Failed to update setting');
+      setProcessError(err instanceof Error ? err.message : t('Failed to update setting'));
     }
   };
 
@@ -552,41 +569,41 @@ export function ManageMarketplaces({
   );
 
   if (loading) {
-    return <Text>Loading marketplaces…</Text>;
+    return <Text>{t('Loading marketplaces…')}</Text>;
   }
 
   if (marketplaceStates.length === 0) {
     return (
       <Box flexDirection="column">
         <Box marginBottom={1}>
-          <Text bold>Manage marketplaces</Text>
+          <Text bold>{t('Manage marketplaces')}</Text>
         </Box>
 
         {/* Add Marketplace option */}
         <Box flexDirection="row" gap={1}>
           <Text color="suggestion">{figures.pointer} +</Text>
           <Text bold color="suggestion">
-            Add Marketplace
+            {t('Add Marketplace')}
           </Text>
         </Box>
 
         <Box marginLeft={3}>
           <Text dimColor italic>
             {exitState.pending ? (
-              <>Press {exitState.keyName} again to go back</>
+              <>{t('Press {{key}} again to go back', { key: exitState.keyName })}</>
             ) : (
               <Byline>
                 <ConfigurableShortcutHint
                   action="select:accept"
                   context="Select"
                   fallback="Enter"
-                  description="select"
+                  description={t('select')}
                 />
                 <ConfigurableShortcutHint
                   action="confirm:no"
                   context="Confirmation"
                   fallback="Esc"
-                  description="go back"
+                  description={t('go back')}
                 />
               </Byline>
             )}
@@ -602,13 +619,16 @@ export function ManageMarketplaces({
     return (
       <Box flexDirection="column">
         <Text bold color="warning">
-          Remove marketplace <Text italic>{selectedMarketplace.name}</Text>?
+          {t('Remove marketplace {{name}}?', { name: selectedMarketplace.name })}
         </Text>
         <Box flexDirection="column">
           {pluginCount > 0 && (
             <Box marginTop={1}>
               <Text color="warning">
-                This will also uninstall {pluginCount} {plural(pluginCount, 'plugin')} from this marketplace:
+                {t('This will also uninstall {{count}} {{unit}} from this marketplace:', {
+                  count: pluginCount,
+                  unit: t(plural(pluginCount, 'plugin')),
+                })}
               </Text>
             </Box>
           )}
@@ -623,7 +643,11 @@ export function ManageMarketplaces({
           )}
           <Box marginTop={1}>
             <Text>
-              Press <Text bold>y</Text> to confirm or <Text bold>n</Text> to cancel
+              {t('Press ')}
+              <Text bold>y</Text>
+              {t(' to confirm or ')}
+              <Text bold>n</Text>
+              {t(' to cancel')}
             </Text>
           </Box>
         </Box>
@@ -645,7 +669,10 @@ export function ManageMarketplaces({
         <Text dimColor>{selectedMarketplace.source}</Text>
         <Box marginTop={1}>
           <Text>
-            {selectedMarketplace.pluginCount || 0} available {plural(selectedMarketplace.pluginCount || 0, 'plugin')}
+            {t('{{count}} available {{unit}}', {
+              count: selectedMarketplace.pluginCount || 0,
+              unit: t(plural(selectedMarketplace.pluginCount || 0, 'plugin')),
+            })}
           </Text>
         </Box>
 
@@ -653,8 +680,7 @@ export function ManageMarketplaces({
         {selectedMarketplace.installedPlugins && selectedMarketplace.installedPlugins.length > 0 && (
           <Box flexDirection="column" marginTop={1}>
             <Text bold>
-              Installed plugins ({selectedMarketplace.installedPlugins.length}
-              ):
+              {t('Installed plugins ({{count}}):', { count: selectedMarketplace.installedPlugins.length })}
             </Text>
             <Box flexDirection="column" marginLeft={1}>
               {selectedMarketplace.installedPlugins.map(plugin => (
@@ -673,7 +699,7 @@ export function ManageMarketplaces({
         {/* Processing indicator */}
         {isUpdating && (
           <Box marginTop={1} flexDirection="column">
-            <Text color="claude">Updating marketplace…</Text>
+            <Text color="claude">{t('Updating marketplace…')}</Text>
             {progressMessage && <Text dimColor>{progressMessage}</Text>}
           </Box>
         )}
@@ -714,7 +740,9 @@ export function ManageMarketplaces({
         {!isUpdating && !shouldSkipPluginAutoupdate() && selectedMarketplace.autoUpdate && (
           <Box marginTop={1}>
             <Text dimColor>
-              Auto-update enabled. Claude Code will automatically update this marketplace and its installed plugins.
+              {t(
+                'Auto-update enabled. Claude Code will automatically update this marketplace and its installed plugins.',
+              )}
             </Text>
           </Box>
         )}
@@ -722,20 +750,20 @@ export function ManageMarketplaces({
         <Box marginLeft={3}>
           <Text dimColor italic>
             {isUpdating ? (
-              <>Please wait…</>
+              <>{t('Please wait…')}</>
             ) : (
               <Byline>
                 <ConfigurableShortcutHint
                   action="select:accept"
                   context="Select"
                   fallback="Enter"
-                  description="select"
+                  description={t('select')}
                 />
                 <ConfigurableShortcutHint
                   action="confirm:no"
                   context="Confirmation"
                   fallback="Esc"
-                  description="go back"
+                  description={t('go back')}
                 />
               </Byline>
             )}
@@ -751,7 +779,7 @@ export function ManageMarketplaces({
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
-        <Text bold>Manage marketplaces</Text>
+        <Text bold>{t('Manage marketplaces')}</Text>
       </Box>
 
       {/* Add Marketplace option */}
@@ -760,7 +788,7 @@ export function ManageMarketplaces({
           {selectedIndex === 0 ? figures.pointer : ' '} +
         </Text>
         <Text bold color={selectedIndex === 0 ? 'suggestion' : undefined}>
-          Add Marketplace
+          {t('Add Marketplace')}
         </Text>
       </Box>
 
@@ -771,8 +799,8 @@ export function ManageMarketplaces({
 
           // Build status indicators
           const indicators: string[] = [];
-          if (state.pendingUpdate) indicators.push('UPDATE');
-          if (state.pendingRemove) indicators.push('REMOVE');
+          if (state.pendingUpdate) indicators.push(t('UPDATE'));
+          if (state.pendingRemove) indicators.push(t('REMOVE'));
 
           return (
             <Box key={state.name} flexDirection="row" gap={1} marginBottom={1}>
@@ -790,11 +818,13 @@ export function ManageMarketplaces({
                 </Box>
                 <Text dimColor>{state.source}</Text>
                 <Text dimColor>
-                  {state.pluginCount !== undefined && <>{state.pluginCount} available</>}
+                  {state.pluginCount !== undefined && <>{t('{{count}} available', { count: state.pluginCount })}</>}
                   {state.installedPlugins && state.installedPlugins.length > 0 && (
-                    <> • {state.installedPlugins.length} installed</>
+                    <>{t(' • {{count}} installed', { count: state.installedPlugins.length })}</>
                   )}
-                  {state.lastUpdated && <> • Updated {new Date(state.lastUpdated).toLocaleDateString()}</>}
+                  {state.lastUpdated && (
+                    <>{t(' • Updated {{date}}', { date: new Date(state.lastUpdated).toLocaleDateString() })}</>
+                  )}
                 </Text>
               </Box>
             </Box>
@@ -806,16 +836,22 @@ export function ManageMarketplaces({
       {hasPendingChanges() && (
         <Box marginTop={1} flexDirection="column">
           <Text>
-            <Text bold>Pending changes:</Text> <Text dimColor>Enter to apply</Text>
+            <Text bold>{t('Pending changes:')}</Text> <Text dimColor>{t('Enter to apply')}</Text>
           </Text>
           {updateCount > 0 && (
             <Text>
-              • Update {updateCount} {plural(updateCount, 'marketplace')}
+              {t('• Update {{count}} {{unit}}', {
+                count: updateCount,
+                unit: t(plural(updateCount, 'marketplace')),
+              })}
             </Text>
           )}
           {removeCount > 0 && (
             <Text color="warning">
-              • Remove {removeCount} {plural(removeCount, 'marketplace')}
+              {t('• Remove {{count}} {{unit}}', {
+                count: removeCount,
+                unit: t(plural(removeCount, 'marketplace')),
+              })}
             </Text>
           )}
         </Box>
@@ -824,7 +860,7 @@ export function ManageMarketplaces({
       {/* Processing indicator */}
       {isProcessing && (
         <Box marginTop={1}>
-          <Text color="claude">Processing changes…</Text>
+          <Text color="claude">{t('Processing changes…')}</Text>
         </Box>
       )}
 
@@ -853,7 +889,7 @@ function ManageMarketplacesKeyHints({
     return (
       <Box marginTop={1}>
         <Text dimColor italic>
-          Press {exitState.keyName} again to go back
+          {t('Press {{key}} again to go back', { key: exitState.keyName })}
         </Text>
       </Box>
     );
@@ -868,19 +904,24 @@ function ManageMarketplacesKeyHints({
               action="select:accept"
               context="Select"
               fallback="Enter"
-              description="apply changes"
+              description={t('apply changes')}
             />
           )}
           {!hasPendingActions && (
-            <ConfigurableShortcutHint action="select:accept" context="Select" fallback="Enter" description="select" />
+            <ConfigurableShortcutHint
+              action="select:accept"
+              context="Select"
+              fallback="Enter"
+              description={t('select')}
+            />
           )}
-          {!hasPendingActions && <KeyboardShortcutHint shortcut="u" action="update" />}
-          {!hasPendingActions && <KeyboardShortcutHint shortcut="r" action="remove" />}
+          {!hasPendingActions && <KeyboardShortcutHint shortcut="u" action={t('update')} />}
+          {!hasPendingActions && <KeyboardShortcutHint shortcut="r" action={t('remove')} />}
           <ConfigurableShortcutHint
             action="confirm:no"
             context="Confirmation"
             fallback="Esc"
-            description={hasPendingActions ? 'cancel' : 'go back'}
+            description={hasPendingActions ? t('cancel') : t('go back')}
           />
         </Byline>
       </Text>

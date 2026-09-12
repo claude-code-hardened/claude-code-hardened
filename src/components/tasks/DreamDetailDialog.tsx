@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DeepImmutable } from 'src/types/utils.js';
 import { useElapsedTime } from '../../hooks/useElapsedTime.js';
+import { t } from '../../i18n/index.js';
 import { type KeyboardEvent, Box, Text } from '@anthropic/ink';
 import { useKeybindings } from '../../keybindings/useKeybinding.js';
 import type { DreamTaskState } from '../../tasks/DreamTask/DreamTask.js';
@@ -45,14 +46,22 @@ export function DreamDetailDialog({ task, onDone, onBack, onKill }: Props): Reac
   return (
     <Box flexDirection="column" tabIndex={0} autoFocus onKeyDown={handleKeyDown}>
       <Dialog
-        title="Memory consolidation"
+        title={t('Memory consolidation')}
         subtitle={
           <Text dimColor>
-            {elapsedTime} · reviewing {task.sessionsReviewing} {plural(task.sessionsReviewing, 'session')}
+            {elapsedTime} ·{' '}
+            {t('reviewing {{n}} {{unit}}', {
+              n: task.sessionsReviewing,
+              unit: plural(task.sessionsReviewing, 'session'),
+            })}
             {task.filesTouched.length > 0 && (
               <>
                 {' '}
-                · {task.filesTouched.length} {plural(task.filesTouched.length, 'file')} touched
+                ·{' '}
+                {t('{{n}} {{unit}} touched', {
+                  n: task.filesTouched.length,
+                  unit: plural(task.filesTouched.length, 'file'),
+                })}
               </>
             )}
           </Text>
@@ -61,7 +70,7 @@ export function DreamDetailDialog({ task, onDone, onBack, onKill }: Props): Reac
         color="background"
         inputGuide={exitState =>
           exitState.pending ? (
-            <Text>Press {exitState.keyName} again to exit</Text>
+            <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
           ) : (
             <Byline>
               {onBack && <KeyboardShortcutHint shortcut="←" action="go back" />}
@@ -73,9 +82,9 @@ export function DreamDetailDialog({ task, onDone, onBack, onKill }: Props): Reac
       >
         <Box flexDirection="column" gap={1}>
           <Text>
-            <Text bold>Status:</Text>{' '}
+            <Text bold>{t('Status:')}</Text>{' '}
             {task.status === 'running' ? (
-              <Text color="background">running</Text>
+              <Text color="background">{t('running')}</Text>
             ) : task.status === 'completed' ? (
               <Text color="success">{task.status}</Text>
             ) : (
@@ -84,20 +93,19 @@ export function DreamDetailDialog({ task, onDone, onBack, onKill }: Props): Reac
           </Text>
 
           {shown.length === 0 ? (
-            <Text dimColor>{task.status === 'running' ? 'Starting…' : '(no text output)'}</Text>
+            <Text dimColor>{task.status === 'running' ? t('Starting…') : t('(no text output)')}</Text>
           ) : (
             <>
               {hidden > 0 && (
-                <Text dimColor>
-                  ({hidden} earlier {plural(hidden, 'turn')})
-                </Text>
+                <Text dimColor>{t('({{n}} earlier {{unit}})', { n: hidden, unit: plural(hidden, 'turn') })}</Text>
               )}
               {shown.map((turn, i) => (
                 <Box key={i} flexDirection="column">
                   <Text wrap="wrap">{turn.text}</Text>
                   {turn.toolUseCount > 0 && (
                     <Text dimColor>
-                      {'  '}({turn.toolUseCount} {plural(turn.toolUseCount, 'tool')})
+                      {'  '}
+                      {t('({{n}} {{unit}})', { n: turn.toolUseCount, unit: plural(turn.toolUseCount, 'tool') })}
                     </Text>
                   )}
                 </Box>

@@ -3,6 +3,7 @@
  */
 import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import type { Message } from '../../types/message.js';
 
 type Props = {
@@ -13,7 +14,7 @@ export function SnipBoundaryMessage({ message }: Props): React.ReactNode {
   const content =
     typeof (message as Record<string, unknown>).content === 'string'
       ? ((message as Record<string, unknown>).content as string)
-      : '[snip] Conversation history before this point has been snipped.';
+      : t('[snip] Conversation history before this point has been snipped.');
 
   return (
     <Box marginTop={1} marginBottom={1}>

@@ -15,6 +15,7 @@ import {
 } from '../../bootstrap/state.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
 import { sanitizePath } from '../../utils/path.js'
+import { t } from '../../i18n/index.js'
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
@@ -269,13 +270,23 @@ const share: Command = {
         return {
           type: 'text',
           value: [
-            'Usage: /share [--public|--private] [--mask-secrets] [--summary-only] [--allow-public-fallback]',
+            t(
+              'Usage: /share [--public|--private] [--mask-secrets] [--summary-only] [--allow-public-fallback]',
+            ),
             '',
-            '  --public               Create a public Gist (default: secret)',
-            '  --private              Create a secret Gist (default)',
-            '  --mask-secrets         Redact API keys, tokens, and secrets before uploading',
-            '  --summary-only         Upload a summary (first 200 chars per turn) instead of full log',
-            '  --allow-public-fallback  Fall back to 0x0.st if gh gist fails',
+            t(
+              '  --public               Create a public Gist (default: secret)',
+            ),
+            t('  --private              Create a secret Gist (default)'),
+            t(
+              '  --mask-secrets         Redact API keys, tokens, and secrets before uploading',
+            ),
+            t(
+              '  --summary-only         Upload a summary (first 200 chars per turn) instead of full log',
+            ),
+            t(
+              '  --allow-public-fallback  Fall back to 0x0.st if gh gist fails',
+            ),
           ].join('\n'),
         }
       }
@@ -303,12 +314,14 @@ const share: Command = {
         return {
           type: 'text',
           value: [
-            '## Session log not found',
+            t('## Session log not found'),
             '',
-            `Session: ${sessionId}`,
-            `Expected path: \`${logPath}\``,
+            t('Session: {{id}}', { id: sessionId }),
+            t('Expected path: {{path}}', { path: `\`${logPath}\`` }),
             '',
-            'The session log may not have been written yet. Try sending at least one message first.',
+            t(
+              'The session log may not have been written yet. Try sending at least one message first.',
+            ),
           ].join('\n'),
         }
       }
@@ -322,21 +335,23 @@ const share: Command = {
         return {
           type: 'text',
           value: [
-            '## Share session log',
+            t('## Share session log'),
             '',
-            `Session: ${sessionId}`,
-            `Log file: \`${logPath}\``,
+            t('Session: {{id}}', { id: sessionId }),
+            t('Log file: {{path}}', { path: `\`${logPath}\`` }),
             '',
-            'To upload to GitHub Gist automatically, install the `gh` CLI:',
+            t('To upload to GitHub Gist automatically, install the `gh` CLI:'),
             '  https://cli.github.com/',
             '',
-            'Then run:',
+            t('Then run:'),
             `  \`gh gist create "${logPath}" --secret --filename claude-session.jsonl\``,
             '',
-            'Or use `--allow-public-fallback` to upload to 0x0.st instead.',
+            t('Or use `--allow-public-fallback` to upload to 0x0.st instead.'),
             '',
-            '_Privacy note: the JSONL contains everything typed in this session,_',
-            '_including tool outputs. Review before sharing._',
+            t(
+              '_Privacy note: the JSONL contains everything typed in this session,_',
+            ),
+            t('_including tool outputs. Review before sharing._'),
           ].join('\n'),
         }
       }
@@ -348,7 +363,7 @@ const share: Command = {
         if (!uploadContent) {
           return {
             type: 'text',
-            value: 'No conversation content found in session log.',
+            value: t('No conversation content found in session log.'),
           }
         }
       } else {
@@ -371,7 +386,10 @@ const share: Command = {
         const msg = sanitizeErrorMessage(
           writeErr instanceof Error ? writeErr.message : String(writeErr),
         )
-        return { type: 'text', value: `Failed to prepare share file: ${msg}` }
+        return {
+          type: 'text',
+          value: t('Failed to prepare share file: {{detail}}', { detail: msg }),
+        }
       }
 
       try {
@@ -404,16 +422,20 @@ const share: Command = {
         return {
           type: 'text',
           value: [
-            '## Session shared',
+            t('## Session shared'),
             '',
-            `URL:        ${url}`,
-            `Session:    ${sessionId}`,
-            `Visibility: ${opts.isPublic ? 'public' : 'secret'}`,
-            `Method:     ${method}`,
-            opts.summaryOnly ? 'Content:    summary only (truncated)' : '',
-            opts.maskSecrets ? 'Secrets:    masked before upload' : '',
+            t('URL:        {{url}}', { url }),
+            t('Session:    {{id}}', { id: sessionId }),
+            t('Visibility: {{visibility}}', {
+              visibility: opts.isPublic ? 'public' : 'secret',
+            }),
+            t('Method:     {{method}}', { method }),
+            opts.summaryOnly ? t('Content:    summary only (truncated)') : '',
+            opts.maskSecrets ? t('Secrets:    masked before upload') : '',
             '',
-            '_Privacy note: the JSONL contains everything typed in this session._',
+            t(
+              '_Privacy note: the JSONL contains everything typed in this session._',
+            ),
           ]
             .filter(l => l !== '')
             .join('\n'),
@@ -427,14 +449,14 @@ const share: Command = {
         return {
           type: 'text',
           value: [
-            '## Failed to share session',
+            t('## Failed to share session'),
             '',
-            `Error: ${msg}`,
+            t('Error: {{message}}', { message: msg }),
             '',
             hasGh
-              ? 'Make sure you are logged in: `gh auth login`'
-              : 'Install the `gh` CLI: https://cli.github.com/',
-            `Log file: \`${logPath}\``,
+              ? t('Make sure you are logged in: `gh auth login`')
+              : t('Install the `gh` CLI: https://cli.github.com/'),
+            t('Log file: {{path}}', { path: `\`${logPath}\`` }),
           ].join('\n'),
         }
       } finally {

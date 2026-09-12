@@ -1,5 +1,6 @@
 import { Select } from 'src/components/CustomSelect/index.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 interface ExistingWorkflowStepProps {
   repoName: string;
@@ -9,15 +10,15 @@ interface ExistingWorkflowStepProps {
 export function ExistingWorkflowStep({ repoName, onSelectAction }: ExistingWorkflowStepProps) {
   const options = [
     {
-      label: 'Update workflow file with latest version',
+      label: t('Update workflow file with latest version'),
       value: 'update',
     },
     {
-      label: 'Skip workflow update (configure secrets only)',
+      label: t('Skip workflow update (configure secrets only)'),
       value: 'skip',
     },
     {
-      label: 'Exit without making changes',
+      label: t('Exit without making changes'),
       value: 'exit',
     },
   ];
@@ -33,15 +34,16 @@ export function ExistingWorkflowStep({ repoName, onSelectAction }: ExistingWorkf
   return (
     <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
       <Box flexDirection="column" marginBottom={1}>
-        <Text bold>Existing Workflow Found</Text>
-        <Text dimColor>Repository: {repoName}</Text>
+        <Text bold>{t('Existing Workflow Found')}</Text>
+        <Text dimColor>{t('Repository: {{repo}}', { repo: repoName })}</Text>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
         <Text>
-          A Claude workflow file already exists at <Text color="claude">.github/workflows/claude.yml</Text>
+          {t('A Claude workflow file already exists at ')}
+          <Text color="claude">.github/workflows/claude.yml</Text>
         </Text>
-        <Text dimColor>What would you like to do?</Text>
+        <Text dimColor>{t('What would you like to do?')}</Text>
       </Box>
 
       <Box flexDirection="column">
@@ -50,7 +52,7 @@ export function ExistingWorkflowStep({ repoName, onSelectAction }: ExistingWorkf
 
       <Box marginTop={1}>
         <Text dimColor>
-          View the latest workflow template at:{' '}
+          {t('View the latest workflow template at:')}{' '}
           <Text color="claude">https://github.com/anthropics/claude-code-action/blob/main/examples/claude.yml</Text>
         </Text>
       </Box>

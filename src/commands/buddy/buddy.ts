@@ -9,6 +9,7 @@ import { renderSprite } from '../../buddy/sprites.js'
 import { CompanionCard } from '../../buddy/CompanionCard.js'
 import { getGlobalConfig, saveGlobalConfig } from '../../utils/config.js'
 import { triggerCompanionReaction } from '../../buddy/companionReact.js'
+import { t } from '../../i18n/index.js'
 import type { ToolUseContext } from '../../Tool.js'
 import type {
   LocalJSXCommandContext,
@@ -78,14 +79,14 @@ export async function call(
   // ── /buddy off — mute companion ──
   if (sub === 'off') {
     saveGlobalConfig(cfg => ({ ...cfg, companionMuted: true }))
-    onDone('companion muted', { display: 'system' })
+    onDone(t('companion muted'), { display: 'system' })
     return null
   }
 
   // ── /buddy on — unmute companion ──
   if (sub === 'on') {
     saveGlobalConfig(cfg => ({ ...cfg, companionMuted: false }))
-    onDone('companion unmuted', { display: 'system' })
+    onDone(t('companion unmuted'), { display: 'system' })
     return null
   }
 
@@ -93,7 +94,9 @@ export async function call(
   if (sub === 'pet') {
     const companion = getCompanion()
     if (!companion) {
-      onDone('no companion yet \u00b7 run /buddy first', { display: 'system' })
+      onDone(t('no companion yet \u00b7 run /buddy first'), {
+        display: 'system',
+      })
       return null
     }
 
@@ -110,7 +113,9 @@ export async function call(
       ),
     )
 
-    onDone(`petted ${companion.name}`, { display: 'system' })
+    onDone(t('petted {{name}}', { name: companion.name }), {
+      display: 'system',
+    })
     return null
   }
 
@@ -152,19 +157,22 @@ export async function call(
 
   const stars = RARITY_STARS[r.bones.rarity]
   const sprite = renderSprite(r.bones, 0)
-  const shiny = r.bones.shiny ? ' \u2728 Shiny!' : ''
+  const shiny = r.bones.shiny ? t(' \u2728 Shiny!') : ''
 
   const lines = [
-    'A wild companion appeared!',
+    t('A wild companion appeared!'),
     '',
     ...sprite,
     '',
-    `${name} the ${speciesLabel(r.bones.species)}${shiny}`,
-    `Rarity: ${stars} (${r.bones.rarity})`,
-    `"${personality}"`,
+    t('{{name}} the {{species}}', {
+      name,
+      species: speciesLabel(r.bones.species),
+    }) + shiny,
+    t('Rarity: {{stars}} ({{rarity}})', { stars, rarity: r.bones.rarity }),
+    t('"{{personality}}"', { personality }),
     '',
-    'Your companion will now appear beside your input box!',
-    'Say its name to get its take \u00b7 /buddy pet \u00b7 /buddy off',
+    t('Your companion will now appear beside your input box!'),
+    t('Say its name to get its take \u00b7 /buddy pet \u00b7 /buddy off'),
   ]
   onDone(lines.join('\n'), { display: 'system' })
   return null

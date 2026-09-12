@@ -5,6 +5,7 @@ import { useClaudeAiLimits } from 'src/services/claudeAiLimitsHook.js';
 import { shouldProcessMockLimits } from 'src/services/rateLimitMocking.js'; // Used for /mock-limits command
 import { getRateLimitTier, getSubscriptionType, isClaudeAISubscriber } from 'src/utils/auth.js';
 import { hasClaudeAiBillingAccess } from 'src/utils/billing.js';
+import { t } from '../i18n/index.js';
 import { MessageResponse } from '../MessageResponse.js';
 
 type UpsellParams = {
@@ -28,30 +29,30 @@ export function getUpsellMessage({
 
   if (isMax20x) {
     if (isExtraUsageCommandEnabled) {
-      return '/extra-usage to finish what you\u2019re working on.';
+      return t('/extra-usage to finish what you\u2019re working on.');
     }
-    return '/login to switch to an API usage-billed account.';
+    return t('/login to switch to an API usage-billed account.');
   }
 
   if (shouldAutoOpenRateLimitOptionsMenu) {
-    return 'Opening your options\u2026';
+    return t('Opening your options\u2026');
   }
 
   if (!isTeamOrEnterprise && !isExtraUsageCommandEnabled) {
-    return '/upgrade to increase your usage limit.';
+    return t('/upgrade to increase your usage limit.');
   }
 
   if (isTeamOrEnterprise) {
     if (!isExtraUsageCommandEnabled) return null;
 
     if (hasBillingAccess) {
-      return '/extra-usage to finish what you\u2019re working on.';
+      return t('/extra-usage to finish what you\u2019re working on.');
     }
 
-    return '/extra-usage to request more usage from your admin.';
+    return t('/extra-usage to request more usage from your admin.');
   }
 
-  return '/upgrade or /extra-usage to finish what you\u2019re working on.';
+  return t('/upgrade or /extra-usage to finish what you\u2019re working on.');
 }
 
 type RateLimitMessageProps = {

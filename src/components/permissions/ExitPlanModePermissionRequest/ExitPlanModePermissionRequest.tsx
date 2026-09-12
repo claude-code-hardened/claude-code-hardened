@@ -55,6 +55,7 @@ import {
   saveCustomTitle,
 } from '../../../utils/sessionStorage.js';
 import { getSettings_DEPRECATED } from '../../../utils/settings/settings.js';
+import { t } from '../../../i18n/index.js';
 import { type OptionWithDescription, Select } from '../../CustomSelect/index.js';
 import { Markdown } from '../../Markdown.js';
 import { PermissionDialog } from '../PermissionDialog.js';
@@ -260,7 +261,7 @@ export function ExitPlanModePermissionRequest({
   const [currentPlan, setCurrentPlan] = useState(() => {
     if (inputPlan) return inputPlan;
     const plan = getPlan();
-    return plan ?? 'No plan found. Please write your plan to the plan file first.';
+    return plan ?? t('No plan found. Please write your plan to the plan file first.');
   });
   const [showSaveMessage, setShowSaveMessage] = useState(false);
   // Track Ctrl+G local edits so updatedInput can include the plan (the tool
@@ -615,7 +616,7 @@ export function ExitPlanModePermissionRequest({
         borderBottom={false}
         paddingX={1}
       >
-        <Text dimColor>Would you like to proceed?</Text>
+        <Text dimColor>{t('Would you like to proceed?')}</Text>
         <Box marginTop={1}>
           <Select
             options={options}
@@ -628,7 +629,7 @@ export function ExitPlanModePermissionRequest({
         </Box>
         {editorName && (
           <Box flexDirection="row" gap={1} marginTop={1}>
-            <Text dimColor>ctrl-g to edit in </Text>
+            <Text dimColor>{t('ctrl-g to edit in ')}</Text>
             <Text bold dimColor>
               {editorName}
             </Text>
@@ -636,7 +637,10 @@ export function ExitPlanModePermissionRequest({
             {showSaveMessage && (
               <>
                 <Text dimColor>{' · '}</Text>
-                <Text color="success">{figures.tick}Plan saved!</Text>
+                <Text color="success">
+                  {figures.tick}
+                  {t('Plan saved!')}
+                </Text>
               </>
             )}
           </Box>
@@ -690,14 +694,14 @@ export function ExitPlanModePermissionRequest({
     }
 
     return (
-      <PermissionDialog color="planMode" title="Exit plan mode?" workerBadge={workerBadge}>
+      <PermissionDialog color="planMode" title={t('Exit plan mode?')} workerBadge={workerBadge}>
         <Box flexDirection="column" paddingX={1} marginTop={1}>
-          <Text>Claude wants to exit plan mode</Text>
+          <Text>{t('Claude wants to exit plan mode')}</Text>
           <Box marginTop={1}>
             <Select
               options={[
-                { label: 'Yes', value: 'yes' as const },
-                { label: 'No', value: 'no' as const },
+                { label: t('Yes'), value: 'yes' as const },
+                { label: t('No'), value: 'no' as const },
               ]}
               onChange={handleEmptyPlanResponse}
               onCancel={() => {
@@ -720,10 +724,10 @@ export function ExitPlanModePermissionRequest({
 
   return (
     <Box flexDirection="column" tabIndex={0} autoFocus onKeyDown={handleKeyDown}>
-      <PermissionDialog color="planMode" title="Ready to code?" innerPaddingX={0} workerBadge={workerBadge}>
+      <PermissionDialog color="planMode" title={t('Ready to code?')} innerPaddingX={0} workerBadge={workerBadge}>
         <Box flexDirection="column" marginTop={1}>
           <Box paddingX={1} flexDirection="column">
-            <Text>Here is Claude&apos;s plan:</Text>
+            <Text>{t("Here is Claude's plan:")}</Text>
           </Box>
           <Box
             borderColor="subtle"
@@ -742,7 +746,7 @@ export function ExitPlanModePermissionRequest({
             <PermissionRuleExplanation permissionResult={toolUseConfirm.permissionResult} toolType="tool" />
             {isClassifierPermissionsEnabled() && allowedPrompts && allowedPrompts.length > 0 && (
               <Box flexDirection="column" marginBottom={1}>
-                <Text bold>Requested permissions:</Text>
+                <Text bold>{t('Requested permissions:')}</Text>
                 {allowedPrompts.map((p, i) => (
                   <Text key={i} dimColor>
                     {'  '}· {p.tool}({PROMPT_PREFIX} {p.prompt})
@@ -752,7 +756,9 @@ export function ExitPlanModePermissionRequest({
             )}
             {!useStickyFooter && (
               <>
-                <Text dimColor>Claude has written up a plan and is ready to execute. Would you like to proceed?</Text>
+                <Text dimColor>
+                  {t('Claude has written up a plan and is ready to execute. Would you like to proceed?')}
+                </Text>
                 <Box marginTop={1}>
                   <Select
                     options={options}
@@ -771,7 +777,7 @@ export function ExitPlanModePermissionRequest({
       {!useStickyFooter && editorName && (
         <Box flexDirection="row" gap={1} paddingX={1} marginTop={1}>
           <Box>
-            <Text dimColor>ctrl-g to edit in </Text>
+            <Text dimColor>{t('ctrl-g to edit in ')}</Text>
             <Text bold dimColor>
               {editorName}
             </Text>
@@ -780,7 +786,10 @@ export function ExitPlanModePermissionRequest({
           {showSaveMessage && (
             <Box>
               <Text dimColor>{' · '}</Text>
-              <Text color="success">{figures.tick}Plan saved!</Text>
+              <Text color="success">
+                {figures.tick}
+                {t('Plan saved!')}
+              </Text>
             </Box>
           )}
         </Box>
@@ -806,22 +815,22 @@ export function buildPlanApprovalOptions({
   onFeedbackChange: (v: string) => void;
 }): OptionWithDescription<ResponseValue>[] {
   const options: OptionWithDescription<ResponseValue>[] = [];
-  const usedLabel = usedPercent !== null ? ` (${usedPercent}% used)` : '';
+  const usedLabel = usedPercent !== null ? t(' ({{pct}}% used)', { pct: usedPercent }) : '';
 
   if (showClearContext) {
     if (feature('TRANSCRIPT_CLASSIFIER') && isAutoModeAvailable) {
       options.push({
-        label: `Yes, clear context${usedLabel} and use auto mode`,
+        label: t('Yes, clear context{{used}} and use auto mode', { used: usedLabel }),
         value: 'yes-auto-clear-context',
       });
     } else if (isBypassPermissionsModeAvailable) {
       options.push({
-        label: `Yes, clear context${usedLabel} and bypass permissions`,
+        label: t('Yes, clear context{{used}} and bypass permissions', { used: usedLabel }),
         value: 'yes-bypass-permissions',
       });
     } else {
       options.push({
-        label: `Yes, clear context${usedLabel} and auto-accept edits`,
+        label: t('Yes, clear context{{used}} and auto-accept edits', { used: usedLabel }),
         value: 'yes-accept-edits',
       });
     }
@@ -830,39 +839,39 @@ export function buildPlanApprovalOptions({
   // Slot 2: keep-context with elevated mode (same priority: auto > bypass > edits).
   if (feature('TRANSCRIPT_CLASSIFIER') && isAutoModeAvailable) {
     options.push({
-      label: 'Yes, and use auto mode',
+      label: t('Yes, and use auto mode'),
       value: 'yes-resume-auto-mode',
     });
   } else if (isBypassPermissionsModeAvailable) {
     options.push({
-      label: 'Yes, and bypass permissions',
+      label: t('Yes, and bypass permissions'),
       value: 'yes-accept-edits-keep-context',
     });
   } else {
     options.push({
-      label: 'Yes, auto-accept edits',
+      label: t('Yes, auto-accept edits'),
       value: 'yes-accept-edits-keep-context',
     });
   }
 
   options.push({
-    label: 'Yes, manually approve edits',
+    label: t('Yes, manually approve edits'),
     value: 'yes-default-keep-context',
   });
 
   if (showUltraplan) {
     options.push({
-      label: 'No, refine with Ultraplan on Claude Code on the web',
+      label: t('No, refine with Ultraplan on Claude Code on the web'),
       value: 'ultraplan',
     });
   }
 
   options.push({
     type: 'input',
-    label: 'No, keep planning',
+    label: t('No, keep planning'),
     value: 'no',
-    placeholder: 'Tell Claude what to change',
-    description: 'shift+tab to approve with this feedback',
+    placeholder: t('Tell Claude what to change'),
+    description: t('shift+tab to approve with this feedback'),
     onChange: onFeedbackChange,
   });
 

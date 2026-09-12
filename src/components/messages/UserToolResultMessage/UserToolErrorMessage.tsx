@@ -3,6 +3,7 @@ import type { ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs
 import * as React from 'react';
 import { BULLET_OPERATOR } from '../../../constants/figures.js';
 import { Text } from '@anthropic/ink';
+import { t } from '../../../i18n/index.js';
 import { filterToolProgressMessages, type Tool, type Tools } from '../../../Tool.js';
 import type { ProgressMessage } from '../../../types/message.js';
 import {
@@ -55,7 +56,9 @@ export function UserToolErrorMessage({
   if (feature('TRANSCRIPT_CLASSIFIER') && typeof param.content === 'string' && isClassifierDenial(param.content)) {
     return (
       <MessageResponse height={1}>
-        <Text dimColor>Denied by auto mode classifier {BULLET_OPERATOR} /feedback if incorrect</Text>
+        <Text dimColor>
+          {t('Denied by auto mode classifier')} {BULLET_OPERATOR} {t('/feedback if incorrect')}
+        </Text>
       </MessageResponse>
     );
   }

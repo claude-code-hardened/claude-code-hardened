@@ -73,8 +73,9 @@ function getI18n(): I18n {
  * The input is the English text; untranslated strings pass through as-is.
  *
  * Interpolation: i18next `{{name}}` placeholders are substituted from
- * `options` (e.g. t('Loaded {{n}} messages', { n: 5 })). en passes the
- * template through and interpolates locally so English needs no pack entry.
+ * `options` (e.g. t('Loaded {{n}} messages', { n: 5 })). Keys stored in the
+ * locale packs keep the placeholder; en passes the template through and
+ * interpolates locally so English needs no pack entry.
  */
 export function t(key: string, options?: Record<string, unknown>): string {
   if (resolveLocale() === 'en') {

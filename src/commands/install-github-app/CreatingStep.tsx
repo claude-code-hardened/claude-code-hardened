@@ -1,4 +1,5 @@
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import type { Workflow } from './types.js';
 
 interface CreatingStepProps {
@@ -20,23 +21,27 @@ export function CreatingStep({
 }: CreatingStepProps) {
   const progressSteps = skipWorkflow
     ? [
-        'Getting repository information',
-        secretExists && useExistingSecret ? 'Using existing API key secret' : `Setting up ${secretName} secret`,
+        t('Getting repository information'),
+        secretExists && useExistingSecret
+          ? t('Using existing API key secret')
+          : t('Setting up {{name}} secret', { name: secretName }),
       ]
     : [
-        'Getting repository information',
-        'Creating branch',
-        selectedWorkflows.length > 1 ? 'Creating workflow files' : 'Creating workflow file',
-        secretExists && useExistingSecret ? 'Using existing API key secret' : `Setting up ${secretName} secret`,
-        'Opening pull request page',
+        t('Getting repository information'),
+        t('Creating branch'),
+        selectedWorkflows.length > 1 ? t('Creating workflow files') : t('Creating workflow file'),
+        secretExists && useExistingSecret
+          ? t('Using existing API key secret')
+          : t('Setting up {{name}} secret', { name: secretName }),
+        t('Opening pull request page'),
       ];
 
   return (
     <>
       <Box flexDirection="column" borderStyle="round" paddingX={1}>
         <Box flexDirection="column" marginBottom={1}>
-          <Text bold>Install GitHub App</Text>
-          <Text dimColor>Create GitHub Actions workflow</Text>
+          <Text bold>{t('Install GitHub App')}</Text>
+          <Text dimColor>{t('Create GitHub Actions workflow')}</Text>
         </Box>
         {progressSteps.map((stepText, index) => {
           let status: 'completed' | 'in-progress' | 'pending' = 'pending';

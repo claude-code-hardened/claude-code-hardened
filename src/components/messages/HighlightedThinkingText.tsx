@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useContext } from 'react';
 import { useQueuedMessage } from '../../context/QueuedMessageContext.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { formatBriefTimestamp } from '../../utils/formatBriefTimestamp.js';
 import { findThinkingTriggerPositions, getRainbowColor, isUltrathinkEnabled } from '../../utils/thinking.js';
 import { MessageActionsSelectedContext } from '../messageActions.js';
@@ -25,7 +26,7 @@ export function HighlightedThinkingText({ text, useBriefLayout, timestamp }: Pro
     return (
       <Box flexDirection="column" paddingLeft={2}>
         <Box flexDirection="row">
-          <Text color={isQueued ? 'subtle' : 'briefLabelYou'}>You</Text>
+          <Text color={isQueued ? 'subtle' : 'briefLabelYou'}>{t('You')}</Text>
           {ts ? <Text dimColor> {ts}</Text> : null}
         </Box>
         <Text color={isQueued ? 'subtle' : 'text'}>{text}</Text>

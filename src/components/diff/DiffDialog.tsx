@@ -2,6 +2,7 @@ import type { StructuredPatchHunk } from 'diff';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
 import { useRegisterOverlay } from '../../context/overlayContext.js';
+import { t } from '../../i18n/index.js';
 import { type DiffData, useDiffData } from '../../hooks/useDiffData.js';
 import { type TurnDiff, useTurnDiffs } from '../../hooks/useTurnDiffs.js';
 import { Box, Text } from '@anthropic/ink';
@@ -148,19 +149,22 @@ export function DiffDialog({ messages, onDone }: Props): React.ReactNode {
 
   const subtitle = diffData.stats ? (
     <Text dimColor>
-      {diffData.stats.filesCount} {plural(diffData.stats.filesCount, 'file')} changed
+      {t('{{n}} {{unit}} changed', {
+        n: diffData.stats.filesCount,
+        unit: plural(diffData.stats.filesCount, 'file'),
+      })}
       {diffData.stats.linesAdded > 0 && <Text color="diffAddedWord"> +{diffData.stats.linesAdded}</Text>}
       {diffData.stats.linesRemoved > 0 && <Text color="diffRemovedWord"> -{diffData.stats.linesRemoved}</Text>}
     </Text>
   ) : null;
 
   // Build header based on current source
-  const headerTitle = currentTurn ? `Turn ${currentTurn.turnIndex}` : 'Uncommitted changes';
+  const headerTitle = currentTurn ? t('Turn {{n}}', { n: currentTurn.turnIndex }) : t('Uncommitted changes');
   const headerSubtitle = currentTurn
     ? currentTurn.userPromptPreview
       ? `"${currentTurn.userPromptPreview}"`
       : ''
-    : '(git diff HEAD)';
+    : t('(git diff HEAD)');
 
   // Source selector pills
   const sourceSelector =
@@ -169,7 +173,7 @@ export function DiffDialog({ messages, onDone }: Props): React.ReactNode {
         {sourceIndex > 0 && <Text dimColor>◀ </Text>}
         {sources.map((source, i) => {
           const isSelected = i === sourceIndex;
-          const label = source.type === 'current' ? 'Current' : `T${source.turn.turnIndex}`;
+          const label = source.type === 'current' ? t('Current') : `T${source.turn.turnIndex}`;
           return (
             <Text key={i} dimColor={!isSelected} bold={isSelected}>
               {i > 0 ? ' · ' : ''}
@@ -185,16 +189,16 @@ export function DiffDialog({ messages, onDone }: Props): React.ReactNode {
   // Determine the appropriate message when no files are shown
   const emptyMessage = (() => {
     if (diffData.loading) {
-      return 'Loading diff…';
+      return t('Loading diff…');
     }
     if (currentTurn) {
-      return 'No file changes in this turn';
+      return t('No file changes in this turn');
     }
     // Check if we have stats but no files (too many files case)
     if (diffData.stats && diffData.stats.filesCount > 0 && diffData.files.length === 0) {
-      return 'Too many files to display details';
+      return t('Too many files to display details');
     }
-    return 'Working tree is clean';
+    return t('Working tree is clean');
   })();
 
   // Build title with header subtitle inline
@@ -210,7 +214,7 @@ export function DiffDialog({ messages, onDone }: Props): React.ReactNode {
     if (viewMode === 'detail') {
       setViewMode('list');
     } else {
-      onDone('Diff dialog dismissed', { display: 'system' });
+      onDone(t('Diff dialog dismissed'), { display: 'system' });
     }
   }
 
@@ -221,18 +225,18 @@ export function DiffDialog({ messages, onDone }: Props): React.ReactNode {
       color="background"
       inputGuide={exitState =>
         exitState.pending ? (
-          <Text>Press {exitState.keyName} again to exit</Text>
+          <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
         ) : viewMode === 'list' ? (
           <Byline>
-            {sources.length > 1 && <Text>←/→ source</Text>}
-            <Text>↑/↓ select</Text>
-            <Text>Enter view</Text>
-            <Text>{dismissShortcut} close</Text>
+            {sources.length > 1 && <Text>{t('←/→ source')}</Text>}
+            <Text>{t('↑/↓ select')}</Text>
+            <Text>{t('Enter view')}</Text>
+            <Text>{t('{{shortcut}} close', { shortcut: dismissShortcut })}</Text>
           </Byline>
         ) : (
           <Byline>
-            <Text>← back</Text>
-            <Text>{dismissShortcut} close</Text>
+            <Text>{t('← back')}</Text>
+            <Text>{t('{{shortcut}} close', { shortcut: dismissShortcut })}</Text>
           </Byline>
         )
       }

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import type { DeepImmutable } from 'src/types/utils.js';
 import { useElapsedTime } from '../../hooks/useElapsedTime.js';
+import { t } from '../../i18n/index.js';
 import { type KeyboardEvent, Box, Text, useTheme } from '@anthropic/ink';
 import { useKeybindings } from '../../keybindings/useKeybinding.js';
 import { getEmptyToolPermissionContext } from '../../Tool.js';
@@ -79,17 +80,21 @@ export function InProcessTeammateDetailDialog({
     <Text>
       {teammate.status !== 'running' && (
         <Text color={teammate.status === 'completed' ? 'success' : teammate.status === 'killed' ? 'warning' : 'error'}>
-          {teammate.status === 'completed' ? 'Completed' : teammate.status === 'failed' ? 'Failed' : 'Stopped'}
+          {teammate.status === 'completed' ? t('Completed') : teammate.status === 'failed' ? t('Failed') : t('Stopped')}
           {' · '}
         </Text>
       )}
       <Text dimColor>
         {elapsedTime}
-        {tokenCount !== undefined && tokenCount > 0 && <> · {formatNumber(tokenCount)} tokens</>}
+        {tokenCount !== undefined && tokenCount > 0 && <> · {t('{{n}} tokens', { n: formatNumber(tokenCount) })}</>}
         {toolUseCount !== undefined && toolUseCount > 0 && (
           <>
             {' '}
-            · {toolUseCount} {toolUseCount === 1 ? 'tool' : 'tools'}
+            ·{' '}
+            {t('{{n}} tool{{s}}', {
+              n: toolUseCount,
+              s: toolUseCount === 1 ? '' : 's',
+            })}
           </>
         )}
       </Text>
@@ -105,7 +110,7 @@ export function InProcessTeammateDetailDialog({
         color="background"
         inputGuide={exitState =>
           exitState.pending ? (
-            <Text>Press {exitState.keyName} again to exit</Text>
+            <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
           ) : (
             <Byline>
               {onBack && <KeyboardShortcutHint shortcut="←" action="go back" />}
@@ -124,7 +129,7 @@ export function InProcessTeammateDetailDialog({
           teammate.progress.recentActivities.length > 0 && (
             <Box flexDirection="column">
               <Text bold dimColor>
-                Progress
+                {t('Progress')}
               </Text>
               {teammate.progress.recentActivities.map((activity, i) => (
                 <Text key={i} dimColor={i < teammate.progress!.recentActivities!.length - 1} wrap="truncate-end">
@@ -138,7 +143,7 @@ export function InProcessTeammateDetailDialog({
         {/* Prompt section */}
         <Box flexDirection="column" marginTop={1}>
           <Text bold dimColor>
-            Prompt
+            {t('Prompt')}
           </Text>
           <Text wrap="wrap">{displayPrompt}</Text>
         </Box>
@@ -147,7 +152,7 @@ export function InProcessTeammateDetailDialog({
         {teammate.status === 'failed' && teammate.error && (
           <Box flexDirection="column" marginTop={1}>
             <Text bold color="error">
-              Error
+              {t('Error')}
             </Text>
             <Text color="error" wrap="wrap">
               {teammate.error}

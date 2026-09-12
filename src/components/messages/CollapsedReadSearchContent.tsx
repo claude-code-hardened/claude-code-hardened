@@ -11,6 +11,7 @@ import { getToolUseIdsFromCollapsedGroup } from '../../utils/collapseReadSearch.
 import { getDisplayPath } from '../../utils/file.js';
 import { formatDuration, formatSecondsShort } from '../../utils/format.js';
 import { isFullscreenEnvEnabled } from '../../utils/fullscreen.js';
+import { t } from '../../i18n/index.js';
 import type { buildMessageLookups } from '../../utils/messages.js';
 import type { ThemeName } from '../../utils/theme.js';
 import { CtrlOToExpand } from '../CtrlOToExpand.js';
@@ -225,8 +226,13 @@ export function CollapsedReadSearchContent({
         {message.hookInfos && message.hookInfos.length > 0 && (
           <>
             <Text dimColor>
-              {'  ⎿  '}Ran {message.hookCount} PreToolUse {message.hookCount === 1 ? 'hook' : 'hooks'} (
-              {formatSecondsShort(message.hookTotalMs ?? 0)})
+              {'  ⎿  '}
+              {t(
+                message.hookCount === 1
+                  ? 'Ran {{count}} PreToolUse hook ({{time}})'
+                  : 'Ran {{count}} PreToolUse hooks ({{time}})',
+                { count: message.hookCount, time: formatSecondsShort(message.hookTotalMs ?? 0) },
+              )}
             </Text>
             {message.hookInfos.map((info, idx) => (
               <Text key={`hook-${idx}`} dimColor>
@@ -239,7 +245,8 @@ export function CollapsedReadSearchContent({
         {message.relevantMemories?.map(m => (
           <Box key={m.path} flexDirection="column" marginTop={1}>
             <Text dimColor>
-              {'  ⎿  '}Recalled {basename(m.path)}
+              {'  ⎿  '}
+              {t('Recalled {{path}}', { path: basename(m.path) })}
             </Text>
             <Box paddingLeft={5}>
               <Text>
@@ -284,7 +291,10 @@ export function CollapsedReadSearchContent({
     }
     if (elapsed !== undefined && elapsed >= 2) {
       const time = formatDuration(elapsed * 1000);
-      shellProgressSuffix = lines > 0 ? ` (${time} · ${lines} ${lines === 1 ? 'line' : 'lines'})` : ` (${time})`;
+      shellProgressSuffix =
+        lines > 0
+          ? ` ${t(lines === 1 ? '({{time}} · {{count}} line)' : '({{time}} · {{count}} lines)', { time, count: lines })}`
+          : ` (${time})`;
     }
   }
 
@@ -304,9 +314,9 @@ export function CollapsedReadSearchContent({
   }
   if (isFullscreenEnvEnabled() && message.commits?.length) {
     const byKind = {
-      committed: 'committed',
-      amended: 'amended commit',
-      'cherry-picked': 'cherry-picked',
+      committed: t('committed'),
+      amended: t('amended commit'),
+      'cherry-picked': t('cherry-picked'),
     };
     for (const kind of ['committed', 'amended', 'cherry-picked'] as const) {
       const shas = message.commits.filter(c => c.kind === kind).map(c => c.sha);
@@ -317,22 +327,22 @@ export function CollapsedReadSearchContent({
   }
   if (isFullscreenEnvEnabled() && message.pushes?.length) {
     const branches = uniq(message.pushes.map(p => p.branch));
-    pushPart('push', 'pushed to', <Text bold>{branches.join(', ')}</Text>);
+    pushPart('push', t('pushed to'), <Text bold>{branches.join(', ')}</Text>);
   }
   if (isFullscreenEnvEnabled() && message.branches?.length) {
-    const byAction = { merged: 'merged', rebased: 'rebased onto' };
+    const byAction = { merged: t('merged'), rebased: t('rebased onto') };
     for (const b of message.branches) {
       pushPart(`br-${b.action}-${b.ref}`, byAction[b.action], <Text bold>{b.ref}</Text>);
     }
   }
   if (isFullscreenEnvEnabled() && message.prs?.length) {
     const verbs = {
-      created: 'created',
-      edited: 'edited',
-      merged: 'merged',
-      commented: 'commented on',
-      closed: 'closed',
-      ready: 'marked ready',
+      created: t('created'),
+      edited: t('edited'),
+      merged: t('merged'),
+      commented: t('commented on'),
+      closed: t('closed'),
+      ready: t('marked ready'),
     };
     for (const pr of message.prs) {
       pushPart(
@@ -347,55 +357,55 @@ export function CollapsedReadSearchContent({
     const isFirst = nonMemParts.length === 0;
     const searchVerb = isActiveGroup
       ? isFirst
-        ? 'Searching for'
-        : 'searching for'
+        ? t('Searching for')
+        : t('searching for')
       : isFirst
-        ? 'Searched for'
-        : 'searched for';
+        ? t('Searched for')
+        : t('searched for');
     if (!isFirst) {
       nonMemParts.push(<Text key="comma-s">, </Text>);
     }
     nonMemParts.push(
       <Text key="search">
-        {searchVerb} <Text bold>{searchCount}</Text> {searchCount === 1 ? 'pattern' : 'patterns'}
+        {searchVerb} <Text bold>{searchCount}</Text> {searchCount === 1 ? t('pattern') : t('patterns')}
       </Text>,
     );
   }
 
   if (readCount > 0) {
     const isFirst = nonMemParts.length === 0;
-    const readVerb = isActiveGroup ? (isFirst ? 'Reading' : 'reading') : isFirst ? 'Read' : 'read';
+    const readVerb = isActiveGroup ? (isFirst ? t('Reading') : t('reading')) : isFirst ? t('Read') : t('read');
     if (!isFirst) {
       nonMemParts.push(<Text key="comma-r">, </Text>);
     }
     nonMemParts.push(
       <Text key="read">
-        {readVerb} <Text bold>{readCount}</Text> {readCount === 1 ? 'file' : 'files'}
+        {readVerb} <Text bold>{readCount}</Text> {readCount === 1 ? t('file') : t('files')}
       </Text>,
     );
   }
 
   if (listCount > 0) {
     const isFirst = nonMemParts.length === 0;
-    const listVerb = isActiveGroup ? (isFirst ? 'Listing' : 'listing') : isFirst ? 'Listed' : 'listed';
+    const listVerb = isActiveGroup ? (isFirst ? t('Listing') : t('listing')) : isFirst ? t('Listed') : t('listed');
     if (!isFirst) {
       nonMemParts.push(<Text key="comma-l">, </Text>);
     }
     nonMemParts.push(
       <Text key="list">
-        {listVerb} <Text bold>{listCount}</Text> {listCount === 1 ? 'directory' : 'directories'}
+        {listVerb} <Text bold>{listCount}</Text> {listCount === 1 ? t('directory') : t('directories')}
       </Text>,
     );
   }
 
   if (replCount > 0) {
-    const replVerb = isActiveGroup ? "REPL'ing" : "REPL'd";
+    const replVerb = isActiveGroup ? t("REPL'ing") : t("REPL'd");
     if (nonMemParts.length > 0) {
       nonMemParts.push(<Text key="comma-repl">, </Text>);
     }
     nonMemParts.push(
       <Text key="repl">
-        {replVerb} <Text bold>{replCount}</Text> {replCount === 1 ? 'time' : 'times'}
+        {replVerb} <Text bold>{replCount}</Text> {replCount === 1 ? t('time') : t('times')}
       </Text>,
     );
   }
@@ -403,7 +413,7 @@ export function CollapsedReadSearchContent({
   if (mcpCallCount > 0) {
     const serverLabel = message.mcpServerNames?.map(n => n.replace(/^claude\.ai /, '')).join(', ') || 'MCP';
     const isFirst = nonMemParts.length === 0;
-    const verb = isActiveGroup ? (isFirst ? 'Querying' : 'querying') : isFirst ? 'Queried' : 'queried';
+    const verb = isActiveGroup ? (isFirst ? t('Querying') : t('querying')) : isFirst ? t('Queried') : t('queried');
     if (!isFirst) {
       nonMemParts.push(<Text key="comma-mcp">, </Text>);
     }
@@ -413,7 +423,7 @@ export function CollapsedReadSearchContent({
         {mcpCallCount > 1 && (
           <>
             {' '}
-            <Text bold>{mcpCallCount}</Text> times
+            <Text bold>{mcpCallCount}</Text> {t('times')}
           </>
         )}
       </Text>,
@@ -422,13 +432,13 @@ export function CollapsedReadSearchContent({
 
   if (isFullscreenEnvEnabled() && bashCount > 0) {
     const isFirst = nonMemParts.length === 0;
-    const verb = isActiveGroup ? (isFirst ? 'Running' : 'running') : isFirst ? 'Ran' : 'ran';
+    const verb = isActiveGroup ? (isFirst ? t('Running') : t('running')) : isFirst ? t('Ran') : t('ran');
     if (!isFirst) {
       nonMemParts.push(<Text key="comma-bash">, </Text>);
     }
     nonMemParts.push(
       <Text key="bash">
-        {verb} <Text bold>{bashCount}</Text> bash {bashCount === 1 ? 'command' : 'commands'}
+        {verb} <Text bold>{bashCount}</Text> {bashCount === 1 ? t('bash command') : t('bash commands')}
       </Text>,
     );
   }
@@ -439,13 +449,13 @@ export function CollapsedReadSearchContent({
 
   if (memoryReadCount > 0) {
     const isFirst = !hasPrecedingNonMem && memParts.length === 0;
-    const verb = isActiveGroup ? (isFirst ? 'Recalling' : 'recalling') : isFirst ? 'Recalled' : 'recalled';
+    const verb = isActiveGroup ? (isFirst ? t('Recalling') : t('recalling')) : isFirst ? t('Recalled') : t('recalled');
     if (!isFirst) {
       memParts.push(<Text key="comma-mr">, </Text>);
     }
     memParts.push(
       <Text key="mem-read">
-        {verb} <Text bold>{memoryReadCount}</Text> {memoryReadCount === 1 ? 'memory' : 'memories'}
+        {verb} <Text bold>{memoryReadCount}</Text> {memoryReadCount === 1 ? t('memory') : t('memories')}
       </Text>,
     );
   }
@@ -456,18 +466,18 @@ export function CollapsedReadSearchContent({
     if (!isFirst) {
       memParts.push(<Text key="comma-ms">, </Text>);
     }
-    memParts.push(<Text key="mem-search">{`${verb} memories`}</Text>);
+    memParts.push(<Text key="mem-search">{t(`${verb} memories`)}</Text>);
   }
 
   if (memoryWriteCount > 0) {
     const isFirst = !hasPrecedingNonMem && memParts.length === 0;
-    const verb = isActiveGroup ? (isFirst ? 'Writing' : 'writing') : isFirst ? 'Wrote' : 'wrote';
+    const verb = isActiveGroup ? (isFirst ? t('Writing') : t('writing')) : isFirst ? t('Wrote') : t('wrote');
     if (!isFirst) {
       memParts.push(<Text key="comma-mw">, </Text>);
     }
     memParts.push(
       <Text key="mem-write">
-        {verb} <Text bold>{memoryWriteCount}</Text> {memoryWriteCount === 1 ? 'memory' : 'memories'}
+        {verb} <Text bold>{memoryWriteCount}</Text> {memoryWriteCount === 1 ? t('memory') : t('memories')}
       </Text>,
     );
   }
@@ -509,8 +519,13 @@ export function CollapsedReadSearchContent({
       )}
       {message.hookTotalMs !== undefined && message.hookTotalMs > 0 && (
         <Text dimColor>
-          {'  ⎿  '}Ran {message.hookCount} PreToolUse {message.hookCount === 1 ? 'hook' : 'hooks'} (
-          {formatSecondsShort(message.hookTotalMs)})
+          {'  ⎿  '}
+          {t(
+            message.hookCount === 1
+              ? 'Ran {{count}} PreToolUse hook ({{time}})'
+              : 'Ran {{count}} PreToolUse hooks ({{time}})',
+            { count: message.hookCount, time: formatSecondsShort(message.hookTotalMs) },
+          )}
         </Text>
       )}
     </Box>

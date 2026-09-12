@@ -3,6 +3,7 @@ import figures from 'figures';
 import * as React from 'react';
 import { SentryErrorBoundary } from 'src/components/SentryErrorBoundary.js';
 import { Box, Text, useTheme } from '@anthropic/ink';
+import { t } from '../../../i18n/index.js';
 import { useAppState } from '../../../state/AppState.js';
 import { filterToolProgressMessages, type Tool, type Tools } from '../../../Tool.js';
 import type { NormalizedUserMessage, ProgressMessage } from '../../../types/message.js';
@@ -124,7 +125,7 @@ export function UserToolSuccessMessage({
               <MessageResponse height={1}>
                 <Text dimColor>
                   <Text color="success">{figures.tick}</Text>
-                  {' Auto-approved \u00b7 matched '}
+                  {t(' Auto-approved \u00b7 matched ')}
                   {`"${classifierRule}"`}
                 </Text>
               </MessageResponse>
@@ -133,7 +134,7 @@ export function UserToolSuccessMessage({
         {feature('TRANSCRIPT_CLASSIFIER')
           ? yoloReason && (
               <MessageResponse height={1}>
-                <Text dimColor>Allowed by auto mode classifier</Text>
+                <Text dimColor>{t('Allowed by auto mode classifier')}</Text>
               </MessageResponse>
             )
           : null}

@@ -382,7 +382,7 @@ export function ResumeConversation({
     return (
       <Box>
         <Spinner />
-        <Text> Resuming conversation…</Text>
+        <Text> {t('Resuming conversation…')}</Text>
       </Box>
     );
   }
@@ -419,8 +419,8 @@ function NoConversationsMessage(): React.ReactNode {
 
   return (
     <Box flexDirection="column">
-      <Text>No conversations found to resume.</Text>
-      <Text dimColor>Press Ctrl+C to exit and start a new conversation.</Text>
+      <Text>{t('No conversations found to resume.')}</Text>
+      <Text dimColor>{t('Press Ctrl+C to exit and start a new conversation.')}</Text>
     </Box>
   );
 }
@@ -436,12 +436,12 @@ function CrossProjectMessage({ command }: { command: string }): React.ReactNode 
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Text>This conversation is from a different directory.</Text>
+      <Text>{t('This conversation is from a different directory.')}</Text>
       <Box flexDirection="column">
-        <Text>To resume, run:</Text>
+        <Text>{t('To resume, run:')}</Text>
         <Text> {command}</Text>
       </Box>
-      <Text dimColor>(Command copied to clipboard)</Text>
+      <Text dimColor>{t('(Command copied to clipboard)')}</Text>
     </Box>
   );
 }

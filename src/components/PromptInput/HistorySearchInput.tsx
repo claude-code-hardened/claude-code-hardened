@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Box, Text, stringWidth } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import TextInput from '../TextInput.js';
 
 type Props = {
@@ -11,7 +12,7 @@ type Props = {
 function HistorySearchInput({ value, onChange, historyFailedMatch }: Props): React.ReactNode {
   return (
     <Box gap={1}>
-      <Text dimColor>{historyFailedMatch ? 'no matching prompt:' : 'search prompts:'}</Text>
+      <Text dimColor>{historyFailedMatch ? t('no matching prompt:') : t('search prompts:')}</Text>
       <TextInput
         value={value}
         onChange={onChange}

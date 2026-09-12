@@ -50,11 +50,11 @@ function getRiskColor(riskLevel: RiskLevel): 'success' | 'warning' | 'error' {
 function getRiskLabel(riskLevel: RiskLevel): string {
   switch (riskLevel) {
     case 'LOW':
-      return 'Low risk';
+      return t('Low risk');
     case 'MEDIUM':
-      return 'Med risk';
+      return t('Med risk');
     case 'HIGH':
-      return 'High risk';
+      return t('High risk');
   }
 }
 

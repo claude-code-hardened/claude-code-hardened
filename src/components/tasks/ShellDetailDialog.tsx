@@ -2,6 +2,7 @@ import React, { Suspense, use, useDeferredValue, useEffect, useState } from 'rea
 import type { DeepImmutable } from 'src/types/utils.js';
 import type { CommandResultDisplay } from '../../commands.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
+import { t } from '../../i18n/index.js';
 import { type KeyboardEvent, Box, Text } from '@anthropic/ink';
 import { useKeybindings } from '../../keybindings/useKeybinding.js';
 import type { LocalShellTaskState } from '../../tasks/LocalShellTask/guards.js';
@@ -62,7 +63,7 @@ export function ShellDetailDialog({ shell, onDone, onKillShell, onBack }: Props)
   }, [shell.id, shell.status]);
 
   // Handle standard close action
-  const handleClose = () => onDone('Shell details dismissed', { display: 'system' });
+  const handleClose = () => onDone(t('Shell details dismissed'), { display: 'system' });
 
   // Handle additional close actions beyond Dialog's built-in Esc handler
   useKeybindings(
@@ -76,7 +77,7 @@ export function ShellDetailDialog({ shell, onDone, onKillShell, onBack }: Props)
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === ' ') {
       e.preventDefault();
-      onDone('Shell details dismissed', { display: 'system' });
+      onDone(t('Shell details dismissed'), { display: 'system' });
     } else if (e.key === 'left' && onBack) {
       e.preventDefault();
       onBack();
@@ -93,12 +94,12 @@ export function ShellDetailDialog({ shell, onDone, onKillShell, onBack }: Props)
   return (
     <Box flexDirection="column" tabIndex={0} autoFocus onKeyDown={handleKeyDown}>
       <Dialog
-        title={isMonitor ? 'Monitor details' : 'Shell details'}
+        title={isMonitor ? t('Monitor details') : t('Shell details')}
         onCancel={handleClose}
         color="background"
         inputGuide={exitState =>
           exitState.pending ? (
-            <Text>Press {exitState.keyName} again to exit</Text>
+            <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
           ) : (
             <Byline>
               {onBack && <KeyboardShortcutHint shortcut="←" action="go back" />}
@@ -110,35 +111,35 @@ export function ShellDetailDialog({ shell, onDone, onKillShell, onBack }: Props)
       >
         <Box flexDirection="column">
           <Text>
-            <Text bold>Status:</Text>{' '}
+            <Text bold>{t('Status:')}</Text>{' '}
             {shell.status === 'running' ? (
               <Text color="background">
                 {shell.status}
-                {shell.result?.code !== undefined && ` (exit code: ${shell.result.code})`}
+                {shell.result?.code !== undefined && t(' (exit code: {{code}})', { code: shell.result.code })}
               </Text>
             ) : shell.status === 'completed' ? (
               <Text color="success">
                 {shell.status}
-                {shell.result?.code !== undefined && ` (exit code: ${shell.result.code})`}
+                {shell.result?.code !== undefined && t(' (exit code: {{code}})', { code: shell.result.code })}
               </Text>
             ) : (
               <Text color="error">
                 {shell.status}
-                {shell.result?.code !== undefined && ` (exit code: ${shell.result.code})`}
+                {shell.result?.code !== undefined && t(' (exit code: {{code}})', { code: shell.result.code })}
               </Text>
             )}
           </Text>
           <Text>
-            <Text bold>Runtime:</Text> {formatDuration((shell.endTime ?? Date.now()) - shell.startTime)}
+            <Text bold>{t('Runtime:')}</Text> {formatDuration((shell.endTime ?? Date.now()) - shell.startTime)}
           </Text>
           <Text wrap="wrap">
-            <Text bold>{isMonitor ? 'Script:' : 'Command:'}</Text> {displayCommand}
+            <Text bold>{isMonitor ? t('Script:') : t('Command:')}</Text> {displayCommand}
           </Text>
         </Box>
 
         <Box flexDirection="column">
-          <Text bold>Output:</Text>
-          <Suspense fallback={<Text dimColor>Loading output…</Text>}>
+          <Text bold>{t('Output:')}</Text>
+          <Suspense fallback={<Text dimColor>{t('Loading output…')}</Text>}>
             <ShellOutputContent outputPromise={deferredOutputPromise} columns={columns} />
           </Suspense>
         </Box>
@@ -156,7 +157,7 @@ function ShellOutputContent({ outputPromise, columns }: ShellOutputContentProps)
   const { content, bytesTotal } = use(outputPromise);
 
   if (!content) {
-    return <Text dimColor>No output available</Text>;
+    return <Text dimColor>{t('No output available')}</Text>;
   }
 
   // Find last 10 line boundaries via lastIndexOf
@@ -189,8 +190,8 @@ function ShellOutputContent({ outputPromise, columns }: ShellOutputContentProps)
         ))}
       </Box>
       <Text dimColor italic>
-        {`Showing ${rendered.length} lines`}
-        {isIncomplete ? ` of ${formatFileSize(bytesTotal)}` : ''}
+        {t('Showing {{n}} lines', { n: rendered.length })}
+        {isIncomplete ? t(' of {{size}}', { size: formatFileSize(bytesTotal) }) : ''}
       </Text>
     </>
   );

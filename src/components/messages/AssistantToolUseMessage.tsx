@@ -5,6 +5,7 @@ import type { ThemeName } from 'src/utils/theme.js';
 import type { Command } from '../../commands.js';
 import { BLACK_CIRCLE } from '../../constants/figures.js';
 import { Box, Text, stringWidth, useTheme } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useAppStateMaybeOutsideOfProvider } from '../../state/AppState.js';
 import { findToolByName, type Tool, type ToolProgressData, type Tools } from '../../Tool.js';
 import type { ProgressMessage } from '../../types/message.js';
@@ -173,12 +174,12 @@ export function AssistantToolUseMessage({
           (isClassifierChecking ? (
             <MessageResponse height={1}>
               <Text dimColor>
-                {isAutoClassifier ? 'Auto classifier checking\u2026' : 'Bash classifier checking\u2026'}
+                {isAutoClassifier ? t('Auto classifier checking\u2026') : t('Bash classifier checking\u2026')}
               </Text>
             </MessageResponse>
           ) : isWaitingForPermission ? (
             <MessageResponse height={1}>
-              <Text dimColor>Waiting for permission…</Text>
+              <Text dimColor>{t('Waiting for permission…')}</Text>
             </MessageResponse>
           ) : (
             renderToolUseProgressMessage(

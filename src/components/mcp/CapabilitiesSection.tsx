@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import { Byline } from '@anthropic/ink';
 
@@ -15,19 +16,19 @@ export function CapabilitiesSection({
 }: Props): React.ReactNode {
   const capabilities = [];
   if (serverToolsCount > 0) {
-    capabilities.push('tools');
+    capabilities.push(t('tools'));
   }
   if (serverResourcesCount > 0) {
-    capabilities.push('resources');
+    capabilities.push(t('resources'));
   }
   if (serverPromptsCount > 0) {
-    capabilities.push('prompts');
+    capabilities.push(t('prompts'));
   }
 
   return (
     <Box>
-      <Text bold>Capabilities: </Text>
-      <Text color="text">{capabilities.length > 0 ? <Byline>{capabilities}</Byline> : 'none'}</Text>
+      <Text bold>{t('Capabilities: ')}</Text>
+      <Text color="text">{capabilities.length > 0 ? <Byline>{capabilities}</Byline> : t('none')}</Text>
     </Box>
   );
 }

@@ -11,6 +11,7 @@ import type { IDESelection } from '../../hooks/useIdeSelection.js';
 import { useMainLoopModel } from '../../hooks/useMainLoopModel.js';
 import { useVoiceEnabled } from '../../hooks/useVoiceEnabled.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useClaudeAiLimits } from '../../services/claudeAiLimitsHook.js';
 import { calculateTokenWarningState } from '../../services/compact/autoCompact.js';
 import type { MCPServerConnection } from '../../services/mcp/types.js';
@@ -127,7 +128,7 @@ export function Notifications({
               action="chat:externalEditor"
               context="Chat"
               fallback="ctrl+g"
-              description={`edit in ${toIDEDisplayName(editor)}`}
+              description={t('edit in {{ide}}', { ide: toIDEDisplayName(editor) })}
             />
           </Text>
         ),
@@ -235,14 +236,14 @@ function NotificationContent({
       {isInOverageMode && !isTeamOrEnterprise && (
         <Box>
           <Text dimColor wrap="truncate">
-            Now using extra usage
+            {t('Now using extra usage')}
           </Text>
         </Box>
       )}
       {apiKeyHelperSlow && (
         <Box>
           <Text color="warning" wrap="truncate">
-            apiKeyHelper is taking a while{' '}
+            {t('apiKeyHelper is taking a while ')}
           </Text>
           <Text dimColor wrap="truncate">
             ({apiKeyHelperSlow})
@@ -253,22 +254,22 @@ function NotificationContent({
         <Box>
           <Text color="error" wrap="truncate">
             {isEnvTruthy(process.env.CLAUDE_CODE_REMOTE)
-              ? 'Authentication error · Try again'
-              : 'Not logged in · Run /login'}
+              ? t('Authentication error · Try again')
+              : t('Not logged in · Run /login')}
           </Text>
         </Box>
       )}
       {debug && (
         <Box>
           <Text color="warning" wrap="truncate">
-            Debug mode
+            {t('Debug mode')}
           </Text>
         </Box>
       )}
       {apiKeyStatus !== 'invalid' && apiKeyStatus !== 'missing' && verbose && (
         <Box>
           <Text dimColor wrap="truncate">
-            {tokenUsage} tokens
+            {t('{{count}} tokens', { count: tokenUsage })}
           </Text>
         </Box>
       )}

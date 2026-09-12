@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../../i18n/index.js';
 import { Text } from '@anthropic/ink';
 import { extractMcpToolDisplayName, getMcpDisplayName } from '../../services/mcp/mcpStringUtils.js';
 import { filterToolsByServer } from '../../services/mcp/utils.js';
@@ -35,9 +36,9 @@ export function MCPToolListView({ server, onSelectTool, onBack }: Props): React.
     const isOpenWorld = tool.isOpenWorld?.({}) ?? false;
 
     const annotations = [];
-    if (isReadOnly) annotations.push('read-only');
-    if (isDestructive) annotations.push('destructive');
-    if (isOpenWorld) annotations.push('open-world');
+    if (isReadOnly) annotations.push(t('read-only'));
+    if (isDestructive) annotations.push(t('destructive'));
+    if (isOpenWorld) annotations.push(t('open-world'));
 
     return {
       label: displayName,
@@ -49,12 +50,12 @@ export function MCPToolListView({ server, onSelectTool, onBack }: Props): React.
 
   return (
     <Dialog
-      title={`Tools for ${server.name}`}
-      subtitle={`${serverTools.length} ${plural(serverTools.length, 'tool')}`}
+      title={t('Tools for {{name}}', { name: server.name })}
+      subtitle={t('{{n}} tool{{s}}', { n: serverTools.length, s: serverTools.length === 1 ? '' : 's' })}
       onCancel={onBack}
       inputGuide={exitState =>
         exitState.pending ? (
-          <Text>Press {exitState.keyName} again to exit</Text>
+          <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
         ) : (
           <Byline>
             <KeyboardShortcutHint shortcut="↑↓" action="navigate" />
@@ -65,7 +66,7 @@ export function MCPToolListView({ server, onSelectTool, onBack }: Props): React.
       }
     >
       {serverTools.length === 0 ? (
-        <Text dimColor>No tools available</Text>
+        <Text dimColor>{t('No tools available')}</Text>
       ) : (
         <Select
           options={toolOptions}
