@@ -1,24 +1,27 @@
 #!/usr/bin/env bun
 /**
- * Differential test: JS byte scanner (verbatim extraction from
- * src/utils/sessionStorage.ts) vs Rust scan_chain — run over real
- * transcript JSONL files. Zero npm dependencies (only bun + the .node
- * artifact) so it runs anywhere without a node_modules.
+ * Performance benchmark for transcript chain scanning on real session files.
+ *
+ * Compares three paths over the same JSONL buffer:
+ *   A. full-line JSON.parse (the naive pre-optimization path)
+ *   B. JS byte scanner + parse of kept lines (walkChainBeforeParse, verbatim)
+ *   C. Rust scan_chain + parse of kept lines (native)
+ *
+ * Zero npm dependencies. Acceptance targets (B4, plan
+ * quiet-splashing-squid.md): 189MB file ≤1.0s end-to-end for the parse
+ * path, 70MB ≤0.5s, memory peak visibly below the naive path.
  *
  * Usage:
- *   bun run packages/transcript-parser-napi/scripts/differential.ts \
- *     <path-to-transcript-parser.node> [<jsonl-or-dir> ...]
- *
- * With no paths, scans all .jsonl files under ~/.claude/projects (recursive).
- * Exit 0 = 100% match. Any mismatch prints details and exits 1.
+ *   bun run packages/transcript-parser-napi/scripts/bench.ts \
+ *     <transcript-parser.node> [<jsonl> ...]
  */
-import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs'
+import { readFileSync, statSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
 
 const nodePath = process.argv[2]
 if (!nodePath || !existsSync(nodePath)) {
-  console.error('usage: differential.ts <transcript-parser.node> [paths...]')
+  console.error('usage: bench.ts <transcript-parser.node> [jsonl files...]')
   process.exit(2)
 }
 const nodeRequire = createRequire(import.meta.url)
@@ -35,23 +38,18 @@ function collect(p: string): void {
   }
   if (st.isDirectory()) {
     for (const e of readdirSync(p)) collect(join(p, e))
-  } else if (p.endsWith('.jsonl')) {
+  } else if (p.endsWith('.jsonl') && st.size > 5 * 1024 * 1024) {
     files.push(p)
   }
 }
 if (paths.length === 0) {
-  const home = process.env.HOME ?? '/root'
-  collect(join(home, '.claude', 'projects'))
+  collect(join(process.env.HOME ?? '/root', '.claude', 'projects'))
 } else {
   for (const p of paths) collect(p)
 }
+files.sort((a, b) => statSync(b).size - statSync(a).size)
 
-// ---------------------------------------------------------------------------
-// VERBATIM extraction of the JS reference from src/utils/sessionStorage.ts
-// (walkChainBeforeParse + pickDepthOneUuidCandidate + METADATA consts).
-// Source of truth: sessionStorage.ts@<this commit>. If the original changes,
-// re-extract here — otherwise this test is self-confirming.
-// ---------------------------------------------------------------------------
+// --- Verbatim JS reference (same extraction as differential.ts) -----------
 const PARENT_PREFIX = Buffer.from('{"parentUuid":')
 const UUID_KEY = Buffer.from('"uuid":"')
 const SIDECHAIN_TRUE = Buffer.from('"isSidechain":true')
@@ -93,21 +91,15 @@ function pickDepthOneUuidCandidate(
   return candidates.at(-1)!
 }
 
-type JsScan = {
-  msgIdx: number[]
-  metaRanges: number[]
-  chainBytes: number
+function walkChainBeforeParseRef(buf: Buffer): {
   keepAll: boolean
   kept: number[]
-}
-
-function walkChainBeforeParseRef(buf: Buffer): JsScan {
+} {
   const NEWLINE = 0x0a
   const OPEN_BRACE = 0x7b
   const msgIdx: number[] = []
   const metaRanges: number[] = []
   const uuidToSlot = new Map<string, number>()
-
   let pos = 0
   const len = buf.length
   while (pos < len) {
@@ -162,7 +154,6 @@ function walkChainBeforeParseRef(buf: Buffer): JsScan {
     }
     pos = lineEnd
   }
-
   let leafSlot = -1
   for (let i = msgIdx.length - 3; i >= 0; i -= 3) {
     const sc = buf.indexOf(SIDECHAIN_TRUE, msgIdx[i]!)
@@ -171,9 +162,7 @@ function walkChainBeforeParseRef(buf: Buffer): JsScan {
       break
     }
   }
-  if (leafSlot < 0)
-    return { msgIdx, metaRanges, chainBytes: 0, keepAll: true, kept: [] }
-
+  if (leafSlot < 0) return { keepAll: true, kept: [] }
   const seen = new Set<number>()
   const chain = new Set<number>()
   let chainBytes = 0
@@ -188,10 +177,7 @@ function walkChainBeforeParseRef(buf: Buffer): JsScan {
     const parent = buf.toString('latin1', parentStart, parentStart + UUID_LEN)
     slot = uuidToSlot.get(parent)
   }
-
-  if (len - chainBytes < len >> 1)
-    return { msgIdx, metaRanges, chainBytes, keepAll: true, kept: [] }
-
+  if (len - chainBytes < len >> 1) return { keepAll: true, kept: [] }
   const kept: number[] = []
   let m = 0
   for (let i = 0; i < msgIdx.length; i += 3) {
@@ -200,99 +186,98 @@ function walkChainBeforeParseRef(buf: Buffer): JsScan {
       kept.push(metaRanges[m]!, metaRanges[m + 1]!)
       m += 2
     }
-    if (chain.has(start)) {
-      kept.push(start, msgIdx[i + 1]!)
-    }
+    if (chain.has(start)) kept.push(start, msgIdx[i + 1]!)
   }
   while (m < metaRanges.length) {
     kept.push(metaRanges[m]!, metaRanges[m + 1]!)
     m += 2
   }
-  return { msgIdx, metaRanges, chainBytes, keepAll: false, kept }
+  return { keepAll: false, kept }
 }
 
-// ---------------------------------------------------------------------------
-// Comparison
-// ---------------------------------------------------------------------------
-const U32_NULL = 0xffffffff
-
-function compareFile(path: string): { ok: boolean; detail: string } {
-  const buf = readFileSync(path)
-
-  const t0 = performance.now()
-  const js = walkChainBeforeParseRef(buf)
-  const jsMs = performance.now() - t0
-
-  const t1 = performance.now()
-  const rs = napi.scanChain(buf)
-  const rsMs = performance.now() - t1
-
-  // msg index (parentStart: -1 → 0xffffffff)
-  const jsMsg = js.msgIdx.slice()
-  for (let i = 2; i < jsMsg.length; i += 3) {
-    if (jsMsg[i] === -1) jsMsg[i] = U32_NULL
-  }
-  const rsMsg = Array.from(rs.msgIndex)
-  if (jsMsg.length !== rsMsg.length || jsMsg.some((v, i) => v !== rsMsg[i])) {
-    return { ok: false, detail: 'msgIndex mismatch' }
-  }
-  const jsMeta = js.metaRanges
-  const rsMeta = Array.from(rs.metaRanges)
-  if (
-    jsMeta.length !== rsMeta.length ||
-    jsMeta.some((v, i) => v !== rsMeta[i])
-  ) {
-    return { ok: false, detail: 'metaRanges mismatch' }
-  }
-  if (js.keepAll !== rs.keepAll) {
-    return {
-      ok: false,
-      detail: `keepAll mismatch js=${js.keepAll} rs=${rs.keepAll}`,
-    }
-  }
-  if (js.chainBytes !== rs.chainBytes) {
-    return {
-      ok: false,
-      detail: `chainBytes js=${js.chainBytes} rs=${rs.chainBytes}`,
-    }
-  }
-  if (!rs.keepAll) {
-    const rsKept = Array.from(rs.keptRanges)
-    if (
-      js.kept.length !== rsKept.length ||
-      js.kept.some((v, i) => v !== rsKept[i])
-    ) {
-      return { ok: false, detail: 'keptRanges mismatch' }
-    }
-  }
-  return { ok: true, detail: `js=${jsMs.toFixed(0)}ms rs=${rsMs.toFixed(0)}ms` }
-}
-
-let passed = 0
-let failed = 0
-let totalRsMs = 0
-let totalJsMs = 0
-for (const f of files) {
-  try {
-    const r = compareFile(f)
-    if (r.ok) {
-      passed++
-      const m = /rs=([0-9.]+)ms js=([0-9.]+)ms/.exec(r.detail)
-      if (m) {
-        totalRsMs += Number(m[1])
-        totalJsMs += Number(m[2])
+// --- Bench -----------------------------------------------------------------
+// Some transcript lines are truncated/invalid JSON (9 bad lines in the
+// 189MB sample) — swallow and continue, timing is what matters here.
+function parseAll(buf: Buffer): void {
+  let start = 0
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] === 0x0a) {
+      try {
+        JSON.parse(buf.toString('utf-8', start, i))
+      } catch {
+        // bad line — skip
       }
-    } else {
-      failed++
-      console.log(`MISMATCH ${f}: ${r.detail}`)
+      start = i + 1
     }
-  } catch (e) {
-    failed++
-    console.log(`ERROR ${f}: ${(e as Error).message}`)
   }
 }
-console.log(
-  `differential: ${passed}/${passed + failed} files match` +
-    ` (js ${totalJsMs.toFixed(0)}ms, rust ${totalRsMs.toFixed(0)}ms)`,
-)
-process.exit(failed === 0 ? 0 : 1)
+
+function benchFile(path: string): void {
+  const size = statSync(path).size
+  const t0 = performance.now()
+  const buf = readFileSync(path)
+  const readMs = performance.now() - t0
+
+  // A: naive full parse
+  const tA0 = performance.now()
+  parseAll(buf)
+  const aMs = performance.now() - tA0
+
+  // B: JS scanner + parse kept
+  const tB0 = performance.now()
+  const ref = walkChainBeforeParseRef(buf)
+  let bBuf = buf
+  if (!ref.keepAll) {
+    const parts: Buffer[] = []
+    for (let i = 0; i < ref.kept.length; i += 2) {
+      parts.push(buf.subarray(ref.kept[i]!, ref.kept[i + 1]!))
+    }
+    bBuf = Buffer.concat(parts)
+  }
+  const tB1 = performance.now()
+  parseAll(bBuf)
+  const bMs = performance.now() - tB0
+  const jsScanMs = tB1 - tB0
+
+  // C: Rust scanner + parse kept
+  const tC0 = performance.now()
+  const scan = napi.scanChain(buf)
+  let cBuf = buf
+  if (!scan.keepAll) {
+    const kept = scan.keptRanges
+    const parts: Buffer[] = []
+    for (let i = 0; i < kept.length; i += 2) {
+      parts.push(buf.subarray(kept[i], kept[i + 1]))
+    }
+    cBuf = Buffer.concat(parts)
+  }
+  const tC1 = performance.now()
+  parseAll(cBuf)
+  const cMs = performance.now() - tC0
+  const rsScanMs = tC1 - tC0
+
+  const mb = (size / 1024 / 1024).toFixed(1)
+  const keptPct = ((cBuf.length / buf.length) * 100).toFixed(0)
+  console.log(
+    `${path.split('/').pop()}  ${mb}MB  keepAll=${scan.keepAll} keptBytes=${keptPct}%  read=${readMs.toFixed(0)}ms`,
+  )
+  console.log(
+    `  [A] naive parse ${aMs.toFixed(0)}ms`,
+  )
+  console.log(
+    `  [B] js scan ${(jsScanMs).toFixed(0)}ms + parse ${bMs.toFixed(0)}ms = ${(jsScanMs + bMs).toFixed(0)}ms`,
+  )
+  console.log(
+    `  [C] rust scan ${(rsScanMs).toFixed(0)}ms + parse ${cMs.toFixed(0)}ms = ${(rsScanMs + cMs).toFixed(0)}ms`,
+  )
+  console.log('')
+}
+
+console.log(`bun ${Bun.version} — transcript scan benchmark\n`)
+for (const f of files.slice(0, 12)) {
+  try {
+    benchFile(f)
+  } catch (e) {
+    console.log(`${f}: ${(e as Error).message}\n`)
+  }
+}
