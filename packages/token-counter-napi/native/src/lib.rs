@@ -41,7 +41,7 @@ fn cl100k_base() -> std::result::Result<CoreBPE, String> {
         let rank: Rank = parts
             .next()
             .unwrap()
-            .parse()
+            .parse::<Rank>()
             .map_err(|e| e.to_string())?;
         encoder.insert(token, rank);
     }
