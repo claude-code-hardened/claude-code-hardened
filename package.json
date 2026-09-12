@@ -154,6 +154,7 @@
     "chalk": "^6.0.0",
     "chokidar": "^5.0.0",
     "cli-boxes": "^4.0.1",
+    "clipboard-napi": "workspace:*",
     "cli-highlight": "^2.1.11",
     "code-excerpt": "^4.0.0",
     "color-diff-napi": "workspace:*",

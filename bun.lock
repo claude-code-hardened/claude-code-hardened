@@ -91,6 +91,7 @@
         "chokidar": "^5.0.0",
         "cli-boxes": "^4.0.1",
         "cli-highlight": "^2.1.11",
+        "clipboard-napi": "workspace:*",
         "code-excerpt": "^4.0.0",
         "color-diff-napi": "workspace:*",
         "diff": "^8.0.4",
@@ -242,6 +243,10 @@
         "@claude-code-best/agent-tools": "workspace:*",
         "marked": "^17.0.6",
       },
+    },
+    "packages/clipboard-napi": {
+      "name": "clipboard-napi",
+      "version": "0.1.0",
     },
     "packages/cloud-artifacts": {
       "name": "cloud-artifacts",
@@ -1710,6 +1715,8 @@
     "cli-truncate": ["cli-truncate@5.2.0", "", { "dependencies": { "slice-ansi": "^8.0.0", "string-width": "^8.2.0" } }, "sha512-xRwvIOMGrfOAnM1JYtqQImuaNtDEv9v6oIYAs4LIHwTiKee8uwvIi363igssOC0O5U04i4AlENs79LQLu9tEMw=="],
 
     "cli-width": ["cli-width@4.1.0", "https://registry.npmmirror.com/cli-width/-/cli-width-4.1.0.tgz", {}, "sha512-ouuZd4/dm2Sw5Gmqy6bGyNNNe1qt9RpmxveLSO7KcgsTnU7RXfsw+/bukWGo1abgBiMAic068rclZsO4IWmmxQ=="],
+
+    "clipboard-napi": ["clipboard-napi@workspace:packages/clipboard-napi"],
 
     "cliui": ["cliui@7.0.4", "https://registry.npmmirror.com/cliui/-/cliui-7.0.4.tgz", { "dependencies": { "string-width": "^4.2.0", "strip-ansi": "^6.0.0", "wrap-ansi": "^7.0.0" } }, "sha512-OcRE68cOsVMXp1Yvonl/fzkQOyjLSu/8bhPDfQt0e0/Eb283TKP20Fs2MqoPsr9SwA595rRCA+QMzYc9nBP+JQ=="],
 
