@@ -789,27 +789,20 @@ fn tokenize(text: &str) -> Vec<&str> {
 }
 
 /// Collect (tag, old_range, new_range) ops from the Myers diff of tokens.
+/// Tag: 0=equal, 1=delete, 2=insert, 3=replace.
 #[derive(Default)]
 struct RangeSink {
-  ops: Vec<(similar::DifferenceTag, usize, usize, usize, usize)>,
+  ops: Vec<(u8, usize, usize, usize, usize)>,
 }
 
 impl DiffHook for RangeSink {
-  type Diff = ();
-
   fn equal(
     &mut self,
     old_index: usize,
     new_index: usize,
     len: usize,
   ) -> Result<(), ()> {
-    self.ops.push((
-      similar::DifferenceTag::Equal,
-      old_index,
-      new_index,
-      len,
-      0,
-    ));
+    self.ops.push((0, old_index, len, new_index, len));
     Ok(())
   }
 
@@ -819,13 +812,7 @@ impl DiffHook for RangeSink {
     old_len: usize,
     new_index: usize,
   ) -> Result<(), ()> {
-    self.ops.push((
-      similar::DifferenceTag::Delete,
-      old_index,
-      new_index,
-      old_len,
-      0,
-    ));
+    self.ops.push((1, old_index, old_len, new_index, 0));
     Ok(())
   }
 
@@ -835,13 +822,7 @@ impl DiffHook for RangeSink {
     new_index: usize,
     new_len: usize,
   ) -> Result<(), ()> {
-    self.ops.push((
-      similar::DifferenceTag::Insert,
-      old_index,
-      new_index,
-      new_len,
-      0,
-    ));
+    self.ops.push((2, old_index, 0, new_index, new_len));
     Ok(())
   }
 
@@ -852,17 +833,11 @@ impl DiffHook for RangeSink {
     new_index: usize,
     new_len: usize,
   ) -> Result<(), ()> {
-    self.ops.push((
-      similar::DifferenceTag::Replace,
-      old_index,
-      new_index,
-      old_len,
-      new_len,
-    ));
+    self.ops.push((3, old_index, old_len, new_index, new_len));
     Ok(())
   }
 
-  fn finish(&mut self) -> Result<(), Self::Diff> {
+  fn finish(&mut self) -> Result<(), ()> {
     Ok(())
   }
 }
@@ -888,28 +863,28 @@ fn word_diff_strings(old_str: &str, new_str: &str) -> (Vec<Range>, Vec<Range>) {
   let mut old_off = 0usize;
   let mut new_off = 0usize;
 
-  for (tag, oi, ni, ol, nl) in sink.ops {
+  for (tag, oi, ol, ni, nl) in sink.ops {
     let old_len: usize = old_tokens[oi..oi + ol].iter().map(|t| t.len()).sum();
     let new_len: usize = new_tokens[ni..ni + nl].iter().map(|t| t.len()).sum();
     match tag {
-      similar::DifferenceTag::Delete => {
+      1 => {
         changed_len += old_len;
         old_ranges.push((old_off, old_off + old_len));
         old_off += old_len;
       }
-      similar::DifferenceTag::Insert => {
+      2 => {
         changed_len += new_len;
         new_ranges.push((new_off, new_off + new_len));
         new_off += new_len;
       }
-      similar::DifferenceTag::Replace => {
+      3 => {
         changed_len += old_len + new_len;
         old_ranges.push((old_off, old_off + old_len));
         new_ranges.push((new_off, new_off + new_len));
         old_off += old_len;
         new_off += new_len;
       }
-      similar::DifferenceTag::Equal => {
+      _ => {
         old_off += old_len;
         new_off += new_len;
       }
@@ -966,15 +941,13 @@ pub struct JsChange {
 }
 
 /// Collect (tag, old_idx, old_len, new_idx, new_len) ops. Tag: 0=equal,
-/// 1=delete, 2=insert, 3=replace — mirrors similar::DifferenceTag.
+/// 1=delete, 2=insert, 3=replace.
 #[derive(Default)]
 struct TagSink {
   ops: Vec<(u8, usize, usize, usize, usize)>,
 }
 
 impl DiffHook for TagSink {
-  type Diff = ();
-
   fn equal(
     &mut self,
     old_index: usize,
@@ -1016,7 +989,7 @@ impl DiffHook for TagSink {
     Ok(())
   }
 
-  fn finish(&mut self) -> std::result::Result<(), Self::Diff> {
+  fn finish(&mut self) -> std::result::Result<(), ()> {
     Ok(())
   }
 }
