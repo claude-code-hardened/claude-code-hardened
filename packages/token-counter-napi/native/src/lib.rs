@@ -10,7 +10,9 @@
 mod vendor_tiktoken;
 
 use base64::{engine::general_purpose, Engine as _};
-use napi::{Error, Result, Status};
+// 不要 `use napi::Result`：napi 3 的 Result<T, S = Status> 是双参泛型别名，
+// 会遮蔽 std::result::Result，把下面的 Result<CoreBPE, String> 解析成 napi 语义。
+use napi::{Error, Status};
 use napi_derive::napi;
 use rustc_hash::FxHashMap as HashMap;
 use std::sync::OnceLock;
@@ -26,7 +28,7 @@ pub const ENDOFPROMPT: &str = "<|endofprompt|>";
 
 const CL100K_PATTERN: &str = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
 
-fn cl100k_base() -> Result<CoreBPE, String> {
+fn cl100k_base() -> std::result::Result<CoreBPE, String> {
     const BPE_FILE: &str = include_str!("../assets/cl100k_base.tiktoken");
 
     let mut encoder = HashMap::default();
@@ -50,7 +52,7 @@ fn cl100k_base() -> Result<CoreBPE, String> {
     CoreBPE::new(encoder, special_tokens, CL100K_PATTERN)
 }
 
-fn bpe() -> Result<&'static CoreBPE> {
+fn bpe() -> napi::Result<&'static CoreBPE> {
     static BPE: OnceLock<CoreBPE> = OnceLock::new();
     match BPE.get() {
         Some(b) => Ok(b),
@@ -69,12 +71,12 @@ fn bpe() -> Result<&'static CoreBPE> {
 }
 
 #[napi]
-pub fn count_tokens(text: String) -> Result<u32> {
+pub fn count_tokens(text: String) -> napi::Result<u32> {
     Ok(bpe()?.encode_with_special_tokens(&text).len() as u32)
 }
 
 #[napi]
-pub fn count_tokens_batch(texts: Vec<String>) -> Result<Vec<u32>> {
+pub fn count_tokens_batch(texts: Vec<String>) -> napi::Result<Vec<u32>> {
     let bpe = bpe()?;
     Ok(texts
         .iter()

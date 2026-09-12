@@ -7,7 +7,8 @@
 //!   `DecodeKeyError` / `byte_pair_split` / `sorted_token_bytes` (dead code here; drops the
 //!   `bstr` dependency and the sorted-token memory).
 //! - `CoreBPE::new` returns `Result<Self, String>` instead of `anyhow::Result` (drops `anyhow`).
-#![rustfmt::skip]
+//! - Dropped the upstream file-level `#[rustfmt::skip]` (unstable as an inner attribute;
+//!   rustfmt is not run on this crate anyway).
 
 use std::collections::HashSet;
 use std::num::NonZeroU64;
@@ -61,9 +62,9 @@ fn _byte_pair_merge(ranks: &HashMap<Vec<u8>, Rank>, piece: &[u8]) -> Vec<(usize,
         // Update parts[i] and parts[i - 1] before removing parts[i + 1], since
         // `parts.remove(i + 1)` will thrash the cache.
         if i > 0 {
-            parts[i - 1].1 = get_rank(i - 1);
+            parts[i - 1].1 = get_rank(&parts, i - 1);
         }
-        parts[i].1 = get_rank(i);
+        parts[i].1 = get_rank(&parts, i);
         parts.remove(i + 1);
 
         min_rank = (Rank::MAX, usize::MAX);
