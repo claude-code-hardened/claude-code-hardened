@@ -92,3 +92,53 @@ jobs:
           name: native-${{ matrix.target }}
           path: stage/
           if-no-files-found: error
+
+  # 矩阵全部成功后：收集所有平台产物 → 同步进 vendor/ → 自动提交推送。
+  # 下一次 bun run build（ci.yml / publish-npm.yml）即把新二进制混合打包进
+  # dist/vendor → npm 包自动携带，全程无人工介入。
+  # vendor/ 不在 on.push.paths 里，本 job 的提交不会重新触发本 workflow（无环）。
+  collect-vendor:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Sync artifacts into vendor/
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in artifacts/native-*; do
+            triple="${dir#artifacts/native-}"
+            if [ -d "$dir/token-counter/$triple" ]; then
+              mkdir -p "vendor/token-counter/$triple"
+              cp "$dir"/token-counter/"$triple"/token-counter.node "vendor/token-counter/$triple/"
+            fi
+            if [ -d "$dir/transcript-parser/$triple" ]; then
+              mkdir -p "vendor/transcript-parser/$triple"
+              cp "$dir"/transcript-parser/"$triple"/transcript-parser.node "vendor/transcript-parser/$triple/"
+            fi
+          done
+          find vendor/token-counter vendor/transcript-parser -name '*.node' | sort
+
+      - name: Commit and push if changed
+        shell: bash
+        run: |
+          git config user.name "native-build-bot"
+          git config user.email "actions@github.com"
+          git add vendor/token-counter vendor/transcript-parser
+          if git diff --cached --quiet; then
+            echo "vendor/ already up to date — nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore: sync native binaries from CI [skip ci]"
+          git push
