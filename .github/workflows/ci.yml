@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  # ── TS 质量：lint + typecheck + test ──
+  quality:
     runs-on: ubuntu-latest
 
     steps:
@@ -47,15 +48,160 @@ jobs:
           test -s coverage/lcov.info
           grep -q '^SF:' coverage/lcov.info
 
-      # codecov 坏了，老是失败，先注释掉
-      # - name: Upload coverage to Codecov
-      #   if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      #   uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5, 2026-04-25
-      #   with:
-      #     fail_ci_if_error: true
-      #     files: ./coverage/lcov.info
-      #     disable_search: true
-      #     token: ${{ secrets.CODECOV_TOKEN }}
+  # ── Rust native：5 平台矩阵（产物供 package 打包内嵌）──
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64（GNU，链接 glibc —— 运行时与本仓库现有 native 产物一致）
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          # Linux ARM64（aarch64 服务器 / ARM 容器）
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          # macOS ARM64（Apple Silicon）
+          - os: macos-14
+            target: aarch64-apple-darwin
+          # macOS x86_64 —— Intel macos-13 runner 容量枯竭长期排队；
+          # macos-14 (arm64) 交叉编译，macOS 通用 SDK 原生支持 -arch x86_64
+          - os: macos-14
+            target: x86_64-apple-darwin
+          # Windows x86_64（MSVC）
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
 
-      - name: Build
-        run: bun run build:vite
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (aarch64 linux)
+        if: matrix.cross
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Build (token-counter)
+        working-directory: packages/token-counter-napi/native
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (transcript-parser)
+        if: hashFiles('packages/transcript-parser-napi/native/Cargo.toml') != ''
+        working-directory: packages/transcript-parser-napi/native
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (color-diff)
+        if: hashFiles('packages/color-diff-napi/native/Cargo.toml') != ''
+        working-directory: packages/color-diff-napi/native
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # 统一整理产物到 vendor 布局：vendor/<name>/<triple>/<name>.node
+      - name: Stage artifacts (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}" "stage/color-diff/${{ matrix.target }}"
+          for name in token-counter transcript-parser color-diff; do
+            crate="${name//-/_}_napi"
+            if [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.so" ]; then
+              cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.so" "stage/$name/${{ matrix.target }}/$name.node"
+            elif [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.dylib" ]; then
+              cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.dylib" "stage/$name/${{ matrix.target }}/$name.node"
+            fi
+          done
+          find stage -type f
+
+      - name: Stage artifacts (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "stage/token-counter/${{ matrix.target }}", "stage/transcript-parser/${{ matrix.target }}", "stage/color-diff/${{ matrix.target }}" | Out-Null
+          foreach ($name in @('token-counter', 'transcript-parser', 'color-diff')) {
+            $crate = $name -replace '-', '_'
+            $src = "packages/$name-napi/native/target/${{ matrix.target }}/release/${crate}_napi.dll"
+            if (Test-Path $src) { Copy-Item $src "stage/$name/${{ matrix.target }}/$name.node" }
+          }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: stage/
+          if-no-files-found: error
+
+  # ── 打包：vendor 同步入库 + 一条 CLI 出完整 claude code ──
+  # scripts/build-all.mjs 与本地全流程是同一个入口（本地不带 --skip-native
+  # 时自己跑 cargo 编译多平台）。CI 端 native 来自上面矩阵的 artifact。
+  package:
+    needs: [quality, native]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Sync artifacts into vendor/
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in artifacts/native-*; do
+            triple="${dir#artifacts/native-}"
+            for name in token-counter transcript-parser color-diff; do
+              if [ -d "$dir/$name/$triple" ]; then
+                mkdir -p "vendor/$name/$triple"
+                cp "$dir/$name/$triple/$name.node" "vendor/$name/$triple/"
+              fi
+            done
+          done
+          find vendor/token-counter vendor/transcript-parser vendor/color-diff -name '*.node' 2>/dev/null | sort
+
+      - name: Commit and push if changed
+        shell: bash
+        run: |
+          git config user.name "native-build-bot"
+          git config user.email "actions@github.com"
+          git add vendor/token-counter vendor/transcript-parser vendor/color-diff
+          if git diff --cached --quiet; then
+            echo "vendor/ already up to date — nothing to commit"
+          else
+            git commit -m "chore: sync native binaries from CI [skip ci]"
+            git push
+          fi
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2, 2026-04-25
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: One-shot build (bundle + npm tarball)
+        run: node scripts/build-all.mjs --skip-native
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-code-dist
+          path: dist/
+
+      - name: Upload npm tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-code-npm
+          path: "*.tgz"
+          if-no-files-found: error
