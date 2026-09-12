@@ -2,80 +2,61 @@
  * Embedded native module loader for bun --compile binaries.
  *
  * 在 bun --compile 模式下，原生 .node 插件不会自动打包。
- * 本模块在构建时将 .node 编码为 base64 注入二进制，
- * 运行时通过 process.dlopen() 从内存 Buffer 直接加载，
+ * 本模块配合 src/utils/embeddedNatives.gen.ts（构建时被 plugin 覆盖注入）
+ * 在运行时通过 process.dlopen(module, buffer) 从内存 Buffer 直接加载，
  * **完全不写入临时文件**，实现真正的内嵌加载。
  *
  * Build-time (scripts/compile.ts):
  *   - 读取目标平台的 .node 文件
- *   - 转为 base64，通过 Bun plugin 注入虚拟模块 "embedded:natives"
+ *   - 转为 base64，通过 Bun plugin 覆盖 embeddedNatives.gen 模块内容
  *
  * Runtime:
- *   - 检测编译二进制 (Bun.compileTarget)
- *   - 从虚拟模块读取 base64，解码为 Buffer
- *   - 使用 process.dlopen(module, buffer) 从内存直接加载
- *   - 开发/常规构建回退到 vendor/ 目录加载
+ *   - EMBEDDED_NATIVES 非空 → 编译二进制 → 解码 base64 → dlopen 内存加载
+ *   - EMBEDDED_NATIVES 为空 → dev / 常规构建 → 回退 vendor/ 目录加载
  */
 
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { EMBEDDED_NATIVES } from './embeddedNatives.gen'
 
 const nodeRequire = createRequire(import.meta.url)
-
-// 内嵌原生模块映射（构建时注入）
-export type EmbeddedNativeMap = Record<string, string> // moduleName -> base64
 
 // 已加载模块缓存
 const loadedCache = new Map<string, unknown>()
 
 /**
- * 检测是否在 bun 编译的二进制中运行
+ * 检测是否在 bun 编译的二进制中运行：
+ * 编译时 plugin 注入了非空 EMBEDDED_NATIVES；dev/常规构建下恒为空对象。
  */
 export function isCompiledBinary(): boolean {
-  return typeof Bun !== 'undefined' && typeof Bun.compileTarget === 'string'
+  return Object.keys(EMBEDDED_NATIVES).length > 0
 }
 
-/**
- * 获取内嵌的原生模块映射（构建时注入）
- */
-export function getEmbeddedNatives(): EmbeddedNativeMap {
-  if (!isCompiledBinary()) {
-    return {}
-  }
-  try {
-    const mod = nodeRequire('embedded:natives') as {
-      EMBEDDED_NATIVES: EmbeddedNativeMap
-    }
-    return mod?.EMBEDDED_NATIVES ?? {}
-  } catch {
-    return {}
-  }
-}
+type NativeModuleLike = Record<string, unknown>
 
 /**
  * 从内存 Buffer 直接加载原生模块（无临时文件）
  * 使用 Node.js 内部 API process.dlopen(module, buffer)
- * 支持 Node 18+ / Bun 所有版本
+ * 当第二个参数是 Buffer 时，从内存加载而非磁盘
  */
-function loadNativeFromMemory(moduleName: string, base64: string): unknown {
+function loadNativeFromMemory(
+  moduleName: string,
+  base64: string,
+): NativeModuleLike {
   const buffer = Buffer.from(base64, 'base64')
 
   // 创建一个虚拟模块对象供 dlopen 初始化
-  const mod = { exports: {} }
+  const mod = { exports: {} as NativeModuleLike }
 
-  // process.dlopen 是 Node.js 内部 API，支持从 Buffer 直接加载
-  // signature: process.dlopen(module: Module, filename: string | Buffer, flags?: number)
-  // 当 filename 是 Buffer 时，从内存加载而非磁盘
   try {
-    // @ts-expect-error - process.dlopen 是内部 API，支持 Buffer 参数
+    // @ts-expect-error — process.dlopen 是内部 API；Buffer 重载在类型定义中缺失
     process.dlopen(mod, buffer, 0x0001) // RTLD_LAZY = 0x0001
-    return mod.exports
   } catch (e) {
-    // 某些平台/版本可能不支持 Buffer 参数，抛出错误让上层处理
     throw new Error(`dlopen from memory failed for ${moduleName}: ${e}`)
   }
+  return mod.exports
 }
 
 /**
@@ -84,27 +65,35 @@ function loadNativeFromMemory(moduleName: string, base64: string): unknown {
 export function loadNativeModule<T>(
   moduleName: string,
   vendorSubPath: string, // 如 'token-counter', 'transcript-parser', 'color-diff'
-  validate: (mod: unknown) => mod is T,
+  validate: (mod: NativeModuleLike) => boolean,
 ): T | null {
   const cacheKey = `${moduleName}:${vendorSubPath}`
 
   // 缓存命中
-  if (loadedCache.has(cacheKey)) {
-    const cached = loadedCache.get(cacheKey)
-    if (validate(cached)) return cached as T
+  const cached = loadedCache.get(cacheKey)
+  if (cached !== undefined && validate(cached as NativeModuleLike)) {
+    return cached as T
+  }
+
+  const accept = (mod: unknown): T | null => {
+    if (
+      mod !== null &&
+      typeof mod === 'object' &&
+      validate(mod as NativeModuleLike)
+    ) {
+      loadedCache.set(cacheKey, mod)
+      return mod as T
+    }
+    return null
   }
 
   // 1. 编译二进制：从内嵌 base64 直接用 dlopen 从内存加载
   if (isCompiledBinary()) {
-    const embedded = getEmbeddedNatives()
-    const base64 = embedded[moduleName]
+    const base64 = EMBEDDED_NATIVES[moduleName]
     if (base64) {
       try {
-        const mod = loadNativeFromMemory(moduleName, base64)
-        if (validate(mod)) {
-          loadedCache.set(cacheKey, mod)
-          return mod as T
-        }
+        const fromMemory = accept(loadNativeFromMemory(moduleName, base64))
+        if (fromMemory) return fromMemory
       } catch (e) {
         console.error(`[embedded-native] 内存加载失败 ${moduleName}:`, e)
         // 继续尝试 vendor 回退
@@ -112,7 +101,7 @@ export function loadNativeModule<T>(
     }
   }
 
-  // 2. 开发/常规构建：从 vendor/ 目录加载
+  // 2. dev / 常规构建：从 vendor/ 目录加载
   try {
     const filePath = fileURLToPath(import.meta.url)
     const dir = dirname(filePath)
@@ -146,11 +135,8 @@ export function loadNativeModule<T>(
       `${moduleName}.node`,
     )
     if (existsSync(candidate)) {
-      const mod = nodeRequire(candidate)
-      if (validate(mod)) {
-        loadedCache.set(cacheKey, mod)
-        return mod as T
-      }
+      const fromVendor = accept(nodeRequire(candidate))
+      if (fromVendor) return fromVendor
     }
   } catch {
     // ignore

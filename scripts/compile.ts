@@ -87,17 +87,18 @@ function readNativeAsBase64(
   return buffer.toString('base64')
 }
 
-// Create a Bun plugin that provides the embedded:natives virtual module
+// Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts
+// with the target platform's real base64 native modules.
 function createEmbeddedNativesPlugin(embeddedNatives: Record<string, string>) {
   return {
     name: 'embedded-natives',
     setup(build: any) {
-      build.onResolve({ filter: /^embedded:natives$/ }, () => ({
-        path: 'embedded:natives',
+      build.onResolve({ filter: /embeddedNatives\.gen(\.ts)?$/ }, args => ({
+        path: args.path,
         namespace: 'embedded-natives',
       }))
       build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, () => ({
-        contents: `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};`,
+        contents: `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`,
         loader: 'js',
       }))
     },

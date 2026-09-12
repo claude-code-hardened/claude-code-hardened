@@ -18,7 +18,7 @@ function loadModule(): TokenCounterNapi | null {
   const mod = loadNativeModule<TokenCounterNapi>(
     'token-counter',
     'token-counter',
-    (m): m is TokenCounterNapi => typeof m?.countTokens === 'function',
+    m => typeof m.countTokens === 'function',
   )
   if (mod) {
     cachedModule = mod

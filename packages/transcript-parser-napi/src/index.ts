@@ -25,7 +25,7 @@ function loadModule(): TranscriptParserNapi | null {
   const mod = loadNativeModule<TranscriptParserNapi>(
     'transcript-parser',
     'transcript-parser',
-    (m): m is TranscriptParserNapi => typeof m?.scanChain === 'function',
+    m => typeof m.scanChain === 'function',
   )
   if (mod) {
     cachedModule = mod

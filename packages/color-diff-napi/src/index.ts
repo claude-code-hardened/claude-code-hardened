@@ -25,6 +25,7 @@ import {
 import hljs from 'highlight.js'
 import { basename, extname, resolve } from 'path'
 import { existsSync } from 'fs'
+import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { loadNativeModule } from 'src/utils/embeddedNative'
 
@@ -1324,8 +1325,7 @@ function tryLoadNative(): NativeModule | null {
   const mod = loadNativeModule<ColorDiffNativeModule>(
     'color-diff',
     'color-diff',
-    (m): m is ColorDiffNativeModule =>
-      typeof m?.ColorDiff === 'function' && typeof m?.ColorFile === 'function',
+    m => typeof m.ColorDiff === 'function' && typeof m.ColorFile === 'function',
   )
   if (mod) {
     cachedModule = {

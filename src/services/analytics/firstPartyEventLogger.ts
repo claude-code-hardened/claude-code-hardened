@@ -371,7 +371,8 @@ export function initialize1PEventLogging(): void {
   firstPartyEventLoggerProvider = new LoggerProvider({
     resource,
     processors: [
-      new BatchLogRecordProcessor(eventLoggingExporter, {
+      new BatchLogRecordProcessor({
+        exporter: eventLoggingExporter,
         scheduledDelayMillis,
         maxExportBatchSize,
         maxQueueSize,
