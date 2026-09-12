@@ -130,6 +130,8 @@ interface LogEntry {
   usage?: Record<string, number>
   timestamp?: string | number
   model?: string
+  /** Sidechain (subagent) rows are excluded from user-turn counting. */
+  isSidechain?: boolean
   /** Real Claude Code transcript rows nest the API message under `message`
    *  (usage/content/role/model live there); only sidechain/synthetic rows
    *  are flat. */
