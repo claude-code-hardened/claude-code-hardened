@@ -131,7 +131,9 @@ for (const target of targets) {
     features,
     plugins: [createEmbeddedNativesPlugin(embeddedNatives)],
     compile: {
-      targets: [target],
+      // 单数 target 是唯一生效的 API：复数 targets 会被静默忽略，
+      // 产物退化为 host 架构（CI x86 上曾把 arm64 名字编成 x86_64 ELF）。
+      target,
       outfile: `dist/ccb-${target.replace(/^bun-/, '')}`,
     },
   })

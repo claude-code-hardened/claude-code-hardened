@@ -193,17 +193,25 @@ jobs:
       - name: One-shot build (bundle + npm tarball)
         run: node scripts/build-all.mjs --skip-native
 
-      # 诊断：qemu 用户态模拟验证 arm64 产物（SIGILL 在 qemu 下同样触发）。
-      # 对照组：同一 x86 host 上交叉编译的 hello world——区分 runtime 变体问题与业务 bundle 问题。
-      - name: Smoke test arm64 binary under qemu
+      # 产物架构断言：e_machine（ELF offset 0x12）必须与目标一致。
+      # 此前 compile.targets 被 Bun 静默忽略，x86 host 曾把 arm64 名字编成 x86_64 ELF。
+      - name: Verify artifact architectures
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static
-          echo 'console.log("hello", Bun.version)' > /tmp/h.ts
-          bun build --compile --target bun-linux-arm64 /tmp/h.ts --outfile /tmp/h-arm64
-          echo "--- qemu: hello-world cross-compile ---"
-          qemu-aarch64-static /tmp/h-arm64 || echo "!! hello-world SIGILL under qemu (runtime variant problem)"
-          echo "--- qemu: ccb-linux-arm64 --version ---"
-          qemu-aarch64-static ./dist/ccb-linux-arm64 --version || echo "!! ccb-linux-arm64 SIGILL under qemu (binary instruction problem)"
+          check() {
+            local file="$1" expect="$2"
+            local machine
+            machine=$(od -A n -t u1 -j 18 -N 2 "$file" | tr -s ' ' | sed 's/^ //;s/ .*$//')
+            if [ "$machine" = "$expect" ]; then
+              echo "  ✓ $file (e_machine=$machine)"
+            else
+              echo "  ✗ $file e_machine=$machine, expected $expect"; exit 1
+            fi
+          }
+          check dist/ccb-linux-x64        62   # EM_X86_64
+          check dist/ccb-linux-arm64     183   # EM_AARCH64
+          check dist/ccb-darwin-x64       62
+          check dist/ccb-darwin-arm64    183
+          check dist/ccb-windows-x64.exe  62
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
