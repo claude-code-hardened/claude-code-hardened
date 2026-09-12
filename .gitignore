@@ -56,3 +56,6 @@ credentials.json
 .test-progress.md
 .squash-tmp/
 .git.*-backup
+
+# Rust/NAPI build artifacts
+packages/*/native/target/

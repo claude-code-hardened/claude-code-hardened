@@ -17,7 +17,11 @@
  *   getSyntaxTheme always returns the default for the given Claude theme.
  */
 
-import { diffArrays } from 'diff'
+import {
+  diffArrays,
+  diffLines as jsDiffLines,
+  diffWordsWithSpace as jsDiffWordsWithSpace,
+} from 'diff'
 import hljs from 'highlight.js'
 import { basename, dirname, extname, resolve, sep } from 'path'
 import { existsSync } from 'fs'
@@ -70,6 +74,40 @@ export type NativeModule = {
   ColorDiff: typeof ColorDiff
   ColorFile: typeof ColorFile
   getSyntaxTheme: (themeName: string) => SyntaxTheme
+  diffLines?: (oldStr: string, newStr: string) => Change[]
+  diffWordsWithSpace?: (oldStr: string, newStr: string) => Change[]
+}
+
+// jsdiff `Change` shape: { value, count, added, removed }
+export type Change = {
+  value: string
+  count: number
+  added: boolean
+  removed: boolean
+}
+
+/**
+ * jsdiff-compatible line diff. Native (Rust/similar) when available,
+ * falls back to the `diff` npm package.
+ */
+export function diffLines(oldStr: string, newStr: string): Change[] {
+  const native = tryLoadNative()
+  if (typeof native?.diffLines === 'function') {
+    return native.diffLines(oldStr, newStr)
+  }
+  return jsDiffLines(oldStr, newStr) as Change[]
+}
+
+/**
+ * jsdiff-compatible word diff with preserved whitespace. Native when
+ * available, falls back to the `diff` npm package.
+ */
+export function diffWordsWithSpace(oldStr: string, newStr: string): Change[] {
+  const native = tryLoadNative()
+  if (typeof native?.diffWordsWithSpace === 'function') {
+    return native.diffWordsWithSpace(oldStr, newStr)
+  }
+  return jsDiffWordsWithSpace(oldStr, newStr) as Change[]
 }
 
 // ---------------------------------------------------------------------------
@@ -361,8 +399,7 @@ function tmMatch(
 
 let cachedTmTheme: { path: string; parsed: TmThemeParsed | null } | null = null
 function loadTmThemeIfAny(): TmThemeParsed | null {
-  const path =
-    process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT ?? process.env.BAT_THEME
+  const path = process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT ?? process.env.BAT_THEME
   if (!path || !path.trim()) return null
   if (cachedTmTheme?.path === path) return cachedTmTheme.parsed
   let parsed: TmThemeParsed | null = null
@@ -719,7 +756,10 @@ function flattenHljs(
           const i = m.index!
           if (i > last) pushDefault(node.slice(last, i))
           out.push([
-            { foreground: scopeColor('operator', m[0]!, theme), background: theme.background },
+            {
+              foreground: scopeColor('operator', m[0]!, theme),
+              background: theme.background,
+            },
             m[0]!,
           ])
           last = i + m[0]!.length
@@ -1255,9 +1295,7 @@ export function getSyntaxTheme(themeName: string): SyntaxTheme {
     const parsed = loadTmThemeIfAny()
     if (parsed) {
       return {
-        theme:
-          parsed.name ??
-          basename(envTheme).replace(/\.tmTheme$/i, ''),
+        theme: parsed.name ?? basename(envTheme).replace(/\.tmTheme$/i, ''),
         source: envTheme,
       }
     }
@@ -1275,7 +1313,11 @@ let cachedNative: NativeModule | null | undefined
 function tryLoadNative(): NativeModule | null {
   if (cachedNative !== undefined) return cachedNative
   cachedNative = null
-  if (process.platform !== 'linux' && process.platform !== 'darwin' && process.platform !== 'win32') {
+  if (
+    process.platform !== 'linux' &&
+    process.platform !== 'darwin' &&
+    process.platform !== 'win32'
+  ) {
     return null
   }
   try {
@@ -1292,22 +1334,41 @@ function tryLoadNative(): NativeModule | null {
     const arch = process.arch
     const triple =
       process.platform === 'linux'
-        ? arch === 'arm64' ? 'aarch64-unknown-linux-gnu' : 'x86_64-unknown-linux-gnu'
+        ? arch === 'arm64'
+          ? 'aarch64-unknown-linux-gnu'
+          : 'x86_64-unknown-linux-gnu'
         : process.platform === 'darwin'
-          ? arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
+          ? arch === 'arm64'
+            ? 'aarch64-apple-darwin'
+            : 'x86_64-apple-darwin'
           : 'x86_64-pc-windows-msvc'
-    const candidate = resolve(vendorRoot, 'color-diff', triple, 'color-diff.node')
+    const candidate = resolve(
+      vendorRoot,
+      'color-diff',
+      triple,
+      'color-diff.node',
+    )
     if (!existsSync(candidate)) return null
     const mod = nodeRequire(candidate) as NativeModule & {
       hasNativeColorDiff?: () => boolean
     }
-    if (typeof mod?.ColorDiff !== 'function' || typeof mod?.ColorFile !== 'function') {
+    if (
+      typeof mod?.ColorDiff !== 'function' ||
+      typeof mod?.ColorFile !== 'function'
+    ) {
       return null
     }
     cachedNative = {
       ColorDiff: mod.ColorDiff,
       ColorFile: mod.ColorFile,
       getSyntaxTheme: mod.getSyntaxTheme ?? getSyntaxTheme,
+      // Optional: only present in builds with the diff functions included
+      ...(typeof mod.diffLines === 'function'
+        ? { diffLines: mod.diffLines }
+        : {}),
+      ...(typeof mod.diffWordsWithSpace === 'function'
+        ? { diffWordsWithSpace: mod.diffWordsWithSpace }
+        : {}),
     }
   } catch {
     cachedNative = null

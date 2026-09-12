@@ -954,6 +954,145 @@ fn find_adjacent_pairs(markers: &[Marker]) -> Vec<(usize, usize)> {
   pairs
 }
 
+// ── jsdiff-compatible line/word diffs (similar-backed) ───────────
+
+/// A jsdiff `Change`: { value, count, added, removed }.
+#[napi(object)]
+pub struct JsChange {
+  pub value: String,
+  pub count: i64,
+  pub added: bool,
+  pub removed: bool,
+}
+
+/// Collect (tag, old_idx, old_len, new_idx, new_len) ops. Tag: 0=equal,
+/// 1=delete, 2=insert, 3=replace — mirrors similar::DifferenceTag.
+#[derive(Default)]
+struct TagSink {
+  ops: Vec<(u8, usize, usize, usize, usize)>,
+}
+
+impl DiffHook for TagSink {
+  type Diff = ();
+
+  fn equal(
+    &mut self,
+    old_index: usize,
+    new_index: usize,
+    len: usize,
+  ) -> std::result::Result<(), ()> {
+    self.ops.push((0, old_index, len, new_index, 0));
+    Ok(())
+  }
+
+  fn delete(
+    &mut self,
+    old_index: usize,
+    old_len: usize,
+    new_index: usize,
+  ) -> std::result::Result<(), ()> {
+    self.ops.push((1, old_index, old_len, new_index, 0));
+    Ok(())
+  }
+
+  fn insert(
+    &mut self,
+    old_index: usize,
+    new_index: usize,
+    new_len: usize,
+  ) -> std::result::Result<(), ()> {
+    self.ops.push((2, old_index, 0, new_index, new_len));
+    Ok(())
+  }
+
+  fn replace(
+    &mut self,
+    old_index: usize,
+    old_len: usize,
+    new_index: usize,
+    new_len: usize,
+  ) -> std::result::Result<(), ()> {
+    self.ops.push((3, old_index, old_len, new_index, new_len));
+    Ok(())
+  }
+
+  fn finish(&mut self) -> std::result::Result<(), Self::Diff> {
+    Ok(())
+  }
+}
+
+fn diff_strings_by(
+  old_str: &str,
+  new_str: &str,
+  split: fn(&str) -> Vec<&str>,
+) -> Vec<JsChange> {
+  let old_units = split(old_str);
+  let new_units = split(new_str);
+  let mut sink = TagSink::default();
+  let _ = diff(Algorithm::Myers, &old_units, &new_units, &mut sink);
+
+  let mut out: Vec<JsChange> = Vec::new();
+  let mut push = |value: String, count: i64, added: bool, removed: bool| {
+    if value.is_empty() {
+      return;
+    }
+    // Merge into the previous change when it shares the same tag — this
+    // reproduces jsdiff's contiguous-run Changes.
+    let same = out.last().map_or(false, |c: &JsChange| {
+      c.added == added && c.removed == removed
+    });
+    if same {
+      if let Some(c) = out.last_mut() {
+        c.value.push_str(&value);
+        c.count += count;
+      }
+      return;
+    }
+    out.push(JsChange {
+      value,
+      count,
+      added,
+      removed,
+    });
+  };
+
+  for (tag, oi, ol, ni, nl) in sink.ops {
+    match tag {
+      0 => push(old_units[oi..oi + ol].concat(), ol as i64, false, false),
+      1 => push(old_units[oi..oi + ol].concat(), ol as i64, false, true),
+      2 => push(new_units[ni..ni + nl].concat(), nl as i64, true, false),
+      _ => {
+        // jsdiff replace: removed chunk followed by added chunk
+        push(old_units[oi..oi + ol].concat(), ol as i64, false, true);
+        push(new_units[ni..ni + nl].concat(), nl as i64, true, false);
+      }
+    }
+  }
+  out
+}
+
+fn split_lines_keep_terminator(s: &str) -> Vec<&str> {
+  s.split_inclusive('\n').collect()
+}
+
+fn split_tokens(s: &str) -> Vec<&str> {
+  tokenize(s)
+}
+
+/// jsdiff `diffLines(old, new)` — Myers over lines (newline-terminated),
+/// contiguous same-tag runs merged into single Changes.
+#[napi]
+pub fn diff_lines(old_str: String, new_str: String) -> Vec<JsChange> {
+  diff_strings_by(&old_str, &new_str, split_lines_keep_terminator)
+}
+
+/// jsdiff `diffWordsWithSpace(old, new)` — Myers over the same word/whitespace/
+/// punctuation split jsdiff uses; word runs keep their whitespace.
+#[napi]
+pub fn diff_words_with_space(old_str: String, new_str: String) -> Vec<JsChange> {
+  diff_strings_by(&old_str, &new_str, split_tokens)
+}
+
 // ── Transform pipeline (port of TS) ──────────────────────────────
 
 struct Highlight {

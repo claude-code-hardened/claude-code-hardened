@@ -17,9 +17,8 @@ const OPERATOR = theme.scopes['operator']!
 
 function flattenCode(code: string, lang: string): Block[] {
   const result = hljs.highlight(code, { language: lang, ignoreIllegals: true })
-  const emitter = (
-    result as unknown as { _emitter?: { rootNode?: unknown } }
-  )._emitter
+  const emitter = (result as unknown as { _emitter?: { rootNode?: unknown } })
+    ._emitter
   if (!emitter?.rootNode) throw new Error('no hljs rootNode')
   const blocks: Block[] = []
   flattenHljs(emitter.rootNode as never, theme, undefined, blocks)

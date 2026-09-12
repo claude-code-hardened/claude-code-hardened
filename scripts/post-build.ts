@@ -71,7 +71,12 @@ async function postBuild() {
   // Native NAPI binaries built by .github/workflows/build-native.yml.
   // Copied only when the CI-produced .node artifacts are present locally
   // (vendor/<name>/ is populated from workflow artifacts).
-  for (const name of ['token-counter', 'transcript-parser', 'color-diff', 'clipboard']) {
+  for (const name of [
+    'token-counter',
+    'transcript-parser',
+    'color-diff',
+    'clipboard',
+  ]) {
     const src = `vendor/${name}`
     if (existsSync(src)) {
       const dest = join(outdir, 'vendor', name)
