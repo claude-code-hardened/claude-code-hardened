@@ -968,7 +968,7 @@
   "2. Your workflow file was kept unchanged": "2. 你的工作流文件保持不变",
   "3. API key is configured and ready to use": "3. API 密钥已配置并可直接使用",
   "1. A pre-filled PR page has been created": "1. 已创建预填好的 PR 页面",
-  "2. Install the Claude GitHub App if you haven't already": "1. 如尚未安装，请安装 Claude GitHub App",
+  "2. Install the Claude GitHub App if you haven't already": "2. 如尚未安装，请安装 Claude GitHub App",
   "3. Merge the PR to enable Claude PR assistance": "3. 合并 PR 以启用 Claude PR 协助",
   "Setup Warnings": "设置警告",
   "We found some potential issues, but you can continue anyway": "发现一些潜在问题，但你仍可继续",
@@ -2263,7 +2263,7 @@
   "Hook Configuration - Disabled": "Hook 配置 - 已禁用",
   "Esc to close": "按 Esc 关闭",
   "All hooks are currently ": "当前所有 hook 均",
-  " by a managed settings file": "由受管设置文件",
+  " by a managed settings file": "（由受管设置文件）",
   "You have {{n}}": "你有 {{n}} 个已配置的",
   "{{s}} that {{v}} not running": "{{s}}，它们{{v}}运行",
   "When hooks are disabled:": "hook 禁用后：",
@@ -2387,8 +2387,8 @@
   "Reading files and directories…": "正在读取文件与目录…",
   "Running command…": "正在执行命令…",
   "Editing file…": "正在编辑文件…",
-  "Loading conversation…": "正在加载会话…",
-  "Loading conversations…": "正在加载会话列表…",
+  "Loading conversation…": "正在加载对话…",
+  "Loading conversations…": "正在加载对话列表…",
   "(esc to interrupt ": "（esc 中断 ",
   "Starting…": "正在启动…"
 }
