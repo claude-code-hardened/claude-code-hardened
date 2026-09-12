@@ -2390,5 +2390,13 @@
   "Loading conversation…": "Loading conversation…",
   "Loading conversations…": "Loading conversations…",
   "(esc to interrupt ": "(esc to interrupt ",
-  "Starting…": "Starting…"
+  "Starting…": "Starting…",
+  "creating commit": "creating commit",
+  "creating commit and PR": "creating commit and PR",
+  "analyzing your codebase": "analyzing your codebase",
+  "analyzing your project and creating verifier skills": "analyzing your project and creating verifier skills",
+  "fetching PR comments": "fetching PR comments",
+  "reviewing pull request": "reviewing pull request",
+  "analyzing code changes for security risks": "analyzing code changes for security risks",
+  "setting up statusLine": "setting up statusLine"
 }

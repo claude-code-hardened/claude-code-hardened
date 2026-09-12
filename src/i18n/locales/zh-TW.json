@@ -2390,5 +2390,13 @@
   "Loading conversation…": "正在載入工作階段…",
   "Loading conversations…": "正在載入工作階段列表…",
   "(esc to interrupt ": "（esc 中斷 ",
-  "Starting…": "正在啟動…"
+  "Starting…": "正在啟動…",
+  "creating commit": "正在建立提交",
+  "creating commit and PR": "正在建立提交與 PR",
+  "analyzing your codebase": "正在分析你的程式碼庫",
+  "analyzing your project and creating verifier skills": "正在分析你的專案並建立驗證技能",
+  "fetching PR comments": "正在獲取 PR 評論",
+  "reviewing pull request": "正在審查 PR",
+  "analyzing code changes for security risks": "正在分析程式碼更改的安全風險",
+  "setting up statusLine": "正在設定 statusLine"
 }
