@@ -79,7 +79,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path stage/token-counter, stage/transcript-parser | Out-Null
+          New-Item -ItemType Directory -Force -Path "stage/token-counter/${{ matrix.target }}", "stage/transcript-parser/${{ matrix.target }}" | Out-Null
           foreach ($name in @('token-counter', 'transcript-parser')) {
             $crate = $name -replace '-', '_'
             $src = "packages/$name-napi/native/target/${{ matrix.target }}/release/${crate}_napi.dll"
