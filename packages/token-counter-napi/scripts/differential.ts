@@ -83,13 +83,49 @@ function bytePairEncode(piece: Uint8Array): number[] {
   return out
 }
 
-function refCountTokens(text: string): number {
+// encode_ordinary path: regex-split pieces → vocab rank or BPE merge.
+function ordinaryCount(text: string): number {
   let n = 0
   for (const m of text.matchAll(PAT)) {
     const piece = new Uint8Array(Buffer.from(m[0], 'utf8'))
     n += ranks.has(piece.join(',')) ? 1 : bytePairEncode(piece).length
   }
   return n
+}
+
+// encode_with_special_tokens path (mirrors vendor_tiktoken.rs _encode_native):
+// every special token is allowed; the earliest occurrence counts as 1 and
+// scanning resumes after it.
+const SPECIALS = [
+  '<|endo' + 'ftext|>',
+  '<|fim_prefix|>',
+  '<|fim_middle|>',
+  '<|fim_suffix|>',
+  '<|endofprompt|>',
+]
+
+function refCountTokens(text: string): number {
+  let total = 0
+  let rest = text
+  while (rest.length > 0) {
+    let best = -1
+    let bestTok = ''
+    for (const s of SPECIALS) {
+      const i = rest.indexOf(s)
+      if (i !== -1 && (best === -1 || i < best)) {
+        best = i
+        bestTok = s
+      }
+    }
+    if (best === -1) {
+      total += ordinaryCount(rest)
+      break
+    }
+    if (best > 0) total += ordinaryCount(rest.slice(0, best))
+    total += 1
+    rest = rest.slice(best + bestTok.length)
+  }
+  return total
 }
 
 // --- native module resolution ---
@@ -132,11 +168,18 @@ function resolveNativePath(arg: string | undefined): string | null {
 let failures = 0
 let checked = 0
 
-function expectEqual(label: string, native: number, ref: number): void {
+function expectEqual(
+  label: string,
+  text: string,
+  native: number,
+  ref: number,
+): void {
   checked++
   if (native !== ref) {
     failures++
-    console.error(`MISMATCH ${label}: native=${native} ref=${ref}`)
+    console.error(
+      `MISMATCH ${label} text=${JSON.stringify(text.slice(0, 80))}: native=${native} ref=${ref}`,
+    )
   }
 }
 
@@ -161,6 +204,7 @@ const anchors: Array<[string, number]> = [
 for (const [text, expected] of anchors) {
   expectEqual(
     JSON.stringify(text.slice(0, 24)),
+    text,
     native.countTokens(text),
     expected,
   )
@@ -219,7 +263,12 @@ for (let i = 0; i < ROUNDS; i++) {
   const parts: string[] = []
   for (let j = 0; j < n; j++) parts.push(fragments[rand(fragments.length)])
   const text = parts.join(rand(2) === 0 ? '' : ' ')
-  expectEqual(`round ${i}`, native.countTokens(text), refCountTokens(text))
+  expectEqual(
+    `round ${i}`,
+    text,
+    native.countTokens(text),
+    refCountTokens(text),
+  )
 }
 
 console.log(`${checked - failures}/${checked} consistent`)
