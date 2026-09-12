@@ -867,7 +867,7 @@ pub struct JsChange {
   pub removed: bool,
 }
 
-fn changes_to_js_changes(diff: &TextDiff<'_, '_, '_, str>) -> Vec<JsChange> {
+fn changes_to_js_changes<'a>(diff: &TextDiff<'a, 'a, 'a, str>) -> Vec<JsChange> {
   let mut out: Vec<JsChange> = Vec::new();
   for change in diff.iter_all_changes() {
     let added = change.tag() == ChangeTag::Insert;
