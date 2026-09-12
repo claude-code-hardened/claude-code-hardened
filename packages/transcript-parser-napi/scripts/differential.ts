@@ -56,15 +56,16 @@ const PREFIX_LEN = PARENT_PREFIX.length
 const KEY_LEN = UUID_KEY.length
 const TS_SUFFIX_LEN = TS_SUFFIX.length
 
+const QUOTE = 0x22
+const BACKSLASH = 0x5c
+const OPEN_BRACE = 0x7b
+const CLOSE_BRACE = 0x7d
+
 function pickDepthOneUuidCandidate(
   buf: Buffer,
   lineStart: number,
   candidates: number[],
 ): number {
-  const QUOTE = 0x22
-  const BACKSLASH = 0x5c
-  const OPEN_BRACE = 0x7b
-  const CLOSE_BRACE = 0x7d
   let depth = 0
   let inString = false
   let escapeNext = false
