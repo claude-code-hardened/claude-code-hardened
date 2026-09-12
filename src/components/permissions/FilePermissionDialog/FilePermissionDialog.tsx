@@ -13,6 +13,7 @@ import { ShowInIDEPrompt } from '../../ShowInIDEPrompt.js';
 import { usePermissionRequestLogging } from '../hooks.js';
 import { PermissionDialog } from '../PermissionDialog.js';
 import type { ToolUseConfirm } from '../PermissionRequest.js';
+import { t } from '../../../i18n/index.js';
 import type { WorkerBadgeProps } from '../WorkerBadge.js';
 import type { IDEDiffSupport } from './ideDiffConfig.js';
 import type { FileOperationType, PermissionOption } from './permissionOptions.js';
@@ -208,7 +209,7 @@ export function FilePermissionDialog<T extends ToolInput = ToolInput>({
         {symlinkWarning}
         {content}
         <Box flexDirection="column" paddingX={1}>
-          {typeof question === 'string' ? <Text>{question}</Text> : question}
+          {typeof question === 'string' ? <Text>{t(question)}</Text> : question}
           <Select
             options={options}
             inlineDescriptions

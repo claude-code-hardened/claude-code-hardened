@@ -47,7 +47,6 @@ export function resolveLocale(): Locale {
     return normalizeTag(lang)
   }
   return 'en'
-  return 'en'
 }
 
 let instance: I18n | null = null

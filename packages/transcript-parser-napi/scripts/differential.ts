@@ -277,10 +277,10 @@ for (const f of files) {
     const r = compareFile(f)
     if (r.ok) {
       passed++
-      const m = /rs=([0-9.]+)ms js=([0-9.]+)ms/.exec(r.detail)
+      const m = /js=([0-9.]+)ms rs=([0-9.]+)ms/.exec(r.detail)
       if (m) {
-        totalRsMs += Number(m[1])
-        totalJsMs += Number(m[2])
+        totalJsMs += Number(m[1])
+        totalRsMs += Number(m[2])
       }
     } else {
       failed++
