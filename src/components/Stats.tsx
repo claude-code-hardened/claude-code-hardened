@@ -35,6 +35,7 @@ import {
 import { resolveThemeSetting } from '../utils/systemTheme.js';
 import { getTheme, themeColorToAnsi } from '../utils/theme.js';
 import { Spinner } from './Spinner.js';
+import { t } from '../i18n/index.js';
 
 function formatPeakDay(dateStr: string): string {
   const date = new Date(dateStr);
@@ -76,7 +77,7 @@ function createAllTimeStatsPromise(): Promise<StatsResult> {
       return { type: 'success', data };
     })
     .catch((err): StatsResult => {
-      const message = err instanceof Error ? err.message : 'Failed to load stats';
+      const message = err instanceof Error ? err.message : t('Failed to load stats');
       return { type: 'error', message };
     });
 }
@@ -160,7 +161,7 @@ function StatsContent({ allTimePromise, onClose }: StatsContentProps): React.Rea
   const allTimeStats = allTimeResult.type === 'success' ? allTimeResult.data : null;
 
   const handleClose = useCallback(() => {
-    onClose('Stats dialog dismissed', { display: 'system' });
+    onClose(t('Stats dialog dismissed'), { display: 'system' });
   }, [onClose]);
 
   useKeybinding('confirm:no', handleClose, { context: 'Confirmation' });
@@ -168,7 +169,7 @@ function StatsContent({ allTimePromise, onClose }: StatsContentProps): React.Rea
   useInput((input, key) => {
     // Handle ctrl+c and ctrl+d for closing
     if (key.ctrl && (input === 'c' || input === 'd')) {
-      onClose('Stats dialog dismissed', { display: 'system' });
+      onClose(t('Stats dialog dismissed'), { display: 'system' });
     }
     // Track tab changes
     if (key.tab) {
@@ -187,7 +188,7 @@ function StatsContent({ allTimePromise, onClose }: StatsContentProps): React.Rea
   if (allTimeResult.type === 'error') {
     return (
       <Box marginTop={1}>
-        <Text color="error">Failed to load stats: {allTimeResult.message}</Text>
+        <Text color="error">{t('Failed to load stats: {{m}}', { m: allTimeResult.message })}</Text>
       </Box>
     );
   }
@@ -195,7 +196,7 @@ function StatsContent({ allTimePromise, onClose }: StatsContentProps): React.Rea
   if (allTimeResult.type === 'empty') {
     return (
       <Box marginTop={1}>
-        <Text color="warning">No stats available yet. Start using Claude Code!</Text>
+        <Text color="warning">{t('No stats available yet. Start using Claude Code!')}</Text>
       </Box>
     );
   }
@@ -204,7 +205,7 @@ function StatsContent({ allTimePromise, onClose }: StatsContentProps): React.Rea
     return (
       <Box marginTop={1}>
         <Spinner />
-        <Text> Loading stats…</Text>
+        <Text>{t(' Loading stats…')}</Text>
       </Box>
     );
   }
@@ -213,7 +214,7 @@ function StatsContent({ allTimePromise, onClose }: StatsContentProps): React.Rea
     <Pane color="claude">
       <Box flexDirection="row" gap={1} marginBottom={1}>
         <Tabs title="" color="claude" defaultTab="Overview">
-          <Tab title="Overview">
+          <Tab title={t('Overview')}>
             <OverviewTab
               stats={displayStats}
               allTimeStats={allTimeStats}
@@ -221,15 +222,15 @@ function StatsContent({ allTimePromise, onClose }: StatsContentProps): React.Rea
               isLoading={isLoadingFiltered}
             />
           </Tab>
-          <Tab title="Models">
+          <Tab title={t('Models')}>
             <ModelsTab stats={displayStats} dateRange={dateRange} isLoading={isLoadingFiltered} />
           </Tab>
         </Tabs>
       </Box>
       <Box paddingLeft={2}>
         <Text dimColor>
-          Esc to cancel · r to cycle dates · ctrl+s to copy
-          {copyStatus ? ` · ${copyStatus}` : ''}
+          {t('Esc to cancel · r to cycle dates · ctrl+s to copy')}
+          {copyStatus ? t(' · {{s}}', { s: copyStatus }) : ''}
         </Text>
       </Box>
     </Pane>
@@ -251,10 +252,10 @@ function DateRangeSelector({
             {i > 0 && <Text dimColor> · </Text>}
             {range === dateRange ? (
               <Text bold color="claude">
-                {DATE_RANGE_LABELS[range]}
+                {t(DATE_RANGE_LABELS[range])}
               </Text>
             ) : (
-              <Text dimColor>{DATE_RANGE_LABELS[range]}</Text>
+              <Text dimColor>{t(DATE_RANGE_LABELS[range])}</Text>
             )}
           </Text>
         ))}
@@ -315,10 +316,10 @@ function OverviewTab({
       shotStatsData = {
         avgShots: (totalShots / total).toFixed(1),
         buckets: [
-          { label: '1-shot', count: b1, pct: pct(b1) },
-          { label: '2\u20135 shot', count: b2_5, pct: pct(b2_5) },
-          { label: '6\u201310 shot', count: b6_10, pct: pct(b6_10) },
-          { label: '11+ shot', count: b11, pct: pct(b11) },
+          { label: t('1-shot'), count: b1, pct: pct(b1) },
+          { label: t('2\u20135 shot'), count: b2_5, pct: pct(b2_5) },
+          { label: t('6\u201310 shot'), count: b6_10, pct: pct(b6_10) },
+          { label: t('11+ shot'), count: b11, pct: pct(b11) },
         ],
       };
     }
@@ -341,7 +342,7 @@ function OverviewTab({
         <Box flexDirection="column" width={28}>
           {favoriteModel && (
             <Text wrap="truncate">
-              Favorite model:{' '}
+              {t('Favorite model: ')}
               <Text color="claude" bold>
                 {renderModelName(favoriteModel[0])}
               </Text>
@@ -350,7 +351,8 @@ function OverviewTab({
         </Box>
         <Box flexDirection="column" width={28}>
           <Text wrap="truncate">
-            Total tokens: <Text color="claude">{formatNumber(totalTokens)}</Text>
+            {t('Total tokens: ')}
+            <Text color="claude">{formatNumber(totalTokens)}</Text>
           </Text>
         </Box>
       </Box>
@@ -359,13 +361,15 @@ function OverviewTab({
       <Box flexDirection="row" gap={4}>
         <Box flexDirection="column" width={28}>
           <Text wrap="truncate">
-            Sessions: <Text color="claude">{formatNumber(stats.totalSessions)}</Text>
+            {t('Sessions: ')}
+            <Text color="claude">{formatNumber(stats.totalSessions)}</Text>
           </Text>
         </Box>
         <Box flexDirection="column" width={28}>
           {stats.longestSession && (
             <Text wrap="truncate">
-              Longest session: <Text color="claude">{formatDuration(stats.longestSession.duration)}</Text>
+              {t('Longest session: ')}
+              <Text color="claude">{formatDuration(stats.longestSession.duration)}</Text>
             </Text>
           )}
         </Box>
@@ -375,17 +379,18 @@ function OverviewTab({
       <Box flexDirection="row" gap={4}>
         <Box flexDirection="column" width={28}>
           <Text wrap="truncate">
-            Active days: <Text color="claude">{stats.activeDays}</Text>
+            {t('Active days: ')}
+            <Text color="claude">{stats.activeDays}</Text>
             <Text color="subtle">/{rangeDays}</Text>
           </Text>
         </Box>
         <Box flexDirection="column" width={28}>
           <Text wrap="truncate">
-            Longest streak:{' '}
+            {t('Longest streak: ')}
             <Text color="claude" bold>
               {stats.streaks.longestStreak}
             </Text>{' '}
-            {stats.streaks.longestStreak === 1 ? 'day' : 'days'}
+            {stats.streaks.longestStreak === 1 ? t('day') : t('days')}
           </Text>
         </Box>
       </Box>
@@ -395,17 +400,18 @@ function OverviewTab({
         <Box flexDirection="column" width={28}>
           {stats.peakActivityDay && (
             <Text wrap="truncate">
-              Most active day: <Text color="claude">{formatPeakDay(stats.peakActivityDay)}</Text>
+              {t('Most active day: ')}
+              <Text color="claude">{formatPeakDay(stats.peakActivityDay)}</Text>
             </Text>
           )}
         </Box>
         <Box flexDirection="column" width={28}>
           <Text wrap="truncate">
-            Current streak:{' '}
+            {t('Current streak: ')}
             <Text color="claude" bold>
               {allTimeStats.streaks.currentStreak}
             </Text>{' '}
-            {allTimeStats.streaks.currentStreak === 1 ? 'day' : 'days'}
+            {allTimeStats.streaks.currentStreak === 1 ? t('day') : t('days')}
           </Text>
         </Box>
       </Box>
@@ -415,7 +421,8 @@ function OverviewTab({
         <Box flexDirection="row" gap={4}>
           <Box flexDirection="column" width={28}>
             <Text wrap="truncate">
-              Speculation saved: <Text color="claude">{formatDuration(stats.totalSpeculationTimeSavedMs)}</Text>
+              {t('Speculation saved: ')}
+              <Text color="claude">{formatDuration(stats.totalSpeculationTimeSavedMs)}</Text>
             </Text>
           </Box>
         </Box>
@@ -425,7 +432,7 @@ function OverviewTab({
       {shotStatsData && (
         <>
           <Box marginTop={1}>
-            <Text>Shot distribution</Text>
+            <Text>{t('Shot distribution')}</Text>
           </Box>
           <Box flexDirection="row" gap={4}>
             <Box flexDirection="column" width={28}>
@@ -458,7 +465,8 @@ function OverviewTab({
           <Box flexDirection="row" gap={4}>
             <Box flexDirection="column" width={28}>
               <Text wrap="truncate">
-                Avg/session: <Text color="claude">{shotStatsData.avgShots}</Text>
+                {t('Avg/session: ')}
+                <Text color="claude">{shotStatsData.avgShots}</Text>
               </Text>
             </Box>
           </Box>
@@ -527,9 +535,9 @@ function generateFunFactoid(stats: ClaudeCodeStats, totalTokens: number): string
     for (const book of matchingBooks) {
       const times = totalTokens / book.tokens;
       if (times >= 2) {
-        factoids.push(`You've used ~${Math.floor(times)}x more tokens than ${book.name}`);
+        factoids.push(t("You've used ~{{n}}x more tokens than {{b}}", { n: Math.floor(times), b: book.name }));
       } else {
-        factoids.push(`You've used the same number of tokens as ${book.name}`);
+        factoids.push(t("You've used the same number of tokens as {{b}}", { b: book.name }));
       }
     }
   }
@@ -539,7 +547,9 @@ function generateFunFactoid(stats: ClaudeCodeStats, totalTokens: number): string
     for (const comparison of TIME_COMPARISONS) {
       const ratio = sessionMinutes / comparison.minutes;
       if (ratio >= 2) {
-        factoids.push(`Your longest session is ~${Math.floor(ratio)}x longer than ${comparison.name}`);
+        factoids.push(
+          t('Your longest session is ~{{n}}x longer than {{c}}', { n: Math.floor(ratio), c: comparison.name }),
+        );
       }
     }
   }
@@ -589,7 +599,7 @@ function ModelsTab({
   if (modelEntries.length === 0) {
     return (
       <Box>
-        <Text color="subtle">No model usage data available</Text>
+        <Text color="subtle">{t('No model usage data available')}</Text>
       </Box>
     );
   }
@@ -618,7 +628,7 @@ function ModelsTab({
       {/* Token usage chart */}
       {chartOutput && (
         <Box flexDirection="column" marginBottom={1}>
-          <Text bold>Tokens per Day</Text>
+          <Text bold>{t('Tokens per Day')}</Text>
           <Ansi>{chartOutput.chart}</Ansi>
           <Text color="subtle">{chartOutput.xAxisLabels}</Text>
           <Box>
@@ -653,9 +663,12 @@ function ModelsTab({
       {showScrollHint && (
         <Box marginTop={1}>
           <Text color="subtle">
-            {canScrollUp ? figures.arrowUp : ' '} {canScrollDown ? figures.arrowDown : ' '} {scrollOffset + 1}-
-            {Math.min(scrollOffset + VISIBLE_MODELS, modelEntries.length)} of {modelEntries.length} models (↑↓ to
-            scroll)
+            {canScrollUp ? figures.arrowUp : ' '} {canScrollDown ? figures.arrowDown : ' '}
+            {t('{{a}}-{{b}} of {{n}} models (↑↓ to scroll)', {
+              a: scrollOffset + 1,
+              b: Math.min(scrollOffset + VISIBLE_MODELS, modelEntries.length),
+              n: modelEntries.length,
+            })}
           </Text>
         </Box>
       )}
@@ -683,7 +696,8 @@ function ModelEntry({ model, usage, totalTokens }: ModelEntryProps): React.React
         {figures.bullet} <Text bold>{renderModelName(model)}</Text> <Text color="subtle">({percentage}%)</Text>
       </Text>
       <Text color="subtle">
-        {'  '}In: {formatNumber(usage.inputTokens)} · Out: {formatNumber(usage.outputTokens)}
+        {'  '}
+        {t('In: {{i}} · Out: {{o}}', { i: formatNumber(usage.inputTokens), o: formatNumber(usage.outputTokens) })}
       </Text>
     </Box>
   );
@@ -824,12 +838,12 @@ async function handleScreenshot(
   activeTab: 'Overview' | 'Models',
   setStatus: (status: string | null) => void,
 ): Promise<void> {
-  setStatus('copying…');
+  setStatus(t('copying…'));
 
   const ansiText = renderStatsToAnsi(stats, activeTab);
   const result = await copyAnsiToClipboard(ansiText);
 
-  setStatus(result.success ? 'copied!' : 'copy failed');
+  setStatus(result.success ? t('copied!') : t('copy failed'));
 
   // Clear status after 2 seconds
   setTimeout(setStatus, 2000, null);
@@ -907,34 +921,36 @@ function renderOverviewToAnsi(stats: ClaudeCodeStats): string[] {
 
   // Row 1: Favorite model | Total tokens
   if (favoriteModel) {
-    lines.push(row('Favorite model', renderModelName(favoriteModel[0]), 'Total tokens', formatNumber(totalTokens)));
+    lines.push(
+      row(t('Favorite model'), renderModelName(favoriteModel[0]), t('Total tokens'), formatNumber(totalTokens)),
+    );
   }
   lines.push('');
 
   // Row 2: Sessions | Longest session
   lines.push(
     row(
-      'Sessions',
+      t('Sessions'),
       formatNumber(stats.totalSessions),
-      'Longest session',
-      stats.longestSession ? formatDuration(stats.longestSession.duration) : 'N/A',
+      t('Longest session'),
+      stats.longestSession ? formatDuration(stats.longestSession.duration) : t('N/A'),
     ),
   );
 
   // Row 3: Current streak | Longest streak
-  const currentStreakVal = `${stats.streaks.currentStreak} ${stats.streaks.currentStreak === 1 ? 'day' : 'days'}`;
-  const longestStreakVal = `${stats.streaks.longestStreak} ${stats.streaks.longestStreak === 1 ? 'day' : 'days'}`;
-  lines.push(row('Current streak', currentStreakVal, 'Longest streak', longestStreakVal));
+  const currentStreakVal = `${stats.streaks.currentStreak} ${stats.streaks.currentStreak === 1 ? t('day') : t('days')}`;
+  const longestStreakVal = `${stats.streaks.longestStreak} ${stats.streaks.longestStreak === 1 ? t('day') : t('days')}`;
+  lines.push(row(t('Current streak'), currentStreakVal, t('Longest streak'), longestStreakVal));
 
   // Row 4: Active days | Peak hour
   const activeDaysVal = `${stats.activeDays}/${stats.totalDays}`;
   const peakHourVal =
-    stats.peakActivityHour !== null ? `${stats.peakActivityHour}:00-${stats.peakActivityHour + 1}:00` : 'N/A';
-  lines.push(row('Active days', activeDaysVal, 'Peak hour', peakHourVal));
+    stats.peakActivityHour !== null ? `${stats.peakActivityHour}:00-${stats.peakActivityHour + 1}:00` : t('N/A');
+  lines.push(row(t('Active days'), activeDaysVal, t('Peak hour'), peakHourVal));
 
   // Speculation time saved (ant-only)
   if (process.env.USER_TYPE === 'ant' && stats.totalSpeculationTimeSavedMs > 0) {
-    const label = 'Speculation saved:'.padEnd(COL1_LABEL_WIDTH);
+    const label = t('Speculation saved:').padEnd(COL1_LABEL_WIDTH);
     lines.push(label + h(formatDuration(stats.totalSpeculationTimeSavedMs)));
   }
 
@@ -959,10 +975,10 @@ function renderOverviewToAnsi(stats: ClaudeCodeStats): string[] {
       const b6_10 = bucket(6, 10);
       const b11 = bucket(11);
       lines.push('');
-      lines.push('Shot distribution');
-      lines.push(row('1-shot', fmtBucket(b1, pct(b1)), '2\u20135 shot', fmtBucket(b2_5, pct(b2_5))));
-      lines.push(row('6\u201310 shot', fmtBucket(b6_10, pct(b6_10)), '11+ shot', fmtBucket(b11, pct(b11))));
-      lines.push(`${'Avg/session:'.padEnd(COL1_LABEL_WIDTH)}${h(avgShots)}`);
+      lines.push(t('Shot distribution'));
+      lines.push(row(t('1-shot'), fmtBucket(b1, pct(b1)), t('2\u20135 shot'), fmtBucket(b2_5, pct(b2_5))));
+      lines.push(row(t('6\u201310 shot'), fmtBucket(b6_10, pct(b6_10)), t('11+ shot'), fmtBucket(b11, pct(b11))));
+      lines.push(`${t('Avg/session:').padEnd(COL1_LABEL_WIDTH)}${h(avgShots)}`);
     }
   }
 
@@ -971,7 +987,7 @@ function renderOverviewToAnsi(stats: ClaudeCodeStats): string[] {
   // Fun factoid
   const factoid = generateFunFactoid(stats, totalTokens);
   lines.push(h(factoid));
-  lines.push(chalk.gray(`Stats from the last ${stats.totalDays} days`));
+  lines.push(chalk.gray(t('Stats from the last {{n}} days', { n: stats.totalDays })));
 
   return lines;
 }
@@ -984,7 +1000,7 @@ function renderModelsToAnsi(stats: ClaudeCodeStats): string[] {
   );
 
   if (modelEntries.length === 0) {
-    lines.push(chalk.gray('No model usage data available'));
+    lines.push(chalk.gray(t('No model usage data available')));
     return lines;
   }
 
@@ -999,7 +1015,7 @@ function renderModelsToAnsi(stats: ClaudeCodeStats): string[] {
   );
 
   if (chartOutput) {
-    lines.push(chalk.bold('Tokens per Day'));
+    lines.push(chalk.bold(t('Tokens per Day')));
     lines.push(chartOutput.chart);
     lines.push(chalk.gray(chartOutput.xAxisLabels));
     // Legend - use pre-colored bullets from chart output
@@ -1010,7 +1026,12 @@ function renderModelsToAnsi(stats: ClaudeCodeStats): string[] {
 
   // Summary
   lines.push(
-    `${figures.star} Favorite: ${chalk.magenta.bold(renderModelName(favoriteModel?.[0] || ''))} · ${figures.circle} Total: ${chalk.magenta(formatNumber(totalTokens))} tokens`,
+    t('{{s}} Favorite: {{f}} · {{c}} Total: {{n}} tokens', {
+      s: figures.star,
+      f: chalk.magenta.bold(renderModelName(favoriteModel?.[0] || '')),
+      c: figures.circle,
+      n: chalk.magenta(formatNumber(totalTokens)),
+    }),
   );
   lines.push('');
 
@@ -1020,7 +1041,11 @@ function renderModelsToAnsi(stats: ClaudeCodeStats): string[] {
     const modelTokens = usage.inputTokens + usage.outputTokens;
     const percentage = ((modelTokens / totalTokens) * 100).toFixed(1);
     lines.push(`${figures.bullet} ${chalk.bold(renderModelName(model))} ${chalk.gray(`(${percentage}%)`)}`);
-    lines.push(chalk.dim(`  In: ${formatNumber(usage.inputTokens)} · Out: ${formatNumber(usage.outputTokens)}`));
+    lines.push(
+      chalk.dim(
+        t('  In: {{i}} · Out: {{o}}', { i: formatNumber(usage.inputTokens), o: formatNumber(usage.outputTokens) }),
+      ),
+    );
   }
 
   return lines;

@@ -10,6 +10,7 @@ import { type AgentDefinition, isBuiltInAgent } from '@claude-code-best/builtin-
 import { getAgentModelDisplay } from '../../utils/model/agent.js';
 import { Markdown } from '../Markdown.js';
 import { getActualRelativeAgentFilePath } from './agentFileUtils.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   agent: AgentDefinition;
@@ -36,11 +37,11 @@ export function AgentDetail({ agent, tools, onBack }: Props): React.ReactNode {
 
   function renderToolsList(): React.ReactNode {
     if (resolvedTools.hasWildcard) {
-      return <Text>All tools</Text>;
+      return <Text>{t('All tools')}</Text>;
     }
 
     if (!agent.tools || agent.tools.length === 0) {
-      return <Text>None</Text>;
+      return <Text>{t('None')}</Text>;
     }
 
     return (
@@ -48,7 +49,7 @@ export function AgentDetail({ agent, tools, onBack }: Props): React.ReactNode {
         {resolvedTools.validTools.length > 0 && <Text>{resolvedTools.validTools.join(', ')}</Text>}
         {resolvedTools.invalidTools.length > 0 && (
           <Text color="warning">
-            {figures.warning} Unrecognized: {resolvedTools.invalidTools.join(', ')}
+            {figures.warning} {t('Unrecognized: {{v}}', { v: resolvedTools.invalidTools.join(', ') })}
           </Text>
         )}
       </>
@@ -61,7 +62,7 @@ export function AgentDetail({ agent, tools, onBack }: Props): React.ReactNode {
 
       <Box flexDirection="column">
         <Text>
-          <Text bold>Description</Text> (tells Claude when to use this agent):
+          <Text bold>{t('Description')}</Text> {t('(tells Claude when to use this agent):')}
         </Text>
         <Box marginLeft={2}>
           <Text>{agent.whenToUse}</Text>
@@ -70,44 +71,44 @@ export function AgentDetail({ agent, tools, onBack }: Props): React.ReactNode {
 
       <Box>
         <Text>
-          <Text bold>Tools</Text>:{' '}
+          <Text bold>{t('Tools')}</Text>:{' '}
         </Text>
         {renderToolsList()}
       </Box>
 
       <Text>
-        <Text bold>Model</Text>: {getAgentModelDisplay(agent.model)}
+        <Text bold>{t('Model')}</Text>: {getAgentModelDisplay(agent.model)}
       </Text>
 
       {agent.permissionMode && (
         <Text>
-          <Text bold>Permission mode</Text>: {agent.permissionMode}
+          <Text bold>{t('Permission mode')}</Text>: {agent.permissionMode}
         </Text>
       )}
 
       {agent.memory && (
         <Text>
-          <Text bold>Memory</Text>: {getMemoryScopeDisplay(agent.memory)}
+          <Text bold>{t('Memory')}</Text>: {getMemoryScopeDisplay(agent.memory)}
         </Text>
       )}
 
       {agent.hooks && Object.keys(agent.hooks).length > 0 && (
         <Text>
-          <Text bold>Hooks</Text>: {Object.keys(agent.hooks).join(', ')}
+          <Text bold>{t('Hooks')}</Text>: {Object.keys(agent.hooks).join(', ')}
         </Text>
       )}
 
       {agent.skills && agent.skills.length > 0 && (
         <Text>
-          <Text bold>Skills</Text>:{' '}
-          {agent.skills.length > 10 ? `${agent.skills.length} skills` : agent.skills.join(', ')}
+          <Text bold>{t('Skills')}</Text>:{' '}
+          {agent.skills.length > 10 ? t('{{n}} skills', { n: agent.skills.length }) : agent.skills.join(', ')}
         </Text>
       )}
 
       {backgroundColor && (
         <Box>
           <Text>
-            <Text bold>Color</Text>:{' '}
+            <Text bold>{t('Color')}</Text>:{' '}
             <Text backgroundColor={backgroundColor} color="inverseText">
               {' '}
               {agent.agentType}{' '}
@@ -120,7 +121,7 @@ export function AgentDetail({ agent, tools, onBack }: Props): React.ReactNode {
         <>
           <Box>
             <Text>
-              <Text bold>System prompt</Text>:
+              <Text bold>{t('System prompt')}</Text>:
             </Text>
           </Box>
           <Box marginLeft={2} marginRight={2}>

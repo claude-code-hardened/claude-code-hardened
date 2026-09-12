@@ -10,6 +10,7 @@ import { Status, buildDiagnostics } from './Status.js';
 import { Config } from './Config.js';
 import { Usage } from './Usage.js';
 import type { LocalJSXCommandContext, CommandResultDisplay } from '../../commands.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   onClose: (result?: string, options?: { display?: CommandResultDisplay }) => void;
@@ -50,7 +51,7 @@ export function Settings({ onClose, context, defaultTab }: Props): React.ReactNo
       return;
     }
     // TODO: Update to "Settings" dialog once we define '/settings'.
-    onClose('Status dialog dismissed', { display: 'system' });
+    onClose(t('Status dialog dismissed'), { display: 'system' });
   };
 
   // Disable when submenu is open so the submenu's Dialog can handle ESC,
@@ -62,10 +63,10 @@ export function Settings({ onClose, context, defaultTab }: Props): React.ReactNo
   });
 
   const tabs = [
-    <Tab key="status" title="Status">
+    <Tab key="status" title={t('Status')}>
       <Status context={context} diagnosticsPromise={diagnosticsPromise} />
     </Tab>,
-    <Tab key="config" title="Config">
+    <Tab key="config" title={t('Config')}>
       <Suspense fallback={null}>
         <Config
           context={context}
@@ -76,7 +77,7 @@ export function Settings({ onClose, context, defaultTab }: Props): React.ReactNo
         />
       </Suspense>
     </Tab>,
-    <Tab key="usage" title="Usage">
+    <Tab key="usage" title={t('Usage')}>
       <Usage />
     </Tab>,
   ];

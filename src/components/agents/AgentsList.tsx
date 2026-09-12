@@ -13,6 +13,7 @@ import type { AgentDefinition } from '@claude-code-best/builtin-tools/tools/Agen
 import { count } from '../../utils/array.js';
 import { Dialog, Divider } from '@anthropic/ink';
 import { getAgentSourceDisplayName } from './utils.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   source: SettingSource | 'all' | 'built-in' | 'plugin';
@@ -43,7 +44,7 @@ export function AgentsList({ source, agents, onBack, onSelect, onCreateNew, chan
         <Text color={isCreateNewSelected ? 'suggestion' : undefined}>
           {isCreateNewSelected ? `${figures.pointer} ` : '  '}
         </Text>
-        <Text color={isCreateNewSelected ? 'suggestion' : undefined}>Create new agent</Text>
+        <Text color={isCreateNewSelected ? 'suggestion' : undefined}>{t('Create new agent')}</Text>
       </Box>
     );
   };
@@ -79,13 +80,13 @@ export function AgentsList({ source, agents, onBack, onSelect, onCreateNew, chan
         {agent.memory && (
           <Text dimColor={true} color={textColor}>
             {' · '}
-            {agent.memory} memory
+            {t('{{n}} memory', { n: agent.memory })}
           </Text>
         )}
         {overriddenBy && (
           <Text dimColor={!isSelected} color={isSelected ? 'warning' : undefined}>
             {' '}
-            {figures.warning} shadowed by {getOverrideSourceLabel(overriddenBy)}
+            {figures.warning} {t('shadowed by {{v}}', { v: getOverrideSourceLabel(overriddenBy) })}
           </Text>
         )}
       </Box>
@@ -207,13 +208,15 @@ export function AgentsList({ source, agents, onBack, onSelect, onCreateNew, chan
 
   if (hasNoAgents) {
     return (
-      <Dialog title={sourceTitle} subtitle="No agents found" onCancel={onBack} hideInputGuide>
+      <Dialog title={sourceTitle} subtitle={t('No agents found')} onCancel={onBack} hideInputGuide>
         <Box flexDirection="column" gap={1} tabIndex={0} autoFocus onKeyDown={handleKeyDown}>
           {onCreateNew && <Box>{renderCreateNewOption()}</Box>}
-          <Text dimColor>No agents found. Create specialized subagents that Claude can delegate to.</Text>
-          <Text dimColor>Each subagent has its own context window, custom system prompt, and specific tools.</Text>
+          <Text dimColor>{t('No agents found. Create specialized subagents that Claude can delegate to.')}</Text>
           <Text dimColor>
-            Try creating: Code Reviewer, Code Simplifier, Security Reviewer, Tech Lead, or UX Reviewer.
+            {t('Each subagent has its own context window, custom system prompt, and specific tools.')}
+          </Text>
+          <Text dimColor>
+            {t('Try creating: Code Reviewer, Code Simplifier, Security Reviewer, Tech Lead, or UX Reviewer.')}
           </Text>
           {source !== 'built-in' && sortedAgents.some(a => a.source === 'built-in') && (
             <>
@@ -229,7 +232,7 @@ export function AgentsList({ source, agents, onBack, onSelect, onCreateNew, chan
   return (
     <Dialog
       title={sourceTitle}
-      subtitle={`${count(sortedAgents, a => !a.overriddenBy)} agents`}
+      subtitle={t('{{n}} agents', { n: count(sortedAgents, a => !a.overriddenBy) })}
       onCancel={onBack}
       hideInputGuide
     >
@@ -253,7 +256,7 @@ export function AgentsList({ source, agents, onBack, onSelect, onCreateNew, chan
             {builtInAgents.length > 0 && (
               <Box flexDirection="column" marginBottom={1} paddingLeft={2}>
                 <Text dimColor>
-                  <Text bold>Built-in agents</Text> (always available)
+                  <Text bold>{t('Built-in agents')}</Text> {t('(always available)')}
                 </Text>
                 {builtInAgents.map(renderAgent)}
               </Box>
@@ -262,7 +265,7 @@ export function AgentsList({ source, agents, onBack, onSelect, onCreateNew, chan
         ) : source === 'built-in' ? (
           <>
             <Text dimColor italic>
-              Built-in agents are provided by default and cannot be modified.
+              {t('Built-in agents are provided by default and cannot be modified.')}
             </Text>
             <Box marginTop={1} flexDirection="column">
               {sortedAgents.map(agent => renderAgent(agent))}

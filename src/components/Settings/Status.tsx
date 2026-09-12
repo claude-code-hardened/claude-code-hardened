@@ -24,6 +24,7 @@ import {
 } from '../../utils/status.js';
 import type { ThemeName } from '../../utils/theme.js';
 import { ConfigurableShortcutHint } from '../ConfigurableShortcutHint.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   context: LocalJSXCommandContext;
@@ -33,12 +34,12 @@ type Props = {
 function buildPrimarySection(): Property[] {
   const sessionId = getSessionId();
   const customTitle = getCurrentSessionTitle(sessionId);
-  const nameValue = customTitle ?? <Text dimColor>/rename to add a name</Text>;
+  const nameValue = customTitle ?? <Text dimColor>{t('/rename to add a name')}</Text>;
 
   return [
-    { label: 'Version', value: MACRO.VERSION },
-    { label: 'Session name', value: nameValue },
-    { label: 'Session ID', value: sessionId },
+    { label: t('Version'), value: MACRO.VERSION },
+    { label: t('Session name'), value: nameValue },
+    { label: t('Session ID'), value: sessionId },
     { label: 'cwd', value: getCwd() },
     ...buildAccountProperties(),
     ...buildAPIProviderProperties(),
@@ -59,7 +60,7 @@ function buildSecondarySection({
   const modelLabel = getModelDisplayLabel(mainLoopModel);
 
   return [
-    { label: 'Model', value: modelLabel },
+    { label: t('Model'), value: modelLabel },
     ...buildIDEProperties(mcp.clients, context.options.ideInstallationStatus, theme),
     ...buildMcpProperties(mcp.clients, theme),
     ...buildSandboxProperties(),
@@ -153,7 +154,7 @@ function Diagnostics({ promise }: { promise: Promise<Diagnostic[]> }): React.Rea
   if (diagnostics.length === 0) return null;
   return (
     <Box flexDirection="column" paddingBottom={1}>
-      <Text bold>System Diagnostics</Text>
+      <Text bold>{t('System Diagnostics')}</Text>
       {diagnostics.map((diagnostic, i) => (
         <Box key={i} flexDirection="row" gap={1} paddingX={1}>
           <Text color="error">{figures.warning}</Text>

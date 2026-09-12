@@ -71,10 +71,19 @@ function getI18n(): I18n {
 /**
  * Translate a user-visible UI string into the active locale.
  * The input is the English text; untranslated strings pass through as-is.
+ *
+ * Interpolation: i18next `{{name}}` placeholders are substituted from
+ * `options` (e.g. t('Loaded {{n}} messages', { n: 5 })). en passes the
+ * template through and interpolates locally so English needs no pack entry.
  */
-export function t(key: string): string {
-  if (resolveLocale() === 'en') return key
-  return getI18n().t(key)
+export function t(key: string, options?: Record<string, unknown>): string {
+  if (resolveLocale() === 'en') {
+    if (!options) return key
+    return key.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+      name in options ? String(options[name]) : match,
+    )
+  }
+  return getI18n().t(key, options)
 }
 
 /** Active locale tag ('en' when no locale pack is selected). */

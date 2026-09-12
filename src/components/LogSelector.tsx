@@ -40,6 +40,7 @@ import { Spinner } from './Spinner.js';
 import { TagTabs } from './TagTabs.js';
 import TextInput from './TextInput.js';
 import { type TreeNode, TreeSelect } from './ui/TreeSelect.js';
+import { t } from '../i18n/index.js';
 
 type AgenticSearchState =
   | { status: 'idle' }
@@ -124,9 +125,11 @@ function buildLogLabel(
   const prefixWidth = isGroupHeader && forkCount > 0 ? PARENT_PREFIX_WIDTH : isChild ? CHILD_PREFIX_WIDTH : 0;
 
   const sessionCountSuffix =
-    isGroupHeader && forkCount > 0 ? ` (+${forkCount} other ${forkCount === 1 ? 'session' : 'sessions'})` : '';
+    isGroupHeader && forkCount > 0
+      ? t(' (+{{n}} other {{s}})', { n: forkCount, s: forkCount === 1 ? t('session') : t('sessions') })
+      : '';
 
-  const sidechainSuffix = log.isSidechain ? ' (sidechain)' : '';
+  const sidechainSuffix = log.isSidechain ? t(' (sidechain)') : '';
 
   const maxSummaryWidth = maxLabelWidth - prefixWidth - sidechainSuffix.length - sessionCountSuffix.length;
   const truncatedSummary = normalizeAndTruncateToWidth(getLogDisplayTitle(log), maxSummaryWidth);
@@ -510,7 +513,7 @@ export function LogSelector({
 
     return displayedLogs.map((log, index) => {
       const rawSummary = getLogDisplayTitle(log);
-      const summaryWithSidechain = rawSummary + (log.isSidechain ? ' (sidechain)' : '');
+      const summaryWithSidechain = rawSummary + (log.isSidechain ? t(' (sidechain)') : '');
       const summary = normalizeAndTruncateToWidth(summaryWithSidechain, maxLabelWidth);
 
       const baseDescription = formatLogMetadata(log);
@@ -546,10 +549,10 @@ export function LogSelector({
     const isChildNode = sessionLogs.indexOf(focusedLog) > 0;
 
     if (isChildNode) {
-      return '← to collapse';
+      return t('← to collapse');
     }
 
-    return isExpanded ? '← to collapse' : '→ to expand';
+    return isExpanded ? t('← to collapse') : t('→ to expand');
   };
 
   const handleRenameSubmit = React.useCallback(async () => {
@@ -615,7 +618,7 @@ export function LogSelector({
       }
       setAgenticSearchState({
         status: 'error',
-        message: error instanceof Error ? error.message : 'Search failed',
+        message: error instanceof Error ? error.message : t('Search failed'),
       });
       logEvent('tengu_agentic_search_error', {
         query_length: searchQuery.length,
@@ -857,7 +860,7 @@ export function LogSelector({
     filterIndicators.push(currentBranch);
   }
   if (hasMultipleWorktrees && !showAllWorktrees) {
-    filterIndicators.push('current worktree');
+    filterIndicators.push(t('current worktree'));
   }
 
   const showAdditionalFilterLine = filterIndicators.length > 0 && viewMode !== 'search';
@@ -915,12 +918,9 @@ export function LogSelector({
       ) : (
         <Box flexShrink={0}>
           <Text bold color="suggestion">
-            Resume Session
+            {t('Resume Session')}
             {viewMode === 'list' && displayedLogs.length > visibleCount && (
-              <Text dimColor>
-                {' '}
-                ({focusedIndex} of {displayedLogs.length})
-              </Text>
+              <Text dimColor> {t('({{i}} of {{n}})', { i: focusedIndex, n: displayedLogs.length })}</Text>
             )}
           </Text>
         </Box>
@@ -946,7 +946,7 @@ export function LogSelector({
       {agenticSearchState.status === 'searching' && (
         <Box paddingLeft={1} flexShrink={0}>
           <Spinner />
-          <Text> Searching…</Text>
+          <Text>{t(' Searching…')}</Text>
         </Box>
       )}
 
@@ -954,7 +954,7 @@ export function LogSelector({
       {agenticSearchState.status === 'results' && agenticSearchState.results.length > 0 && (
         <Box paddingLeft={1} marginBottom={1} flexShrink={0}>
           <Text dimColor italic>
-            Claude found these results:
+            {t('Claude found these results:')}
           </Text>
         </Box>
       )}
@@ -965,7 +965,7 @@ export function LogSelector({
         filteredLogs.length === 0 && (
           <Box paddingLeft={1} marginBottom={1} flexShrink={0}>
             <Text dimColor italic>
-              No matching sessions found.
+              {t('No matching sessions found.')}
             </Text>
           </Box>
         )}
@@ -974,7 +974,7 @@ export function LogSelector({
       {agenticSearchState.status === 'error' && filteredLogs.length === 0 && (
         <Box paddingLeft={1} marginBottom={1} flexShrink={0}>
           <Text dimColor italic>
-            No matching sessions found.
+            {t('No matching sessions found.')}
           </Text>
         </Box>
       )}
@@ -992,7 +992,7 @@ export function LogSelector({
                 {isAgenticSearchOptionFocused ? figures.pointer : ' '}
               </Text>
               <Text color={isAgenticSearchOptionFocused ? 'suggestion' : undefined} bold={isAgenticSearchOptionFocused}>
-                Search deeply using Claude →
+                {t('Search deeply using Claude →')}
               </Text>
             </Box>
             <Box height={1} />
@@ -1002,13 +1002,13 @@ export function LogSelector({
       {/* Hide session list when agentic search is in progress */}
       {agenticSearchState.status === 'searching' ? null : viewMode === 'rename' && focusedLog ? (
         <Box paddingLeft={2} flexDirection="column">
-          <Text bold>Rename session:</Text>
+          <Text bold>{t('Rename session:')}</Text>
           <Box paddingTop={1}>
             <TextInput
               value={renameValue}
               onChange={setRenameValue}
               onSubmit={handleRenameSubmit}
-              placeholder={getLogDisplayTitle(focusedLog!, 'Enter new session name')}
+              placeholder={getLogDisplayTitle(focusedLog!, t('Enter new session name'))}
               columns={columns}
               cursorOffset={renameCursorOffset}
               onChangeCursorOffset={setRenameCursorOffset}
@@ -1079,7 +1079,7 @@ export function LogSelector({
       )}
       <Box paddingLeft={2}>
         {exitState.pending ? (
-          <Text dimColor>Press {exitState.keyName} again to exit</Text>
+          <Text dimColor>{t('Press {{k}} again to exit', { k: exitState.keyName })}</Text>
         ) : viewMode === 'rename' ? (
           <Text dimColor>
             <Byline>
@@ -1095,7 +1095,7 @@ export function LogSelector({
         ) : agenticSearchState.status === 'searching' ? (
           <Text dimColor>
             <Byline>
-              <Text>Searching with Claude…</Text>
+              <Text>{t('Searching with Claude…')}</Text>
               <ConfigurableShortcutHint
                 action="confirm:no"
                 context="Confirmation"
@@ -1120,7 +1120,7 @@ export function LogSelector({
         ) : viewMode === 'search' ? (
           <Text dimColor>
             <Byline>
-              <Text>{isSearching && isDeepSearchEnabled ? 'Searching…' : 'Type to Search'}</Text>
+              <Text>{isSearching && isDeepSearchEnabled ? t('Searching…') : t('Type to Search')}</Text>
               <KeyboardShortcutHint shortcut="Enter" action="select" />
               <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="clear" />
             </Byline>
@@ -1131,19 +1131,19 @@ export function LogSelector({
               {onToggleAllProjects && (
                 <KeyboardShortcutHint
                   shortcut="Ctrl+A"
-                  action={`show ${showAllProjects ? 'current dir' : 'all projects'}`}
+                  action={t('show {{v}}', { v: showAllProjects ? t('current dir') : t('all projects') })}
                 />
               )}
-              {currentBranch && <KeyboardShortcutHint shortcut="Ctrl+B" action="toggle branch" />}
+              {currentBranch && <KeyboardShortcutHint shortcut="Ctrl+B" action={t('toggle branch')} />}
               {hasMultipleWorktrees && (
                 <KeyboardShortcutHint
                   shortcut="Ctrl+W"
-                  action={`show ${showAllWorktrees ? 'current worktree' : 'all worktrees'}`}
+                  action={t('show {{v}}', { v: showAllWorktrees ? t('current worktree') : t('all worktrees') })}
                 />
               )}
-              <KeyboardShortcutHint shortcut="Ctrl+V" action="preview" />
-              <KeyboardShortcutHint shortcut="Ctrl+R" action="rename" />
-              <Text>Type to search</Text>
+              <KeyboardShortcutHint shortcut="Ctrl+V" action={t('preview')} />
+              <KeyboardShortcutHint shortcut="Ctrl+R" action={t('rename')} />
+              <Text>{t('Type to search')}</Text>
               <ConfigurableShortcutHint
                 action="confirm:no"
                 context="Confirmation"

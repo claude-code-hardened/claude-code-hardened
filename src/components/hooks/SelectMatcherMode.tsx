@@ -15,6 +15,7 @@ import {
 import { plural } from '../../utils/stringUtils.js';
 import { Select } from '../CustomSelect/select.js';
 import { Dialog } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 type MatcherWithSource = {
   matcher: string;
@@ -55,21 +56,21 @@ export function SelectMatcherMode({
   if (matchersForSelectedEvent.length === 0) {
     return (
       <Dialog
-        title={`${selectedEvent} - Matchers`}
+        title={t('{{e}} - Matchers', { e: selectedEvent })}
         subtitle={eventDescription}
         onCancel={onCancel}
-        inputGuide={() => <Text>Esc to go back</Text>}
+        inputGuide={() => <Text>{t('Esc to go back')}</Text>}
       >
         <Box flexDirection="column" gap={1}>
-          <Text dimColor>No hooks configured for this event.</Text>
-          <Text dimColor>To add hooks, edit settings.json directly or ask Claude.</Text>
+          <Text dimColor>{t('No hooks configured for this event.')}</Text>
+          <Text dimColor>{t('To add hooks, edit settings.json directly or ask Claude.')}</Text>
         </Box>
       </Dialog>
     );
   }
 
   return (
-    <Dialog title={`${selectedEvent} - Matchers`} subtitle={eventDescription} onCancel={onCancel}>
+    <Dialog title={t('{{e}} - Matchers', { e: selectedEvent })} subtitle={eventDescription} onCancel={onCancel}>
       <Box flexDirection="column">
         <Select
           options={matchersWithSources.map(item => {

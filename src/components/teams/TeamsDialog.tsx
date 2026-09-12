@@ -28,6 +28,7 @@ import { isPaneBackend, type PaneBackendType } from '../../utils/swarm/backends/
 import { getSwarmSocketName, TMUX_COMMAND } from '../../utils/swarm/constants.js';
 import { removeMemberFromTeam, setMemberMode, setMultipleMemberModes } from '../../utils/swarm/teamHelpers.js';
 import { listTasks, type Task, unassignTeammateTasks } from '../../utils/tasks.js';
+import { t } from '../../i18n/index.js';
 import { getTeammateStatuses, type TeammateStatus, type TeamSummary } from '../../utils/teamDiscovery.js';
 import {
   createModeSetRequestMessage,
@@ -301,7 +302,10 @@ type TeamDetailViewProps = {
 };
 
 function TeamDetailView({ teamName, teammates, selectedIndex, onCancel }: TeamDetailViewProps): React.ReactNode {
-  const subtitle = `${teammates.length} ${teammates.length === 1 ? 'teammate' : 'teammates'}`;
+  const subtitle = t('{{n}} {{s}}', {
+    n: teammates.length,
+    s: teammates.length === 1 ? t('teammate') : t('teammates'),
+  });
   // Check if the backend supports hide/show
   const supportsHideShow = getCachedBackend()?.supportsHideShow ?? false;
   // Get the display text for the cycle mode shortcut
@@ -309,9 +313,15 @@ function TeamDetailView({ teamName, teammates, selectedIndex, onCancel }: TeamDe
 
   return (
     <>
-      <Dialog title={`Team ${teamName}`} subtitle={subtitle} onCancel={onCancel} color="background" hideInputGuide>
+      <Dialog
+        title={t('Team {{n}}', { n: teamName })}
+        subtitle={subtitle}
+        onCancel={onCancel}
+        color="background"
+        hideInputGuide
+      >
         {teammates.length === 0 ? (
-          <Text dimColor>No teammates</Text>
+          <Text dimColor>{t('No teammates')}</Text>
         ) : (
           <Box flexDirection="column">
             {teammates.map((teammate, index) => (
@@ -322,10 +332,13 @@ function TeamDetailView({ teamName, teammates, selectedIndex, onCancel }: TeamDe
       </Dialog>
       <Box marginLeft={1}>
         <Text dimColor>
-          {figures.arrowUp}/{figures.arrowDown} select · Enter view · k kill · s shutdown · p prune idle
-          {supportsHideShow && ' · h hide/show · H hide/show all'}
+          {t('{{u}}/{{d}} select · Enter view · k kill · s shutdown · p prune idle', {
+            u: figures.arrowUp,
+            d: figures.arrowDown,
+          })}
+          {supportsHideShow && t(' · h hide/show · H hide/show all')}
           {' · '}
-          {cycleModeShortcut} sync cycle modes for all · Esc close
+          {t('{{k}} sync cycle modes for all · Esc close', { k: cycleModeShortcut })}
         </Text>
       </Box>
     </>
@@ -423,7 +436,7 @@ function TeammateDetailView({ teammate, teamName, onCancel }: TeammateDetailView
         {/* Tasks section */}
         {teammateTasks.length > 0 && (
           <Box flexDirection="column">
-            <Text bold>Tasks</Text>
+            <Text bold>{t('Tasks')}</Text>
             {teammateTasks.map(task => (
               <Text key={task.id} color={task.status === 'completed' ? 'success' : undefined}>
                 {task.status === 'completed' ? figures.tick : '◼'} {task.subject}
@@ -435,20 +448,20 @@ function TeammateDetailView({ teammate, teamName, onCancel }: TeammateDetailView
         {/* Prompt section */}
         {teammate.prompt && (
           <Box flexDirection="column">
-            <Text bold>Prompt</Text>
+            <Text bold>{t('Prompt')}</Text>
             <Text>
               {promptExpanded ? teammate.prompt : truncateToWidth(teammate.prompt, 80)}
-              {stringWidth(teammate.prompt) > 80 && !promptExpanded && <Text dimColor> (p to expand)</Text>}
+              {stringWidth(teammate.prompt) > 80 && !promptExpanded && <Text dimColor>{t(' (p to expand)')}</Text>}
             </Text>
           </Box>
         )}
       </Dialog>
       <Box marginLeft={1}>
         <Text dimColor>
-          {figures.arrowLeft} back · Esc close · k kill · s shutdown
-          {getCachedBackend()?.supportsHideShow && ' · h hide/show'}
+          {t('{{a}} back · Esc close · k kill · s shutdown', { a: figures.arrowLeft })}
+          {getCachedBackend()?.supportsHideShow && t(' · h hide/show')}
           {' · '}
-          {cycleModeShortcut} cycle mode
+          {t('{{k}} cycle mode', { k: cycleModeShortcut })}
         </Text>
       </Box>
     </>

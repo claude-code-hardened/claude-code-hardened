@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Text } from '@anthropic/ink';
 import { useAppState } from '../../state/AppState.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   teamsSelected: boolean;
@@ -27,11 +28,14 @@ export function TeamStatus({ teamsSelected, showHint }: Props): React.ReactNode 
     showHint && teamsSelected ? (
       <>
         <Text dimColor>· </Text>
-        <Text dimColor>Enter to view</Text>
+        <Text dimColor>{t('Enter to view')}</Text>
       </>
     ) : null;
 
-  const statusText = `${totalTeammates} ${totalTeammates === 1 ? 'teammate' : 'teammates'}`;
+  const statusText = t('{{n}} {{s}}', {
+    n: totalTeammates,
+    s: totalTeammates === 1 ? t('teammate') : t('teammates'),
+  });
 
   return (
     <>
