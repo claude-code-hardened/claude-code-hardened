@@ -1,4 +1,4 @@
-import { loadNativeModule } from '../../src/utils/embeddedNative'
+import { loadNativeModule } from '../../../src/utils/embeddedNative'
 
 type ChainScan = {
   msgIndex: Uint32Array
