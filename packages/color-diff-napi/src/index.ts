@@ -1337,4 +1337,6 @@ export const __test = {
   detectColorMode,
   detectLanguage,
   parseTmTheme,
+  flattenHljs,
+  buildTheme,
 }
