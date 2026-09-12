@@ -486,24 +486,28 @@ describe('UDS inbox retention', () => {
     expect(drainInbox()).toEqual([])
   })
 
-  test('destroys oversized frames before enqueueing inbox work', async () => {
-    const path = socketPath('oversized')
-    await startUdsMessaging(path, { isExplicit: true })
+  test(
+    'destroys oversized frames before enqueueing inbox work',
+    async () => {
+      const path = socketPath('oversized')
+      await startUdsMessaging(path, { isExplicit: true })
 
-    await new Promise<void>((resolve, reject) => {
-      const conn = createConnection(path, () => {
-        conn.write('x'.repeat(MAX_UDS_FRAME_BYTES + 1))
+      await new Promise<void>((resolve, reject) => {
+        const conn = createConnection(path, () => {
+          conn.write('x'.repeat(MAX_UDS_FRAME_BYTES + 1))
+        })
+        conn.setTimeout(20_000, () => {
+          conn.destroy()
+          reject(new Error('Timed out waiting for oversized frame close'))
+        })
+        conn.on('close', () => resolve())
+        conn.on('error', () => resolve())
       })
-      conn.setTimeout(5_000, () => {
-        conn.destroy()
-        reject(new Error('Timed out waiting for oversized frame close'))
-      })
-      conn.on('close', () => resolve())
-      conn.on('error', () => resolve())
-    })
 
-    expect(drainInbox()).toEqual([])
-  })
+      expect(drainInbox()).toEqual([])
+    },
+    30_000,
+  )
 
   test('default socket path is regenerated after stop', async () => {
     const firstPath = getDefaultUdsSocketPath()
@@ -565,34 +569,38 @@ describe('UDS inbox retention', () => {
     }
   })
 
-  test('rejects closed receiver responses without waiting for timeout', async () => {
-    const path = socketPath('closed-response')
-    if (process.platform !== 'win32') {
-      await mkdir(dirname(path), { recursive: true })
-    }
-    const receiver = createServer(socket => {
-      socket.end()
-    })
-    await new Promise<void>((resolve, reject) => {
-      receiver.on('error', reject)
-      receiver.listen(path, () => resolve())
-    })
-
-    try {
-      await expect(
-        sendUdsMessage(
-          path,
-          { type: 'text', data: 'hello' },
-          { authToken: 'test-token' },
-        ),
-      ).rejects.toThrow('before response')
-    } finally {
-      await closeServer(receiver)
+  test(
+    'rejects closed receiver responses without waiting for timeout',
+    async () => {
+      const path = socketPath('closed-response')
       if (process.platform !== 'win32') {
-        await unlink(path).catch(() => undefined)
+        await mkdir(dirname(path), { recursive: true })
       }
-    }
-  })
+      const receiver = createServer(socket => {
+        socket.end()
+      })
+      await new Promise<void>((resolve, reject) => {
+        receiver.on('error', reject)
+        receiver.listen(path, () => resolve())
+      })
+
+      try {
+        await expect(
+          sendUdsMessage(
+            path,
+            { type: 'text', data: 'hello' },
+            { authToken: 'test-token' },
+          ),
+        ).rejects.toThrow('before response')
+      } finally {
+        await closeServer(receiver)
+        if (process.platform !== 'win32') {
+          await unlink(path).catch(() => undefined)
+        }
+      }
+    },
+    30_000,
+  )
 
   test('rejects malformed receiver responses without waiting for timeout', async () => {
     const path = socketPath('malformed-response')

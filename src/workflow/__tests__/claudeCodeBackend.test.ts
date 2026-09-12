@@ -1,4 +1,5 @@
 import { expect, test, mock } from 'bun:test'
+import { randomBytes, randomUUID } from 'node:crypto'
 
 // Note: mock specifier must resolve to the same module that impl actually imports (bun mock.module
 // matches by resolved module). impl uses '@claude-code-best/builtin-tools/...' and 'src/*' alias
@@ -38,7 +39,9 @@ mock.module('src/utils/messages.js', () => ({
   // mock here corrupts every later test that imports the real createUserMessage
   // (e.g. bridgeMessaging.test.ts's `type !== 'user'` early-exit, or
   // processSlashCommand.test.ts's `message.content` access). Mirror the real
-  // shape from src/utils/messages.ts: type + message envelope + passthrough.
+  // shape from src/utils/messages.ts: type + message envelope + passthrough —
+  // including real uuid generation, or messages.test.ts's uniqueness check
+  // sees two identical undefined uuids.
   createUserMessage: (
     o: {
       content: string
@@ -46,11 +49,20 @@ mock.module('src/utils/messages.js', () => ({
   ) => ({
     type: 'user' as const,
     message: { role: 'user', content: o.content },
+    uuid: (o.uuid as string | undefined) || randomUUID(),
+    timestamp: o.timestamp ?? new Date().toISOString(),
     ...o,
   }),
   extractTextContent: () => 'agent-text',
 }))
-mock.module('src/utils/uuid.js', () => ({ createAgentId: () => 'agent-1' }))
+// Mirror the real createAgentId (randomBytes suffix) — a constant mock here
+// leaks into uuid.test.ts's format assertions in the same test process.
+mock.module('src/utils/uuid.js', () => ({
+  createAgentId: (label?: string) => {
+    const suffix = randomBytes(8).toString('hex')
+    return label ? `a${label}-${suffix}` : `a${suffix}`
+  },
+}))
 mock.module('src/services/analytics/index.js', () => ({ logEvent: () => {} }))
 mock.module('src/utils/debug.js', () => ({ logForDebugging: () => {} }))
 
