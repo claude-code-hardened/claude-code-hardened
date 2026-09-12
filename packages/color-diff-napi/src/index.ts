@@ -686,6 +686,12 @@ function scopeColor(
   )
 }
 
+// highlight.js leaves standalone operators (`=`, `:`, `==`, `=>`, `::`, …)
+// unscoped in most grammars, while strings/comments/numbers stay tagged —
+// syntect scopes them as keyword.operator. Longest-first; ambiguous angle
+// brackets (< >) are deliberately excluded (generics vs comparison).
+const UNTAGGED_OP_SPLIT = /(===|!==|=>|==|::|->|=|:|\?)/g
+
 function flattenHljs(
   node: HljsNode | string,
   theme: Theme,
@@ -693,6 +699,35 @@ function flattenHljs(
   out: Block[],
 ): void {
   if (typeof node === 'string') {
+    // Only truly untagged text participates (inside a tagged scope the
+    // characters are content, not operators).
+    if (
+      parentScope === undefined &&
+      (theme.scopes['operator'] || theme.tm) &&
+      node.length > 0
+    ) {
+      const matches = [...node.matchAll(UNTAGGED_OP_SPLIT)]
+      if (matches.length > 0) {
+        const pushDefault = (text: string): void => {
+          out.push([
+            { foreground: theme.foreground, background: theme.background },
+            text,
+          ])
+        }
+        let last = 0
+        for (const m of matches) {
+          const i = m.index!
+          if (i > last) pushDefault(node.slice(last, i))
+          out.push([
+            { foreground: scopeColor('operator', m[0]!, theme), background: theme.background },
+            m[0]!,
+          ])
+          last = i + m[0]!.length
+        }
+        if (last < node.length) pushDefault(node.slice(last))
+        return
+      }
+    }
     const fg = scopeColor(parentScope, node, theme)
     out.push([{ foreground: fg, background: theme.background }, node])
     return
