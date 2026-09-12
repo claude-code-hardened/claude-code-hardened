@@ -200,23 +200,19 @@ jobs:
           check_elf() {
             local file="$1" expect="$2"
             local machine
-            machine=$(od -A n -t u1 -j 18 -N 2 "$file" | tr -s ' ' | sed 's/^ //;s/ .*$//')
+            machine=$(od -A n -t u1 -j 18 -N 2 "$file" | tr -s ' ' | sed 's/^ //')
             [ "$machine" = "$expect" ] || { echo "  ✗ $file e_machine=$machine, expected $expect"; exit 1; }
             echo "  ✓ $file (ELF e_machine=$machine)"
           }
           check_macho() {
-            local file="$1" expect="$2"  # expect: 498676446 (0x1dba1 = cffaedfe LE as u32... use bytes)
+            local file="$1" expect="$2"  # cputype LE bytes, e.g. "12 0 0 1" = arm64
             local magic
             magic=$(od -A n -t x1 -N 4 "$file" | tr -d ' \n')
             [ "$magic" = "cffaedfe" ] || { echo "  ✗ $file Mach-O magic=$magic, expected cffaedfe"; exit 1; }
-            # CPU type at offset 4: 0100000c LE = 12 00 00 01 → arm64; 07000001 → x86_64
             local cputype
-            cputype=$(od -A n -t u1 -j 4 -N 4 "$file" | tr -s ' ' | sed 's/^ //;s/ .*$//')
-            if [ "$cputype" = "$expect" ]; then
-              echo "  ✓ $file (Mach-O cputype bytes=$cputype)"
-            else
-              echo "  ✗ $file cputype bytes=$cputype, expected $expect"; exit 1
-            fi
+            cputype=$(od -A n -t u1 -j 4 -N 4 "$file" | tr '\n' ' ' | tr -s ' ' | sed 's/^ //;s/ $//')
+            [ "$cputype" = "$expect" ] || { echo "  ✗ $file cputype bytes=$cputype, expected $expect"; exit 1; }
+            echo "  ✓ $file (Mach-O cputype bytes=$cputype)"
           }
           check_pe() {
             local file="$1"
