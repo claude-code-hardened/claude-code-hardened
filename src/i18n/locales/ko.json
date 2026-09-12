@@ -33,5 +33,7 @@
   "Running command…": "명령 실행 중…",
   "Editing file…": "파일 편집 중…",
   "Loading conversation…": "대화를 불러오는 중…",
+  "Loading conversations…": "대화 목록을 불러오는 중…",
+  "(esc to interrupt ": "(esc로 중단 ",
   "Starting…": "시작 중…"
 }

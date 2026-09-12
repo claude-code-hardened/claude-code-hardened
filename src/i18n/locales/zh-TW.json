@@ -33,5 +33,7 @@
   "Running command…": "正在執行命令…",
   "Editing file…": "正在編輯檔案…",
   "Loading conversation…": "正在載入會話…",
+  "Loading conversations…": "正在載入會話清單…",
+  "(esc to interrupt ": "（esc 中斷 ",
   "Starting…": "正在啟動…"
 }

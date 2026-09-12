@@ -33,5 +33,7 @@
   "Running command…": "コマンドを実行中…",
   "Editing file…": "ファイルを編集中…",
   "Loading conversation…": "会話を読み込み中…",
+  "Loading conversations…": "会話リストを読み込み中…",
+  "(esc to interrupt ": "（esc で中断 ",
   "Starting…": "起動中…"
 }

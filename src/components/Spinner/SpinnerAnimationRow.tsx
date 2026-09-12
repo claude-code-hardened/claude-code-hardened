@@ -2,6 +2,7 @@ import figures from 'figures';
 import * as React from 'react';
 import { useMemo, useRef } from 'react';
 import { Box, Text, useAnimationFrame, stringWidth, Byline, ProgressBar } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { toInkColor } from '../../utils/ink.js';
 import type { InProcessTeammateTaskState } from '../../tasks/InProcessTeammateTask/types.js';
 import { formatDuration, formatNumber } from '../../utils/format.js';
@@ -270,7 +271,7 @@ export function SpinnerAnimationRow({
   const status =
     foregroundedTeammate && !foregroundedTeammate.isIdle ? (
       <>
-        <Text dimColor>(esc to interrupt </Text>
+        <Text dimColor>{t('(esc to interrupt ')}</Text>
         <Text color={toInkColor(foregroundedTeammate.identity.color)}>{foregroundedTeammate.identity.agentName}</Text>
         <Text dimColor>)</Text>
       </>

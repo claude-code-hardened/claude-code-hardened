@@ -17,6 +17,7 @@ import { agenticSessionSearch } from '../../utils/agenticSessionSearch.js';
 import { checkCrossProjectResume } from '../../utils/crossProjectResume.js';
 import { getWorktreePaths } from '../../utils/getWorktreePaths.js';
 import { logError } from '../../utils/log.js';
+import { t } from '../../i18n/index.js';
 import {
   getLastSessionLog,
   getSessionIdFromLog,
@@ -171,7 +172,7 @@ function ResumeCommand({
     return (
       <Box>
         <Spinner />
-        <Text> Loading conversations…</Text>
+        <Text> {t('Loading conversations…')}</Text>
       </Box>
     );
   }

@@ -47,6 +47,7 @@ import {
   restoreSessionMetadata,
   type SessionLogResult,
 } from '../utils/sessionStorage.js';
+import { t } from '../i18n/index.js';
 import type { ThinkingConfig } from '../utils/thinking.js';
 import type { ContentReplacementRecord } from '../utils/toolResultStorage.js';
 import { REPL } from './REPL.js';
@@ -372,7 +373,7 @@ export function ResumeConversation({
     return (
       <Box>
         <Spinner />
-        <Text> Loading conversations…</Text>
+        <Text> {t('Loading conversations…')}</Text>
       </Box>
     );
   }
