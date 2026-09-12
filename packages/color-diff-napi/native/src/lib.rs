@@ -448,6 +448,55 @@ fn detect_language(
   None
 }
 
+// ── Custom .tmTheme support (BAT_THEME) ──────────────────────────
+
+/// Load the alternate syntect theme selected via BAT_THEME /
+/// CLAUDE_CODE_SYNTAX_HIGHLIGHT (path to a .tmTheme file). Returns the
+/// parsed theme plus its display name. Cached process-wide.
+fn custom_theme() -> Option<&'static (syntect::highlighting::Theme, String)> {
+  static CACHE: OnceLock<Option<(syntect::highlighting::Theme, String)>> =
+    OnceLock::new();
+  CACHE
+    .get_or_init(|| {
+      let path = std::env::var("CLAUDE_CODE_SYNTAX_HIGHLIGHT")
+        .ok()
+        .filter(|p| !p.is_empty())
+        .or_else(|| std::env::var("BAT_THEME").ok().filter(|p| !p.is_empty()))?;
+      let bytes = std::fs::read(&path).ok()?;
+      let theme = syntect::highlighting::ThemeSet::load_from_reader(
+        &mut std::io::Cursor::new(bytes),
+      )
+      .ok()?;
+      let name = theme.name.clone().unwrap_or_else(|| {
+        std::path::Path::new(&path)
+          .file_stem()
+          .map(|s| s.to_string_lossy().into_owned())
+          .unwrap_or_default()
+      });
+      Some((theme, name))
+    })
+    .as_ref()
+}
+
+/// Resolve a scope stack against a syntect theme file: the most specific
+/// matching selector wins (same power ranking syntect uses internally).
+fn syntect_theme_color(
+  theme: &syntect::highlighting::Theme,
+  stack: &ScopeStack,
+) -> Option<Color> {
+  let mut best: Option<(f64, Color)> = None;
+  for item in &theme.scopes {
+    if let Some(m) = item.scope.does_match(stack) {
+      if best.as_ref().map_or(true, |(bm, _)| m.0 > *bm) {
+        if let Some(fg) = item.style.foreground {
+          best = Some((m.0, Color { r: fg.r, g: fg.g, b: fg.b, a: 255 }));
+        }
+      }
+    }
+  }
+  best.map(|(_, c)| c)
+}
+
 // ── Scope → theme bucket resolution ──────────────────────────────
 
 /// Map a syntect scope path to a theme-table bucket key. Ordered by
@@ -565,6 +614,19 @@ impl Highlighter {
   /// parse state. Background is always theme.background — the transform
   /// pipeline applies real line/word backgrounds later.
   fn highlight_line(&mut self, line: &str, theme: &Theme) -> Vec<Block> {
+    // BAT_THEME-selected .tmTheme overrides the built-in color tables.
+    let custom = custom_theme().map(|(t, _)| t);
+    if let Some(ct) = custom {
+      return self.highlight_line_with_theme(line, |stack| {
+        syntect_theme_color(ct, stack)
+          .or_else(|| {
+            ct.settings
+              .foreground
+              .map(|fg| Color { r: fg.r, g: fg.g, b: fg.b, a: 255 })
+          })
+          .unwrap_or(theme.foreground)
+      });
+    }
     let ss = syntax_set();
     let ops = match self.parse_state.parse_line(line, ss) {
       Ok(ops) => ops,
@@ -607,6 +669,55 @@ impl Highlighter {
       match merged.last_mut() {
         Some(((s, _), t)) if *s == style.0 => t.push_str(&text),
         _ => merged.push((style, text)),
+      }
+    }
+    merged
+  }
+
+  /// Segment + color a line using an arbitrary scope-resolver (used by the
+  /// custom .tmTheme path). Identical segmentation replay as highlight_line.
+  fn highlight_line_with_theme(
+    &mut self,
+    line: &str,
+    resolve: impl Fn(&ScopeStack) -> Color,
+  ) -> Vec<Block> {
+    let ss = syntax_set();
+    let ops = match self.parse_state.parse_line(line, ss) {
+      Ok(ops) => ops,
+      Err(_) => return vec![((resolve(&ScopeStack::new()), Color { r: 0, g: 0, b: 0, a: 1 }), line.to_string())],
+    };
+    let mut segments: Vec<(usize, usize, ScopeStack)> = Vec::new();
+    let mut stack = ScopeStack::new();
+    let mut cursor = 0usize;
+    for (pos, op) in ops {
+      let pos = pos.min(line.len());
+      if pos > cursor {
+        if line.is_char_boundary(cursor) && line.is_char_boundary(pos) {
+          segments.push((cursor, pos, stack.clone()));
+        }
+        cursor = pos;
+      }
+      stack.apply(&op);
+    }
+    if line.len() > cursor
+      && line.is_char_boundary(cursor)
+      && line.is_char_boundary(line.len())
+    {
+      segments.push((cursor, line.len(), stack));
+    }
+    if segments.is_empty() {
+      return vec![(
+        (resolve(&ScopeStack::new()), Color { r: 0, g: 0, b: 0, a: 1 }),
+        line.to_string(),
+      )];
+    }
+    let mut merged: Vec<Block> = Vec::with_capacity(segments.len());
+    for (start, end, stack) in segments {
+      let fg = resolve(&stack);
+      let block = ((fg, Color { r: 0, g: 0, b: 0, a: 1 }), line[start..end].to_string());
+      match merged.last_mut() {
+        Some(((s, _), t)) if s.0 == fg => t.push_str(&block.1),
+        _ => merged.push(block),
       }
     }
     merged
@@ -1273,11 +1384,16 @@ pub struct SyntaxTheme {
 
 #[napi]
 pub fn get_syntax_theme(theme_name: String) -> SyntaxTheme {
-  // Alternate syntect themes via env are reported for diagnostics; the
-  // built-in tables are what actually renders.
-  let env_theme = std::env::var("CLAUDE_CODE_SYNTAX_HIGHLIGHT")
-    .or_else(|_| std::env::var("BAT_THEME"))
-    .ok();
+  // When BAT_THEME selects a loadable .tmTheme, it IS the active theme —
+  // report its name truthfully. Otherwise the built-in tables render.
+  if let Some((_, name)) = custom_theme() {
+    return SyntaxTheme {
+      theme: name.clone(),
+      source: std::env::var("CLAUDE_CODE_SYNTAX_HIGHLIGHT")
+        .or_else(|_| std::env::var("BAT_THEME"))
+        .ok(),
+    };
+  }
   let theme = if theme_name.contains("ansi") {
     "ansi"
   } else if theme_name.contains("dark") {
@@ -1287,7 +1403,7 @@ pub fn get_syntax_theme(theme_name: String) -> SyntaxTheme {
   };
   SyntaxTheme {
     theme: theme.to_string(),
-    source: env_theme,
+    source: None,
   }
 }
 
@@ -1295,4 +1411,61 @@ pub fn get_syntax_theme(theme_name: String) -> SyntaxTheme {
 #[napi]
 pub fn has_native_color_diff() -> bool {
   true
+}
+
+/// Runtime theme export: serialize the ACTIVE theme — a BAT_THEME-loaded
+/// .tmTheme when set (all its selector rules), otherwise the built-in
+/// measured tables for the given Claude theme name. Returns JSON:
+/// { name, source, foreground, rules: { selector: "#RRGGBB" } }.
+#[napi]
+pub fn export_active_theme(theme_name: String) -> Option<String> {
+  let (name, source, rules): (String, Option<String>, Vec<(String, String)>) =
+    if let Some((theme, cname)) = custom_theme() {
+      let source = std::env::var("CLAUDE_CODE_SYNTAX_HIGHLIGHT")
+        .or_else(|_| std::env::var("BAT_THEME"))
+        .ok();
+      let mut rules = Vec::new();
+      for item in &theme.scopes {
+        if let Some(fg) = item.style.foreground {
+          rules.push((
+            item.scope.to_string(),
+            format!("#{:02x}{:02x}{:02x}", fg.r, fg.g, fg.b),
+          ));
+        }
+      }
+      (cname.clone(), source, rules)
+    } else {
+      let mode = detect_color_mode(&theme_name);
+      let theme = build_theme(&theme_name, mode);
+      let mut rules = Vec::new();
+      for (key, color) in theme.scopes.map {
+        rules.push((
+          (*key).to_string(),
+          format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b),
+        ));
+      }
+      (theme_name, None, rules)
+    };
+
+  let mut json = String::with_capacity(256 + rules.len() * 32);
+  let esc = |s: &str| -> String {
+    s.replace('\\', "\\\\")
+      .replace('"', "\\\"")
+      .replace('\n', "\\n")
+  };
+  json.push_str(&format!("{{\"name\":\"{}\"", esc(&name)));
+  json.push_str(",\"source\":");
+  match &source {
+    Some(s) => json.push_str(&format!("\"{}\"", esc(s))),
+    None => json.push_str("null"),
+  }
+  json.push_str(",\"rules\":{");
+  for (i, (sel, hex)) in rules.iter().enumerate() {
+    if i > 0 {
+      json.push(',');
+    }
+    json.push_str(&format!("\"{}\":\"{}\"", esc(sel), hex));
+  }
+  json.push_str("}}");
+  Some(json)
 }

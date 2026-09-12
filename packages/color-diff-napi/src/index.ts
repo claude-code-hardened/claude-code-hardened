@@ -181,6 +181,205 @@ type Theme = {
   foreground: Color
   background: Color
   scopes: Record<string, Color>
+  // BAT_THEME-selected .tmTheme, when loadable — overrides `scopes` lookup
+  tm?: TmThemeParsed | null
+}
+
+// ---------------------------------------------------------------------------
+// .tmTheme (TextMate plist XML) interpreter — BAT_THEME support
+// ---------------------------------------------------------------------------
+
+type TmThemeParsed = {
+  name: string | null
+  rules: Map<string, string> // selector → hex like #RRGGBB
+  defaultFg: string | null
+}
+
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+}
+
+type PlistNode = string | PlistNode[] | { [k: string]: PlistNode }
+
+/** Scanner for the plist-XML subset .tmTheme uses (dict/array/string/key). */
+function parsePlistSubset(text: string): PlistNode | null {
+  const clean = text.replace(/<!--[\s\S]*?-->/g, '')
+  const tagRe = /<(\/?)(key|string|dict|array)(?:\s[^>]*)?>/g
+  type Frame =
+    | { type: 'dict'; obj: Record<string, unknown>; pendingKey?: string }
+    | { type: 'array'; arr: unknown[] }
+  const stack: Frame[] = []
+  let root: unknown = null
+
+  const addValue = (v: unknown): void => {
+    const top = stack[stack.length - 1]
+    if (!top) {
+      root = v
+      return
+    }
+    if (top.type === 'dict') {
+      if (top.pendingKey !== undefined) {
+        top.obj[top.pendingKey] = v
+        top.pendingKey = undefined
+      }
+    } else {
+      top.arr.push(v)
+    }
+  }
+
+  let m: RegExpExecArray | null
+  while ((m = tagRe.exec(clean))) {
+    const [full, close, tag] = m
+    if (tag === 'string' && !close) {
+      const end = clean.indexOf('</string>', m.index)
+      if (end < 0) return null
+      addValue(decodeXmlEntities(clean.slice(m.index + full.length, end)))
+      tagRe.lastIndex = end + '</string>'.length
+      continue
+    }
+    if (tag === 'key' && !close) {
+      const end = clean.indexOf('</key>', m.index)
+      if (end < 0) return null
+      const top = stack[stack.length - 1]
+      if (top?.type === 'dict') {
+        top.pendingKey = decodeXmlEntities(
+          clean.slice(m.index + full.length, end),
+        )
+      }
+      tagRe.lastIndex = end + '</key>'.length
+      continue
+    }
+    if (tag === 'dict' && !close) {
+      stack.push({ type: 'dict', obj: {} })
+      continue
+    }
+    if (tag === 'array' && !close) {
+      stack.push({ type: 'array', arr: [] })
+      continue
+    }
+    if ((tag === 'dict' || tag === 'array') && close) {
+      const top = stack.pop()
+      if (!top) return null
+      addValue(top.type === 'dict' ? top.obj : top.arr)
+    }
+  }
+  return (root ?? null) as PlistNode | null
+}
+
+function parseTmTheme(xml: string): TmThemeParsed | null {
+  const root = parsePlistSubset(xml)
+  if (!root || typeof root !== 'object' || Array.isArray(root)) return null
+  const name = typeof root.name === 'string' ? root.name : null
+  if (!Array.isArray(root.settings)) return null
+  const rules = new Map<string, string>()
+  let defaultFg: string | null = null
+  for (const item of root.settings) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const st = item.settings
+    if (!st || typeof st !== 'object' || Array.isArray(st)) continue
+    const fg = typeof st.foreground === 'string' ? st.foreground : null
+    if (!fg) continue
+    if (typeof item.scope === 'string' && item.scope.trim()) {
+      for (const sel of item.scope.split(',')) {
+        const s = sel.trim()
+        if (s) rules.set(s, fg) // later entries override the same selector
+      }
+    } else if (!defaultFg) {
+      defaultFg = fg
+    }
+  }
+  if (rules.size === 0 && !defaultFg) return null
+  return { name, rules, defaultFg }
+}
+
+function hexToColor(hex: string): Color | null {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim())
+  if (!m) return null
+  const n = parseInt(m[1]!, 16)
+  return rgb(Math.floor(n / 65536), Math.floor((n / 256) % 256), n % 256)
+}
+
+/**
+ * Synthesized TextMate scope for each highlight.js scope — lets a .tmTheme's
+ * selectors query hljs output (the two vocabularies differ).
+ */
+const HLJS_TM_BRIDGE: Record<string, string> = {
+  keyword: 'keyword',
+  _storage: 'storage.type',
+  built_in: 'support.function',
+  type: 'entity.name.type',
+  literal: 'constant.language',
+  number: 'constant.numeric',
+  string: 'string',
+  title: 'entity.name',
+  'title.function': 'entity.name.function',
+  'title.class': 'entity.name.class',
+  'title.class.inherited': 'entity.name.class.inherited',
+  params: 'variable.parameter',
+  comment: 'comment',
+  meta: 'meta',
+  attr: 'entity.other.attribute-name',
+  attribute: 'entity.other.attribute-name',
+  variable: 'variable.other',
+  'variable.language': 'variable.language',
+  property: 'variable.other.property',
+  operator: 'keyword.operator',
+  punctuation: 'punctuation',
+  symbol: 'constant.other.symbol',
+  regexp: 'string.regexp',
+  subst: 'meta.interpolation',
+}
+
+/** Most-specific matching selector wins (TextMate power ranking). */
+function tmMatch(
+  rules: Map<string, string>,
+  tmScope: string,
+): { hex: string; score: number } | null {
+  const segs = tmScope.split('.')
+  let best: { hex: string; score: number } | null = null
+  for (const [sel, hex] of rules) {
+    const sSegs = sel.split('.')
+    if (sSegs.length > segs.length) continue
+    let ok = true
+    for (let i = 0; i < sSegs.length; i++) {
+      if (segs[i] !== sSegs[i]) {
+        ok = false
+        break
+      }
+    }
+    if (ok && (!best || sSegs.length > best.score)) {
+      best = { hex, score: sSegs.length }
+    }
+  }
+  return best
+}
+
+let cachedTmTheme: { path: string; parsed: TmThemeParsed | null } | null = null
+function loadTmThemeIfAny(): TmThemeParsed | null {
+  const path =
+    process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT ?? process.env.BAT_THEME
+  if (!path || !path.trim()) return null
+  if (cachedTmTheme?.path === path) return cachedTmTheme.parsed
+  let parsed: TmThemeParsed | null = null
+  try {
+    if (existsSync(path)) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const xml = createRequire(import.meta.url)('node:fs').readFileSync(
+        path,
+        'utf-8',
+      ) as string
+      parsed = parseTmTheme(xml)
+    }
+  } catch {
+    parsed = null
+  }
+  cachedTmTheme = { path, parsed }
+  return parsed
 }
 
 function defaultSyntaxThemeName(themeName: string): string {
@@ -284,6 +483,16 @@ const ANSI_SCOPES: Record<string, Color> = {
 }
 
 function buildTheme(themeName: string, mode: ColorMode): Theme {
+  const theme = buildBuiltinTheme(themeName, mode)
+  theme.tm = loadTmThemeIfAny()
+  if (theme.tm?.defaultFg) {
+    const fg = hexToColor(theme.tm.defaultFg)
+    if (fg) theme.foreground = fg
+  }
+  return theme
+}
+
+function buildBuiltinTheme(themeName: string, mode: ColorMode): Theme {
   const isDark = themeName.includes('dark')
   const isAnsi = themeName.includes('ansi')
   const isDaltonized = themeName.includes('daltonized')
@@ -460,6 +669,13 @@ function scopeColor(
   theme: Theme,
 ): Color {
   if (!scope) return theme.foreground
+  // BAT_THEME .tmTheme takes precedence: query via the hljs→TextMate bridge
+  if (theme.tm) {
+    const tmScope = HLJS_TM_BRIDGE[scope] ?? scope
+    const hit = tmMatch(theme.tm.rules, tmScope)
+    const color = hit ? hexToColor(hit.hex) : null
+    if (color) return color
+  }
   if (scope === 'keyword' && STORAGE_KEYWORDS.has(text.trim())) {
     return theme.scopes['_storage'] ?? theme.foreground
   }
@@ -996,11 +1212,21 @@ export class ColorFile {
 }
 
 export function getSyntaxTheme(themeName: string): SyntaxTheme {
-  // highlight.js has no bat theme set, so env vars can't select alternate
-  // syntect themes. We still report the env var if set, for diagnostics.
+  // When BAT_THEME selects a parseable .tmTheme it IS the active theme —
+  // report its name truthfully. Otherwise the built-in tables render.
   const envTheme =
     process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT ?? process.env.BAT_THEME
-  void envTheme
+  if (envTheme?.trim()) {
+    const parsed = loadTmThemeIfAny()
+    if (parsed) {
+      return {
+        theme:
+          parsed.name ??
+          basename(envTheme).replace(/\.tmTheme$/i, ''),
+        source: envTheme,
+      }
+    }
+  }
   return { theme: defaultSyntaxThemeName(themeName), source: null }
 }
 
