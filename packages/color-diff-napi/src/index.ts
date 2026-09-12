@@ -27,7 +27,7 @@ import { basename, extname, resolve } from 'path'
 import { existsSync } from 'fs'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
-import { loadNativeModule } from 'src/utils/embeddedNative'
+import { loadNativeModule } from '../../src/utils/embeddedNative'
 
 // Static import — createRequire(import.meta.url) fails in Bun --compile mode
 // because the resolved path points to the internal bunfs binary path where
