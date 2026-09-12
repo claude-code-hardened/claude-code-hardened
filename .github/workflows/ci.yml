@@ -224,8 +224,8 @@ jobs:
             [ "$machine" = "34404" ] || { echo "  ✗ $file PE machine=$machine, expected 34404 (0x8664)"; exit 1; }
             echo "  ✓ $file (PE machine=0x8664)"
           }
-          check_elf dist/ccb-linux-x64        62   # EM_X86_64
-          check_elf dist/ccb-linux-arm64     183   # EM_AARCH64
+          check_elf dist/ccb-linux-x64        "62 0"    # EM_X86_64
+          check_elf dist/ccb-linux-arm64     "183 0"   # EM_AARCH64
           check_macho dist/ccb-darwin-x64     "7 0 0 0"     # x86_64 LE bytes
           check_macho dist/ccb-darwin-arm64  "12 0 0 1"    # arm64 LE bytes
           check_pe dist/ccb-windows-x64.exe
