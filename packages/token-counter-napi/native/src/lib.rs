@@ -35,13 +35,13 @@ fn cl100k_base() -> std::result::Result<CoreBPE, String> {
     for line in BPE_FILE.lines() {
         let mut parts = line.split(' ');
         let raw = parts.next().unwrap();
-        let token = general_purpose::STANDARD
+        let token: Vec<u8> = general_purpose::STANDARD
             .decode(raw)
             .map_err(|e| e.to_string())?;
         let rank: Rank = parts
             .next()
             .unwrap()
-            .parse::<Rank>()
+            .parse()
             .map_err(|e| e.to_string())?;
         encoder.insert(token, rank);
     }

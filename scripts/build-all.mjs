@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 一体化构建 CLI：Rust native（多平台）→ claude code bundle（内嵌 .node）→ npm tarball
+// 一体化构建 CLI：Rust native（多平台）→ claude code bundle（内嵌 .node）→ 单文件可执行二进制
 //
 // usage:
 //   node scripts/build-all.mjs                          # 全流程（native + build + pack）
@@ -7,8 +7,8 @@
 //   node scripts/build-all.mjs --platforms <t1,t2,...>  # 指定 triple（默认全部）
 //   node scripts/build-all.mjs --skip-pack              # 只出 dist，不打 tgz
 import { spawnSync } from 'node:child_process'
-import { cp, existsSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { cp, existsSync, mkdirSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 const args = process.argv.slice(2)
 const flag = name => args.includes(name)
@@ -59,6 +59,17 @@ function run(cmd, cmdArgs, opts = {}) {
   }
 }
 
+function tripleToTarget(triple) {
+  const map = {
+    'x86_64-unknown-linux-gnu': 'bun-linux-x64',
+    'aarch64-unknown-linux-gnu': 'bun-linux-arm64',
+    'x86_64-apple-darwin': 'bun-darwin-x64',
+    'aarch64-apple-darwin': 'bun-darwin-arm64',
+    'x86_64-pc-windows-msvc': 'bun-windows-x64',
+  }
+  return map[triple]
+}
+
 const host = `${process.platform}/${process.arch}`
 console.log(`build-all: host=${host} platforms=[${platforms.join(', ')}]`)
 
@@ -96,18 +107,29 @@ if (!SKIP_NATIVE) {
   console.log('step 1 (rust native): skipped')
 }
 
-// ── Step 2: claude code bundle（build.ts 把 vendor/<name>/ 复制进 dist/vendor/）──
-run('bun', ['run', 'build'])
-console.log('step 2 (bundle): dist/ ready — dist/vendor 内嵌全部平台 .node')
+// ── Step 2: 为每个 target 编译单文件二进制（内嵌对应平台的 .node）──
+console.log('\n=== Step 2: Compile single-file binaries ===')
+for (const platform of platforms) {
+  const target = tripleToTarget(platform)
+  if (!target) {
+    console.warn(`  Unknown target for ${platform}, skipping`)
+    continue
+  }
+  console.log(`\n--- Compiling for ${target} (${platform}) ---`)
+  run('bun', ['run', 'scripts/compile.ts', target])
+}
 
-// ── Step 3: npm tarball ──
-if (!SKIP_PACK) {
-  run('npm', ['pack', '--pack-destination', '.'])
-  console.log(
-    'step 3 (pack): *.tgz ready — npm i -g claude-code-best-*.tgz 即装即用',
-  )
-} else {
-  console.log('step 3 (pack): skipped')
+console.log('\n=== Step 3: Verify binaries ===')
+for (const platform of platforms) {
+  const target = tripleToTarget(platform)
+  if (!target) continue
+  const outfile = `dist/ccb-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`
+  if (existsSync(outfile)) {
+    const stats = require('node:fs').statSync(outfile)
+    console.log(`  ✓ ${outfile} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`)
+  } else {
+    console.log(`  ✗ ${outfile} NOT FOUND`)
+  }
 }
 
 console.log('\nbuild-all: DONE')

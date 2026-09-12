@@ -23,10 +23,10 @@ import {
   diffWordsWithSpace as jsDiffWordsWithSpace,
 } from 'diff'
 import hljs from 'highlight.js'
-import { basename, dirname, extname, resolve, sep } from 'path'
+import { basename, extname, resolve } from 'path'
 import { existsSync } from 'fs'
-import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
+import { loadNativeModule } from 'src/utils/embeddedNative'
 
 // Static import — createRequire(import.meta.url) fails in Bun --compile mode
 // because the resolved path points to the internal bunfs binary path where
@@ -1307,73 +1307,39 @@ export function getSyntaxTheme(themeName: string): SyntaxTheme {
 // Prefers the restored Rust native module (syntect tokenization — accurate
 // multi-line handling, the original behavior); falls back to this file's
 // highlight.js-based TS implementation when the .node binary is absent.
-let cachedModule: NativeModule | null = null
 
-let cachedNative: NativeModule | null | undefined
+type ColorDiffNativeModule = NativeModule & {
+  hasNativeColorDiff?: () => boolean
+}
+
+let cachedModule: NativeModule | null = null
+let loadAttempted = false
+
 function tryLoadNative(): NativeModule | null {
-  if (cachedNative !== undefined) return cachedNative
-  cachedNative = null
-  if (
-    process.platform !== 'linux' &&
-    process.platform !== 'darwin' &&
-    process.platform !== 'win32'
-  ) {
-    return null
+  if (loadAttempted) {
+    return cachedModule
   }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const nodeRequire = createRequire(import.meta.url)
-    const filePath = fileURLToPath(import.meta.url)
-    const dir = dirname(filePath)
-    const parts = dir.split(sep)
-    const distIdx = parts.lastIndexOf('dist')
-    const vendorRoot =
-      distIdx !== -1
-        ? parts.slice(0, distIdx + 1).join(sep) + sep + 'vendor'
-        : resolve(dir, '..', '..', '..', 'vendor')
-    const arch = process.arch
-    const triple =
-      process.platform === 'linux'
-        ? arch === 'arm64'
-          ? 'aarch64-unknown-linux-gnu'
-          : 'x86_64-unknown-linux-gnu'
-        : process.platform === 'darwin'
-          ? arch === 'arm64'
-            ? 'aarch64-apple-darwin'
-            : 'x86_64-apple-darwin'
-          : 'x86_64-pc-windows-msvc'
-    const candidate = resolve(
-      vendorRoot,
-      'color-diff',
-      triple,
-      'color-diff.node',
-    )
-    if (!existsSync(candidate)) return null
-    const mod = nodeRequire(candidate) as NativeModule & {
-      hasNativeColorDiff?: () => boolean
-    }
-    if (
-      typeof mod?.ColorDiff !== 'function' ||
-      typeof mod?.ColorFile !== 'function'
-    ) {
-      return null
-    }
-    cachedNative = {
+  loadAttempted = true
+
+  const mod = loadNativeModule<ColorDiffNativeModule>(
+    'color-diff',
+    'color-diff',
+    (m): m is ColorDiffNativeModule =>
+      typeof m?.ColorDiff === 'function' && typeof m?.ColorFile === 'function'
+  )
+  if (mod) {
+    cachedModule = {
       ColorDiff: mod.ColorDiff,
       ColorFile: mod.ColorFile,
       getSyntaxTheme: mod.getSyntaxTheme ?? getSyntaxTheme,
       // Optional: only present in builds with the diff functions included
-      ...(typeof mod.diffLines === 'function'
-        ? { diffLines: mod.diffLines }
-        : {}),
+      ...(typeof mod.diffLines === 'function' ? { diffLines: mod.diffLines } : {}),
       ...(typeof mod.diffWordsWithSpace === 'function'
         ? { diffWordsWithSpace: mod.diffWordsWithSpace }
         : {}),
     }
-  } catch {
-    cachedNative = null
   }
-  return cachedNative
+  return cachedModule
 }
 
 export function isNativeColorDiffAvailable(): boolean {
