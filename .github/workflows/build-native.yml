@@ -148,9 +148,9 @@ jobs:
             git push
           fi
 
-      # ── 自动打包：vendor 已就绪，就地产出完整 claude code ──
-      # dist/vendor/ 内嵌本次矩阵产出的最新 .node，保证 Rust 改动 → 可运行
-      # 成品一条流水线完成（不再依赖下一次手动构建）。
+      # ── 自动打包：vendor 已就绪，一条 CLI 产出完整 claude code ──
+      # scripts/build-all.mjs 与本地全流程是同一个入口（本地不带 --skip-native
+      # 时自己跑 cargo 交叉/本地编译多平台）。CI 端 native 来自矩阵 artifact。
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2, 2026-04-25
         with:
@@ -159,11 +159,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build claude code
-        run: bun run build
-
-      - name: Pack npm tarball
-        run: npm pack --pack-destination .
+      - name: One-shot build (bundle + npm tarball)
+        run: node scripts/build-all.mjs --skip-native
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
