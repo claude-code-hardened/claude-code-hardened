@@ -64,12 +64,7 @@ function loadModule(): TranscriptParserNapi | null {
   const triple = platformDirName()
   const vendorRoot = getVendorRoot()
   const candidates = [
-    resolve(
-      vendorRoot,
-      'transcript-parser',
-      triple,
-      'transcript-parser.node',
-    ),
+    resolve(vendorRoot, 'transcript-parser', triple, 'transcript-parser.node'),
   ]
 
   for (const candidate of candidates) {

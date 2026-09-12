@@ -223,11 +223,7 @@ export function PermissionPrompt<T extends string>({
 
   return (
     <Box flexDirection="column">
-      {typeof question === 'string' ? (
-        <Text>{t(question)}</Text>
-      ) : (
-        question
-      )}
+      {typeof question === 'string' ? <Text>{t(question)}</Text> : question}
       <Select
         options={selectOptions}
         inlineDescriptions
