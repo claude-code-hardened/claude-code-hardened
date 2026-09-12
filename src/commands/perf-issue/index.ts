@@ -130,6 +130,15 @@ interface LogEntry {
   usage?: Record<string, number>
   timestamp?: string | number
   model?: string
+  /** Real Claude Code transcript rows nest the API message under `message`
+   *  (usage/content/role/model live there); only sidechain/synthetic rows
+   *  are flat. */
+  message?: {
+    role?: string
+    content?: unknown
+    usage?: Record<string, number>
+    model?: string
+  }
 }
 
 interface ToolUseBlock {
@@ -215,11 +224,24 @@ function analyzeLog(logPath: string, maxLines = MAX_LOG_LINES): AnalyzedLog {
       const entry = JSON.parse(line) as LogEntry
       messageCount++
 
-      if (entry.role === 'user') turnCount++
+      // Transcript rows nest the API message under `message`; synthetic rows
+      // may be flat. Normalize before reading.
+      const msg = entry.message ?? entry
+      const role = msg.role ?? entry.role
+      const entryUsage = msg.usage ?? entry.usage
+      const entryContent = msg.content ?? entry.content
+      const entryModel = msg.model ?? entry.model
 
-      // Capture first observed model name from any entry
-      if (entry.model && detectedModel === null) {
-        detectedModel = entry.model
+      if (role === 'user' && !entry.isSidechain) turnCount++
+
+      // Capture first observed model name from any entry (skip synthetic
+      // error rows — their model field is a placeholder, not a real model)
+      if (
+        entryModel &&
+        detectedModel === null &&
+        entryModel !== '<synthetic>'
+      ) {
+        detectedModel = entryModel
       }
 
       // Track wall-clock window from log entry timestamps
@@ -229,15 +251,15 @@ function analyzeLog(logPath: string, maxLines = MAX_LOG_LINES): AnalyzedLog {
         lastTimestampMs = entryTsMs
       }
 
-      if (entry.usage) {
+      if (entryUsage) {
         for (const key of Object.keys(usage) as Array<keyof UsageTotals>) {
-          const val = entry.usage[key]
+          const val = entryUsage[key]
           if (typeof val === 'number') usage[key] += val
         }
       }
 
-      if (Array.isArray(entry.content)) {
-        for (const block of entry.content as Array<Record<string, unknown>>) {
+      if (Array.isArray(entryContent)) {
+        for (const block of entryContent as Array<Record<string, unknown>>) {
           if (block.type === 'tool_use') {
             const b = block as unknown as ToolUseBlock
             const name = b.name ?? 'unknown'
