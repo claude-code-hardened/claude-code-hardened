@@ -135,7 +135,9 @@ for (const platform of platforms) {
 // ── Step 4: npm tarball ──
 if (!SKIP_PACK) {
   run('npm', ['pack', '--pack-destination', '.'])
-  console.log('step 4 (pack): *.tgz ready — npm i -g claude-code-best-*.tgz 即装即用')
+  console.log(
+    'step 4 (pack): *.tgz ready — npm i -g claude-code-best-*.tgz 即装即用',
+  )
 } else {
   console.log('step 4 (pack): skipped')
 }
