@@ -1301,4 +1301,5 @@ export const __test = {
   colorToEscape,
   detectColorMode,
   detectLanguage,
+  parseTmTheme,
 }
