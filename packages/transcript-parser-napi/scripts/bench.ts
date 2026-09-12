@@ -261,9 +261,7 @@ function benchFile(path: string): void {
   console.log(
     `${path.split('/').pop()}  ${mb}MB  keepAll=${scan.keepAll} keptBytes=${keptPct}%  read=${readMs.toFixed(0)}ms`,
   )
-  console.log(
-    `  [A] naive parse ${aMs.toFixed(0)}ms`,
-  )
+  console.log(`  [A] naive parse ${aMs.toFixed(0)}ms`)
   console.log(
     `  [B] js scan ${(jsScanMs).toFixed(0)}ms + parse ${bMs.toFixed(0)}ms = ${(jsScanMs + bMs).toFixed(0)}ms`,
   )
