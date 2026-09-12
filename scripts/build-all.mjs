@@ -7,7 +7,7 @@
 //   node scripts/build-all.mjs --platforms <t1,t2,...>  # 指定 triple（默认全部）
 //   node scripts/build-all.mjs --skip-pack              # 只出 dist，不打 tgz
 import { spawnSync } from 'node:child_process'
-import { cp, existsSync, mkdirSync, rmSync } from 'node:fs'
+import { cp, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const args = process.argv.slice(2)
@@ -125,7 +125,7 @@ for (const platform of platforms) {
   if (!target) continue
   const outfile = `dist/ccb-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`
   if (existsSync(outfile)) {
-    const stats = require('node:fs').statSync(outfile)
+    const stats = statSync(outfile)
     console.log(`  ✓ ${outfile} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`)
   } else {
     console.log(`  ✗ ${outfile} NOT FOUND`)
