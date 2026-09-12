@@ -13,10 +13,9 @@
 use std::sync::OnceLock;
 
 use napi::bindgen_prelude::*;
-use napi::Result;
 use napi_derive::napi;
 use similar::{ChangeTag, TextDiff};
-use syntect::parsing::{ParseState, ScopeStack, ScopeStackOp, SyntaxSet};
+use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
@@ -393,7 +392,7 @@ fn syntax_set() -> &'static SyntaxSet {
 
 /// Filename-based hints (approximates bat's SyntaxMapping for well-known
 /// filenames that syntect's extension lookup misses).
-fn filename_language(base: &str) -> Option<&'static str> {
+fn filename_language(base: &str) -> Option<&str> {
   let ss = syntax_set();
   match base {
     "Dockerfile" => Some("dockerfile"),
@@ -868,7 +867,7 @@ pub struct JsChange {
   pub removed: bool,
 }
 
-fn changes_to_js_changes(diff: &TextDiff) -> Vec<JsChange> {
+fn changes_to_js_changes(diff: &TextDiff<'_, '_, '_, str>) -> Vec<JsChange> {
   let mut out: Vec<JsChange> = Vec::new();
   for change in diff.iter_all_changes() {
     let added = change.tag() == ChangeTag::Insert;
