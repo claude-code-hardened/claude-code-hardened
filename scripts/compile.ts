@@ -36,9 +36,24 @@ const features = [...new Set([...DEFAULT_BUILD_FEATURES, ...envFeatures])]
 
 // Crate 映射：package 名 -> { crate 名（cdylib 产物名）, vendor 子目录名 }
 const CRATES = [
-  { pkg: 'token-counter-napi', crate: 'token_counter_napi', vendorDir: 'token-counter', moduleName: 'token-counter' },
-  { pkg: 'transcript-parser-napi', crate: 'transcript_parser_napi', vendorDir: 'transcript-parser', moduleName: 'transcript-parser' },
-  { pkg: 'color-diff-napi', crate: 'color_diff_napi', vendorDir: 'color-diff', moduleName: 'color-diff' },
+  {
+    pkg: 'token-counter-napi',
+    crate: 'token_counter_napi',
+    vendorDir: 'token-counter',
+    moduleName: 'token-counter',
+  },
+  {
+    pkg: 'transcript-parser-napi',
+    crate: 'transcript_parser_napi',
+    vendorDir: 'transcript-parser',
+    moduleName: 'transcript-parser',
+  },
+  {
+    pkg: 'color-diff-napi',
+    crate: 'color_diff_napi',
+    vendorDir: 'color-diff',
+    moduleName: 'color-diff',
+  },
 ]
 
 function artifactName(crate: string, platform: string): string {
@@ -58,7 +73,11 @@ function targetToTriple(target: string): string {
   return map[target] ?? 'unknown'
 }
 
-function readNativeAsBase64(vendorDir: string, triple: string, moduleName: string): string | null {
+function readNativeAsBase64(
+  vendorDir: string,
+  triple: string,
+  moduleName: string,
+): string | null {
   const candidate = join('vendor', vendorDir, triple, `${moduleName}.node`)
   if (!existsSync(candidate)) {
     console.warn(`  [embed] Native not found: ${candidate}`)
@@ -94,7 +113,9 @@ for (const target of targets) {
     const base64 = readNativeAsBase64(vendorDir, triple, moduleName)
     if (base64) {
       embeddedNatives[moduleName] = base64
-      console.log(`  [embed] ${moduleName} (${triple}): ${Math.round(base64.length * 0.75 / 1024)} KB`)
+      console.log(
+        `  [embed] ${moduleName} (${triple}): ${Math.round((base64.length * 0.75) / 1024)} KB`,
+      )
     }
   }
 
@@ -121,5 +142,7 @@ for (const target of targets) {
     }
     process.exit(1)
   }
-  console.log(`compiled: dist/ccb-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`)
+  console.log(
+    `compiled: dist/ccb-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`,
+  )
 }

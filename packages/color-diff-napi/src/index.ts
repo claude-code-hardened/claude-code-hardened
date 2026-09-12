@@ -1325,7 +1325,7 @@ function tryLoadNative(): NativeModule | null {
     'color-diff',
     'color-diff',
     (m): m is ColorDiffNativeModule =>
-      typeof m?.ColorDiff === 'function' && typeof m?.ColorFile === 'function'
+      typeof m?.ColorDiff === 'function' && typeof m?.ColorFile === 'function',
   )
   if (mod) {
     cachedModule = {
@@ -1333,7 +1333,9 @@ function tryLoadNative(): NativeModule | null {
       ColorFile: mod.ColorFile,
       getSyntaxTheme: mod.getSyntaxTheme ?? getSyntaxTheme,
       // Optional: only present in builds with the diff functions included
-      ...(typeof mod.diffLines === 'function' ? { diffLines: mod.diffLines } : {}),
+      ...(typeof mod.diffLines === 'function'
+        ? { diffLines: mod.diffLines }
+        : {}),
       ...(typeof mod.diffWordsWithSpace === 'function'
         ? { diffWordsWithSpace: mod.diffWordsWithSpace }
         : {}),

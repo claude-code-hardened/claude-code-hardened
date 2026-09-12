@@ -45,7 +45,9 @@ export function getEmbeddedNatives(): EmbeddedNativeMap {
     return {}
   }
   try {
-    const mod = nodeRequire('embedded:natives') as { EMBEDDED_NATIVES: EmbeddedNativeMap }
+    const mod = nodeRequire('embedded:natives') as {
+      EMBEDDED_NATIVES: EmbeddedNativeMap
+    }
     return mod?.EMBEDDED_NATIVES ?? {}
   } catch {
     return {}
@@ -82,7 +84,7 @@ function loadNativeFromMemory(moduleName: string, base64: string): unknown {
 export function loadNativeModule<T>(
   moduleName: string,
   vendorSubPath: string, // 如 'token-counter', 'transcript-parser', 'color-diff'
-  validate: (mod: unknown) => mod is T
+  validate: (mod: unknown) => mod is T,
 ): T | null {
   const cacheKey = `${moduleName}:${vendorSubPath}`
 
@@ -125,7 +127,10 @@ export function loadNativeModule<T>(
     const platform = process.platform
     let triple: string
     if (platform === 'linux') {
-      triple = arch === 'arm64' ? 'aarch64-unknown-linux-gnu' : 'x86_64-unknown-linux-gnu'
+      triple =
+        arch === 'arm64'
+          ? 'aarch64-unknown-linux-gnu'
+          : 'x86_64-unknown-linux-gnu'
     } else if (platform === 'darwin') {
       triple = arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
     } else if (platform === 'win32') {
@@ -134,7 +139,12 @@ export function loadNativeModule<T>(
       return null
     }
 
-    const candidate = resolve(vendorRoot, vendorSubPath, triple, `${moduleName}.node`)
+    const candidate = resolve(
+      vendorRoot,
+      vendorSubPath,
+      triple,
+      `${moduleName}.node`,
+    )
     if (existsSync(candidate)) {
       const mod = nodeRequire(candidate)
       if (validate(mod)) {
