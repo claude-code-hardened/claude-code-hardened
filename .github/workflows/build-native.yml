@@ -6,6 +6,7 @@ on:
     paths:
       - 'packages/token-counter-napi/native/**'
       - 'packages/transcript-parser-napi/native/**'
+      - 'packages/color-diff-napi/native/**'
       - '.github/workflows/build-native.yml'
 
 permissions:
@@ -59,13 +60,18 @@ jobs:
         working-directory: packages/transcript-parser-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Build (color-diff)
+        if: hashFiles('packages/color-diff-napi/native/Cargo.toml') != ''
+        working-directory: packages/color-diff-napi/native
+        run: cargo build --release --target ${{ matrix.target }}
+
       # 统一整理产物到 vendor 布局：vendor/<name>/<triple>/<name>.node
       - name: Stage artifacts (unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}"
-          for name in token-counter transcript-parser; do
+          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}" "stage/color-diff/${{ matrix.target }}"
+          for name in token-counter transcript-parser color-diff; do
             crate="${name//-/_}_napi"
             if [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.so" ]; then
               cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.so" "stage/$name/${{ matrix.target }}/$name.node"
@@ -79,8 +85,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path "stage/token-counter/${{ matrix.target }}", "stage/transcript-parser/${{ matrix.target }}" | Out-Null
-          foreach ($name in @('token-counter', 'transcript-parser')) {
+          New-Item -ItemType Directory -Force -Path "stage/token-counter/${{ matrix.target }}", "stage/transcript-parser/${{ matrix.target }}", "stage/color-diff/${{ matrix.target }}" | Out-Null
+          foreach ($name in @('token-counter', 'transcript-parser', 'color-diff')) {
             $crate = $name -replace '-', '_'
             $src = "packages/$name-napi/native/target/${{ matrix.target }}/release/${crate}_napi.dll"
             if (Test-Path $src) { Copy-Item $src "stage/$name/${{ matrix.target }}/$name.node" }
@@ -119,23 +125,21 @@ jobs:
           set -euo pipefail
           for dir in artifacts/native-*; do
             triple="${dir#artifacts/native-}"
-            if [ -d "$dir/token-counter/$triple" ]; then
-              mkdir -p "vendor/token-counter/$triple"
-              cp "$dir"/token-counter/"$triple"/token-counter.node "vendor/token-counter/$triple/"
-            fi
-            if [ -d "$dir/transcript-parser/$triple" ]; then
-              mkdir -p "vendor/transcript-parser/$triple"
-              cp "$dir"/transcript-parser/"$triple"/transcript-parser.node "vendor/transcript-parser/$triple/"
-            fi
+            for name in token-counter transcript-parser color-diff; do
+              if [ -d "$dir/$name/$triple" ]; then
+                mkdir -p "vendor/$name/$triple"
+                cp "$dir/$name/$triple/$name.node" "vendor/$name/$triple/"
+              fi
+            done
           done
-          find vendor/token-counter vendor/transcript-parser -name '*.node' | sort
+          find vendor/token-counter vendor/transcript-parser vendor/color-diff -name '*.node' 2>/dev/null | sort
 
       - name: Commit and push if changed
         shell: bash
         run: |
           git config user.name "native-build-bot"
           git config user.email "actions@github.com"
-          git add vendor/token-counter vendor/transcript-parser
+          git add vendor/token-counter vendor/transcript-parser vendor/color-diff
           if git diff --cached --quiet; then
             echo "vendor/ already up to date — nothing to commit"
             exit 0

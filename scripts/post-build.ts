@@ -68,14 +68,16 @@ async function postBuild() {
   await cp('src/utils/vendor/ripgrep', ripgrepDir, { recursive: true } as never)
   console.log(`Copied src/utils/vendor/ripgrep/ → ${ripgrepDir}/`)
 
-  // token-counter-napi: Rust BPE tokenizer built by .github/workflows/build-native.yml.
+  // Native NAPI binaries built by .github/workflows/build-native.yml.
   // Copied only when the CI-produced .node artifacts are present locally
-  // (vendor/token-counter/ is populated from workflow artifacts).
-  const tokenCounterSrc = 'vendor/token-counter'
-  if (existsSync(tokenCounterSrc)) {
-    const tokenCounterDir = join(outdir, 'vendor', 'token-counter')
-    await cp(tokenCounterSrc, tokenCounterDir, { recursive: true } as never)
-    console.log(`Copied ${tokenCounterSrc}/ → ${tokenCounterDir}/`)
+  // (vendor/<name>/ is populated from workflow artifacts).
+  for (const name of ['token-counter', 'transcript-parser', 'color-diff']) {
+    const src = `vendor/${name}`
+    if (existsSync(src)) {
+      const dest = join(outdir, 'vendor', name)
+      await cp(src, dest, { recursive: true } as never)
+      console.log(`Copied ${src}/ → ${dest}/`)
+    }
   }
 
   // Step 3: Generate dual entry points

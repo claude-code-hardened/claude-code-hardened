@@ -19,7 +19,10 @@
 
 import { diffArrays } from 'diff'
 import hljs from 'highlight.js'
-import { basename, extname } from 'path'
+import { basename, dirname, extname, resolve, sep } from 'path'
+import { existsSync } from 'fs'
+import { createRequire } from 'module'
+import { fileURLToPath } from 'url'
 
 // Static import — createRequire(import.meta.url) fails in Bun --compile mode
 // because the resolved path points to the internal bunfs binary path where
@@ -1001,12 +1004,63 @@ export function getSyntaxTheme(themeName: string): SyntaxTheme {
   return { theme: defaultSyntaxThemeName(themeName), source: null }
 }
 
-// Lazy loader to match vendor/color-diff-src/index.ts API
+// Lazy loader to match vendor/color-diff-src/index.ts API.
+// Prefers the restored Rust native module (syntect tokenization — accurate
+// multi-line handling, the original behavior); falls back to this file's
+// highlight.js-based TS implementation when the .node binary is absent.
 let cachedModule: NativeModule | null = null
+
+let cachedNative: NativeModule | null | undefined
+function tryLoadNative(): NativeModule | null {
+  if (cachedNative !== undefined) return cachedNative
+  cachedNative = null
+  if (process.platform !== 'linux' && process.platform !== 'darwin' && process.platform !== 'win32') {
+    return null
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeRequire = createRequire(import.meta.url)
+    const filePath = fileURLToPath(import.meta.url)
+    const dir = dirname(filePath)
+    const parts = dir.split(sep)
+    const distIdx = parts.lastIndexOf('dist')
+    const vendorRoot =
+      distIdx !== -1
+        ? parts.slice(0, distIdx + 1).join(sep) + sep + 'vendor'
+        : resolve(dir, '..', '..', '..', 'vendor')
+    const arch = process.arch
+    const triple =
+      process.platform === 'linux'
+        ? arch === 'arm64' ? 'aarch64-unknown-linux-gnu' : 'x86_64-unknown-linux-gnu'
+        : process.platform === 'darwin'
+          ? arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin'
+          : 'x86_64-pc-windows-msvc'
+    const candidate = resolve(vendorRoot, 'color-diff', triple, 'color-diff.node')
+    if (!existsSync(candidate)) return null
+    const mod = nodeRequire(candidate) as NativeModule & {
+      hasNativeColorDiff?: () => boolean
+    }
+    if (typeof mod?.ColorDiff !== 'function' || typeof mod?.ColorFile !== 'function') {
+      return null
+    }
+    cachedNative = {
+      ColorDiff: mod.ColorDiff,
+      ColorFile: mod.ColorFile,
+      getSyntaxTheme: mod.getSyntaxTheme ?? getSyntaxTheme,
+    }
+  } catch {
+    cachedNative = null
+  }
+  return cachedNative
+}
+
+export function isNativeColorDiffAvailable(): boolean {
+  return tryLoadNative() !== null
+}
 
 export function getNativeModule(): NativeModule | null {
   if (cachedModule) return cachedModule
-  cachedModule = { ColorDiff, ColorFile, getSyntaxTheme }
+  cachedModule = tryLoadNative() ?? { ColorDiff, ColorFile, getSyntaxTheme }
   return cachedModule
 }
 

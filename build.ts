@@ -89,14 +89,16 @@ const audioCaptureDir = join(outdir, 'vendor', 'audio-capture')
 await cp('vendor/audio-capture', audioCaptureDir, { recursive: true })
 console.log(`Copied vendor/audio-capture/ → ${audioCaptureDir}/`)
 
-// token-counter-napi: Rust BPE tokenizer built by .github/workflows/build-native.yml.
+// Native NAPI binaries built by .github/workflows/build-native.yml.
 // Copied only when the CI-produced .node artifacts are present locally
-// (vendor/token-counter/ is populated from workflow artifacts).
-const tokenCounterSrc = 'vendor/token-counter'
-if (existsSync(tokenCounterSrc)) {
-  const tokenCounterDir = join(outdir, 'vendor', 'token-counter')
-  await cp(tokenCounterSrc, tokenCounterDir, { recursive: true })
-  console.log(`Copied ${tokenCounterSrc}/ → ${tokenCounterDir}/`)
+// (vendor/<name>/ is populated from workflow artifacts).
+for (const name of ['token-counter', 'transcript-parser', 'color-diff']) {
+  const src = `vendor/${name}`
+  if (existsSync(src)) {
+    const dest = join(outdir, 'vendor', name)
+    await cp(src, dest, { recursive: true })
+    console.log(`Copied ${src}/ → ${dest}/`)
+  }
 }
 
 const ripgrepDir = join(outdir, 'vendor', 'ripgrep')
