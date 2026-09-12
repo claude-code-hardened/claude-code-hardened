@@ -193,6 +193,18 @@ jobs:
       - name: One-shot build (bundle + npm tarball)
         run: node scripts/build-all.mjs --skip-native
 
+      # 诊断：qemu 用户态模拟验证 arm64 产物（SIGILL 在 qemu 下同样触发）。
+      # 对照组：同一 x86 host 上交叉编译的 hello world——区分 runtime 变体问题与业务 bundle 问题。
+      - name: Smoke test arm64 binary under qemu
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static
+          echo 'console.log("hello", Bun.version)' > /tmp/h.ts
+          bun build --compile --target bun-linux-arm64 /tmp/h.ts --outfile /tmp/h-arm64
+          echo "--- qemu: hello-world cross-compile ---"
+          qemu-aarch64-static /tmp/h-arm64 || echo "!! hello-world SIGILL under qemu (runtime variant problem)"
+          echo "--- qemu: ccb-linux-arm64 --version ---"
+          qemu-aarch64-static ./dist/ccb-linux-arm64 --version || echo "!! ccb-linux-arm64 SIGILL under qemu (binary instruction problem)"
+
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
