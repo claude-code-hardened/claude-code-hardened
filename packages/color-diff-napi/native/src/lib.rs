@@ -910,6 +910,166 @@ pub fn diff_words_with_space(old_str: String, new_str: String) -> Vec<JsChange> 
   changes_to_js_changes(&TextDiff::from_words(&old_str, &new_str))
 }
 
+// ── jsdiff-compatible structuredPatch (similar-backed) ───────────
+
+/// jsdiff `structuredPatch` hunk: { oldStart, oldLines, newStart, newLines,
+/// lines } where `lines` carry ' '/'-'/'+' prefixes plus jsdiff's
+/// "\\ No newline at end of file" markers.
+#[napi(object)]
+pub struct JsStructuredPatchHunk {
+  pub old_start: i64,
+  pub old_lines: i64,
+  pub new_start: i64,
+  pub new_lines: i64,
+  pub lines: Vec<String>,
+}
+
+/// Split a jsdiff Change value into lines keeping the trailing newline
+/// (except the final line when the value doesn't end with one) — port of
+/// jsdiff's splitLines in patch/create.js.
+fn split_change_lines(value: &str) -> Vec<String> {
+  let has_trailing_nl = value.ends_with('\n');
+  let mut result: Vec<String> = value.split('\n').map(|l| format!("{l}\n")).collect();
+  if has_trailing_nl {
+    result.pop();
+  } else if let Some(last) = result.pop() {
+    // Strip the newline we just appended; slicing one trailing ASCII byte
+    // off a string ending in '\n' is always a char boundary.
+    result.push(last[..last.len() - 1].to_string());
+  }
+  result
+}
+
+/// Assemble unified-diff hunks from a line-level change list — line-for-line
+/// port of jsdiff's diffLinesResultToPatch (patch/create.js), including the
+/// two-pass "no newline at end of file" marker handling and the
+/// `lines.len() <= context * 2` hunk-overlap rule.
+fn structured_patch_from_changes(changes: &[(bool, bool, String)], context: usize) -> Vec<JsStructuredPatchHunk> {
+  // (added, removed, lines) — same shape jsdiff's assembly loop consumes.
+  let mut diff: Vec<(bool, bool, Vec<String>)> = changes
+    .iter()
+    .map(|(added, removed, value)| (*added, *removed, split_change_lines(value)))
+    .collect();
+  // Append an empty value to make cleanup easier (jsdiff does the same).
+  diff.push((false, false, Vec::new()));
+
+  let mut hunks: Vec<JsStructuredPatchHunk> = Vec::new();
+  // jsdiff uses 0 as the "no open range" sentinel; ranges never legitimately
+  // start at 0 because line numbers are 1-based.
+  let mut old_range_start: i64 = 0;
+  let mut new_range_start: i64 = 0;
+  let mut cur_range: Vec<String> = Vec::new();
+  let mut old_line: i64 = 1;
+  let mut new_line: i64 = 1;
+
+  for (i, (added, removed, lines)) in diff.iter().enumerate() {
+    let lines_len = lines.len() as i64;
+    if *added || *removed {
+      // If we have previous context, start with that
+      if old_range_start == 0 {
+        old_range_start = old_line;
+        new_range_start = new_line;
+        if i > 0 {
+          let prev = &diff[i - 1].2;
+          let ctx: Vec<String> = if context > 0 {
+            let skip = prev.len().saturating_sub(context);
+            prev[skip..].iter().map(|l| format!(" {l}")).collect()
+          } else {
+            Vec::new()
+          };
+          old_range_start -= ctx.len() as i64;
+          new_range_start -= ctx.len() as i64;
+          cur_range = ctx;
+        }
+      }
+      // Output our changes
+      let marker = if *added { '+' } else { '-' };
+      for line in lines {
+        cur_range.push(format!("{marker}{line}"));
+      }
+      // Track the updated file position
+      if *added {
+        new_line += lines_len;
+      } else {
+        old_line += lines_len;
+      }
+    } else {
+      // Identical context lines. Track line changes
+      if old_range_start != 0 {
+        // Close out any changes that have been output (or join overlapping)
+        // (i + 2 < diff.len() is jsdiff's `i < diff.length - 2`, written
+        // subtraction-free so the usize arithmetic can't underflow)
+        if lines.len() <= context * 2 && i + 2 < diff.len() {
+          // Overlapping
+          for line in lines {
+            cur_range.push(format!(" {line}"));
+          }
+        } else {
+          // End the range and output it
+          let context_size = (lines.len()).min(context);
+          for line in &lines[..context_size] {
+            cur_range.push(format!(" {line}"));
+          }
+          hunks.push(JsStructuredPatchHunk {
+            old_start: old_range_start,
+            old_lines: old_line - old_range_start + context_size as i64,
+            new_start: new_range_start,
+            new_lines: new_line - new_range_start + context_size as i64,
+            lines: std::mem::take(&mut cur_range),
+          });
+          old_range_start = 0;
+          new_range_start = 0;
+        }
+      }
+      old_line += lines_len;
+      new_line += lines_len;
+    }
+  }
+
+  // Step 2: eliminate the trailing \n from each line of each hunk, and, where
+  // needed, add "\ No newline at end of file".
+  for hunk in &mut hunks {
+    let mut out: Vec<String> = Vec::with_capacity(hunk.lines.len());
+    for line in &hunk.lines {
+      if let Some(stripped) = line.strip_suffix('\n') {
+        out.push(stripped.to_string());
+      } else {
+        out.push(line.clone());
+        out.push("\\ No newline at end of file".to_string());
+      }
+    }
+    hunk.lines = out;
+  }
+  hunks
+}
+
+/// jsdiff `structuredPatch(old, new, { context }).hunks`: unified-diff hunks
+/// with ' '/'-'/'+' prefixed lines and "\ No newline at end of file" markers.
+/// Hunk assembly is a faithful port of jsdiff's patch/create.js; the
+/// underlying line diff uses the similar crate (Myers), so on inputs with
+/// multiple minimal edit scripts the chosen edit script may differ from
+/// jsdiff's while staying equally minimal.
+#[napi]
+pub fn structured_patch(
+  old_str: String,
+  new_str: String,
+  context: Option<i64>,
+) -> Vec<JsStructuredPatchHunk> {
+  let context = context.unwrap_or(4).max(0) as usize;
+  let diff = TextDiff::from_lines(&old_str, &new_str);
+  let changes: Vec<(bool, bool, String)> = diff
+    .iter_all_changes()
+    .map(|change| {
+      (
+        change.tag() == ChangeTag::Insert,
+        change.tag() == ChangeTag::Delete,
+        change.value().to_string(),
+      )
+    })
+    .collect();
+  structured_patch_from_changes(&changes, context)
+}
+
 // ── Transform pipeline (port of TS) ──────────────────────────────
 
 struct Highlight {
