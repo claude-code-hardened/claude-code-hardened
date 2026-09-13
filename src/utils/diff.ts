@@ -1,10 +1,15 @@
-import { type StructuredPatchHunk, structuredPatch } from 'diff'
+import {
+  structuredPatch as colorDiffStructuredPatch,
+  type StructuredPatchHunk,
+} from 'color-diff-napi'
 import { logEvent } from 'src/services/analytics/index.js'
 import { getLocCounter } from '../bootstrap/state.js'
 import { addToTotalLinesChanged } from '../cost-tracker.js'
 import type { FileEdit } from '@claude-code-best/builtin-tools/tools/FileEditTool/types.js'
 import { count } from './array.js'
 import { convertLeadingTabsToSpaces } from './file.js'
+
+export type { StructuredPatchHunk }
 
 export const CONTEXT_LINES = 3
 export const DIFF_TIMEOUT_MS = 5_000
@@ -84,23 +89,21 @@ export function getPatchFromContents({
   newContent,
   ignoreWhitespace = false,
   singleHunk = false,
+  context = CONTEXT_LINES,
 }: {
   filePath: string
   oldContent: string
   newContent: string
   ignoreWhitespace?: boolean
   singleHunk?: boolean
+  context?: number
 }): StructuredPatchHunk[] {
-  const result = structuredPatch(
-    filePath,
-    filePath,
+  const result = colorDiffStructuredPatch(
     escapeForDiff(oldContent),
     escapeForDiff(newContent),
-    undefined,
-    undefined,
     {
       ignoreWhitespace,
-      context: singleHunk ? 100_000 : CONTEXT_LINES,
+      context: singleHunk ? 100_000 : context,
       timeout: DIFF_TIMEOUT_MS,
     },
   )
@@ -139,9 +142,7 @@ export function getPatchForDisplay({
   const preparedFileContents = escapeForDiff(
     convertLeadingTabsToSpaces(fileContents),
   )
-  const result = structuredPatch(
-    filePath,
-    filePath,
+  const result = colorDiffStructuredPatch(
     preparedFileContents,
     edits.reduce((p, edit) => {
       const { old_string, new_string } = edit
@@ -159,8 +160,6 @@ export function getPatchForDisplay({
         return p.replace(escapedOldString, () => escapedNewString)
       }
     }, preparedFileContents),
-    undefined,
-    undefined,
     {
       context: CONTEXT_LINES,
       ignoreWhitespace,
@@ -174,4 +173,62 @@ export function getPatchForDisplay({
     ..._,
     lines: _.lines.map(unescapeFromDiff),
   }))
+}
+
+// ---------------------------------------------------------------------------
+// Unified-diff text generation (jsdiff createPatch/formatPatch port)
+// ---------------------------------------------------------------------------
+
+/**
+ * Port of jsdiff's formatPatch header/hunk rendering (INCLUDE_HEADERS
+ * default): Index header, underline, ---/+++ file headers, then
+ * `@@ -oldStart,oldLines +newStart,newLines @@` per hunk with the
+ * chunk-size-0 start adjustment quirk applied.
+ */
+function formatPatch(
+  hunks: StructuredPatchHunk[],
+  fileName: string,
+  oldHeader?: string,
+  newHeader?: string,
+): string {
+  const ret: string[] = []
+  ret.push(`Index: ${fileName}`)
+  ret.push(
+    '===================================================================',
+  )
+  ret.push(`--- ${fileName}${oldHeader === undefined ? '' : `\t${oldHeader}`}`)
+  ret.push(`+++ ${fileName}${newHeader === undefined ? '' : `\t${newHeader}`}`)
+  for (const hunk of hunks) {
+    // Unified Diff Format quirk: If the chunk size is 0, the first number is
+    // one lower than one would expect.
+    const oldStart = hunk.oldLines === 0 ? hunk.oldStart - 1 : hunk.oldStart
+    const newStart = hunk.newLines === 0 ? hunk.newStart - 1 : hunk.newStart
+    ret.push(
+      `@@ -${oldStart},${hunk.oldLines} +${newStart},${hunk.newLines} @@`,
+    )
+    ret.push(...hunk.lines)
+  }
+  return `${ret.join('\n')}\n`
+}
+
+/**
+ * jsdiff `createPatch(fileName, oldStr, newStr, oldHeader, newHeader)`
+ * equivalent: renders a unified diff patch string. Returns undefined when
+ * the diff times out (parity with jsdiff's abort behavior).
+ */
+export function createPatch(
+  fileName: string,
+  oldStr: string,
+  newStr: string,
+  oldHeader?: string,
+  newHeader?: string,
+): string | undefined {
+  const result = colorDiffStructuredPatch(oldStr, newStr, {
+    context: 4,
+    timeout: DIFF_TIMEOUT_MS,
+  })
+  if (!result) {
+    return undefined
+  }
+  return formatPatch(result.hunks, fileName, oldHeader, newHeader)
 }

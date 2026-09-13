@@ -1,5 +1,5 @@
 import { createHash, type UUID } from 'crypto'
-import { diffLines } from 'diff'
+import { diffLines } from 'color-diff-napi'
 import type { Stats } from 'fs'
 import {
   chmod,

@@ -1,11 +1,10 @@
-import { type StructuredPatchHunk, structuredPatch } from 'diff'
 import { logError } from 'src/utils/log.js'
 import { expandPath } from 'src/utils/path.js'
 import { countCharInString } from 'src/utils/stringUtils.js'
 import {
-  DIFF_TIMEOUT_MS,
   getPatchForDisplay,
   getPatchFromContents,
+  type StructuredPatchHunk,
 } from 'src/utils/diff.js'
 import { errorMessage, isENOENT } from 'src/utils/errors.js'
 import {
@@ -224,24 +223,18 @@ export function getSnippetForTwoFileDiff(
   fileAContents: string,
   fileBContents: string,
 ): string {
-  const patch = structuredPatch(
-    'file.txt',
-    'file.txt',
-    fileAContents,
-    fileBContents,
-    undefined,
-    undefined,
-    {
-      context: 8,
-      timeout: DIFF_TIMEOUT_MS,
-    },
-  )
+  const patch = getPatchFromContents({
+    filePath: 'file.txt',
+    oldContent: fileAContents,
+    newContent: fileBContents,
+    context: 8,
+  })
 
   if (!patch) {
     return ''
   }
 
-  const full = patch.hunks
+  const full = patch
     .map(_ => ({
       startLine: _.oldStart,
       content: _.lines
