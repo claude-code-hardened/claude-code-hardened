@@ -37,6 +37,7 @@ import { PermissionRuleInput } from './PermissionRuleInput.js';
 import { RecentDenialsTab } from './RecentDenialsTab.js';
 import { RemoveWorkspaceDirectory } from './RemoveWorkspaceDirectory.js';
 import { WorkspaceTab } from './WorkspaceTab.js';
+import { t } from '../../../i18n/index.js';
 
 type TabType = 'recent' | 'allow' | 'ask' | 'deny' | 'workspace';
 
@@ -44,18 +45,18 @@ type RuleSourceTextProps = {
   rule: PermissionRule;
 };
 function RuleSourceText({ rule }: RuleSourceTextProps): React.ReactNode {
-  return <Text dimColor>{`From ${permissionRuleSourceDisplayString(rule.source)}`}</Text>;
+  return <Text dimColor>{t('From {{source}}', { source: permissionRuleSourceDisplayString(rule.source) })}</Text>;
 }
 
 // Helper function to get the appropriate label for rule behavior
 function getRuleBehaviorLabel(ruleBehavior: PermissionBehavior): string {
   switch (ruleBehavior) {
     case 'allow':
-      return 'allowed';
+      return t('allowed');
     case 'deny':
-      return 'denied';
+      return t('denied');
     case 'ask':
-      return 'ask';
+      return t('ask');
   }
 }
 
@@ -84,9 +85,9 @@ function RuleDetails({
   const footer = (
     <Box marginLeft={3}>
       {exitState.pending ? (
-        <Text dimColor>Press {exitState.keyName} again to exit</Text>
+        <Text dimColor>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
       ) : (
-        <Text dimColor>Esc to cancel</Text>
+        <Text dimColor>{t('Esc to cancel')}</Text>
       )}
     </Box>
   );
@@ -104,13 +105,13 @@ function RuleDetails({
           borderColor="permission"
         >
           <Text bold color="permission">
-            Rule details
+            {t('Rule details')}
           </Text>
           {ruleDescription}
           <Text italic>
-            This rule is configured by managed settings and cannot be modified.
+            {t('This rule is configured by managed settings and cannot be modified.')}
             {'\n'}
-            Contact your system administrator for more information.
+            {t('Contact your system administrator for more information.')}
           </Text>
         </Box>
         {footer}
@@ -122,16 +123,16 @@ function RuleDetails({
     <>
       <Box flexDirection="column" gap={1} borderStyle="round" paddingLeft={1} paddingRight={1} borderColor="error">
         <Text bold color="error">
-          Delete {getRuleBehaviorLabel(rule.ruleBehavior)} tool?
+          {t('Delete {{behavior}} tool?', { behavior: getRuleBehaviorLabel(rule.ruleBehavior) })}
         </Text>
         {ruleDescription}
-        <Text>Are you sure you want to delete this permission rule?</Text>
+        <Text>{t('Are you sure you want to delete this permission rule?')}</Text>
         <Select
           onChange={_ => (_ === 'yes' ? onDelete() : onCancel())}
           onCancel={onCancel}
           options={[
-            { label: 'Yes', value: 'yes' },
-            { label: 'No', value: 'no' },
+            { label: t('Yes'), value: 'yes' },
+            { label: t('No'), value: 'no' },
           ]}
         />
       </Box>
@@ -213,9 +214,9 @@ function PermissionRulesTab({
       <Text>
         {
           {
-            allow: "Claude Code won't ask before using allowed tools.",
-            ask: 'Claude Code will always ask for confirmation before using these tools.',
-            deny: 'Claude Code will always reject requests to use denied tools.',
+            allow: t("Claude Code won't ask before using allowed tools."),
+            ask: t('Claude Code will always ask for confirmation before using these tools.'),
+            deny: t('Claude Code will always reject requests to use denied tools.'),
           }[tab]
         }
       </Text>
@@ -322,7 +323,7 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
       // Only show "Add a new rule" for allow and deny tabs (and not when searching)
       if (tab !== 'workspace' && tab !== 'recent' && !query) {
         options.push({
-          label: `Add a new rule${figures.ellipsis}`,
+          label: t(`Add a new rule${figures.ellipsis}`),
           value: 'add-new-rule',
         });
       }
@@ -438,7 +439,10 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
     for (const rule of rules) {
       setChanges(prev => [
         ...prev,
-        `Added ${rule.ruleBehavior} rule ${chalk.bold(permissionRuleValueToString(rule.ruleValue))}`,
+        t('Added {{behavior}} rule {{rule}}', {
+          behavior: getRuleBehaviorLabel(rule.ruleBehavior),
+          rule: chalk.bold(permissionRuleValueToString(rule.ruleValue)),
+        }),
       ]);
     }
 
@@ -476,7 +480,10 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
       onExit(undefined, {
         shouldQuery: true,
         metaMessages: [
-          `Permission granted for: ${commands.join(', ')}. You may now retry ${commands.length === 1 ? 'this command' : 'these commands'} if you would like.`,
+          t('Permission granted for: {{commands}}. You may now retry {{x}} if you would like.', {
+            commands: commands.join(', '),
+            x: commands.length === 1 ? t('this command') : t('these commands'),
+          }),
         ],
       });
       return;
@@ -485,10 +492,12 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
     const approvedDenials = denialsFor(s.approved);
     if (approvedDenials.length > 0 || changes.length > 0) {
       const approvedMsg =
-        approvedDenials.length > 0 ? [`Approved ${approvedDenials.map(d => chalk.bold(d.display)).join(', ')}`] : [];
+        approvedDenials.length > 0
+          ? [t('Approved {{commands}}', { commands: approvedDenials.map(d => chalk.bold(d.display)).join(', ') })]
+          : [];
       onExit([...approvedMsg, ...changes].join('\n'));
     } else {
-      onExit('Permissions dialog dismissed', {
+      onExit(t('Permissions dialog dismissed'), {
         display: 'system',
       });
     }
@@ -537,7 +546,10 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
 
     setChanges(prev => [
       ...prev,
-      `Deleted ${selectedRule.ruleBehavior} rule ${chalk.bold(permissionRuleValueToString(selectedRule.ruleValue))}`,
+      t('Deleted {{behavior}} rule {{rule}}', {
+        behavior: getRuleBehaviorLabel(selectedRule.ruleBehavior),
+        rule: chalk.bold(permissionRuleValueToString(selectedRule.ruleValue)),
+      }),
     ]);
     setSelectedRule(undefined);
   };
@@ -600,7 +612,7 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
 
           setChanges(prev => [
             ...prev,
-            `Added directory ${chalk.bold(path)} to workspace${remember ? ' and saved to local settings' : ' for this session'}`,
+            `${t('Added directory {{dir}} to workspace', { dir: chalk.bold(path) })}${remember ? t(' and saved to local settings') : t(' for this session')}`,
           ]);
           setIsAddingWorkspaceDirectory(false);
         }}
@@ -615,7 +627,10 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
       <RemoveWorkspaceDirectory
         directoryPath={removingDirectory}
         onRemove={() => {
-          setChanges(prev => [...prev, `Removed directory ${chalk.bold(removingDirectory)} from workspace`]);
+          setChanges(prev => [
+            ...prev,
+            t('Removed directory {{dir}} from workspace', { dir: chalk.bold(removingDirectory) }),
+          ]);
           setRemovingDirectory(null);
         }}
         onCancel={() => setRemovingDirectory(null)}
@@ -649,28 +664,30 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
     <Box flexDirection="column" onKeyDown={handleKeyDown}>
       <Pane color="permission">
         <Tabs
-          title="Permissions:"
+          title={t('Permissions:')}
           color="permission"
           defaultTab={defaultTab}
           hidden={isHidden}
           initialHeaderFocused={!hasDenials}
           navFromContent={!isSearchMode}
         >
-          <Tab id="recent" title="Recently denied">
+          <Tab id="recent" title={t('Recently denied')}>
             <RecentDenialsTab onHeaderFocusChange={handleHeaderFocusChange} onStateChange={handleDenialStateChange} />
           </Tab>
-          <Tab id="allow" title="Allow">
+          <Tab id="allow" title={t('Allow')}>
             <PermissionRulesTab tab="allow" {...sharedRulesProps} />
           </Tab>
-          <Tab id="ask" title="Ask">
+          <Tab id="ask" title={t('Ask')}>
             <PermissionRulesTab tab="ask" {...sharedRulesProps} />
           </Tab>
-          <Tab id="deny" title="Deny">
+          <Tab id="deny" title={t('Deny')}>
             <PermissionRulesTab tab="deny" {...sharedRulesProps} />
           </Tab>
-          <Tab id="workspace" title="Workspace">
+          <Tab id="workspace" title={t('Workspace')}>
             <Box flexDirection="column">
-              <Text>Claude Code can read files in the workspace, and make edits when auto-accept edits is on.</Text>
+              <Text>
+                {t('Claude Code can read files in the workspace, and make edits when auto-accept edits is on.')}
+              </Text>
               <WorkspaceTab
                 onExit={onExit}
                 toolPermissionContext={toolPermissionContext}
@@ -684,15 +701,15 @@ export function PermissionRuleList({ onExit, initialTab, onRetryDenials }: Props
         <Box marginTop={1} paddingLeft={1}>
           <Text dimColor>
             {exitState.pending ? (
-              <>Press {exitState.keyName} again to exit</>
+              <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
             ) : headerFocused ? (
-              <>←/→ tab switch · ↓ return · Esc cancel</>
+              <>{t('←/→ tab switch · ↓ return · Esc cancel')}</>
             ) : isSearchMode ? (
-              <>Type to filter · Enter/↓ select · ↑ tabs · Esc clear</>
+              <>{t('Type to filter · Enter/↓ select · ↑ tabs · Esc clear')}</>
             ) : hasDenials && defaultTab === 'recent' ? (
-              <>Enter approve · r retry · ↑↓ navigate · ←/→ switch · Esc cancel</>
+              <>{t('Enter approve · r retry · ↑↓ navigate · ←/→ switch · Esc cancel')}</>
             ) : (
-              <>↑↓ navigate · Enter select · Type to search · ←/→ switch · Esc cancel</>
+              <>{t('↑↓ navigate · Enter select · Type to search · ←/→ switch · Esc cancel')}</>
             )}
           </Text>
         </Box>

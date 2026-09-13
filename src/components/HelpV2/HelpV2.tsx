@@ -11,6 +11,7 @@ import { useIsInsideModal } from '../../context/modalContext.js';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import { Box, Link, Text, Tab, Tabs, Pane } from '@anthropic/ink';
 import { useKeybinding } from '../../keybindings/useKeybinding.js';
+import { t } from '../../i18n/index.js';
 import { Commands } from './Commands.js';
 import { General } from './General.js';
 
@@ -27,7 +28,7 @@ export function HelpV2({ onClose, commands }: Props): React.ReactNode {
   // footer since Tabs won't shrink to fit. Let the modal slot handle sizing.
   const insideModal = useIsInsideModal();
 
-  const close = () => onClose('Help dialog dismissed', { display: 'system' });
+  const close = () => onClose(t('Help dialog dismissed'), { display: 'system' });
   useKeybinding('help:dismiss', close, { context: 'Help' });
   const exitState = useExitOnCtrlCDWithKeybindings(close);
   const dismissShortcut = useShortcutDisplay('help:dismiss', 'Help', 'esc');
@@ -46,31 +47,31 @@ export function HelpV2({ onClose, commands }: Props): React.ReactNode {
   const customCommands = commands.filter(cmd => !builtinNames.has(cmd.name) && !cmd.isHidden);
 
   const tabs = [
-    <Tab key="general" title="general">
+    <Tab key="general" title={t('general')}>
       <General />
     </Tab>,
   ];
 
   tabs.push(
-    <Tab key="commands" title="commands">
+    <Tab key="commands" title={t('commands')}>
       <Commands
         commands={builtinCommands}
         maxHeight={maxHeight}
         columns={columns}
-        title="Browse default commands:"
+        title={t('Browse default commands:')}
         onCancel={close}
       />
     </Tab>,
   );
 
   tabs.push(
-    <Tab key="custom" title="custom-commands">
+    <Tab key="custom" title={t('custom-commands')}>
       <Commands
         commands={customCommands}
         maxHeight={maxHeight}
         columns={columns}
-        title="Browse custom commands:"
-        emptyMessage="No custom commands found"
+        title={t('Browse custom commands:')}
+        emptyMessage={t('No custom commands found')}
         onCancel={close}
       />
     </Tab>,
@@ -83,7 +84,7 @@ export function HelpV2({ onClose, commands }: Props): React.ReactNode {
           commands={antOnlyCommands}
           maxHeight={maxHeight}
           columns={columns}
-          title="Browse ant-only commands:"
+          title={t('Browse ant-only commands:')}
           onCancel={close}
         />
       </Tab>,
@@ -102,15 +103,19 @@ export function HelpV2({ onClose, commands }: Props): React.ReactNode {
         </Tabs>
         <Box marginTop={1}>
           <Text>
-            For more help: <Link url="https://code.claude.com/docs/en/overview" />
+            {t('For more help: ')}
+            <Link url="https://code.claude.com/docs/en/overview" />
           </Text>
         </Box>
         <Box marginTop={1}>
           <Text dimColor>
             {exitState.pending ? (
-              <>Press {exitState.keyName} again to exit</>
+              <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
             ) : (
-              <Text italic>{dismissShortcut} to cancel</Text>
+              <Text italic>
+                {dismissShortcut}
+                {t(' to cancel')}
+              </Text>
             )}
           </Text>
         </Box>

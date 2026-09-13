@@ -17,6 +17,7 @@ import type { ReferralRedemptionsResponse, ReferrerRewardInfo } from '../../serv
 import { count } from '../../utils/array.js';
 import { logError } from '../../utils/log.js';
 import { Pane } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 type PassStatus = {
   passNumber: number;
@@ -35,11 +36,11 @@ export function Passes({ onDone }: Props): React.ReactNode {
   const [referrerReward, setReferrerReward] = useState<ReferrerRewardInfo | null | undefined>(undefined);
 
   const exitState = useExitOnCtrlCDWithKeybindings(() =>
-    onDone('Guest passes dialog dismissed', { display: 'system' }),
+    onDone(t('Guest passes dialog dismissed'), { display: 'system' }),
   );
 
   const handleCancel = useCallback(() => {
-    onDone('Guest passes dialog dismissed', { display: 'system' });
+    onDone(t('Guest passes dialog dismissed'), { display: 'system' });
   }, [onDone]);
 
   useKeybinding('confirm:no', handleCancel, { context: 'Confirmation' });
@@ -49,7 +50,7 @@ export function Passes({ onDone }: Props): React.ReactNode {
       void setClipboard(referralLink).then(raw => {
         if (raw) process.stdout.write(raw);
         logEvent('tengu_guest_passes_link_copied', {});
-        onDone(`Referral link copied to clipboard!`);
+        onDone(t('Referral link copied to clipboard!'));
       });
     }
   });
@@ -120,9 +121,13 @@ export function Passes({ onDone }: Props): React.ReactNode {
     return (
       <Pane>
         <Box flexDirection="column" gap={1}>
-          <Text dimColor>Loading guest pass information…</Text>
+          <Text dimColor>{t('Loading guest pass information…')}</Text>
           <Text dimColor italic>
-            {exitState.pending ? <>Press {exitState.keyName} again to exit</> : <>Esc to cancel</>}
+            {exitState.pending ? (
+              <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
+            ) : (
+              <>{t('Esc to cancel')}</>
+            )}
           </Text>
         </Box>
       </Pane>
@@ -133,9 +138,13 @@ export function Passes({ onDone }: Props): React.ReactNode {
     return (
       <Pane>
         <Box flexDirection="column" gap={1}>
-          <Text>Guest passes are not currently available.</Text>
+          <Text>{t('Guest passes are not currently available.')}</Text>
           <Text dimColor italic>
-            {exitState.pending ? <>Press {exitState.keyName} again to exit</> : <>Esc to cancel</>}
+            {exitState.pending ? (
+              <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
+            ) : (
+              <>{t('Esc to cancel')}</>
+            )}
           </Text>
         </Box>
       </Pane>
@@ -178,7 +187,7 @@ export function Passes({ onDone }: Props): React.ReactNode {
   return (
     <Pane>
       <Box flexDirection="column" gap={1}>
-        <Text color="permission">Guest passes · {availableCount} left</Text>
+        <Text color="permission">{t('Guest passes · {{n}} left', { n: availableCount })}</Text>
 
         <Box flexDirection="row" marginLeft={2}>
           {sortedPasses.slice(0, 3).map(pass => renderTicket(pass))}
@@ -193,8 +202,11 @@ export function Passes({ onDone }: Props): React.ReactNode {
         <Box flexDirection="column" marginLeft={2}>
           <Text dimColor>
             {referrerReward
-              ? `Share a free week of Claude Code with friends. If they love it and subscribe, you'll get ${formatCreditAmount(referrerReward)} of extra usage to keep building. `
-              : 'Share a free week of Claude Code with friends. '}
+              ? t(
+                  "Share a free week of Claude Code with friends. If they love it and subscribe, you'll get {{credit}} of extra usage to keep building. ",
+                  { credit: formatCreditAmount(referrerReward) },
+                )
+              : t('Share a free week of Claude Code with friends. ')}
             <Link
               url={
                 referrerReward
@@ -202,14 +214,18 @@ export function Passes({ onDone }: Props): React.ReactNode {
                   : 'https://support.claude.com/en/articles/12875061-claude-code-guest-passes'
               }
             >
-              Terms apply.
+              {t('Terms apply.')}
             </Link>
           </Text>
         </Box>
 
         <Box>
           <Text dimColor italic>
-            {exitState.pending ? <>Press {exitState.keyName} again to exit</> : <>Enter to copy link · Esc to cancel</>}
+            {exitState.pending ? (
+              <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
+            ) : (
+              <>{t('Enter to copy link · Esc to cancel')}</>
+            )}
           </Text>
         </Box>
       </Box>

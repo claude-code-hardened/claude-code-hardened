@@ -35,6 +35,7 @@ import { asSystemPrompt } from '../utils/systemPromptType.js';
 import { ConfigurableShortcutHint } from './ConfigurableShortcutHint.js';
 import { Byline, Dialog, KeyboardShortcutHint } from '@anthropic/ink';
 import TextInput from './TextInput.js';
+import { t } from '../i18n/index.js';
 
 // This value was determined experimentally by testing the URL length limit
 const GITHUB_URL_LIMIT = 7250;
@@ -232,12 +233,12 @@ export function Feedback({
       ...(rawTranscriptJsonl && { rawTranscriptJsonl }),
     };
 
-    const [result, t] = await Promise.all([
+    const [result, generatedTitle] = await Promise.all([
       submitFeedback(reportData as FeedbackData, abortSignal),
       generateTitle(description, abortSignal),
     ]);
 
-    setTitle(t);
+    setTitle(generatedTitle);
 
     if (result.success) {
       if (result.feedbackId) {
@@ -256,9 +257,9 @@ export function Feedback({
       setStep('done');
     } else {
       if (result.isZdrOrg) {
-        setError('Feedback collection is not available for organizations with custom data retention policies.');
+        setError(t('Feedback collection is not available for organizations with custom data retention policies.'));
       } else {
-        setError('Could not submit feedback. Please try again later.');
+        setError(t('Could not submit feedback. Please try again later.'));
       }
       // Stay on userInput step so user can retry with their content preserved
       setStep('userInput');
@@ -270,15 +271,15 @@ export function Feedback({
     // Don't cancel when done - let other keys close the dialog
     if (step === 'done') {
       if (error) {
-        onDone('Error submitting feedback / bug report', {
+        onDone(t('Error submitting feedback / bug report'), {
           display: 'system',
         });
       } else {
-        onDone('Feedback / bug report submitted', { display: 'system' });
+        onDone(t('Feedback / bug report submitted'), { display: 'system' });
       }
       return;
     }
-    onDone('Feedback / bug report cancelled', { display: 'system' });
+    onDone(t('Feedback / bug report cancelled'), { display: 'system' });
   }, [step, error, onDone]);
 
   // During text input, use Settings context where only Escape (not 'n') triggers confirm:no.
@@ -297,11 +298,11 @@ export function Feedback({
         void openBrowser(issueUrl);
       }
       if (error) {
-        onDone('Error submitting feedback / bug report', {
+        onDone(t('Error submitting feedback / bug report'), {
           display: 'system',
         });
       } else {
-        onDone('Feedback / bug report submitted', { display: 'system' });
+        onDone(t('Feedback / bug report submitted'), { display: 'system' });
       }
       return;
     }
@@ -309,7 +310,7 @@ export function Feedback({
     // When in userInput step with error, allow user to edit and retry
     // (don't close on any keypress - they can still press Esc to cancel)
     if (error && step !== 'userInput') {
-      onDone('Error submitting feedback / bug report', {
+      onDone(t('Error submitting feedback / bug report'), {
         display: 'system',
       });
       return;
@@ -322,12 +323,12 @@ export function Feedback({
 
   return (
     <Dialog
-      title="Submit Feedback / Bug Report"
+      title={t('Submit Feedback / Bug Report')}
       onCancel={handleCancel}
       isCancelActive={step !== 'userInput'}
       inputGuide={exitState =>
         exitState.pending ? (
-          <Text>Press {exitState.keyName} again to exit</Text>
+          <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
         ) : step === 'userInput' ? (
           <Byline>
             <KeyboardShortcutHint shortcut="Enter" action="continue" />
@@ -343,7 +344,7 @@ export function Feedback({
     >
       {step === 'userInput' && (
         <Box flexDirection="column" gap={1}>
-          <Text>Describe the issue below:</Text>
+          <Text>{t('Describe the issue below:')}</Text>
           <TextInput
             value={description}
             onChange={value => {
@@ -355,7 +356,7 @@ export function Feedback({
             }}
             columns={textInputColumns}
             onSubmit={() => setStep('consent')}
-            onExitMessage={() => onDone('Feedback cancelled', { display: 'system' })}
+            onExitMessage={() => onDone(t('Feedback cancelled'), { display: 'system' })}
             cursorOffset={cursorOffset}
             onChangeCursorOffset={setCursorOffset}
             showCursor
@@ -363,7 +364,7 @@ export function Feedback({
           {error && (
             <Box flexDirection="column" gap={1}>
               <Text color="error">{error}</Text>
-              <Text dimColor>Edit and press Enter to retry, or Esc to cancel</Text>
+              <Text dimColor>{t('Edit and press Enter to retry, or Esc to cancel')}</Text>
             </Box>
           )}
         </Box>
@@ -371,20 +372,21 @@ export function Feedback({
 
       {step === 'consent' && (
         <Box flexDirection="column">
-          <Text>This report will include:</Text>
+          <Text>{t('This report will include:')}</Text>
           <Box marginLeft={2} flexDirection="column">
             <Text>
-              - Your feedback / bug description: <Text dimColor>{description}</Text>
+              {t('- Your feedback / bug description: ')}
+              <Text dimColor>{description}</Text>
             </Text>
             <Text>
-              - Environment info:{' '}
+              {t('- Environment info: ')}
               <Text dimColor>
                 {env.platform}, {env.terminal}, v{MACRO.VERSION}
               </Text>
             </Text>
             {envInfo.gitState && (
               <Text>
-                - Git repo metadata:{' '}
+                {t('- Git repo metadata: ')}
                 <Text dimColor>
                   {envInfo.gitState.branchName}
                   {envInfo.gitState.commitHash ? `, ${envInfo.gitState.commitHash.slice(0, 7)}` : ''}
@@ -394,17 +396,20 @@ export function Feedback({
                 </Text>
               </Text>
             )}
-            <Text>- Current session transcript</Text>
+            <Text>{t('- Current session transcript')}</Text>
           </Box>
           <Box marginTop={1}>
             <Text wrap="wrap" dimColor>
-              We will use your feedback to debug related issues or to improve Claude Code&apos;s functionality (eg. to
-              reduce the risk of bugs occurring in the future).
+              {t(
+                "We will use your feedback to debug related issues or to improve Claude Code's functionality (eg. to reduce the risk of bugs occurring in the future).",
+              )}
             </Text>
           </Box>
           <Box marginTop={1}>
             <Text>
-              Press <Text bold>Enter</Text> to confirm and submit.
+              {t('Press ')}
+              <Text bold>Enter</Text>
+              {t(' to confirm and submit.')}
             </Text>
           </Box>
         </Box>
@@ -412,18 +417,23 @@ export function Feedback({
 
       {step === 'submitting' && (
         <Box flexDirection="row" gap={1}>
-          <Text>Submitting report…</Text>
+          <Text>{t('Submitting report…')}</Text>
         </Box>
       )}
 
       {step === 'done' && (
         <Box flexDirection="column">
-          {error ? <Text color="error">{error}</Text> : <Text color="success">Thank you for your report!</Text>}
-          {feedbackId && <Text dimColor>Feedback ID: {feedbackId}</Text>}
+          {error ? <Text color="error">{error}</Text> : <Text color="success">{t('Thank you for your report!')}</Text>}
+          {feedbackId && (
+            <Text dimColor>
+              {t('Feedback ID: ')}
+              {feedbackId}
+            </Text>
+          )}
           <Box marginTop={1}>
-            <Text>Press </Text>
+            <Text>{t('Press ')}</Text>
             <Text bold>Enter </Text>
-            <Text>to open your browser and draft a GitHub issue, or any other key to close.</Text>
+            <Text>{t(' to open your browser and draft a GitHub issue, or any other key to close.')}</Text>
           </Box>
         </Box>
       )}

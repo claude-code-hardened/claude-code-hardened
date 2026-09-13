@@ -44,6 +44,7 @@ import { Opus1mMergeNotice } from './Opus1mMergeNotice.js';
 import { GateOverridesWarning } from './GateOverridesWarning.js';
 import { ExperimentEnrollmentNotice } from './ExperimentEnrollmentNotice.js';
 import { feature } from 'bun:bundle';
+import { t } from '../../i18n/index.js';
 
 // Conditional require so ChannelsNotice.tsx tree-shakes when both flags are
 // false. A module-scope helper component inside a feature() ternary does NOT
@@ -153,32 +154,40 @@ export function LogoV2(): React.ReactNode {
         {ChannelsNoticeModule && <ChannelsNoticeModule.ChannelsNotice />}
         {isDebugMode() && (
           <Box paddingLeft={2} flexDirection="column">
-            <Text color="warning">Debug mode enabled</Text>
-            <Text dimColor>Logging to: {isDebugToStdErr() ? 'stderr' : getDebugLogPath()}</Text>
+            <Text color="warning">{t('Debug mode enabled')}</Text>
+            <Text dimColor>
+              {t('Logging to: ')}
+              {isDebugToStdErr() ? 'stderr' : getDebugLogPath()}
+            </Text>
           </Box>
         )}
         <EmergencyTip />
         {process.env.CLAUDE_CODE_TMUX_SESSION && (
           <Box paddingLeft={2} flexDirection="column">
-            <Text dimColor>tmux session: {process.env.CLAUDE_CODE_TMUX_SESSION}</Text>
+            <Text dimColor>
+              {t('tmux session: ')}
+              {process.env.CLAUDE_CODE_TMUX_SESSION}
+            </Text>
             <Text dimColor>
               {process.env.CLAUDE_CODE_TMUX_PREFIX_CONFLICTS
-                ? `Detach: ${process.env.CLAUDE_CODE_TMUX_PREFIX} ${process.env.CLAUDE_CODE_TMUX_PREFIX} d (press prefix twice - Claude uses ${process.env.CLAUDE_CODE_TMUX_PREFIX})`
-                : `Detach: ${process.env.CLAUDE_CODE_TMUX_PREFIX} d`}
+                ? t('Detach: {{prefix}} {{prefix}} d (press prefix twice - Claude uses {{prefix}})', {
+                    prefix: process.env.CLAUDE_CODE_TMUX_PREFIX,
+                  })
+                : t('Detach: {{prefix}} d', { prefix: process.env.CLAUDE_CODE_TMUX_PREFIX })}
             </Text>
           </Box>
         )}
         {announcement && (
           <Box paddingLeft={2} flexDirection="column">
             {!process.env.IS_DEMO && config.oauthAccount?.organizationName && (
-              <Text dimColor>Message from {config.oauthAccount.organizationName}:</Text>
+              <Text dimColor>{t('Message from {{org}}:', { org: config.oauthAccount.organizationName })}</Text>
             )}
             <Text>{announcement}</Text>
           </Box>
         )}
         {process.env.USER_TYPE === 'ant' && !process.env.DEMO_VERSION && (
           <Box paddingLeft={2} flexDirection="column">
-            <Text dimColor>Use /issue to report model behavior issues</Text>
+            <Text dimColor>{t('Use /issue to report model behavior issues')}</Text>
           </Box>
         )}
         {process.env.USER_TYPE === 'ant' && !process.env.DEMO_VERSION && (
@@ -254,7 +263,7 @@ export function LogoV2(): React.ReactNode {
         {ChannelsNoticeModule && <ChannelsNoticeModule.ChannelsNotice />}
         {showSandboxStatus && (
           <Box marginTop={1} flexDirection="column">
-            <Text color="warning">Your bash commands will be sandboxed. Disable with /sandbox.</Text>
+            <Text color="warning">{t('Your bash commands will be sandboxed. Disable with /sandbox.')}</Text>
           </Box>
         )}
         {process.env.USER_TYPE === 'ant' && <GateOverridesWarning />}
@@ -353,37 +362,45 @@ export function LogoV2(): React.ReactNode {
       {ChannelsNoticeModule && <ChannelsNoticeModule.ChannelsNotice />}
       {isDebugMode() && (
         <Box paddingLeft={2} flexDirection="column">
-          <Text color="warning">Debug mode enabled</Text>
-          <Text dimColor>Logging to: {isDebugToStdErr() ? 'stderr' : getDebugLogPath()}</Text>
+          <Text color="warning">{t('Debug mode enabled')}</Text>
+          <Text dimColor>
+            {t('Logging to: ')}
+            {isDebugToStdErr() ? 'stderr' : getDebugLogPath()}
+          </Text>
         </Box>
       )}
       <EmergencyTip />
       {process.env.CLAUDE_CODE_TMUX_SESSION && (
         <Box paddingLeft={2} flexDirection="column">
-          <Text dimColor>tmux session: {process.env.CLAUDE_CODE_TMUX_SESSION}</Text>
+          <Text dimColor>
+            {t('tmux session: ')}
+            {process.env.CLAUDE_CODE_TMUX_SESSION}
+          </Text>
           <Text dimColor>
             {process.env.CLAUDE_CODE_TMUX_PREFIX_CONFLICTS
-              ? `Detach: ${process.env.CLAUDE_CODE_TMUX_PREFIX} ${process.env.CLAUDE_CODE_TMUX_PREFIX} d (press prefix twice - Claude uses ${process.env.CLAUDE_CODE_TMUX_PREFIX})`
-              : `Detach: ${process.env.CLAUDE_CODE_TMUX_PREFIX} d`}
+              ? t('Detach: {{prefix}} {{prefix}} d (press prefix twice - Claude uses {{prefix}})', {
+                  prefix: process.env.CLAUDE_CODE_TMUX_PREFIX,
+                })
+              : t('Detach: {{prefix}} d', { prefix: process.env.CLAUDE_CODE_TMUX_PREFIX })}
           </Text>
         </Box>
       )}
       {announcement && (
         <Box paddingLeft={2} flexDirection="column">
           {!process.env.IS_DEMO && config.oauthAccount?.organizationName && (
-            <Text dimColor>Message from {config.oauthAccount.organizationName}:</Text>
+            <Text dimColor>{t('Message from {{org}}:', { org: config.oauthAccount.organizationName })}</Text>
           )}
           <Text>{announcement}</Text>
         </Box>
       )}
       {showSandboxStatus && (
         <Box paddingLeft={2} flexDirection="column">
-          <Text color="warning">Your bash commands will be sandboxed. Disable with /sandbox.</Text>
+          <Text color="warning">{t('Your bash commands will be sandboxed. Disable with /sandbox.')}</Text>
         </Box>
       )}
       {process.env.USER_TYPE === 'ant' && !process.env.DEMO_VERSION && (
         <Box paddingLeft={2} flexDirection="column">
-          <Text dimColor>Use /issue to report model behavior issues</Text>
+          <Text dimColor>{t('Use /issue to report model behavior issues')}</Text>
         </Box>
       )}
       {process.env.USER_TYPE === 'ant' && !process.env.DEMO_VERSION && (

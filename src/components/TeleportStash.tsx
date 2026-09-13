@@ -6,6 +6,7 @@ import type { GitFileStatus } from '../utils/git.js';
 import { getFileStatus, stashToCleanState } from '../utils/git.js';
 import { Select } from './CustomSelect/index.js';
 import { Spinner } from './Spinner.js';
+import { t } from '../i18n/index.js';
 
 type TeleportStashProps = {
   onStashAndContinue: () => void;
@@ -30,7 +31,7 @@ export function TeleportStash({ onStashAndContinue, onCancel }: TeleportStashPro
         logForDebugging(`Error getting changed files: ${errorMessage}`, {
           level: 'error',
         });
-        setError('Failed to get changed files');
+        setError(t('Failed to get changed files'));
       } finally {
         setLoading(false);
       }
@@ -49,14 +50,14 @@ export function TeleportStash({ onStashAndContinue, onCancel }: TeleportStashPro
         logForDebugging('Successfully stashed changes');
         onStashAndContinue();
       } else {
-        setError('Failed to stash changes');
+        setError(t('Failed to stash changes'));
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       logForDebugging(`Error stashing changes: ${errorMessage}`, {
         level: 'error',
       });
-      setError('Failed to stash changes');
+      setError(t('Failed to stash changes'));
     } finally {
       setStashing(false);
     }
@@ -75,7 +76,10 @@ export function TeleportStash({ onStashAndContinue, onCancel }: TeleportStashPro
       <Box flexDirection="column" padding={1}>
         <Box marginBottom={1}>
           <Spinner />
-          <Text> Checking git status{figures.ellipsis}</Text>
+          <Text>
+            {t(' Checking git status')}
+            {figures.ellipsis}
+          </Text>
         </Box>
       </Box>
     );
@@ -85,12 +89,13 @@ export function TeleportStash({ onStashAndContinue, onCancel }: TeleportStashPro
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold color="error">
-          Error: {error}
+          {t('Error: ')}
+          {error}
         </Text>
         <Box marginTop={1}>
-          <Text dimColor>Press </Text>
+          <Text dimColor>{t('Press ')}</Text>
           <Text bold>Escape</Text>
-          <Text dimColor> to cancel</Text>
+          <Text dimColor>{t(' to cancel')}</Text>
         </Box>
       </Box>
     );
@@ -99,33 +104,33 @@ export function TeleportStash({ onStashAndContinue, onCancel }: TeleportStashPro
   const showFileCount = changedFiles.length > 8;
 
   return (
-    <Dialog title="Working Directory Has Changes" onCancel={onCancel}>
-      <Text>Teleport will switch git branches. The following changes were found:</Text>
+    <Dialog title={t('Working Directory Has Changes')} onCancel={onCancel}>
+      <Text>{t('Teleport will switch git branches. The following changes were found:')}</Text>
 
       <Box flexDirection="column" paddingLeft={2}>
         {changedFiles.length > 0 ? (
           showFileCount ? (
-            <Text>{changedFiles.length} files changed</Text>
+            <Text>{t('{{n}} files changed', { n: changedFiles.length })}</Text>
           ) : (
             changedFiles.map((file: string, index: number) => <Text key={index}>{file}</Text>)
           )
         ) : (
-          <Text dimColor>No changes detected</Text>
+          <Text dimColor>{t('No changes detected')}</Text>
         )}
       </Box>
 
-      <Text>Would you like to stash these changes and continue with teleport?</Text>
+      <Text>{t('Would you like to stash these changes and continue with teleport?')}</Text>
 
       {stashing ? (
         <Box>
           <Spinner />
-          <Text> Stashing changes...</Text>
+          <Text>{t(' Stashing changes...')}</Text>
         </Box>
       ) : (
         <Select
           options={[
-            { label: 'Stash changes and continue', value: 'stash' },
-            { label: 'Exit', value: 'exit' },
+            { label: t('Stash changes and continue'), value: 'stash' },
+            { label: t('Exit'), value: 'exit' },
           ]}
           onChange={handleSelectChange}
         />
