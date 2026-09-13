@@ -91,3 +91,13 @@ export function t(key: string, options?: Record<string, unknown>): string {
 export function currentLocale(): Locale {
   return resolveLocale()
 }
+
+/**
+ * Drop the cached i18next instance so the next t() re-resolves the locale.
+ * Needed after persisting a new settings.json uiLocale mid-session: the
+ * instance captures the locale it was created with and i18next has no
+ * live language change otherwise.
+ */
+export function resetI18n(): void {
+  instance = null
+}

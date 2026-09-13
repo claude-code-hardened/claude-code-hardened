@@ -1,7 +1,7 @@
 import * as React from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
 import { Box, Pane, Text } from '@anthropic/ink';
-import { AVAILABLE_LOCALES, currentLocale, t } from '../../i18n/index.js';
+import { AVAILABLE_LOCALES, currentLocale, resetI18n, t } from '../../i18n/index.js';
 import { updateSettingsForSource } from '../../utils/settings/settings.js';
 import type { LocalJSXCommandCall } from '../../types/command.js';
 import { Select } from '../../components/CustomSelect/index.js';
@@ -42,9 +42,11 @@ function LanguagePicker({ onDone }: Props): React.ReactNode {
               onDone(t('UI language already set to {{name}}', { name }), { display: 'system' });
               return;
             }
-            // updateSettingsForSource resets the settings cache, so the
-            // t() call below already renders in the newly selected locale.
+            // updateSettingsForSource resets the settings cache and
+            // resetI18n() drops the cached i18next instance, so the t()
+            // call below already renders in the newly selected locale.
             updateSettingsForSource('userSettings', { uiLocale: locale });
+            resetI18n();
             onDone(t('UI language set to {{name}}', { name }), {
               display: 'system',
             });
