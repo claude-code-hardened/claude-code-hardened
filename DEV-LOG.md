@@ -1,5 +1,20 @@
 # DEV-LOG
 
+## 性能优化第二批落地 + 基线巩固 (2026-09-13)
+
+Rust native 五模块收尾后的性能与文档日：
+
+- **两个 perf 分支合并 main**（CI run 34746187055 七 job 全绿）：
+  - `perf/p0-hotpath`（44ef5d70）——`src/utils/messageLookups.ts`（655 行）消息渲染索引增量维护：`MessageLookupsCache` 纯追加走增量（0.71ms/delta vs 全量重编 4.26ms），每 4 次变更强制全量兜底；`differential-hotpath.ts` 20 文件×8602 操作×17238 次逐字节断言。query.ts 3 处 spread 改 concat。清掉本报告（memory-peak-analysis）P0 #1/#4。
+  - `perf/startup-lazy`（5ee43b97）——86 个命令模块改 `lazyCommand` Proxy shim（7 trap 全套，gOPD 强制 configurable）；tools.ts 56 个 memoized 懒 require getter；Ink 推迟首帧。REMOTE_SAFE/BRIDGE_SAFE 身份集合保持静态（commandsBridgeSafety.test.ts 对象身份断言）。
+- **文档三件套**（44b90f0c）——`docs/native-rust-modules.md` 首次入库；`docs/i18n.md` 修订（插值已支持 {{var}}、I3 状态 7/8 批）；AGENTS.md 同步最新 CLAUDE.md。
+- **第一批速赢 2 项**（分支 `perf/p1-quickwins`，787901ab + revert 91e02436，CI run 34748739348）：
+  - 三个 API 适配层（openai/gemini/grok）`text_delta` 改数组累积（`textDeltas` Map + join），对齐 claude.ts:2223/2292 样板；input/thinking 经裁定保持原版 `+=`（memory-peak P1 #7 部分）。
+  - `src/cli/print.ts` GC 恢复官方原版 `setInterval(Bun.gc, 1000)`——5 月 0977b052 引入的"RSS>350MB 每秒 Bun.gc(true)"是回归（基线 682MB 下每秒 STW major GC），恢复即消除长会话周期性卡顿。
+  - 写入分块降档（MAX_CHUNK_BYTES 100MB→2MB）已实施后按用户裁定 revert：**原版行为一个参数都不动**（性能优化"原汁原味"标准的严格解读）。
+- **审查幻觉定案**："colordiff 缺 .parse::<Rank>() 放宽致 TS2345"经三路独立查证为幻觉——该 Rust 语法只在 token-counter lib.rs:44；幻觉源头是 run 34735694922 的真实 TS2345（differential.ts:337，JsChange 缺 value，早已修复）。
+- **小修**：ci.yml push/PR 白名单加 `perf/*`（此前 perf 分支需手动 workflow_dispatch）；husky pre-commit 补可执行位（本机 node_modules 不完整，本机 commit 仍走 `--no-verify`）。
+
 ## /poor 省流模式 (2026-04-11)
 
 新增 `/poor` 命令，toggle 关闭 `extract_memories` 和 `prompt_suggestion`，省 token。

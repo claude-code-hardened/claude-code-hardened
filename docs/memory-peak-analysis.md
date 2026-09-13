@@ -2,6 +2,8 @@
 
 > 进程 bun，RSS 基线 **682 MB**，最差 **1.8 GB** | 2026-05-02 | **调研完成**（12 轮迭代）
 > 修复 commit：`ef10ad28` + `ab0bbbc4`（降 100-300 MB）| 架构限制：Bun mimalloc/JSC 不归还内存页（~150-250 MB 永久占用）
+>
+> **2026-09-13 逐项复核**：本报告部分条目已修复或经实测定案，详见各条目行内【标注】。未标注的条目仍是有效待办。复核时注意行号可能已漂移。
 
 ## 已修复（10 项）
 
@@ -22,22 +24,22 @@
 
 | # | 问题 | 峰值 | 位置 | 建议 |
 |---|------|------|------|------|
-| 1 | 消息数组 7-8x spread 拷贝（turn 尾部 3-4 份同时驻留） | 120-320 MB | `query.ts` 7 处（:477,:491,:897,:1135,:1745,:1857,:1878） | 去掉 spread / 传引用 / 改 push |
+| 1 | 消息数组 7-8x spread 拷贝（turn 尾部 3-4 份同时驻留） | 120-320 MB | `query.ts` 7 处（:477,:491,:897,:1135,:1745,:1857,:1878） | 去掉 spread / 传引用 / 改 push 【已修 2026-09-13 `perf/p0-hotpath`：全部改 concat，query.ts 已无 spread 消息数组模式】 |
 | 2 | AutoCompact 时序缺陷（检查在 API 前，增长在 API 后） | API 超限 | `query.ts:575` | 加入预测式阈值检查 |
 | 3 | reactiveCompact 空存根（API 413 时无紧急压缩） | 无降级 | `reactiveCompact.ts` 全文 | 实现真实逻辑 |
-| 4 | buildMessageLookups 8 Map/Set 重建（流式每个 delta 触发） | GC STW 100-173ms | `Messages.tsx:519` | 增量更新 / 拆分 useMemo 链 |
+| 4 | buildMessageLookups 8 Map/Set 重建（流式每个 delta 触发） | GC STW 100-173ms | `Messages.tsx:519` | 增量更新 / 拆分 useMemo 链 【已修 2026-09-13 `perf/p0-hotpath`：MessageLookupsCache 增量维护，0.71ms vs 4.26ms/delta，17238 次断言对拍】 |
 | 5 | useDeferredValue 双缓冲 | 100-200 MB | `REPL.tsx:1569` | React 调度机制固有，优化空间有限 |
-| 6 | Compact 峰值窗口（preCompactReadFileState + summary + attachments） | 20-80 MB | `compact.ts:524-644` | 提前释放 preCompactReadFileState/summaryResponse |
+| 6 | Compact 峰值窗口（preCompactReadFileState + summary + attachments） | 20-80 MB | `compact.ts:524-644` | 提前释放 preCompactReadFileState/summaryResponse 【已修：`compact.ts:572`/:681 均已提前置 undefined】 |
 
 ## P1 — 重要瓶颈（14 项）
 
 | # | 问题 | 峰值 | 位置 | 建议 |
 |---|------|------|------|------|
-| 7 | OpenAI/Gemini/Grok 兼容层 O(n²) 拼接 | 25-75 MB | 3 文件 9 处（`openai/index.ts:386`, `gemini/index.ts:148`, `grok/index.ts:163`） | 改数组累积（同 claude.ts 模式） |
-| 8 | messages.ts O(n²) 拼接 | 10-25 MB | `messages.ts:3252,3268` | 改数组累积 |
+| 7 | OpenAI/Gemini/Grok 兼容层 O(n²) 拼接 | 25-75 MB | 3 文件 9 处（`openai/index.ts:386`, `gemini/index.ts:148`, `grok/index.ts:163`） | 改数组累积（同 claude.ts 模式） 【text_delta 3 处已修 2026-09-13 `perf/p1-quickwins`；input/thinking 经裁定保持原版（对齐 claude.ts 的 += 样板）】 |
+| 8 | messages.ts O(n²) 拼接 | 10-25 MB | `messages.ts:3252,3268` | 改数组累积 【误判 2026-09-13 复核：:3654/:3674 为 todo 提示消息的一次性追加，非流式热路径，剔除】 |
 | 9 | highlight.js 全量 192 语言（仅需 26 种） | 8-12 MB | `color-diff-napi/index.ts:21` | 自定义构建 |
-| 10 | hlLineCache 模块级单例 2048 条目 | ~4 MB | `color-diff-napi/index.ts:508` | 改 LRU + size 上限 |
-| 11 | colorFileCache 3x 代码存储 | 2-5 MB | `HighlightedCode.tsx:14` | 移除 value 中 code 字段 |
+| 10 | hlLineCache 模块级单例 2048 条目 | ~4 MB | `color-diff-napi/index.ts:508` | 改 LRU + size 上限 【已修：现 `index.ts:924` 已有 2048 上限淘汰，~4MB 收益过小，剔除】 |
+| 11 | colorFileCache 3x 代码存储 | 2-5 MB | `HighlightedCode.tsx:14` | 移除 value 中 code 字段 【裁定不改 2026-09-13：code 字段是缓存键校验（`:48 cached.code === code`），非冗余；优化需重设计 key，不值】 |
 | 12 | 虚拟滚动 200 组件常驻 | 50 MB | `useVirtualScroll.ts` | 降低 OVERSCAN_ROWS / MAX_MOUNTED_ITEMS |
 | 13 | FileReadTool 大文件（输出上限 100K 字符，但读取期间完整加载） | 临时数 MB | `FileReadTool.ts:342` | 读取前检测大小，流式截断 |
 | 14 | Session 恢复全量加载（磁盘→JSON→REPL 三阶段） | 200-300 MB | `sessionStorage.ts:3482` | 流式 JSONL / 增量恢复 |
