@@ -310,7 +310,7 @@ transcript 可增长到几百 MB 甚至 GB，读取路径有几层防护。
 | byte-level dead branch 裁剪 | `walkChainBeforeParse()` | JSON.parse 前只保留 active chain 和 metadata 的字节区间（零拷贝 `subarray` 视图 + `parseJSONLSegments` 按段 parse），跳过 dead fork/rewind branch。 |
 | lite read 限制 | `MAX_TRANSCRIPT_READ_BYTES` | 直接读 raw transcript 的调用超过约 50MB 要避开。 |
 
-`walkChainBeforeParse()` 只有预计能丢掉至少一半 buffer 时才返回裁剪区间（native 路径为 `scanChainRanges`），调用方按段零拷贝 parse、不再 concat，避免优化本身变成额外成本。
+`walkChainBeforeParse()` 只有预计能丢掉至少一半 buffer 时才返回裁剪区间（native 路径为 `scanChainRanges`），调用方按段零拷贝 parse、不再 concat，避免优化本身变成额外成本。native 区间路径需 vendor 重建（CI 产物）后方生效；现役 vendor 二进制尚无 `scanChainRanges` 导出时，包装层自动降级到 Rust 旧接口 `scanChain` 的 kept 区间，native 模块整体缺失时再退到 JS 扫描。
 
 ### preserved segment 与 snip
 
