@@ -48,6 +48,7 @@ export const DEFAULT_BUILD_FEATURES = [
   'TOKEN_BUDGET', // Token 预算管理与控制
   'TOKEN_COUNT_NATIVE', // 本地 Rust BPE 精确 token 计数（native 缺失时自动回退 rough 估算）
   'TRANSCRIPT_NATIVE_SCAN', // 转录 JSONL 字节级链扫描 Rust 实现（native 缺失时回退 JS）
+  'FILE_INDEX_NATIVE', // @-mention 文件路径模糊搜索 Rust 实现（native 缺失时回退 TS FileIndex）
   // P0: local features
   'AGENT_TRIGGERS', // 本地 Agent 触发器（工具调用时启动子代理）
   'ULTRATHINK', // 超深度思考模式，增加推理链长度

@@ -54,6 +54,12 @@ const CRATES = [
     vendorDir: 'color-diff',
     moduleName: 'color-diff',
   },
+  {
+    pkg: 'file-index-napi',
+    crate: 'file_index_napi',
+    vendorDir: 'file-index',
+    moduleName: 'file-index',
+  },
 ]
 
 function artifactName(crate: string, platform: string): string {

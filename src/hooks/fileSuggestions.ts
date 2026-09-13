@@ -1,5 +1,7 @@
+import { feature } from 'bun:bundle'
 import { statSync } from 'fs'
 import ignore from 'ignore'
+import { createNativeFileIndex, type FileIndexLike } from 'file-index-napi'
 import * as path from 'path'
 import {
   CLAUDE_CONFIG_DIRECTORIES,
@@ -31,16 +33,27 @@ import { getInitialSettings } from '../utils/settings/settings.js'
 import { createSignal } from '../utils/signal.js'
 
 // Lazily constructed singleton
-let fileIndex: FileIndex | null = null
+let fileIndex: FileIndexLike | null = null
 
-function getFileIndex(): FileIndex {
-  if (!fileIndex) {
-    fileIndex = new FileIndex()
+function getFileIndex(): FileIndexLike {
+  if (fileIndex) {
+    return fileIndex
   }
+  // Native-first: the Rust index returns identical results (differential-
+  // tested) with <1ms searches on 270k paths. The TS FileIndex below stays
+  // as the fallback — it is the behavioral baseline.
+  if (feature('FILE_INDEX_NATIVE')) {
+    const native = createNativeFileIndex()
+    if (native !== null) {
+      fileIndex = native
+      return fileIndex
+    }
+  }
+  fileIndex = new FileIndex()
   return fileIndex
 }
 
-let fileListRefreshPromise: Promise<FileIndex> | null = null
+let fileListRefreshPromise: Promise<FileIndexLike> | null = null
 // Signal fired when an in-progress index build completes. Lets the
 // typeahead UI re-run its last search so partial results upgrade to full.
 const indexBuildComplete = createSignal()
@@ -82,6 +95,8 @@ let loadedMergedSignature: string | null = null
  * Call this when resuming a session to ensure fresh file discovery.
  */
 export function clearFileSuggestionCaches(): void {
+  // Release the native index memory eagerly (TS fallback has no free()).
+  fileIndex?.free?.()
   fileIndex = null
   fileListRefreshPromise = null
   cacheGeneration++
@@ -513,7 +528,7 @@ async function getProjectFiles(
  * Uses git ls-files for git repos (fast) or ripgrep as fallback
  * Returns a FileIndex populated for fast fuzzy search
  */
-export async function getPathsForSuggestions(): Promise<FileIndex> {
+export async function getPathsForSuggestions(): Promise<FileIndexLike> {
   const signal = AbortSignal.timeout(10_000)
   const index = getFileIndex()
 
@@ -609,7 +624,7 @@ function createFileSuggestionItem(
  */
 const MAX_SUGGESTIONS = 15
 function findMatchingFiles(
-  fileIndex: FileIndex,
+  fileIndex: FileIndexLike,
   partialPath: string,
 ): SuggestionItem[] {
   const results = fileIndex.search(partialPath, MAX_SUGGESTIONS)

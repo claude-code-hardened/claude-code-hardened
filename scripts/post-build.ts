@@ -75,6 +75,7 @@ async function postBuild() {
     'token-counter',
     'transcript-parser',
     'color-diff',
+    'file-index',
     'clipboard',
   ]) {
     const src = `vendor/${name}`

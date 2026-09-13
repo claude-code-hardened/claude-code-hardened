@@ -164,6 +164,7 @@
     "env-paths": "^4.0.0",
     "execa": "^9.6.1",
     "fflate": "^0.8.2",
+    "file-index-napi": "workspace:*",
     "figures": "^6.1.0",
     "fuse.js": "^7.3.0",
     "get-east-asian-width": "^1.5.0",
