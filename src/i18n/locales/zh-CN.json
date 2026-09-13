@@ -936,7 +936,7 @@
   "Review a pull request": "审查拉取请求（PR）",
   "~10–20 min · Finds and verifies bugs in your branch. Runs in Claude Code on the web. See https://code.claude.com/docs/en/claude-code-on-the-web": "约 10–20 分钟 · 查找并验证你分支中的 bug。在 Claude Code 网页版上运行。详见 https://code.claude.com/docs/en/claude-code-on-the-web",
   "Complete a security review of the pending changes on the current branch": "对当前分支的待处理更改完成安全审查",
-  "Upload the current session log to GitHub Gist. Flags: --public, --private (default), --mask-secrets, --summary-only, --allow-public-fallback": "将当前会话日志上传到 GitHub Gist。Flags: --public, --private (default), --mask-secrets, --summary-only, --allow-public-fallback",
+  "Upload the current session log to GitHub Gist. Flags: --public, --private (default), --mask-secrets, --summary-only, --allow-public-fallback": "将当前会话日志上传到 GitHub Gist。Flags: --public, --private（默认）, --mask-secrets, --summary-only, --allow-public-fallback",
   "Browse and install remote skills from the Anthropic skill marketplace. Requires Claude Pro/Max/Team subscription.": "浏览并安装来自 Anthropic 技能市场的远程技能。需要 Claude Pro/Max/Team 订阅。",
   "Subscribe to GitHub PR activity (comments, CI, reviews)": "订阅 GitHub PR 动态（评论、CI、审查）",
   "Enable Option+Enter key binding for newlines and visual bell": "启用 Option+Enter 换行按键绑定和视觉响铃",
@@ -2345,5 +2345,13 @@
   "Loading output…": "正在加载输出…",
   "No output available": "无可用输出",
   "Showing {{n}} lines": "显示 {{n}} 行",
-  " of {{size}}": "（共 {{size}}）"
+  " of {{size}}": "（共 {{size}}）",
+  "Guide for modern game anti-cheat architecture, Windows kernel monitoring, and detection tradeoffs. Use this skill when analyzing EAC, BattlEye, Vanguard, FACEIT AC, kernel callbacks, handle protection, manual-map detection, boot-start drivers, BYOVD, DMA threats, or behavioral telemetry in game security research.": "现代游戏反作弊架构、Windows 内核监控与检测权衡指南。在游戏安全研究中分析 EAC、BattlEye、Vanguard、FACEIT AC、内核回调、句柄保护、manual-map 检测、boot-start 驱动、BYOVD、DMA 威胁或行为遥测时使用此技能。",
+  "Guide for Android and iOS game security, reversing, and anti-cheat-adjacent platform research. Use this skill when working with APK or IPA analysis, IL2CPP mobile titles, Frida, Zygisk or Magisk, jailbreak or root detection bypass, Android kernel modules, emulator detection, or mobile anti-cheat systems.": "Android 与 iOS 游戏安全、逆向工程及反作弊相关平台研究指南。处理 APK 或 IPA 分析、IL2CPP 手游、Frida、Zygisk 或 Magisk、越狱或 root 检测绕过、Android 内核模块、模拟器检测或移动端反作弊系统时使用此技能。",
+  "Guide for reverse engineering protected games and anti-cheat components across user mode, kernel mode, and hypervisor-aware environments. Use this skill when analyzing drivers, IOCTL protocols, callback registration, injected-code artifacts, integrity checks, protected binaries, or debugging security-sensitive game components.": "跨用户态、内核态与 hypervisor 感知环境逆向受保护游戏和反作弊组件的指南。分析驱动、IOCTL 协议、回调注册、注入代码痕迹、完整性校验、受保护二进制文件，或调试安全敏感游戏组件时使用此技能。",
+  "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR. (bundled)": "调研并规划大规模更改，然后在 5–30 个隔离 worktree 代理中并行执行，每个代理各开一个 PR。（内置）",
+  "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo, defaults to 10m) (bundled)": "按周期重复运行提示词或斜杠命令（如 /loop 5m /foo，默认 10 分钟）。（内置）",
+  "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, use Config tool. (bundled)": "使用此技能通过 settings.json 配置 Claude Code 运行框架。自动化行为（“从现在起每当 X”“每次 X”“无论何时 X”“在 X 之前/之后”）需要在 settings.json 中配置 hook——执行这些行为的是框架而非 Claude，因此记忆/偏好无法实现。也适用于：权限（“允许 X”“添加权限”“移动权限到”）、环境变量（“设置 X=Y”）、hook 排障，以及对 settings.json/settings.local.json 文件的任何更改。示例：“允许 npm 命令”“将 bq 权限添加到全局设置”“移动权限到用户设置”“设置 DEBUG=true”“claude 停止时显示 X”。主题/模型等简单设置请用 Config 工具。（内置）",
+  "(open-code-review) Run OCR in delegation mode — OCR handles file selection and rules, the host agent performs the actual review.": "（open-code-review）以委托模式运行 OCR——OCR 负责文件选择与规则，主代理执行实际审查。",
+  "(open-code-review) Run OpenCodeReview (OCR) to review code changes and autonomously apply fixes.": "（open-code-review）运行 OpenCodeReview（OCR）审查代码更改并自动应用修复。"
 }
