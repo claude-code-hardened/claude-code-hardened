@@ -261,7 +261,7 @@ function NoConfigView({
     <Box flexDirection="column" padding={1}>
       <Text bold>{adapter.label}</Text>
       <Box flexDirection="column" marginTop={1}>
-        <Text>{adapter.description}</Text>
+        <Text>{t(adapter.description)}</Text>
         <Box marginTop={1}>
           <Text dimColor>{t('No additional configuration needed.')}</Text>
         </Box>
