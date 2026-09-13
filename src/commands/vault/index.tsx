@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { getGlobalConfig } from '../../utils/config.js';
 import type { Command } from '../../types/command.js';
 
@@ -5,8 +6,9 @@ const vaultCommand: Command = {
   type: 'local-jsx',
   name: 'vault',
   aliases: ['vaults'],
-  description:
+  description: t(
     'Manage remote secret vaults and credentials for cloud agents. Requires Claude Pro/Max/Team subscription.',
+  ),
   // REPL markdown renderer strips `<...>` as HTML tags — use uppercase.
   argumentHint:
     'list | create NAME | get ID | archive ID | add-credential VAULT_ID KEY VALUE | archive-credential VAULT_ID CRED_ID',

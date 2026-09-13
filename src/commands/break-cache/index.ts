@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import {
   appendFileSync,
   existsSync,
@@ -245,8 +246,9 @@ export async function callBreakCache(
 const breakCache: Command = {
   type: 'local-jsx',
   name: 'break-cache',
-  description:
+  description: t(
     'Manage prompt-cache breaking. Open actions or run: once, status, always, off',
+  ),
   isHidden: false,
   isEnabled: () => !getIsNonInteractiveSession(),
   argumentHint: '[once|status|always|off|--clear]',
@@ -261,8 +263,9 @@ const breakCache: Command = {
 export const breakCacheNonInteractive: Command = {
   type: 'local',
   name: 'break-cache',
-  description:
+  description: t(
     'Force the next (or all) API call(s) to miss prompt cache. Scopes: once, status, always, off',
+  ),
   isHidden: false,
   isEnabled: () => getIsNonInteractiveSession(),
   supportsNonInteractive: true,

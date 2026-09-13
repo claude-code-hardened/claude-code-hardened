@@ -1,10 +1,11 @@
+import { t } from '../../i18n/index.js'
 import type { Command } from '../../commands.js'
 import { feature } from 'bun:bundle'
 
 const job = {
   type: 'local-jsx',
   name: 'job',
-  description: 'Manage template jobs',
+  description: t('Manage template jobs'),
   argumentHint: '[list|new|reply|status]',
   isEnabled: () => {
     if (feature('TEMPLATES')) return true

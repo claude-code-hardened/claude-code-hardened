@@ -1,10 +1,11 @@
+import { t } from '../../i18n/index.js'
 import type { Command } from '../../commands.js'
 import { isAssistantEnabled } from './gate.js'
 
 const assistant = {
   type: 'local-jsx',
   name: 'assistant',
-  description: 'Open the Kairos assistant panel',
+  description: t('Open the Kairos assistant panel'),
   isEnabled: isAssistantEnabled,
   get isHidden() {
     return !isAssistantEnabled()

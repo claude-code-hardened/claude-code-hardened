@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import type { Command } from '../../types/command.js'
 
 const scheduleCommand: Command = {
@@ -9,8 +10,9 @@ const scheduleCommand: Command = {
   // keep the rename minimal — only the user-facing slash name changes.
   name: 'triggers',
   aliases: ['cron'],
-  description:
+  description: t(
     'Manage scheduled remote agent triggers (cloud cron). Requires Claude Pro/Max/Team subscription.',
+  ),
   // REPL markdown renderer strips `<...>` as HTML tags — use uppercase.
   argumentHint:
     'list | get ID | create CRON PROMPT | update ID FIELD VALUE | delete ID | run ID | enable ID | disable ID',

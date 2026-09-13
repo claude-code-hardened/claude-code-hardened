@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
@@ -501,8 +502,9 @@ function formatReportCSV(analyzed: AnalyzedLog): string {
 const perfIssue: Command = {
   type: 'local',
   name: 'perf-issue',
-  description:
+  description: t(
     'Capture a performance + token-usage snapshot. Flags: --format=json|csv|md (default md)',
+  ),
   isHidden: false,
   isEnabled: () => true,
   supportsNonInteractive: true,

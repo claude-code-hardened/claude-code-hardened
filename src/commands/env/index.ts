@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import type { Command, LocalCommandResult } from '../../types/command.js'
 import { getSessionId } from '../../bootstrap/state.js'
 
@@ -79,7 +80,7 @@ function formatRuntime(): string {
 const env: Command = {
   type: 'local',
   name: 'env',
-  description: 'Show current environment, runtime, and feature flags',
+  description: t('Show current environment, runtime, and feature flags'),
   isHidden: false,
   isEnabled: () => true,
   supportsNonInteractive: true,

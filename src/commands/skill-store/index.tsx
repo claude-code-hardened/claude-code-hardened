@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { getGlobalConfig } from '../../utils/config.js';
 import type { Command } from '../../types/command.js';
 
@@ -5,8 +6,9 @@ const skillStoreCommand: Command = {
   type: 'local-jsx',
   name: 'skill-store',
   aliases: ['ss', 'cloud-skills'],
-  description:
+  description: t(
     'Browse and install remote skills from the Anthropic skill marketplace. Requires Claude Pro/Max/Team subscription.',
+  ),
   // REPL markdown renderer strips `<...>` as HTML tags — use uppercase.
   argumentHint:
     'list | get ID | versions ID | version ID VER | create NAME MARKDOWN | delete ID | install ID[@VERSION]',

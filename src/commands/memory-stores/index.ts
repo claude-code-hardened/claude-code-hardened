@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { getGlobalConfig } from '../../utils/config.js'
 import type { Command } from '../../types/command.js'
 
@@ -5,8 +6,9 @@ const memoryStoresCommand: Command = {
   type: 'local-jsx',
   name: 'memory-stores',
   aliases: ['mem', 'mstore'],
-  description:
+  description: t(
     'Manage remote memory stores (cross-device memory persistence). Requires Claude Pro/Max/Team subscription.',
+  ),
   // REPL markdown renderer strips `<...>` as HTML tags — use uppercase.
   argumentHint:
     'list | get ID | create NAME | archive ID | memories STORE_ID | create-memory STORE_ID CONTENT | get-memory STORE_ID MEMORY_ID | update-memory STORE_ID MEMORY_ID CONTENT | delete-memory STORE_ID MEMORY_ID | versions STORE_ID | redact STORE_ID VERSION_ID',

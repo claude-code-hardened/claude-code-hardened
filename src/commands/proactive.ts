@@ -4,6 +4,7 @@
  * When enabled, the model receives periodic <tick> prompts and works
  * autonomously between user inputs.  SleepTool controls pacing.
  */
+import { t } from '../i18n/index.js'
 import { feature } from 'bun:bundle'
 import type { ToolUseContext } from '../Tool.js'
 import type {
@@ -16,7 +17,7 @@ const proactive = {
   bridgeSafe: true,
   type: 'local-jsx',
   name: 'proactive',
-  description: 'Toggle proactive (autonomous) mode',
+  description: t('Toggle proactive (autonomous) mode'),
   isEnabled: () => {
     if (feature('PROACTIVE') || feature('KAIROS')) {
       return true

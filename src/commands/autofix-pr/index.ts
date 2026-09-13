@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { feature } from 'bun:bundle'
 import type { Command } from '../../types/command.js'
 
@@ -12,7 +13,7 @@ function isAutofixPrEnabled(): boolean {
 const autofixPr: Command = {
   type: 'local-jsx',
   name: 'autofix-pr',
-  description: 'Auto-fix CI failures on a pull request',
+  description: t('Auto-fix CI failures on a pull request'),
   // Avoid `<x>` in hints — REPL markdown renderer eats angle-bracketed
   // tokens as HTML tags. Uppercase placeholders survive intact.
   argumentHint: 'PR_NUMBER | stop | OWNER/REPO#N',

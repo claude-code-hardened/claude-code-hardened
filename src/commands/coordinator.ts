@@ -5,6 +5,7 @@
  * to worker agents via Agent({ subagent_type: "worker" }).
  * The coordinator can only use Agent, SendMessage, and TaskStop.
  */
+import { t } from '../i18n/index.js'
 import { feature } from 'bun:bundle'
 import type { ToolUseContext } from '../Tool.js'
 import type {
@@ -16,7 +17,7 @@ import type {
 const coordinator = {
   type: 'local-jsx',
   name: 'coordinator',
-  description: 'Toggle coordinator (multi-worker) mode',
+  description: t('Toggle coordinator (multi-worker) mode'),
   isEnabled: () => {
     if (feature('COORDINATOR_MODE')) {
       return true

@@ -35,16 +35,16 @@ type ViewState = { kind: 'main' } | { kind: 'config'; adapter: AdapterMeta };
 // ── Data ───────────────────────────────────────────────────────────────────
 
 const SEARCH_ADAPTERS: AdapterMeta[] = [
-  { key: 'tavily', label: 'Tavily', description: 'Tavily Search API (default)', hasConfig: true },
-  { key: 'api', label: 'Anthropic API', description: 'Anthropic server-side web search', hasConfig: false },
-  { key: 'bing', label: 'Bing', description: 'Scrape Bing HTML results', hasConfig: false },
-  { key: 'brave', label: 'Brave', description: 'Brave Search API (needs API key)', hasConfig: true },
-  { key: 'exa', label: 'Exa', description: 'Exa AI search (MCP endpoint)', hasConfig: true },
+  { key: 'tavily', label: 'Tavily', description: t('Tavily Search API (default)'), hasConfig: true },
+  { key: 'api', label: 'Anthropic API', description: t('Anthropic server-side web search'), hasConfig: false },
+  { key: 'bing', label: 'Bing', description: t('Scrape Bing HTML results'), hasConfig: false },
+  { key: 'brave', label: 'Brave', description: t('Brave Search API (needs API key)'), hasConfig: true },
+  { key: 'exa', label: 'Exa', description: t('Exa AI search (MCP endpoint)'), hasConfig: true },
 ];
 
 const FETCH_ADAPTERS: AdapterMeta[] = [
-  { key: 'tavily', label: 'Tavily Extract', description: 'Use Tavily /extract (default)', hasConfig: true },
-  { key: 'http', label: 'HTTP Direct', description: 'Fetch URL directly via HTTP', hasConfig: true },
+  { key: 'tavily', label: 'Tavily Extract', description: t('Use Tavily /extract (default)'), hasConfig: true },
+  { key: 'http', label: 'HTTP Direct', description: t('Fetch URL directly via HTTP'), hasConfig: true },
 ];
 
 // ── Config field definitions ───────────────────────────────────────────────

@@ -257,8 +257,9 @@ function parseShareArgs(args: string): ShareOptions {
 const share: Command = {
   type: 'local',
   name: 'share',
-  description:
+  description: t(
     'Upload the current session log to GitHub Gist. Flags: --public, --private (default), --mask-secrets, --summary-only, --allow-public-fallback',
+  ),
   isHidden: false,
   isEnabled: () => true,
   supportsNonInteractive: true,

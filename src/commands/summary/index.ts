@@ -4,6 +4,7 @@
  * Triggers a manual Session Memory extraction (bypassing automatic thresholds),
  * then reads and displays the updated summary.md file.
  */
+import { t } from '../../i18n/index.js'
 import type { Command, LocalCommandCall } from '../../types/command.js'
 import type { Message } from '../../types/message.js'
 
@@ -69,7 +70,7 @@ const call: LocalCommandCall = async (_args, context) => {
 const summary = {
   type: 'local',
   name: 'summary',
-  description: 'Generate and display a session summary',
+  description: t('Generate and display a session summary'),
   supportsNonInteractive: true,
   isHidden: false,
   load: () => Promise.resolve({ call }),

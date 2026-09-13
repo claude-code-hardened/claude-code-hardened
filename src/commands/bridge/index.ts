@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { feature } from 'bun:bundle'
 import { isBridgeEnabled } from '../../bridge/bridgeEnabled.js'
 import type { Command } from '../../commands.js'
@@ -13,7 +14,7 @@ const bridge = {
   type: 'local-jsx',
   name: 'remote-control',
   aliases: ['rc'],
-  description: 'Connect this terminal for remote-control sessions',
+  description: t('Connect this terminal for remote-control sessions'),
   argumentHint: '[name]',
   isEnabled,
   get isHidden() {

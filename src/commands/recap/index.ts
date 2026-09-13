@@ -17,6 +17,7 @@
  * checks feature('AWAY_SUMMARY'). For the manual /recap command we check the
  * same GrowthBook flag so the two surfaces stay in sync.
  */
+import { t } from '../../i18n/index.js'
 import { feature } from 'bun:bundle'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import type {
@@ -64,7 +65,7 @@ const call: LocalCommandCall = async (_args, context) => {
 const recap = {
   type: 'local',
   name: 'recap',
-  description: 'Generate a one-line session recap now',
+  description: t('Generate a one-line session recap now'),
   aliases: ['away', 'catchup'],
   /**
    * Enabled when:

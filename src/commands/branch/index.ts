@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { feature } from 'bun:bundle'
 import type { Command } from '../../commands.js'
 
@@ -6,7 +7,7 @@ const branch = {
   name: 'branch',
   // 'fork' alias only when /fork doesn't exist as its own command
   aliases: feature('FORK_SUBAGENT') ? [] : ['fork'],
-  description: 'Create a branch of the current conversation at this point',
+  description: t('Create a branch of the current conversation at this point'),
   argumentHint: '[name]',
   load: () => import('./branch.js'),
 } satisfies Command

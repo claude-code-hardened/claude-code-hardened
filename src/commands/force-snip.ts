@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js'
 import { randomUUID } from 'crypto'
 import type { Command, LocalCommandCall } from '../types/command.js'
 import type { Message } from '../types/message.js'
@@ -50,7 +51,7 @@ const call: LocalCommandCall = async (_args, context) => {
 const forceSnip = {
   type: 'local',
   name: 'force-snip',
-  description: 'Force snip conversation history at current point',
+  description: t('Force snip conversation history at current point'),
   supportsNonInteractive: true,
   isHidden: false,
   load: () => Promise.resolve({ call }),

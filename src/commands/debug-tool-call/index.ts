@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -121,8 +122,9 @@ function parseToolCallsFromLog(
 const debugToolCall: Command = {
   type: 'local',
   name: 'debug-tool-call',
-  description:
+  description: t(
     'Show the last N tool call pairs (use/result) from the session log',
+  ),
   isHidden: false,
   isEnabled: () => true,
   supportsNonInteractive: true,

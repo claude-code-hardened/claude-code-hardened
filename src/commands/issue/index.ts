@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import {
   existsSync,
   mkdirSync,
@@ -282,8 +283,9 @@ function parseIssueArgs(args: string): IssueOptions {
 const issue: Command = {
   type: 'local',
   name: 'issue',
-  description:
+  description: t(
     'Create a GitHub issue via gh CLI. Flags: --label <label>, --assignee <user>',
+  ),
   isHidden: false,
   isEnabled: () => true,
   supportsNonInteractive: true,

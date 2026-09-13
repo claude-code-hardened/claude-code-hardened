@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js'
 import type { Command } from '../commands.js'
 import type { LocalCommandCall } from '../types/command.js'
 import { getAPIProvider } from '../utils/model/providers.js'
@@ -164,8 +165,9 @@ const call: LocalCommandCall = async (args, _context) => {
 const provider = {
   type: 'local',
   name: 'provider',
-  description:
+  description: t(
     'Switch API provider (anthropic/openai/gemini/grok/bedrock/vertex/foundry)',
+  ),
   aliases: ['api'],
   argumentHint: '[anthropic|openai|gemini|grok|bedrock|vertex|foundry|unset]',
   supportsNonInteractive: true,

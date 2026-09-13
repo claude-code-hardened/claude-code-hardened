@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { getGlobalConfig } from '../../utils/config.js'
 import type { Command } from '../../types/command.js'
 
@@ -9,7 +10,7 @@ const agentsPlatform: Command = {
   type: 'local-jsx',
   name: 'agents-platform',
   aliases: ['agents', 'schedule-agent'],
-  description: 'Manage scheduled remote agents (cron-style triggers)',
+  description: t('Manage scheduled remote agents (cron-style triggers)'),
   // REPL markdown renderer strips `<...>` as HTML tags — use uppercase.
   argumentHint: 'list | create CRON PROMPT | delete ID | run ID',
   get isHidden(): boolean {

@@ -9,6 +9,7 @@
  *   /monitor watch -n 5 git status
  *   /monitor "while true; do curl -s http://localhost:3000/health; sleep 10; done"
  */
+import { t } from '../i18n/index.js'
 import { feature } from 'bun:bundle'
 import type {
   Command,
@@ -20,7 +21,7 @@ import type { ToolUseContext } from '../Tool.js'
 const monitor = {
   type: 'local-jsx',
   name: 'monitor',
-  description: 'Start a background shell monitor (Shift+Down to view)',
+  description: t('Start a background shell monitor (Shift+Down to view)'),
   isEnabled: () => {
     if (feature('MONITOR_TOOL')) {
       return true

@@ -1,11 +1,13 @@
+import { t } from '../../i18n/index.js';
 import type { Command } from '../../types/command.js';
 
 const localMemoryCommand: Command = {
   type: 'local-jsx',
   name: 'local-memory',
   aliases: ['lm'],
-  description:
+  description: t(
     'Manage local memory stores for notes and context. Stored in ~/.claude/local-memory/ — no API key required.',
+  ),
   // Avoid `<store>` / `<key>` / `<value>` in hint — REPL markdown renderer
   // strips angle-bracketed words as HTML tags. Uppercase placeholders are
   // visible. Same fix as /local-vault.

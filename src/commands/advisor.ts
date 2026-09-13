@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js'
 import type { Command } from '../commands.js'
 import type { LocalCommandCall } from '../types/command.js'
 import {
@@ -96,7 +97,7 @@ const call: LocalCommandCall = async (args, context) => {
 const advisor = {
   type: 'local',
   name: 'advisor',
-  description: 'Configure the advisor model',
+  description: t('Configure the advisor model'),
   argumentHint: '[<model>|off]',
   isEnabled: () => canUserConfigureAdvisor(),
   get isHidden() {

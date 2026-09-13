@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import type { Command } from '../../commands.js'
 
 function isSupportedPlatform(): boolean {
@@ -14,7 +15,7 @@ const desktop = {
   type: 'local-jsx',
   name: 'desktop',
   aliases: ['app'],
-  description: 'Continue the current session in Claude Desktop',
+  description: t('Continue the current session in Claude Desktop'),
   availability: ['claude-ai'],
   isEnabled: isSupportedPlatform,
   get isHidden() {

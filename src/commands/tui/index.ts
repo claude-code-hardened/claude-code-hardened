@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getIsNonInteractiveSession } from '../../bootstrap/state.js'
@@ -154,8 +155,9 @@ export async function callTui(args: string): Promise<LocalCommandResult> {
 const tuiCommand: Command = {
   type: 'local-jsx',
   name: 'tui',
-  description:
+  description: t(
     'Manage flicker-free TUI mode. Open actions or run: status, on, off, toggle',
+  ),
   isHidden: false,
   isEnabled: () => !getIsNonInteractiveSession(),
   argumentHint: '[status|on|off|toggle]',
@@ -170,8 +172,9 @@ const tuiCommand: Command = {
 export const tuiNonInteractive: Command = {
   type: 'local',
   name: 'tui',
-  description:
+  description: t(
     'Toggle flicker-free TUI mode (alternate screen buffer). Subcommands: on, off, status',
+  ),
   isHidden: false,
   isEnabled: () => getIsNonInteractiveSession(),
   supportsNonInteractive: true,

@@ -35,6 +35,7 @@ import {
   isFirstPartyAnthropicBaseUrl,
   isThirdPartyAPIProvider,
 } from './utils/model/providers.js'
+import { t } from './i18n/index.js'
 
 /**
  * Startup-lazy command shim.
@@ -330,9 +331,9 @@ const effort = lazyCommand('./commands/effort/index.js')
 const usageReport: Command = {
   type: 'prompt',
   name: 'insights',
-  description: 'Generate a report analyzing your Claude Code sessions',
+  description: t('Generate a report analyzing your Claude Code sessions'),
   contentLength: 0,
-  progressMessage: 'analyzing your sessions',
+  progressMessage: t('analyzing your sessions'),
   source: 'builtin',
   async getPromptForCommand(args, context) {
     const real = (await import('./commands/insights.js')).default

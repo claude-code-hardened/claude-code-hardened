@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import React, { useEffect, useState } from 'react';
@@ -263,7 +264,7 @@ function Install({ onDone, force, target }: InstallProps): React.ReactNode {
 export const install = {
   type: 'local-jsx' as const,
   name: 'install',
-  description: 'Install Claude Code native build',
+  description: t('Install Claude Code native build'),
   argumentHint: '[options]',
   async call(
     onDone: (result: string, options?: { display?: CommandResultDisplay }) => void,

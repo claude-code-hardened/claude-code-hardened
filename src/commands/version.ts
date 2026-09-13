@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js'
 import type { Command, LocalCommandCall } from '../types/command.js'
 
 const call: LocalCommandCall = async () => {
@@ -12,8 +13,9 @@ const call: LocalCommandCall = async () => {
 const version = {
   type: 'local',
   name: 'version',
-  description:
+  description: t(
     'Print the version this session is running (not what autoupdate downloaded)',
+  ),
   // Was Ant-only upstream; for fork subscribers we want this universally
   // available — version info is harmless and useful for bug reports.
   isEnabled: () => true,

@@ -58,7 +58,7 @@ You have the capability to call multiple tools in a single response. Stage and c
 const command = {
   type: 'prompt',
   name: 'commit',
-  description: 'Create a git commit',
+  description: t('Create a git commit'),
   allowedTools: ALLOWED_TOOLS,
   contentLength: 0, // Dynamic content
   progressMessage: t('creating commit'),

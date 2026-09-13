@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import React, { useMemo, useState } from 'react';
 import { Box, Text, useInput } from '@anthropic/ink';
 import { Dialog } from '@anthropic/ink';
@@ -78,22 +79,22 @@ function SkillSearchPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
     () => [
       {
         label: 'Status',
-        description: 'Show whether automatic skill matching is active',
+        description: t('Show whether automatic skill matching is active'),
         run: () => Promise.resolve(getStatusText()),
       },
       {
         label: 'Start',
-        description: 'Enable automatic skill matching for this session',
+        description: t('Enable automatic skill matching for this session'),
         run: startSkillSearch,
       },
       {
         label: 'Stop',
-        description: 'Disable automatic skill matching for this session',
+        description: t('Disable automatic skill matching for this session'),
         run: stopSkillSearch,
       },
       {
         label: 'About',
-        description: 'How automatic skill matching works',
+        description: t('How automatic skill matching works'),
         run: () => Promise.resolve(ABOUT_TEXT),
       },
     ],

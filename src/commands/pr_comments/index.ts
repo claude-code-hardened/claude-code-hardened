@@ -3,7 +3,7 @@ import { t } from '../../i18n/index.js'
 
 export default createMovedToPluginCommand({
   name: 'pr-comments',
-  description: 'Get comments from a GitHub pull request',
+  description: t('Get comments from a GitHub pull request'),
   progressMessage: t('fetching PR comments'),
   pluginName: 'pr-comments',
   pluginCommand: 'pr-comments',

@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js'
 import type { Command } from '../../commands.js'
 import { checkStatsigFeatureGate_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 
@@ -6,7 +7,7 @@ import { checkStatsigFeatureGate_CACHED_MAY_BE_STALE } from '../../services/anal
 const thinkbackPlay = {
   type: 'local',
   name: 'thinkback-play',
-  description: 'Play the thinkback animation',
+  description: t('Play the thinkback animation'),
   isEnabled: () =>
     checkStatsigFeatureGate_CACHED_MAY_BE_STALE('tengu_thinkback'),
   isHidden: true,

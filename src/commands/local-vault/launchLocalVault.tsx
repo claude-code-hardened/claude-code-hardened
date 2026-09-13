@@ -51,26 +51,26 @@ const VAULT_MENU: Array<{
   label: string;
   description: string;
 }> = [
-  { kind: 'list', label: 'List', description: 'Show stored secret keys' },
+  { kind: 'list', label: 'List', description: t('Show stored secret keys') },
   {
     kind: 'set',
     label: 'Set',
-    description: 'Store a secret: KEY + VALUE (input is masked)',
+    description: t('Store a secret: KEY + VALUE (input is masked)'),
   },
   {
     kind: 'get',
     label: 'Get',
-    description: 'Look up a secret (returns masked preview)',
+    description: t('Look up a secret (returns masked preview)'),
   },
   {
     kind: 'delete',
     label: 'Delete',
-    description: 'Delete a stored secret by KEY',
+    description: t('Delete a stored secret by KEY'),
   },
   {
     kind: 'about',
     label: 'About',
-    description: 'Show command syntax',
+    description: t('Show command syntax'),
   },
 ];
 

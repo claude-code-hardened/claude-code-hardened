@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import React, { useMemo, useState } from 'react';
 import { Box, Dialog, Text, useInput } from '@anthropic/ink';
 import type { LocalJSXCommandOnDone } from '../../types/command.js';
@@ -25,22 +26,22 @@ function TuiPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.ReactNod
     () => [
       {
         label: 'Status',
-        description: 'Show marker and environment override state',
+        description: t('Show marker and environment override state'),
         run: () => void runTuiAction('status', onDone),
       },
       {
         label: 'Toggle',
-        description: 'Flip persisted TUI mode for the next session',
+        description: t('Flip persisted TUI mode for the next session'),
         run: () => void runTuiAction('toggle', onDone),
       },
       {
         label: 'On',
-        description: 'Enable flicker-free alternate-screen mode',
+        description: t('Enable flicker-free alternate-screen mode'),
         run: () => void runTuiAction('on', onDone),
       },
       {
         label: 'Off',
-        description: 'Disable flicker-free alternate-screen mode',
+        description: t('Disable flicker-free alternate-screen mode'),
         run: () => void runTuiAction('off', onDone),
       },
     ],

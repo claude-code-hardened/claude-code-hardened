@@ -77,36 +77,36 @@ const MENU: Array<{
   label: string;
   description: string;
 }> = [
-  { kind: 'list', label: 'List', description: 'Show all stores' },
+  { kind: 'list', label: 'List', description: t('Show all stores') },
   {
     kind: 'create',
     label: 'Create',
-    description: 'Create a new memory store',
+    description: t('Create a new memory store'),
   },
   {
     kind: 'store',
     label: 'Store',
-    description: 'Write an entry: store name + key + value',
+    description: t('Write an entry: store name + key + value'),
   },
   {
     kind: 'fetch',
     label: 'Fetch',
-    description: 'Read an entry by store name + key',
+    description: t('Read an entry by store name + key'),
   },
   {
     kind: 'entries',
     label: 'Entries',
-    description: 'List entry keys in a store',
+    description: t('List entry keys in a store'),
   },
   {
     kind: 'archive',
     label: 'Archive',
-    description: 'Archive a store (rename to *.archived)',
+    description: t('Archive a store (rename to *.archived)'),
   },
   {
     kind: 'about',
     label: 'About',
-    description: 'Show command syntax',
+    description: t('Show command syntax'),
   },
 ];
 

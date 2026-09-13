@@ -1,9 +1,10 @@
+import { t } from '../../i18n/index.js'
 import type { Command } from '../../commands.js'
 
 const stickers = {
   type: 'local',
   name: 'stickers',
-  description: 'Order Claude Code stickers',
+  description: t('Order Claude Code stickers'),
   supportsNonInteractive: false,
   load: () => import('./stickers.js'),
 } satisfies Command

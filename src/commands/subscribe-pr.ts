@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { Command, LocalCommandCall } from '../types/command.js'
@@ -164,7 +165,7 @@ const subscribePr = {
   type: 'local',
   name: 'subscribe-pr',
   aliases: ['watch-pr'],
-  description: 'Subscribe to GitHub PR activity (comments, CI, reviews)',
+  description: t('Subscribe to GitHub PR activity (comments, CI, reviews)'),
   argumentHint: '<pr-url-or-number>',
   supportsNonInteractive: false,
   isHidden: true,

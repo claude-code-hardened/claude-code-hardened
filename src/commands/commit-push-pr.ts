@@ -109,7 +109,7 @@ Return the PR URL when you're done, so the user can see it.`
 const command = {
   type: 'prompt',
   name: 'commit-push-pr',
-  description: 'Commit, push, and open a PR',
+  description: t('Commit, push, and open a PR'),
   allowedTools: ALLOWED_TOOLS,
   get contentLength() {
     // Use 'main' as estimate for content length calculation

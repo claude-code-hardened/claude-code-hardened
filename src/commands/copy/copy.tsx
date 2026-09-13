@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { mkdir, writeFile } from 'fs/promises';
 import { marked, type Tokens } from 'marked';
 import { tmpdir } from 'os';
@@ -135,7 +136,7 @@ function CopyPicker({ fullText, codeBlocks, messageAge, onDone }: PickerProps): 
     {
       label: 'Always copy full response',
       value: 'always' as const,
-      description: 'Skip this picker in the future (revert via /config)',
+      description: t('Skip this picker in the future (revert via /config)'),
     },
   ];
 

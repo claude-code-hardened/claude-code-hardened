@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import React, { useMemo, useState } from 'react';
 import { Box, Dialog, Text, useInput } from '@anthropic/ink';
 import type { LocalJSXCommandOnDone } from '../../types/command.js';
@@ -25,27 +26,27 @@ function BreakCachePanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.R
     () => [
       {
         label: 'Status',
-        description: 'Show pending marker, always mode, and break count',
+        description: t('Show pending marker, always mode, and break count'),
         run: () => void runBreakCacheAction('status', onDone),
       },
       {
         label: 'Once',
-        description: 'Break prompt cache on the next API call only',
+        description: t('Break prompt cache on the next API call only'),
         run: () => void runBreakCacheAction('once', onDone),
       },
       {
         label: 'Always',
-        description: 'Break prompt cache on every API call',
+        description: t('Break prompt cache on every API call'),
         run: () => void runBreakCacheAction('always', onDone),
       },
       {
         label: 'Off',
-        description: 'Disable always mode and clear pending once marker',
+        description: t('Disable always mode and clear pending once marker'),
         run: () => void runBreakCacheAction('off', onDone),
       },
       {
         label: 'Clear Once',
-        description: 'Cancel the pending one-time cache break',
+        description: t('Cancel the pending one-time cache break'),
         run: () => void runBreakCacheAction('--clear', onDone),
       },
     ],

@@ -1,9 +1,10 @@
+import { t } from '../../i18n/index.js'
 import type { Command } from '../../commands.js'
 
 const memory: Command = {
   type: 'local-jsx',
   name: 'memory',
-  description: 'Edit Claude memory files',
+  description: t('Edit Claude memory files'),
   load: () => import('./memory.js'),
 }
 

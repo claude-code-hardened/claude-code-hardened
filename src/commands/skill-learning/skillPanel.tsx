@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import React, { useMemo, useState } from 'react';
 import { Box, Text, useInput } from '@anthropic/ink';
 import { Dialog } from '@anthropic/ink';
@@ -97,22 +98,22 @@ function SkillPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.ReactN
     () => [
       {
         label: 'Status',
-        description: 'Show skill learning status for current project',
+        description: t('Show skill learning status for current project'),
         run: getStatusText,
       },
       {
         label: 'Start',
-        description: 'Enable skill learning for this session',
+        description: t('Enable skill learning for this session'),
         run: startSkillLearning,
       },
       {
         label: 'Stop',
-        description: 'Disable skill learning for this session',
+        description: t('Disable skill learning for this session'),
         run: stopSkillLearning,
       },
       {
         label: 'About',
-        description: 'Detailed description of skill learning features',
+        description: t('Detailed description of skill learning features'),
         run: () => Promise.resolve(ABOUT_TEXT),
       },
     ],

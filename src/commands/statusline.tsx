@@ -5,7 +5,7 @@ import { t } from '../i18n/index.js';
 
 const statusline = {
   type: 'prompt',
-  description: "Set up Claude Code's status line UI",
+  description: t("Set up Claude Code's status line UI"),
   contentLength: 0, // Dynamic content
   aliases: [],
   name: 'statusline',
