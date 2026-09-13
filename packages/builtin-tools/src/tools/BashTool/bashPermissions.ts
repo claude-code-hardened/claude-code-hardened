@@ -1238,7 +1238,10 @@ export async function checkCommandAndSuggestRules(
 
       return {
         behavior: 'ask',
-        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
+        message: createPermissionRequestMessage(
+          getBashTool().name,
+          decisionReason,
+        ),
         decisionReason,
         suggestions: [], // Don't suggest saving a potentially dangerous command
       }
@@ -1762,7 +1765,10 @@ export async function bashToolHasPermission(
     return {
       behavior: 'ask',
       decisionReason,
-      message: createPermissionRequestMessage(getBashTool().name, decisionReason),
+      message: createPermissionRequestMessage(
+        getBashTool().name,
+        decisionReason,
+      ),
       suggestions: [],
       ...(feature('BASH_CLASSIFIER')
         ? {
@@ -1795,7 +1801,10 @@ export async function bashToolHasPermission(
       return {
         behavior: 'ask',
         decisionReason,
-        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
+        message: createPermissionRequestMessage(
+          getBashTool().name,
+          decisionReason,
+        ),
         suggestions: [],
       }
     }
@@ -1828,7 +1837,10 @@ export async function bashToolHasPermission(
       return {
         behavior: 'ask',
         decisionReason,
-        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
+        message: createPermissionRequestMessage(
+          getBashTool().name,
+          decisionReason,
+        ),
       }
     }
   }
@@ -2180,7 +2192,10 @@ export async function bashToolHasPermission(
     }
     return {
       behavior: 'ask',
-      message: createPermissionRequestMessage(getBashTool().name, decisionReason),
+      message: createPermissionRequestMessage(
+        getBashTool().name,
+        decisionReason,
+      ),
       decisionReason,
     }
   }
@@ -2198,7 +2213,10 @@ export async function bashToolHasPermission(
     return {
       behavior: 'ask',
       decisionReason,
-      message: createPermissionRequestMessage(getBashTool().name, decisionReason),
+      message: createPermissionRequestMessage(
+        getBashTool().name,
+        decisionReason,
+      ),
     }
   }
 
@@ -2226,7 +2244,10 @@ export async function bashToolHasPermission(
       return {
         behavior: 'ask',
         decisionReason,
-        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
+        message: createPermissionRequestMessage(
+          getBashTool().name,
+          decisionReason,
+        ),
       }
     }
   }
