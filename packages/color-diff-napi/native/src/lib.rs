@@ -2,9 +2,11 @@
 //! (vendor/color-diff-src was lost; the TypeScript port in ../src was a
 //! stand-in using highlight.js). This crate restores the original design:
 //! syntect for syntax tokenization (stateful — multi-line strings/comments
-//! highlight correctly, unlike hljs line-by-line), the `similar` Myers
-//! algorithm for word diffing, and the measured scope-color tables so the
-//! output colors match what the original produced.
+//! highlight correctly, unlike hljs line-by-line), a line-for-line Rust port
+//! of jsdiff 8.0.4's tokenizers + Myers engine for the line/word diffs
+//! (byte-identical to the `diff` npm package, see ../src/jsDiff.ts), and the
+//! measured scope-color tables so the output colors match what the original
+//! produced.
 //!
 //! The transform pipeline (markers, backgrounds, wrapping, line numbers,
 //! dimming) is a line-for-line port of the TS port, which itself was
@@ -12,9 +14,10 @@
 
 use std::sync::OnceLock;
 
+use std::collections::HashMap;
+
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use similar::{ChangeTag, TextDiff};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
@@ -731,55 +734,103 @@ impl Highlighter {
   }
 }
 
-// ── Word diff (similar crate, Myers on tokens) ───────────────────
+// ── jsdiff 8.0.4 word/line tokenizer + Myers engine ──────────────
+//
+// Line-for-line port of the `diff` npm package 8.0.4 (MIT): diff/word.js,
+// diff/line.js and diff/base.js, exactly mirroring ../src/jsDiff.ts. The
+// previous implementation used the `similar` crate's from_words/from_lines,
+// whose tokenizers differ from jsdiff's in observable ways (punctuation
+// attaching to words, newlines not being separate tokens, lone \r being a
+// line terminator, different Myers tie-breaks) — so change boundaries and
+// count semantics diverged. Everything below reproduces jsdiff byte-for-byte.
 
 type Range = (usize, usize);
 
 const CHANGE_THRESHOLD: f64 = 0.4;
 
-/// Tokenize into word runs, whitespace runs, and single punctuation chars —
-/// identical splitting to the TS tokenize() (mirrors diffWordsWithSpace).
-fn tokenize(text: &str) -> Vec<&str> {
+/// jsdiff's `extendedWordChars` (diff/word.js) — the exact "word" character
+/// ranges of the word tokenizer regex. Note `\u{F8}-\u{2C6}` is one big
+/// range (Latin-1 ø through IPA extensions): İ, Ā, ǅ… are word characters,
+/// while CJK, Greek, Cyrillic and the ˇ–˝ modifiers (U+02C7, U+02D8-02DD)
+/// are not.
+fn is_extended_word_char(c: char) -> bool {
+  matches!(
+    c,
+    'a'..='z' | 'A'..='Z' | '0'..='9' | '_'
+      | '\u{AD}'
+      | '\u{C0}'..='\u{D6}'
+      | '\u{D8}'..='\u{F6}'
+      | '\u{F8}'..='\u{2C6}'
+      | '\u{2C8}'..='\u{2D7}'
+      | '\u{2DE}'..='\u{2FF}'
+      | '\u{1E00}'..='\u{1EFF}'
+  )
+}
+
+/// JavaScript's `\s` character class — NOT the same set as Rust's
+/// `char::is_whitespace` (JS includes U+FEFF, excludes U+0085).
+fn is_js_whitespace(c: char) -> bool {
+  matches!(
+    c,
+    '\u{09}'..='\u{0D}'
+      | '\u{20}'
+      | '\u{A0}'
+      | '\u{1680}'
+      | '\u{2000}'..='\u{200A}'
+      | '\u{2028}'
+      | '\u{2029}'
+      | '\u{202F}'
+      | '\u{205F}'
+      | '\u{3000}'
+      | '\u{FEFF}'
+  )
+}
+
+/// jsdiff WordsWithSpaceDiff.tokenize (diff/word.js) — a left-to-right scan
+/// with the exact alternation order of its regex
+/// `(\r?\n)|[EXT]+|[^\S\n\r]+|[^EXT]` (`u` flag): every \n / \r\n is its own
+/// token, word runs and non-newline whitespace runs group up, and anything
+/// else (including a lone \r and each punctuation char) is a single-char
+/// token.
+fn tokenize_words_with_space(text: &str) -> Vec<&str> {
   let mut tokens: Vec<&str> = Vec::new();
   let bytes = text.as_bytes();
   let mut i = 0usize;
-  while i < bytes.len() {
-    let b = bytes[i];
-    let is_word = b.is_ascii_alphanumeric() || b == b'_';
-    let is_ws = b.is_ascii_whitespace();
-    if is_word || (b >= 0x80 && {
-      let ch = text[i..].chars().next().unwrap_or(' ');
-      ch.is_alphanumeric() || ch == '_'
-    }) {
-      let mut j = i + 1;
-      while j < bytes.len() {
-        let b2 = bytes[j];
-        let w = b2.is_ascii_alphanumeric()
-          || b2 == b'_'
-          || (b2 >= 0x80 && {
-            let ch = text[j..].chars().next().unwrap_or(' ');
-            ch.is_alphanumeric() || ch == '_'
-          });
-        if !w {
+  while i < text.len() {
+    let c = text[i..].chars().next().unwrap();
+    if c == '\n' {
+      // (\r?\n) — lone \n
+      tokens.push(&text[i..i + 1]);
+      i += 1;
+    } else if c == '\r' && i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+      // (\r?\n) — \r\n pair
+      tokens.push(&text[i..i + 2]);
+      i += 2;
+    } else if is_extended_word_char(c) {
+      // [EXT]+
+      let mut j = i + c.len_utf8();
+      while let Some(c2) = text[j..].chars().next() {
+        if !is_extended_word_char(c2) {
           break;
         }
-        j += text[j..]
-          .chars()
-          .next()
-          .map(|c| c.len_utf8())
-          .unwrap_or(1);
+        j += c2.len_utf8();
       }
       tokens.push(&text[i..j]);
       i = j;
-    } else if is_ws {
-      let mut j = i + 1;
-      while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-        j += 1;
+    } else if c != '\r' && is_js_whitespace(c) {
+      // [^\S\n\r]+ — whitespace runs sans \n and \r
+      let mut j = i + c.len_utf8();
+      while let Some(c2) = text[j..].chars().next() {
+        if c2 == '\r' || !is_js_whitespace(c2) {
+          break;
+        }
+        j += c2.len_utf8();
       }
       tokens.push(&text[i..j]);
       i = j;
     } else {
-      let len = text[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+      // [^EXT] — single char (punctuation, lone \r, CJK, …)
+      let len = c.len_utf8();
       tokens.push(&text[i..i + len]);
       i += len;
     }
@@ -787,33 +838,316 @@ fn tokenize(text: &str) -> Vec<&str> {
   tokens
 }
 
+/// jsdiff's diffLines tokenizer (diff/line.js `tokenize`, default options):
+/// split keeping each (\n|\r\n) terminator attached to the preceding line,
+/// drop the trailing empty token, then drop empty tokens (Diff#removeEmpty).
+/// A lone \r is NOT a line terminator — it stays inside the line content.
+fn tokenize_lines_js(text: &str) -> Vec<String> {
+  let bytes = text.as_bytes();
+  let mut parts: Vec<&str> = Vec::new();
+  let mut start = 0usize;
+  let mut i = 0usize;
+  while i < bytes.len() {
+    if bytes[i] == b'\n' {
+      parts.push(&text[start..i]);
+      parts.push("\n");
+      i += 1;
+      start = i;
+    } else if bytes[i] == b'\r' && i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+      parts.push(&text[start..i]);
+      parts.push("\r\n");
+      i += 2;
+      start = i;
+    } else {
+      i += 1;
+    }
+  }
+  parts.push(&text[start..]);
+  if parts.last().is_some_and(|t| t.is_empty()) {
+    parts.pop();
+  }
+
+  let mut ret: Vec<String> = Vec::new();
+  for (idx, part) in parts.iter().enumerate() {
+    if idx % 2 == 1 {
+      // retLines[retLines.length - 1] += line — a separator is always
+      // preceded by a (possibly empty) content token, so ret is non-empty.
+      if let Some(last) = ret.last_mut() {
+        last.push_str(part);
+      }
+    } else {
+      ret.push((*part).to_string());
+    }
+  }
+  ret.retain(|t| !t.is_empty());
+  ret
+}
+
+// ── jsdiff Myers engine (diff/base.js) ───────────────────────────
+
+/// A node of jsdiff's change linked list (`previousComponent`).
+struct MyersComponent {
+  count: i64,
+  added: bool,
+  removed: bool,
+  previous: Option<usize>,
+}
+
+/// jsdiff `Path` — one best path per diagonal. Kept in a HashMap keyed by
+/// the (possibly negative) diagonal, mirroring JS's sparse array.
+#[derive(Clone, Copy)]
+struct MyersPath {
+  old_pos: i64,
+  last_component: Option<usize>,
+}
+
+/// jsdiff `extractCommon`: extend the path along the common prefix at the
+/// current positions, appending one equal component.
+fn extract_common(
+  base_path: &mut MyersPath,
+  components: &mut Vec<MyersComponent>,
+  diagonal_path: i64,
+  old_tokens: &[&str],
+  new_tokens: &[&str],
+) -> i64 {
+  let new_len = new_tokens.len() as i64;
+  let old_len = old_tokens.len() as i64;
+  let mut old_pos = base_path.old_pos;
+  let mut new_pos = old_pos - diagonal_path;
+  let mut common_count: i64 = 0;
+  while new_pos + 1 < new_len
+    && old_pos + 1 < old_len
+    && old_tokens[(old_pos + 1) as usize] == new_tokens[(new_pos + 1) as usize]
+  {
+    new_pos += 1;
+    old_pos += 1;
+    common_count += 1;
+  }
+  if common_count > 0 {
+    components.push(MyersComponent {
+      count: common_count,
+      previous: base_path.last_component,
+      added: false,
+      removed: false,
+    });
+    base_path.last_component = Some(components.len() - 1);
+  }
+  base_path.old_pos = old_pos;
+  new_pos
+}
+
+/// jsdiff `addToPath` (`oneChangePerToken` is always false here): append an
+/// add/remove step, merging with the previous component when it has the
+/// same tag.
+fn add_to_path(
+  source: MyersPath,
+  added: bool,
+  removed: bool,
+  old_pos_inc: i64,
+  components: &mut Vec<MyersComponent>,
+) -> MyersPath {
+  let last = source.last_component;
+  let same_tag = last.is_some_and(|l| {
+    components[l].added == added && components[l].removed == removed
+  });
+  let component = if same_tag {
+    let l = last.unwrap();
+    MyersComponent {
+      count: components[l].count + 1,
+      added,
+      removed,
+      previous: components[l].previous,
+    }
+  } else {
+    MyersComponent {
+      count: 1,
+      added,
+      removed,
+      previous: last,
+    }
+  };
+  components.push(component);
+  MyersPath {
+    old_pos: source.old_pos + old_pos_inc,
+    last_component: Some(components.len() - 1),
+  }
+}
+
+/// jsdiff `buildValues`: walk the linked component list front-to-back and
+/// join token slices into change values.
+fn build_values(
+  components: &[MyersComponent],
+  head: Option<usize>,
+  old_tokens: &[&str],
+  new_tokens: &[&str],
+) -> Vec<JsChange> {
+  let mut indices: Vec<usize> = Vec::new();
+  let mut cursor = head;
+  while let Some(i) = cursor {
+    indices.push(i);
+    cursor = components[i].previous;
+  }
+  indices.reverse();
+
+  let mut out: Vec<JsChange> = Vec::with_capacity(indices.len());
+  let mut new_pos = 0usize;
+  let mut old_pos = 0usize;
+  for i in indices {
+    let component = &components[i];
+    let count = component.count as usize;
+    if !component.removed {
+      out.push(JsChange {
+        value: new_tokens[new_pos..new_pos + count].concat(),
+        count: component.count,
+        added: component.added,
+        removed: component.removed,
+      });
+      new_pos += count;
+      if !component.added {
+        old_pos += count;
+      }
+    } else {
+      out.push(JsChange {
+        value: old_tokens[old_pos..old_pos + count].concat(),
+        count: component.count,
+        added: component.added,
+        removed: component.removed,
+      });
+      old_pos += count;
+    }
+  }
+  out
+}
+
+/// jsdiff `Diff#diffWithOptionsObj` (sync mode, no options): Myers diff over
+/// string tokens with jsdiff's exact tie-breaks — in particular the
+/// `!canRemove || (canAdd && removePath.oldPos < addPath.oldPos)` rule that
+/// decides between the add and remove branch. The deadline check is dropped
+/// (napi exposes no timeout option) and maxEditLength is always
+/// oldLen + newLen, which admits the delete-all + insert-all path, so the
+/// loop always finishes; the trailing fallback is unreachable but keeps the
+/// function total.
+fn diff_tokens_to_changes(old_tokens: &[&str], new_tokens: &[&str]) -> Vec<JsChange> {
+  let new_len = new_tokens.len() as i64;
+  let old_len = old_tokens.len() as i64;
+  let max_edit_length = new_len + old_len;
+
+  let mut components: Vec<MyersComponent> = Vec::new();
+  let mut best_path: HashMap<i64, MyersPath> = HashMap::new();
+  best_path.insert(0, MyersPath { old_pos: -1, last_component: None });
+
+  // Seed editLength = 0, i.e. the content starts with the same values.
+  let seed_pos = extract_common(
+    best_path.get_mut(&0).unwrap(),
+    &mut components,
+    0,
+    old_tokens,
+    new_tokens,
+  );
+  if best_path.get(&0).unwrap().old_pos + 1 >= old_len && seed_pos + 1 >= new_len {
+    let head = best_path.get(&0).unwrap().last_component;
+    return build_values(&components, head, old_tokens, new_tokens);
+  }
+
+  let mut min_diagonal_to_consider = i64::MIN;
+  let mut max_diagonal_to_consider = i64::MAX;
+
+  let mut edit_length: i64 = 1;
+  while edit_length <= max_edit_length {
+    // Start bound is computed once per edit length (as in jsdiff's for-loop
+    // initializer); the end bound is re-evaluated every iteration because
+    // maxDiagonalToConsider shrinks inside the loop body.
+    let mut diagonal_path = min_diagonal_to_consider.max(-edit_length);
+    while diagonal_path <= max_diagonal_to_consider.min(edit_length) {
+      // removePath is consumed from the map (jsdiff clears the slot);
+      // addPath stays in place.
+      let remove_path = best_path.remove(&(diagonal_path - 1));
+      let add_path = best_path.get(&(diagonal_path + 1)).copied();
+      let add_path_new_pos = add_path.map(|p| p.old_pos - diagonal_path);
+      let can_add = add_path_new_pos.is_some_and(|p| p >= 0 && p < new_len);
+      let can_remove = remove_path.is_some_and(|p| p.old_pos + 1 < old_len);
+      if !can_add && !can_remove {
+        // If this path is a terminal then prune.
+        best_path.remove(&diagonal_path);
+        diagonal_path += 2;
+        continue;
+      }
+      // Select the diagonal that we want to branch from — jsdiff's exact
+      // tie-break (add wins when removePath.oldPos < addPath.oldPos).
+      let mut base_path =
+        if !can_remove || (can_add && remove_path.unwrap().old_pos < add_path.unwrap().old_pos) {
+          add_to_path(add_path.unwrap(), true, false, 0, &mut components)
+        } else {
+          add_to_path(remove_path.unwrap(), false, true, 1, &mut components)
+        };
+      let new_pos = extract_common(
+        &mut base_path,
+        &mut components,
+        diagonal_path,
+        old_tokens,
+        new_tokens,
+      );
+      if base_path.old_pos + 1 >= old_len && new_pos + 1 >= new_len {
+        // End of both token strings — done.
+        let head = base_path.last_component;
+        return build_values(&components, head, old_tokens, new_tokens);
+      }
+      best_path.insert(diagonal_path, base_path);
+      if base_path.old_pos + 1 >= old_len {
+        max_diagonal_to_consider = max_diagonal_to_consider.min(diagonal_path - 1);
+      }
+      if new_pos + 1 >= new_len {
+        min_diagonal_to_consider = min_diagonal_to_consider.max(diagonal_path + 1);
+      }
+      diagonal_path += 2;
+    }
+    edit_length += 1;
+  }
+
+  // Unreachable (see doc comment); degrade to a full replacement so the
+  // function stays total.
+  vec![
+    JsChange {
+      value: old_tokens.concat(),
+      count: old_len,
+      added: false,
+      removed: true,
+    },
+    JsChange {
+      value: new_tokens.concat(),
+      count: new_len,
+      added: true,
+      removed: false,
+    },
+  ]
+}
+
 /// Byte ranges of changed regions in each string; empty pair when the change
-/// is too large (CHANGE_THRESHOLD) — identical to the TS wordDiffStrings.
+/// is too large (CHANGE_THRESHOLD) — jsdiff-exact tokenization + Myers.
 fn word_diff_strings(old_str: &str, new_str: &str) -> (Vec<Range>, Vec<Range>) {
-  let diff = TextDiff::from_words(old_str, new_str);
+  let old_tokens = tokenize_words_with_space(old_str);
+  let new_tokens = tokenize_words_with_space(new_str);
+  let changes = diff_tokens_to_changes(&old_tokens, &new_tokens);
+
   let mut changed_len = 0usize;
   let mut old_ranges: Vec<Range> = Vec::new();
   let mut new_ranges: Vec<Range> = Vec::new();
   let mut old_off = 0usize;
   let mut new_off = 0usize;
 
-  for change in diff.iter_all_changes() {
-    let len = change.value().len();
-    match change.tag() {
-      ChangeTag::Delete => {
-        changed_len += len;
-        old_ranges.push((old_off, old_off + len));
-        old_off += len;
-      }
-      ChangeTag::Insert => {
-        changed_len += len;
-        new_ranges.push((new_off, new_off + len));
-        new_off += len;
-      }
-      ChangeTag::Equal => {
-        old_off += len;
-        new_off += len;
-      }
+  for change in &changes {
+    let len = change.value.len();
+    if change.removed {
+      changed_len += len;
+      old_ranges.push((old_off, old_off + len));
+      old_off += len;
+    } else if change.added {
+      changed_len += len;
+      new_ranges.push((new_off, new_off + len));
+      new_off += len;
+    } else {
+      old_off += len;
+      new_off += len;
     }
   }
 
@@ -856,7 +1190,7 @@ fn find_adjacent_pairs(markers: &[Marker]) -> Vec<(usize, usize)> {
   pairs
 }
 
-// ── jsdiff-compatible line/word diffs (similar-backed) ───────────
+// ── jsdiff-compatible line/word diffs (faithful jsdiff 8.0.4 port) ──
 
 /// A jsdiff `Change`: { value, count, added, removed }.
 #[napi(object)]
@@ -867,50 +1201,25 @@ pub struct JsChange {
   pub removed: bool,
 }
 
-fn changes_to_js_changes<'a>(diff: &TextDiff<'a, 'a, 'a, str>) -> Vec<JsChange> {
-  let mut out: Vec<JsChange> = Vec::new();
-  for change in diff.iter_all_changes() {
-    let added = change.tag() == ChangeTag::Insert;
-    let removed = change.tag() == ChangeTag::Delete;
-    let value = change.value().to_string();
-    if value.is_empty() {
-      continue;
-    }
-    let count = value.split_inclusive('\n').count() as i64;
-    // jsdiff merges contiguous same-tag runs into a single Change.
-    let same = out
-      .last()
-      .map_or(false, |c: &JsChange| c.added == added && c.removed == removed);
-    if same {
-      if let Some(c) = out.last_mut() {
-        c.value.push_str(&value);
-        c.count += count;
-      }
-    } else {
-      out.push(JsChange {
-        value,
-        count,
-        added,
-        removed,
-      });
-    }
-  }
-  out
-}
-
-/// jsdiff `diffLines(old, new)`.
+/// jsdiff `diffLines(old, new)` (default options).
 #[napi]
 pub fn diff_lines(old_str: String, new_str: String) -> Vec<JsChange> {
-  changes_to_js_changes(&TextDiff::from_lines(&old_str, &new_str))
+  let old_tokens = tokenize_lines_js(&old_str);
+  let new_tokens = tokenize_lines_js(&new_str);
+  let old_refs: Vec<&str> = old_tokens.iter().map(String::as_str).collect();
+  let new_refs: Vec<&str> = new_tokens.iter().map(String::as_str).collect();
+  diff_tokens_to_changes(&old_refs, &new_refs)
 }
 
-/// jsdiff `diffWordsWithSpace(old, new)`.
+/// jsdiff `diffWordsWithSpace(old, new)` (default options).
 #[napi]
 pub fn diff_words_with_space(old_str: String, new_str: String) -> Vec<JsChange> {
-  changes_to_js_changes(&TextDiff::from_words(&old_str, &new_str))
+  let old_tokens = tokenize_words_with_space(&old_str);
+  let new_tokens = tokenize_words_with_space(&new_str);
+  diff_tokens_to_changes(&old_tokens, &new_tokens)
 }
 
-// ── jsdiff-compatible structuredPatch (similar-backed) ───────────
+// ── jsdiff-compatible structuredPatch ────────────────────────────
 
 /// jsdiff `structuredPatch` hunk: { oldStart, oldLines, newStart, newLines,
 /// lines } where `lines` carry ' '/'-'/'+' prefixes plus jsdiff's
@@ -1045,10 +1354,8 @@ fn structured_patch_from_changes(changes: &[(bool, bool, String)], context: usiz
 
 /// jsdiff `structuredPatch(old, new, { context }).hunks`: unified-diff hunks
 /// with ' '/'-'/'+' prefixed lines and "\ No newline at end of file" markers.
-/// Hunk assembly is a faithful port of jsdiff's patch/create.js; the
-/// underlying line diff uses the similar crate (Myers), so on inputs with
-/// multiple minimal edit scripts the chosen edit script may differ from
-/// jsdiff's while staying equally minimal.
+/// Both the line diff and the hunk assembly are faithful ports of jsdiff
+/// 8.0.4, so the output is byte-identical to the `diff` npm package.
 #[napi]
 pub fn structured_patch(
   old_str: String,
@@ -1056,16 +1363,10 @@ pub fn structured_patch(
   context: Option<i64>,
 ) -> Vec<JsStructuredPatchHunk> {
   let context = context.unwrap_or(4).max(0) as usize;
-  let diff = TextDiff::from_lines(&old_str, &new_str);
-  let changes: Vec<(bool, bool, String)> = diff
-    .iter_all_changes()
-    .map(|change| {
-      (
-        change.tag() == ChangeTag::Insert,
-        change.tag() == ChangeTag::Delete,
-        change.value().to_string(),
-      )
-    })
+  let changes = diff_lines(old_str, new_str);
+  let changes: Vec<(bool, bool, String)> = changes
+    .into_iter()
+    .map(|c| (c.added, c.removed, c.value))
     .collect();
   structured_patch_from_changes(&changes, context)
 }
