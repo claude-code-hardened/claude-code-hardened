@@ -1,5 +1,5 @@
 import { createMovedToPluginCommand } from '../createMovedToPluginCommand.js'
-import { t } from '../i18n/index.js'
+import { t } from '../../i18n/index.js'
 
 export default createMovedToPluginCommand({
   name: 'pr-comments',
