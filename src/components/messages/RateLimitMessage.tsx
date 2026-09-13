@@ -5,7 +5,7 @@ import { useClaudeAiLimits } from 'src/services/claudeAiLimitsHook.js';
 import { shouldProcessMockLimits } from 'src/services/rateLimitMocking.js'; // Used for /mock-limits command
 import { getRateLimitTier, getSubscriptionType, isClaudeAISubscriber } from 'src/utils/auth.js';
 import { hasClaudeAiBillingAccess } from 'src/utils/billing.js';
-import { t } from '../i18n/index.js';
+import { t } from '../../i18n/index.js';
 import { MessageResponse } from '../MessageResponse.js';
 
 type UpsellParams = {
