@@ -818,10 +818,10 @@ fn tokenize_words_with_space(text: &str) -> Vec<&str> {
       tokens.push(&text[i..j]);
       i = j;
     } else if c != '\r' && is_js_whitespace(c) {
-      // [^\S\n\r]+ — whitespace runs sans \n and \r
+      // [^\S\n\r]+ — whitespace runs sans \n and \r (\n gets its own token)
       let mut j = i + c.len_utf8();
       while let Some(c2) = text[j..].chars().next() {
-        if c2 == '\r' || !is_js_whitespace(c2) {
+        if c2 == '\r' || c2 == '\n' || !is_js_whitespace(c2) {
           break;
         }
         j += c2.len_utf8();
