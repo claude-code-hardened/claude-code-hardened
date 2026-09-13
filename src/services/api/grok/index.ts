@@ -73,7 +73,7 @@ export async function* queryModelGrok(
         }),
       ),
     )
-    const standardTools = toolSchemas.filter(
+    const standardTools: BetaToolUnion[] = toolSchemas.filter(
       (t): t is BetaToolUnion & { type: string } => {
         const anyT = t as unknown as Record<string, unknown>
         return (
