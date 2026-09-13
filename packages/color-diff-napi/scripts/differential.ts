@@ -209,17 +209,14 @@ const WORD_EDGE_CASES: [string, string][] = [
   ['end\n', 'end'],
   ['no-change-text', 'no-change-text'],
   [
-    'function greet(name) {\n  console.log(`Hello, ${name}!`);\n}',
-    'function greet(name) {\n  console.log(`Hi there, ${name}!`);\n}',
+    'function greet(name) {\n  console.log("Hello, " + name);\n}',
+    'function greet(name) {\n  console.log("Hi there, " + name);\n}',
   ],
   [
     'const oldVariable = computeValue(input, { strict: true });',
     'const newVariable = computeValue(input, { strict: false });',
   ],
-  [
-    '\tindented {\n\t\tdeeply\n\t}',
-    '  indented {\n    deeply\n  }',
-  ],
+  ['\tindented {\n\t\tdeeply\n\t}', '  indented {\n    deeply\n  }'],
 ]
 
 // Token vocabulary for the word-oriented random corpus — punctuation-heavy,
