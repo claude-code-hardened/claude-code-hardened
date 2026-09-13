@@ -1,9 +1,10 @@
 /**
  * Pure TypeScript port of vendor/color-diff-src.
  *
- * The Rust version uses syntect+bat for syntax highlighting and the similar
- * crate for word diffing. This port uses highlight.js (already a dep via
- * cli-highlight) and the pure-TS jsdiff port in ./jsDiff.
+ * The Rust version uses syntect+bat for syntax highlighting and a
+ * line-for-line port of jsdiff 8.0.4 for the line/word diffs. This port uses
+ * highlight.js (already a dep via cli-highlight) and the pure-TS jsdiff port
+ * in ./jsDiff.
  *
  * The exported ColorDiff/ColorFile/getSyntaxTheme/diffLines/
  * diffWordsWithSpace/structuredPatch are native-first: they use the Rust
@@ -119,8 +120,8 @@ export type Change = {
 }
 
 /**
- * jsdiff-compatible line diff. Native (Rust/similar) when available,
- * falls back to the pure-TS jsdiff port in ./jsDiff.
+ * jsdiff-compatible line diff. Native (Rust port of jsdiff 8.0.4) when
+ * available, falls back to the pure-TS jsdiff port in ./jsDiff.
  */
 export function diffLines(oldStr: string, newStr: string): Change[] {
   const native = tryLoadNative()
@@ -135,14 +136,25 @@ export function diffLines(oldStr: string, newStr: string): Change[] {
 }
 
 /**
- * jsdiff-compatible word diff with preserved whitespace. Always uses the
- * pure-TS jsdiff port in ./jsDiff: the native module's similar-backed word
- * diff tokenizes differently (punctuation attaches to words, newlines are
- * not separate tokens), so its change boundaries and count semantics differ
- * from jsdiff. The StructuredDiff fallback renders these changes verbatim
- * and gates word highlighting on them, so it needs jsdiff-identical output.
+ * jsdiff-compatible word diff with preserved whitespace. Native-first: the
+ * Rust module now embeds a line-for-line port of jsdiff 8.0.4's word
+ * tokenizer + Myers engine (verified byte-identical against the real
+ * jsdiff 8.0.4 — punctuation is tokenized standalone, every \n/\r\n is its
+ * own token, lone \r is ordinary content), so change boundaries and count
+ * semantics match jsdiff exactly. Falls back to the pure-TS jsdiff port in
+ * ./jsDiff when the .node binary fails to load; the StructuredDiff fallback
+ * renders these changes verbatim and gates word highlighting on them, so
+ * both paths need jsdiff-identical output.
  */
 export function diffWordsWithSpace(oldStr: string, newStr: string): Change[] {
+  const native = tryLoadNative()
+  if (typeof native?.diffWordsWithSpace === 'function') {
+    try {
+      return native.diffWordsWithSpace(oldStr, newStr)
+    } catch (error) {
+      logError(error)
+    }
+  }
   return jsDiffWordsWithSpace(oldStr, newStr) ?? []
 }
 
@@ -164,7 +176,8 @@ export type StructuredPatch = { hunks: StructuredPatchHunk[] }
 /**
  * jsdiff `structuredPatch(...).hunks` equivalent: unified-diff hunks with
  * ' '/'-'/'+' prefixed lines and "\ No newline at end of file" markers.
- * Native (Rust/similar) when available; never throws — falls back to the
+ * Native (Rust port of jsdiff 8.0.4) when available; never throws — falls
+ * back to the
  * pure-TS jsdiff port in ./jsDiff and returns null when that times out.
  */
 export function structuredPatch(

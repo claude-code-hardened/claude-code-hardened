@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Differential test: native structuredPatch/diffLines (Rust/similar) vs the
- * pure-JS jsdiff port in ../src/jsDiff.ts — hunk-by-hunk parity over a
- * deterministic generated corpus plus (optionally) real files. Zero npm
- * dependencies (only bun + the .node artifact) so it runs anywhere without
- * a node_modules.
+ * Differential test: native structuredPatch/diffLines/diffWordsWithSpace
+ * (Rust port of jsdiff 8.0.4) vs the pure-JS jsdiff port in ../src/jsDiff.ts —
+ * hunk-by-hunk and change-by-change parity over a deterministic generated
+ * corpus plus (optionally) real files. Zero npm dependencies (only bun + the
+ * .node artifact) so it runs anywhere without a node_modules.
  *
  * Usage:
  *   bun run packages/color-diff-napi/scripts/differential.ts \
@@ -14,16 +14,21 @@
  * mutation rounds. Exit 0 = no hard failures. Outcomes:
  *   match       — native hunks are byte-identical to the JS reference
  *   divergence  — hunks differ but both sides reconstruct old→new exactly
- *                 (equally minimal edit scripts; similar's Myers may pick a
- *                 different tie-break than jsdiff's). --strict turns these
- *                 into failures.
+ *                 (equally minimal edit scripts; a Myers tie-break picked a
+ *                 different minimal path). --strict turns these into
+ *                 failures.
  *   FAIL        — reconstruction broken or added/removed counts differ.
+ *
+ * diffWordsWithSpace (and the word edge cases below) must be byte-identical
+ * — the native word diff is a line-for-line port of jsdiff's engine, so
+ * divergences there are always bugs.
  */
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   jsDiffLines,
+  jsDiffWordsWithSpace,
   jsStructuredPatch,
   type JsChange,
   type JsStructuredPatchHunk,
@@ -55,6 +60,7 @@ const napi = nodeRequire(nodePath) as {
   // The native module returns full jsdiff-shaped changes ({value, count,
   // added, removed}) — same struct as src/jsDiff.ts's JsChange.
   diffLines?: (oldStr: string, newStr: string) => JsChange[]
+  diffWordsWithSpace?: (oldStr: string, newStr: string) => JsChange[]
 }
 if (typeof napi.structuredPatch !== 'function') {
   console.error(
@@ -62,6 +68,7 @@ if (typeof napi.structuredPatch !== 'function') {
   )
   process.exit(2)
 }
+const hasNativeWords = typeof napi.diffWordsWithSpace === 'function'
 
 // ---------------------------------------------------------------------------
 // Deterministic PRNG + corpus
@@ -100,8 +107,10 @@ const VOCAB = [
   'return value;',
   '// comment with & and $',
 ]
-// Lone \r is a documented tokenizer divergence (similar treats it as a line
-// terminator, jsdiff does not) — exclude it from generated corpus.
+// Lone \r used to be a tokenizer divergence (the similar crate treated it as
+// a line terminator, jsdiff does not) — the native diff now ports jsdiff's
+// tokenizer exactly, but the generated corpus below keeps excluding it; the
+// word corpus covers it explicitly.
 
 function randText(rnd: () => number, maxLines: number): string {
   const n = Math.floor(rnd() * maxLines)
@@ -161,6 +170,120 @@ const EDGE_CASES: [string, string][] = [
   ['\n\n\n', '\n\n'],
   ['only', 'only\n'],
 ]
+
+// Word-diff-specific edge cases (each is also run through the line diff
+// checks above via compareCase): punctuation boundaries, calls, whitespace
+// runs, newline flavors (jsdiff treats each \n / \r\n as its own token and a
+// lone \r as ordinary content), CJK, Latin-extended, empties.
+const WORD_EDGE_CASES: [string, string][] = [
+  ['oldName(param)', 'newName(param)'],
+  ['oldName(param)', 'oldName(argument)'],
+  ['foo.bar(baz)', 'foo.qux(baz)'],
+  ['const a = 1;', 'const a = 2;'],
+  ['end.', 'ending.'],
+  ['hello  world', 'hello   world'],
+  ['a  b', 'ab'],
+  ['a\nb', 'a\nc'],
+  ['a\r\nb', 'a\r\nc'],
+  ['a\rb', 'a\rc'],
+  ['a \r b', 'a \n b'],
+  ['line1\r\nline2\r\n', 'line1\nline2\n'],
+  ['x\r\ny', 'x\ry'],
+  ['\r\n', '\n'],
+  ['\r', '\n'],
+  ['中文测试', '中文輸入'],
+  ['use 中文 identifiers', 'use 日本 identifiers'],
+  ['错误：file not found (404)', '错误：file not found (500)'],
+  ['İx', 'Ix'],
+  ['café', 'cafés'],
+  ['ışık', 'ışık geç'],
+  ['', ''],
+  ['', 'x'],
+  ['x', ''],
+  ['  ', '\t'],
+  [' ', '  '],
+  ['\u00a0x', ' x'],
+  ['a\u2028b', 'a\u2029b'],
+  ['a\ufeffb', 'ab'],
+  ['end', 'end\n'],
+  ['end\n', 'end'],
+  ['no-change-text', 'no-change-text'],
+  [
+    'function greet(name) {\n  console.log(`Hello, ${name}!`);\n}',
+    'function greet(name) {\n  console.log(`Hi there, ${name}!`);\n}',
+  ],
+  [
+    'const oldVariable = computeValue(input, { strict: true });',
+    'const newVariable = computeValue(input, { strict: false });',
+  ],
+  [
+    '\tindented {\n\t\tdeeply\n\t}',
+    '  indented {\n    deeply\n  }',
+  ],
+]
+
+// Token vocabulary for the word-oriented random corpus — punctuation-heavy,
+// whitespace runs, newline flavors, CJK and Latin-extended samples.
+const WORD_VOCAB = [
+  'foo',
+  'bar',
+  'baz',
+  'oldName',
+  'newName',
+  '(',
+  ')',
+  '{',
+  '}',
+  ';',
+  '=',
+  ',',
+  '.',
+  '  ',
+  ' ',
+  '\t',
+  '中文',
+  'İ',
+  'é',
+  '42',
+  '_',
+  '\r',
+  '\r\n',
+  '\n',
+  'x-1',
+  "'s",
+  '’s',
+  'a',
+  'b',
+  'the',
+  'quick',
+]
+
+function randWordText(rnd: () => number): string {
+  const n = 1 + Math.floor(rnd() * 24)
+  let s = ''
+  for (let i = 0; i < n; i++) {
+    s += WORD_VOCAB[Math.floor(rnd() * WORD_VOCAB.length)]!
+  }
+  return s
+}
+
+function mutateWordText(rnd: () => number, s: string): string {
+  const chars = [...s]
+  const ops = 1 + Math.floor(rnd() * 5)
+  for (let i = 0; i < ops; i++) {
+    const r = rnd()
+    const pos = Math.floor(rnd() * (chars.length + 1))
+    if (r < 0.4 || chars.length === 0) {
+      chars.splice(pos, 0, WORD_VOCAB[Math.floor(rnd() * WORD_VOCAB.length)]!)
+    } else if (r < 0.7 && chars.length > 0) {
+      chars.splice(Math.floor(rnd() * chars.length), 1)
+    } else if (chars.length > 0) {
+      chars[Math.floor(rnd() * chars.length)] =
+        WORD_VOCAB[Math.floor(rnd() * WORD_VOCAB.length)]!
+    }
+  }
+  return chars.join('')
+}
 
 // ---------------------------------------------------------------------------
 // File collection
@@ -242,7 +365,48 @@ let matched = 0
 let diverged = 0
 let failed = 0
 let checkedDiffLines = 0
+let matchedWords = 0
+let failedWords = 0
 const failures: string[] = []
+
+/**
+ * napi-rs serializes Change objects as {value, count, added, removed} while
+ * the TS port produces {count, added, removed, value} — key order differs,
+ * so project both onto fixed-shape tuples before the byte-exact compare.
+ */
+function canonChanges(changes: readonly JsChange[] | undefined): string {
+  return JSON.stringify(
+    (changes ?? []).map(c => [c.value, c.count, c.added, c.removed]),
+  )
+}
+
+/** Byte-exact word-diff parity check (no divergence allowance). */
+function compareWordCase(oldStr: string, newStr: string): void {
+  if (!hasNativeWords) return
+  const expected = jsDiffWordsWithSpace(oldStr, newStr) ?? []
+  let got: JsChange[] | undefined
+  try {
+    got = napi.diffWordsWithSpace!(oldStr, newStr)
+  } catch (e) {
+    failedWords++
+    if (failures.length < 5) {
+      failures.push(
+        `FAIL diffWordsWithSpace threw\n  old=${JSON.stringify(oldStr)}\n  new=${JSON.stringify(newStr)}\n  ${String(e)}`,
+      )
+    }
+    return
+  }
+  if (canonChanges(got ?? []) === canonChanges(expected)) {
+    matchedWords++
+  } else {
+    failedWords++
+    if (failures.length < 5) {
+      failures.push(
+        `FAIL diffWordsWithSpace mismatch\n  old=${JSON.stringify(oldStr)}\n  new=${JSON.stringify(newStr)}\n  native=${canonChanges(got)}\n  js    =${canonChanges(expected)}`,
+      )
+    }
+  }
+}
 
 function noteFailure(
   kind: string,
@@ -260,6 +424,7 @@ function noteFailure(
 }
 
 function compareCase(oldStr: string, newStr: string, context: number): void {
+  compareWordCase(oldStr, newStr)
   const expected = jsStructuredPatch(oldStr, newStr, { context }) ?? []
   let got: JsStructuredPatchHunk[] | undefined
   try {
@@ -363,6 +528,15 @@ for (let i = 0; i < caseCount; i++) {
   const n = mutate(rnd, o)
   compareCase(o, n, CONTEXTS[Math.floor(rnd() * CONTEXTS.length)]!)
 }
+// Word-diff corpus: edge cases once, then a punctuation/unicode-heavy random
+// corpus of single-line-ish strings with char-level mutations.
+for (const [o, n] of WORD_EDGE_CASES) {
+  compareCase(o, n, 4)
+}
+for (let i = 0; i < caseCount; i++) {
+  const o = randWordText(rnd)
+  compareCase(o, mutateWordText(rnd, o), 4)
+}
 const fileRnd = mulberry32(424242)
 for (const f of seedFiles) {
   let text: string | null = null
@@ -387,5 +561,13 @@ console.log(
     `${strict ? '' : ' (allowed)'}, ${failed} fail` +
     `; diffLines totals compared on ${checkedDiffLines}`,
 )
+if (hasNativeWords) {
+  console.log(
+    `diffWordsWithSpace: ${matchedWords} match, ${failedWords} fail` +
+      `${failedWords > 0 ? '' : ' (byte-identical)'}`,
+  )
+}
 if (failures.length > 0) console.log(failures.join('\n---\n'))
-process.exit(failed === 0 && (!strict || diverged === 0) ? 0 : 1)
+process.exit(
+  failed === 0 && failedWords === 0 && (!strict || diverged === 0) ? 0 : 1,
+)
