@@ -2865,6 +2865,18 @@ export async function generateUsageReport(options?: {
     }
   }
 
+  // Drop full message data for sessions that won't get facet extraction —
+  // only the ≤MAX_FACET_EXTRACTIONS logs above are read past this point.
+  // Each retained LogOption pins an entire conversation chain, so releasing
+  // the rest here (before the long-running API extraction phase) keeps peak
+  // memory bounded instead of scaling with every loaded session.
+  const extractSessionIds = new Set(toExtract.map(e => e.sessionId))
+  for (const sessionId of logsForFacets.keys()) {
+    if (!extractSessionIds.has(sessionId)) {
+      logsForFacets.delete(sessionId)
+    }
+  }
+
   // Extract facets for sessions that need them (50 concurrent)
   const CONCURRENCY = 50
   for (let i = 0; i < toExtract.length; i += CONCURRENCY) {

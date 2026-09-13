@@ -78,8 +78,8 @@ import { getFsImplementation } from './fsOperations.js'
 import { getWorktreePaths } from './getWorktreePaths.js'
 import { getBranch } from './git.js'
 import { gracefulShutdownSync, isShuttingDown } from './gracefulShutdown.js'
-import { parseJSONL } from './json.js'
-import { nativeScanChain } from 'transcript-parser-napi'
+import { parseJSONL, parseJSONLSegments } from './json.js'
+import { nativeScanChainRanges } from 'transcript-parser-napi'
 import { logError } from './log.js'
 import { extractTag, isCompactBoundaryMessage } from './messages.js'
 import { sanitizePath } from './path.js'
@@ -3399,23 +3399,43 @@ function pickDepthOneUuidCandidate(
 }
 
 /**
- * Native (Rust) variant of {@link walkChainBeforeParse}. Returns null when
- * the native module is unavailable — callers must fall back to the JS
- * implementation. keepAll maps to "no stitching needed" (original buffer).
+ * Zero-copy stitch result: the byte ranges to keep as `buf.subarray` views
+ * (each view is one or more complete lines), or keepAll=true meaning "parse
+ * the original buffer unchanged" (below the 50% stitch gate, or no leaf).
  */
-function walkChainBeforeParseNative(buf: Buffer): Buffer | null {
-  const scan = nativeScanChain(buf)
-  if (scan === null) return null
-  if (scan.keepAll) return buf
-  const kept = scan.keptRanges
-  const parts: Buffer[] = []
-  for (let i = 0; i < kept.length; i += 2) {
-    parts.push(buf.subarray(kept[i]!, kept[i + 1]!))
-  }
-  return Buffer.concat(parts)
+type ChainStitchViews = {
+  keepAll: boolean
+  views: Buffer[]
 }
 
-function walkChainBeforeParse(buf: Buffer): Buffer {
+/**
+ * Native (Rust) variant of {@link walkChainBeforeParse}. Returns null when
+ * the native module is unavailable — callers must fall back to the JS
+ * implementation. Unlike the old concat-based wrapper this never copies: the
+ * native side returns kept byte ranges and the views alias the input buffer,
+ * so callers parse per segment via parseJSONLSegments instead of
+ * Buffer.concat (peak allocation drops by the stitched buffer size).
+ */
+function walkChainBeforeParseNative(buf: Buffer): ChainStitchViews | null {
+  const scan = nativeScanChainRanges(buf)
+  if (scan === null) return null
+  if (scan.keepAll) return { keepAll: true, views: [] }
+  const kept = scan.keptRanges
+  const views: Buffer[] = []
+  for (let i = 0; i < kept.length; i += 2) {
+    views.push(buf.subarray(kept[i]!, kept[i + 1]!))
+  }
+  return { keepAll: false, views }
+}
+
+/**
+ * JS fallback for {@link walkChainBeforeParseNative} — same classification,
+ * same 50% stitch gate. Returns the lines to keep as zero-copy subarray views
+ * (null = keepAll: parse the original buffer unchanged), so callers parse per
+ * segment via parseJSONLSegments instead of paying a full Buffer.concat
+ * memcpy of the stitched bytes.
+ */
+function walkChainBeforeParse(buf: Buffer): Buffer[] | null {
   const NEWLINE = 0x0a
   const OPEN_BRACE = 0x7b
   const QUOTE = 0x22
@@ -3520,10 +3540,10 @@ function walkChainBeforeParse(buf: Buffer): Buffer {
       break
     }
   }
-  if (leafSlot < 0) return buf
+  if (leafSlot < 0) return null
 
   // Walk parentUuid to root. Collect kept-message line starts and sum their
-  // byte lengths so we can decide whether the concat is worth it. A dangling
+  // byte lengths so we can decide whether the stitch is worth it. A dangling
   // parent (uuid not in file) is the normal termination for forked sessions
   // and post-boundary chains -- same semantics as buildConversationChain.
   // Correctness against index poisoning rests on the timestamp suffix check
@@ -3550,14 +3570,14 @@ function walkChainBeforeParse(buf: Buffer): Buffer {
   // dead bytes - index+concat overhead exceeded parse savings). Gate on
   // bytes: only stitch if we would drop at least half the buffer. Metadata
   // is tiny so len - chainBytes approximates dead bytes closely enough.
-  // Near break-even the concat memcpy (copying chainBytes into a fresh
-  // allocation) dominates, so a conservative 50% gate stays safely on the
-  // winning side.
-  if (len - chainBytes < len >> 1) return buf
+  // Near break-even the per-segment bookkeeping (one subarray view + one
+  // parse call per kept line) dominates, so a conservative 50% gate stays
+  // safely on the winning side.
+  if (len - chainBytes < len >> 1) return null
 
   // Merge chain entries with metadata in original file order. Both msgIdx and
   // metaRanges are already sorted by offset; interleave them into subarray
-  // views and concat once.
+  // views (zero-copy) and let the caller parse per segment.
   const parts: Buffer[] = []
   let m = 0
   for (let i = 0; i < msgIdx.length; i += 3) {
@@ -3574,7 +3594,7 @@ function walkChainBeforeParse(buf: Buffer): Buffer {
     parts.push(buf.subarray(metaRanges[m]!, metaRanges[m + 1]!))
     m += 2
   }
-  return Buffer.concat(parts)
+  return parts
 }
 
 /**
@@ -3683,6 +3703,13 @@ export async function loadTranscriptFile(
     // "load everything, skip nothing"; this is another skip-before-parse
     // optimization and the scan it depends on for hasPreservedSegment did
     // not run).
+    //
+    // Zero-copy stitch: the chain scans return kept byte ranges and we parse
+    // each range as a `buf.subarray` view via parseJSONLSegments instead of
+    // Buffer.concat-ing them into a fresh buffer (old peak: file + stitched
+    // copy, and mimalloc does not return those pages promptly). Equivalent
+    // byte-for-byte: every view is a sequence of complete lines.
+    let stitchViews: Buffer[] | null = null
     if (
       !opts?.keepAllLeaves &&
       !hasPreservedSegment &&
@@ -3690,9 +3717,16 @@ export async function loadTranscriptFile(
       buf.length > SKIP_PRECOMPACT_THRESHOLD
     ) {
       if (feature('TRANSCRIPT_NATIVE_SCAN')) {
-        buf = walkChainBeforeParseNative(buf) ?? walkChainBeforeParse(buf)
+        const nativeStitch = walkChainBeforeParseNative(buf)
+        // null = native module unavailable → JS byte scanner fallback.
+        stitchViews =
+          nativeStitch !== null
+            ? nativeStitch.keepAll
+              ? null
+              : nativeStitch.views
+            : walkChainBeforeParse(buf)
       } else {
-        buf = walkChainBeforeParse(buf)
+        stitchViews = walkChainBeforeParse(buf)
       }
     }
 
@@ -3733,7 +3767,13 @@ export async function loadTranscriptFile(
       }
     }
 
-    const entries = parseJSONL<Entry>(buf)
+    // Per-segment parse when the stitch dropped lines (zero-copy views into
+    // buf); parseJSONLSegments skips nothing extra — entries come back in
+    // file order, exactly as parsing the old concatenated buffer did.
+    const entries =
+      stitchViews !== null
+        ? parseJSONLSegments<Entry>(stitchViews)
+        : parseJSONL<Entry>(buf)
 
     // Bridge map for legacy progress entries: progress_uuid → progress_parent_uuid.
     // PR #24099 removed progress from isTranscriptMessage, so old transcripts with
@@ -4117,15 +4157,22 @@ export async function loadMessageLogs(limit?: number): Promise<LogOption[]> {
 /**
  * Loads message logs from all project directories.
  * @param limit Optional limit on number of session files to load per project (used when no index exists)
+ * @param options.skipIndex Load every session with full message data (full-scan 口径, e.g. /insights analysis)
+ * @param options.mtimeLimitMs Opt-in pre-read filter (skipIndex path only): only load files modified
+ *   within the last N milliseconds. Omitted → unchanged full-scan behavior.
  * @returns List of message logs sorted by date
  */
 export async function loadAllProjectsMessageLogs(
   limit?: number,
-  options?: { skipIndex?: boolean; initialEnrichCount?: number },
+  options?: {
+    skipIndex?: boolean
+    initialEnrichCount?: number
+    mtimeLimitMs?: number
+  },
 ): Promise<LogOption[]> {
   if (options?.skipIndex) {
     // Load all sessions with full message data (e.g. for /insights analysis)
-    return loadAllProjectsMessageLogsFull(limit)
+    return loadAllProjectsMessageLogsFull(limit, options.mtimeLimitMs)
   }
   const result = await loadAllProjectsMessageLogsProgressive(
     limit,
@@ -4136,6 +4183,7 @@ export async function loadAllProjectsMessageLogs(
 
 async function loadAllProjectsMessageLogsFull(
   limit?: number,
+  mtimeLimitMs?: number,
 ): Promise<LogOption[]> {
   const projectsDir = getProjectsDir()
 
@@ -4151,7 +4199,9 @@ async function loadAllProjectsMessageLogsFull(
     .map(dirent => join(projectsDir, dirent.name))
 
   const logsPerProject = await Promise.all(
-    projectDirs.map(projectDir => getLogsWithoutIndex(projectDir, limit)),
+    projectDirs.map(projectDir =>
+      getLogsWithoutIndex(projectDir, limit, mtimeLimitMs),
+    ),
   )
   const allLogs = logsPerProject.flat()
 
@@ -4867,18 +4917,22 @@ export async function loadAllLogsFromSessionFile(
 async function getLogsWithoutIndex(
   projectDir: string,
   limit?: number,
+  mtimeLimitMs?: number,
 ): Promise<LogOption[]> {
   const sessionFilesMap = await getSessionFilesWithMtime(projectDir)
   if (sessionFilesMap.size === 0) return []
 
+  // Pre-read filters ("先过滤再读"), both opt-in — omitted limits keep the
+  // full-scan 口径 (skipIndex) byte-for-byte unchanged.
+  let filesToProcess = [...sessionFilesMap.values()]
+  if (mtimeLimitMs !== undefined) {
+    const mtimeFloor = Date.now() - mtimeLimitMs
+    filesToProcess = filesToProcess.filter(f => f.mtime >= mtimeFloor)
+  }
   // If limit specified, only load N most recent files by mtime
-  let filesToProcess: Array<{ path: string; mtime: number }>
-  if (limit && sessionFilesMap.size > limit) {
-    filesToProcess = [...sessionFilesMap.values()]
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, limit)
-  } else {
-    filesToProcess = [...sessionFilesMap.values()]
+  if (limit && filesToProcess.length > limit) {
+    filesToProcess.sort((a, b) => b.mtime - a.mtime)
+    filesToProcess = filesToProcess.slice(0, limit)
   }
 
   const logs: LogOption[] = []

@@ -216,8 +216,65 @@ function walkChainBeforeParseRef(buf: Buffer): JsScan {
 // ---------------------------------------------------------------------------
 const U32_NULL = 0xffffffff
 
-function compareFile(path: string): { ok: boolean; detail: string } {
+// Bun.JSONL.parseChunk when available — mirrors src/utils/json.ts parseJSONL
+// so the parse-equivalence check below exercises the production parser. When
+// absent (plain node), the check is skipped.
+type BunJSONLParseChunk = (
+  data: string | Buffer,
+  offset?: number,
+) => { values: unknown[]; error: null | Error; read: number; done: boolean }
+const bunJSONLParse: BunJSONLParseChunk | false = (() => {
+  const bun = globalThis as unknown as {
+    Bun?: { JSONL?: { parseChunk?: BunJSONLParseChunk } }
+  }
+  const parseChunk = bun.Bun?.JSONL?.parseChunk
+  if (typeof parseChunk !== 'function') return false
+  return parseChunk
+})()
+
+function parseJSONLRef(data: Buffer): unknown[] {
+  if (bunJSONLParse === false) return []
+  const len = data.length
+  const result = bunJSONLParse(data)
+  if (!result.error || result.done || result.read >= len) {
+    return result.values
+  }
+  // Had an error mid-stream — collect what we got and keep going
+  let values = result.values
+  let offset = result.read
+  while (offset < len) {
+    const newlineIndex = data.indexOf(0x0a, offset)
+    if (newlineIndex === -1) break
+    offset = newlineIndex + 1
+    const next = bunJSONLParse(data, offset)
+    if (next.values.length > 0) {
+      values = values.concat(next.values)
+    }
+    if (!next.error || next.done || next.read >= len) break
+    offset = next.read
+  }
+  return values
+}
+
+type CompareMetrics = {
+  stitched: boolean
+  concatBytes: number
+  segments: number
+  concatParseMs: number
+  segmentsParseMs: number
+}
+
+function compareFile(
+  path: string,
+): { ok: boolean; detail: string } & CompareMetrics {
   const buf = readFileSync(path)
+  const metrics: CompareMetrics = {
+    stitched: false,
+    concatBytes: 0,
+    segments: 0,
+    concatParseMs: 0,
+    segmentsParseMs: 0,
+  }
 
   const t0 = performance.now()
   const js = walkChainBeforeParseRef(buf)
@@ -234,7 +291,7 @@ function compareFile(path: string): { ok: boolean; detail: string } {
   }
   const rsMsg = Array.from(rs.msgIndex)
   if (jsMsg.length !== rsMsg.length || jsMsg.some((v, i) => v !== rsMsg[i])) {
-    return { ok: false, detail: 'msgIndex mismatch' }
+    return { ok: false, detail: 'msgIndex mismatch', ...metrics }
   }
   const jsMeta = js.metaRanges
   const rsMeta = Array.from(rs.metaRanges)
@@ -242,18 +299,20 @@ function compareFile(path: string): { ok: boolean; detail: string } {
     jsMeta.length !== rsMeta.length ||
     jsMeta.some((v, i) => v !== rsMeta[i])
   ) {
-    return { ok: false, detail: 'metaRanges mismatch' }
+    return { ok: false, detail: 'metaRanges mismatch', ...metrics }
   }
   if (js.keepAll !== rs.keepAll) {
     return {
       ok: false,
       detail: `keepAll mismatch js=${js.keepAll} rs=${rs.keepAll}`,
+      ...metrics,
     }
   }
   if (js.chainBytes !== rs.chainBytes) {
     return {
       ok: false,
       detail: `chainBytes js=${js.chainBytes} rs=${rs.chainBytes}`,
+      ...metrics,
     }
   }
   if (!rs.keepAll) {
@@ -262,16 +321,102 @@ function compareFile(path: string): { ok: boolean; detail: string } {
       js.kept.length !== rsKept.length ||
       js.kept.some((v, i) => v !== rsKept[i])
     ) {
-      return { ok: false, detail: 'keptRanges mismatch' }
+      return { ok: false, detail: 'keptRanges mismatch', ...metrics }
     }
   }
-  return { ok: true, detail: `js=${jsMs.toFixed(0)}ms rs=${rsMs.toFixed(0)}ms` }
+
+  // Range-only interface: scanChainRanges must agree with scanChain on
+  // keptRanges/keepAll/chainBytes (it runs the same scan, minus the ABI
+  // copies of msgIndex/metaRanges). Skipped for .node builds that predate it.
+  let hasRanges = false
+  if (typeof napi.scanChainRanges === 'function') {
+    hasRanges = true
+    const rr = napi.scanChainRanges(buf)
+    const rrKept = Array.from(rr.keptRanges)
+    const rsKept = Array.from(rs.keptRanges)
+    if (rr.keepAll !== rs.keepAll) {
+      return {
+        ok: false,
+        detail: `ranges keepAll mismatch ${rr.keepAll} vs ${rs.keepAll}`,
+        ...metrics,
+      }
+    }
+    if (rr.chainBytes !== rs.chainBytes) {
+      return {
+        ok: false,
+        detail: `ranges chainBytes mismatch ${rr.chainBytes} vs ${rs.chainBytes}`,
+        ...metrics,
+      }
+    }
+    if (
+      rrKept.length !== rsKept.length ||
+      rrKept.some((v, i) => v !== rsKept[i])
+    ) {
+      return { ok: false, detail: 'ranges keptRanges mismatch', ...metrics }
+    }
+  }
+
+  // Stitched files: assert parseJSONLSegments semantics — per-segment parse
+  // of zero-copy subarray views must produce byte-identical entries to
+  // parsing the concatenated buffer (the old walkChainBeforeParse output).
+  if (!rs.keepAll && bunJSONLParse !== false) {
+    const kept = rs.keptRanges
+    const segs: Buffer[] = []
+    for (let i = 0; i < kept.length; i += 2) {
+      segs.push(buf.subarray(kept[i]!, kept[i + 1]!))
+    }
+    metrics.stitched = true
+    metrics.segments = segs.length
+
+    const tC0 = performance.now()
+    const concat = Buffer.concat(segs)
+    const whole = parseJSONLRef(concat)
+    metrics.concatParseMs = performance.now() - tC0
+    metrics.concatBytes = concat.length
+
+    const tS0 = performance.now()
+    const perSeg: unknown[] = []
+    for (const seg of segs) {
+      for (const v of parseJSONLRef(seg)) perSeg.push(v)
+    }
+    metrics.segmentsParseMs = performance.now() - tS0
+
+    if (whole.length !== perSeg.length) {
+      return {
+        ok: false,
+        detail: `parse mismatch: concat ${whole.length} vs segments ${perSeg.length}`,
+        ...metrics,
+      }
+    }
+    for (let i = 0; i < whole.length; i++) {
+      if (JSON.stringify(whole[i]) !== JSON.stringify(perSeg[i])) {
+        return {
+          ok: false,
+          detail: `parse value mismatch at entry ${i}`,
+          ...metrics,
+        }
+      }
+    }
+  }
+  if (hasRanges) {
+    rangesChecked++
+  }
+  return {
+    ok: true,
+    detail: `js=${jsMs.toFixed(0)}ms rs=${rsMs.toFixed(0)}ms`,
+    ...metrics,
+  }
 }
 
 let passed = 0
 let failed = 0
 let totalRsMs = 0
 let totalJsMs = 0
+let rangesChecked = 0
+let stitchedFiles = 0
+let totalConcatBytes = 0
+let totalConcatParseMs = 0
+let totalSegmentsParseMs = 0
 for (const f of files) {
   try {
     const r = compareFile(f)
@@ -281,6 +426,12 @@ for (const f of files) {
       if (m) {
         totalJsMs += Number(m[1])
         totalRsMs += Number(m[2])
+      }
+      if (r.stitched) {
+        stitchedFiles++
+        totalConcatBytes += r.concatBytes
+        totalConcatParseMs += r.concatParseMs
+        totalSegmentsParseMs += r.segmentsParseMs
       }
     } else {
       failed++
@@ -294,5 +445,19 @@ for (const f of files) {
 console.log(
   `differential: ${passed}/${passed + failed} files match` +
     ` (js ${totalJsMs.toFixed(0)}ms, rust ${totalRsMs.toFixed(0)}ms)`,
+)
+console.log(
+  `ranges: ${rangesChecked} files via scanChainRanges` +
+    (rangesChecked === 0
+      ? ' (native build predates scanChainRanges — skipped)'
+      : ''),
+)
+console.log(
+  `parse-equiv: ${stitchedFiles} stitched files, per-segment === concat` +
+    ` (${totalConcatParseMs.toFixed(0)}ms concat+parse vs ${totalSegmentsParseMs.toFixed(0)}ms segments)`,
+)
+console.log(
+  `memory: concat path allocates ${(totalConcatBytes / 1048576) | 0}MB of stitched copies;` +
+    ` ranges path allocates 0 (subarray views alias the input buffer)`,
 )
 process.exit(failed === 0 ? 0 : 1)

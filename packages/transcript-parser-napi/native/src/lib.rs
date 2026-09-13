@@ -42,6 +42,28 @@ pub struct ChainScan {
   pub keep_all: bool,
 }
 
+#[napi(object)]
+pub struct ChainScanRanges {
+  /// Flat [start, end, ...] pairs of lines to KEEP when stitching
+  /// (active chain + metadata, in file order). Empty when keep_all is true.
+  pub kept_ranges: Uint32Array,
+  /// Sum of chain-line byte lengths.
+  pub chain_bytes: f64,
+  /// true = caller should use the original buffer unchanged (below the 50%
+  /// stitch gate, or no leaf found). false = stitch from kept_ranges.
+  pub keep_all: bool,
+}
+
+/// Internal scan result — identical to `ChainScan` but holding owned vectors
+/// so the two napi wrappers can copy across the ABI only what they return.
+struct CoreScan {
+  msg_idx: Vec<u32>,
+  meta_ranges: Vec<u32>,
+  kept: Vec<u32>,
+  chain_bytes: usize,
+  keep_all: bool,
+}
+
 fn find_sub(
   buf: &[u8],
   finder: &memchr::memmem::Finder,
@@ -107,10 +129,32 @@ pub fn has_native_transcript_parser() -> bool {
 /// Note: parentStart == u32::MAX in msg_index means null parent (JS uses -1).
 #[napi]
 pub fn scan_chain(buf: Buffer) -> Result<ChainScan> {
-  scan_chain_impl(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))
+  let core = scan_core(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))?;
+  Ok(ChainScan {
+    msg_index: Uint32Array::with_data_copied(&core.msg_idx),
+    meta_ranges: Uint32Array::with_data_copied(&core.meta_ranges),
+    kept_ranges: Uint32Array::with_data_copied(&core.kept),
+    chain_bytes: core.chain_bytes as f64,
+    keep_all: core.keep_all,
+  })
 }
 
-fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
+/// Range-only variant of [`scan_chain`]: returns just the kept byte ranges
+/// so JS callers can parse zero-copy `buf.subarray(start, end)` views
+/// per line instead of materializing a concatenated copy. Skips copying
+/// `msg_index`/`meta_ranges` across the ABI (the scan itself still needs
+/// them internally). Same classification algorithm, byte-identical ranges.
+#[napi]
+pub fn scan_chain_ranges(buf: Buffer) -> Result<ChainScanRanges> {
+  let core = scan_core(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))?;
+  Ok(ChainScanRanges {
+    kept_ranges: Uint32Array::with_data_copied(&core.kept),
+    chain_bytes: core.chain_bytes as f64,
+    keep_all: core.keep_all,
+  })
+}
+
+fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
   let prefix_len = PARENT_PREFIX.len();
   let key_len = UUID_KEY.len();
   let ts_len = TS_SUFFIX.len();
@@ -189,9 +233,15 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
 
       if uk >= 0 {
         let uuid_start = (uk as usize) + key_len;
-        let mut uuid = [0u8; UUID_LEN];
-        uuid.copy_from_slice(&buf[uuid_start..uuid_start + UUID_LEN]);
-        uuid_to_slot.insert(uuid, msg_idx.len() / 3);
+        // Truncated line at EOF: JS `buf.toString('latin1', ...)` clamps the
+        // end offset and reads a short string that no parent lookup can hit
+        // (parents always appear before children in append-only files), so
+        // skipping the insert matches JS instead of panicking on the slice.
+        if uuid_start + UUID_LEN <= len {
+          let mut uuid = [0u8; UUID_LEN];
+          uuid.copy_from_slice(&buf[uuid_start..uuid_start + UUID_LEN]);
+          uuid_to_slot.insert(uuid, msg_idx.len() / 3);
+        }
         msg_idx.push(pos as u32);
         msg_idx.push(line_end as u32);
         msg_idx.push(parent_start as u32);
@@ -223,11 +273,11 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
     i -= 1;
   }
   if leaf_slot < 0 {
-    return Ok(ChainScan {
-      msg_index: Uint32Array::with_data_copied(&msg_idx),
-      meta_ranges: Uint32Array::with_data_copied(&meta_ranges),
-      kept_ranges: Uint32Array::with_data_copied(&[]),
-      chain_bytes: 0f64,
+    return Ok(CoreScan {
+      msg_idx,
+      meta_ranges,
+      kept: Vec::new(),
+      chain_bytes: 0,
       keep_all: true,
     });
   }
@@ -262,11 +312,11 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
 
   // 50% stitch gate (see JS comment): only stitch when dropping ≥ half.
   if len - chain_bytes < (len >> 1) {
-    return Ok(ChainScan {
-      msg_index: Uint32Array::with_data_copied(&msg_idx),
-      meta_ranges: Uint32Array::with_data_copied(&meta_ranges),
-      kept_ranges: Uint32Array::with_data_copied(&[]),
-      chain_bytes: chain_bytes as f64,
+    return Ok(CoreScan {
+      msg_idx,
+      meta_ranges,
+      kept: Vec::new(),
+      chain_bytes,
       keep_all: true,
     });
   }
@@ -293,11 +343,11 @@ fn scan_chain_impl(buf: &[u8]) -> std::result::Result<ChainScan, String> {
     m += 2;
   }
 
-  Ok(ChainScan {
-    msg_index: Uint32Array::with_data_copied(&msg_idx),
-    meta_ranges: Uint32Array::with_data_copied(&meta_ranges),
-    kept_ranges: Uint32Array::with_data_copied(&kept),
-    chain_bytes: chain_bytes as f64,
+  Ok(CoreScan {
+    msg_idx,
+    meta_ranges,
+    kept,
+    chain_bytes,
     keep_all: false,
   })
 }

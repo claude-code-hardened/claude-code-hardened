@@ -189,6 +189,24 @@ export function parseJSONL<T>(data: string | Buffer): T[] {
   return parseJSONLBuffer<T>(data)
 }
 
+/**
+ * Parses JSONL from multiple buffer segments, concatenating the entry lists.
+ * Equivalent to parseJSONL(Buffer.concat(segments)) — each segment is a
+ * sequence of complete lines (line boundaries are preserved), so per-line
+ * malformed-line skipping matches the single-buffer path. Use this with
+ * zero-copy subarray views to avoid materializing a concatenated copy:
+ * peak allocation is the parsed entries, not input + concat.
+ */
+export function parseJSONLSegments<T>(segments: readonly Buffer[]): T[] {
+  const results: T[] = []
+  for (const segment of segments) {
+    for (const value of parseJSONL<T>(segment)) {
+      results.push(value)
+    }
+  }
+  return results
+}
+
 const MAX_JSONL_READ_BYTES = 100 * 1024 * 1024
 
 /**

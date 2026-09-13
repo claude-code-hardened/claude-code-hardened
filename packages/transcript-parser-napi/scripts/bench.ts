@@ -256,6 +256,24 @@ function benchFile(path: string): void {
   const cMs = performance.now() - tC0
   const rsScanMs = tC1 - tC0
 
+  // D: Rust range-only scanner + per-segment parse of zero-copy views
+  // (production path — no concat copy). Uses scanChainRanges when the .node
+  // build has it, falls back to scanChain's keptRanges otherwise (same scan).
+  const tD0 = performance.now()
+  const scanD =
+    typeof napi.scanChainRanges === 'function'
+      ? napi.scanChainRanges(buf)
+      : scan
+  if (!scanD.keepAll) {
+    const kept = scanD.keptRanges
+    for (let i = 0; i < kept.length; i += 2) {
+      parseAll(buf.subarray(kept[i]!, kept[i + 1]!))
+    }
+  } else {
+    parseAll(buf)
+  }
+  const dMs = performance.now() - tD0
+
   const mb = (size / 1024 / 1024).toFixed(1)
   const keptPct = ((cBuf.length / buf.length) * 100).toFixed(0)
   console.log(
@@ -267,6 +285,9 @@ function benchFile(path: string): void {
   )
   console.log(
     `  [C] rust scan ${(rsScanMs).toFixed(0)}ms + parse ${cMs.toFixed(0)}ms = ${(rsScanMs + cMs).toFixed(0)}ms`,
+  )
+  console.log(
+    `  [D] rust ranges scan + segment parse (no concat) ${dMs.toFixed(0)}ms`,
   )
   console.log('')
 }
