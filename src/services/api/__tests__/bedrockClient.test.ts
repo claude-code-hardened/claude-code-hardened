@@ -65,7 +65,7 @@ async function dispatch(client: AnthropicBedrock): Promise<void> {
   }
 }
 
-describe('BedrockClient.buildRequest body.anthropic_beta cleanup', () => {
+describe('BedrockClient backendMiddleware body.anthropic_beta cleanup', () => {
   test('BUG REPRO: unmodified AnthropicBedrock puts anthropic_beta in body', async () => {
     const { fetch: captureFetch, get } = makeCaptureFetch()
     const client = new AnthropicBedrock({
