@@ -78,6 +78,10 @@ function getI18n(): I18n {
  * interpolates locally so English needs no pack entry.
  */
 export function t(key: string, options?: Record<string, unknown>): string {
+  // Guard for dynamic call sites that may pass an empty description (e.g.
+  // MCP prompts use `description: prompt.description ?? ''`). Empty input
+  // passes through unchanged instead of hitting i18next internals.
+  if (!key) return key
   if (resolveLocale() === 'en') {
     if (!options) return key
     return key.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
