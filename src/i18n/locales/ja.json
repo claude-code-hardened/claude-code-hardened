@@ -2353,5 +2353,10 @@
   "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo, defaults to 10m) (bundled)": "プロンプトやスラッシュコマンドを定間隔で繰り返し実行（例：/loop 5m /foo、デフォルトは 10 分）。（バンドル）",
   "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, use Config tool. (bundled)": "このスキルは、settings.json 経由で Claude Code ハーネスを設定するために使用します。自動化された動作（「今から X のときは毎回」「X のたびに」「X のときはいつでも」「X の前後」）は、settings.json に設定された hook が必要です——実行するのはハーネスであり Claude ではないため、メモリ/設定では実現できません。次の場合にも使用：権限（「X を許可」「権限を追加」「権限を移動」）、環境変数（「X=Y を設定」）、hook のトラブルシューティング、settings.json/settings.local.json ファイルへの変更全般。例：「npm コマンドを許可」「bq 権限をグローバル設定に追加」「権限をユーザー設定へ移動」「DEBUG=true を設定」「claude 停止時に X を表示」。テーマ/モデルなどの簡単な設定は Config ツールを使用。（バンドル）",
   "(open-code-review) Run OCR in delegation mode — OCR handles file selection and rules, the host agent performs the actual review.": "（open-code-review）OCR をデリゲーションモードで実行——ファイル選択とルールは OCR が担当し、実際のレビューはホストエージェントが行います。",
-  "(open-code-review) Run OpenCodeReview (OCR) to review code changes and autonomously apply fixes.": "（open-code-review）OpenCodeReview（OCR）を実行してコード変更をレビューし、修正を自動適用します。"
+  "(open-code-review) Run OpenCodeReview (OCR) to review code changes and autonomously apply fixes.": "（open-code-review）OpenCodeReview（OCR）を実行してコード変更をレビューし、修正を自動適用します。",
+  "Set the UI display language": "表示言語を設定",
+  "Select display language": "表示言語を選択",
+  "UI language set to {{name}}": "表示言語を {{name}} に設定しました",
+  "UI language already set to {{name}}": "表示言語はすでに {{name}} です",
+  "Language selection dismissed": "言語選択をキャンセルしました"
 }

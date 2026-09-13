@@ -59,6 +59,7 @@ import bughunter from './commands/bughunter/index.js'
 import terminalSetup from './commands/terminalSetup/index.js'
 import usage from './commands/usage/index.js'
 import theme from './commands/theme/index.js'
+import language from './commands/language/index.js'
 import vim from './commands/vim/index.js'
 import webTools from './commands/web-tools/index.js'
 import { feature } from 'bun:bundle'
@@ -335,6 +336,7 @@ const COMMANDS = memoize((): Command[] => [
   init,
   keybindings,
   lang,
+  language,
   installGitHubApp,
   installSlackApp,
   mcp,
@@ -713,6 +715,7 @@ export const REMOTE_SAFE_COMMANDS: Set<Command> = new Set([
   clear, // Clear screen
   help, // Show help
   theme, // Change terminal theme
+  language, // Change UI display language
   color, // Change agent color
   vim, // Toggle vim mode
   usage, // Show session cost, plan usage, and activity stats (/cost and /stats are aliases)

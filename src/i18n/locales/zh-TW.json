@@ -2353,5 +2353,10 @@
   "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo, defaults to 10m) (bundled)": "按週期重複執行提示詞或斜線命令（如 /loop 5m /foo，預設 10 分鐘）。（內建）",
   "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, use Config tool. (bundled)": "使用此技能透過 settings.json 設定 Claude Code 執行框架。自動化行為（「從現在起每當 X」「每次 X」「無論何時 X」「在 X 之前/之後」）需要在 settings.json 中設定 hook——執行這些行為的是框架而非 Claude，因此記憶/偏好無法實現。也適用於：權限（「允許 X」「新增權限」「移動權限到」）、環境變數（「設定 X=Y」）、hook 除錯，以及對 settings.json/settings.local.json 檔案的任何變更。範例：「允許 npm 命令」「將 bq 權限新增至全域設定」「移動權限到使用者設定」「設定 DEBUG=true」「claude 停止時顯示 X」。主題/模型等簡單設定請用 Config 工具。（內建）",
   "(open-code-review) Run OCR in delegation mode — OCR handles file selection and rules, the host agent performs the actual review.": "（open-code-review）以委託模式執行 OCR——OCR 負責檔案選擇與規則，主代理執行實際審查。",
-  "(open-code-review) Run OpenCodeReview (OCR) to review code changes and autonomously apply fixes.": "（open-code-review）執行 OpenCodeReview（OCR）審查程式碼變更並自動套用修復。"
+  "(open-code-review) Run OpenCodeReview (OCR) to review code changes and autonomously apply fixes.": "（open-code-review）執行 OpenCodeReview（OCR）審查程式碼變更並自動套用修復。",
+  "Set the UI display language": "設定介面顯示語言",
+  "Select display language": "選擇介面顯示語言",
+  "UI language set to {{name}}": "介面語言已設為 {{name}}",
+  "UI language already set to {{name}}": "介面語言已是 {{name}}",
+  "Language selection dismissed": "已取消語言選擇"
 }
