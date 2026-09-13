@@ -1,4 +1,4 @@
-import type { StructuredPatchHunk } from 'diff';
+import type { StructuredPatchHunk } from 'src/utils/diff.js';
 import * as React from 'react';
 import { memo } from 'react';
 import { useSettings } from '../hooks/useSettings.js';

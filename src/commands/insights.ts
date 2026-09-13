@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { diffLines } from 'diff'
+import { diffLines } from 'color-diff-napi'
 import { constants as fsConstants, type Dirent } from 'fs'
 import {
   copyFile,

@@ -1,6 +1,7 @@
-import { diffWordsWithSpace, type StructuredPatchHunk } from 'diff';
+import { diffWordsWithSpace } from 'color-diff-napi';
 import * as React from 'react';
 import { useMemo } from 'react';
+import type { StructuredPatchHunk } from 'src/utils/diff.js';
 import type { ThemeName } from 'src/utils/theme.js';
 import { Box, NoSelect, Text, stringWidth, useTheme, wrapText } from '@anthropic/ink';
 
@@ -204,7 +205,7 @@ export function processAdjacentLines(lineObjects: LineObject[]): LineObject[] {
 export function calculateWordDiffs(oldText: string, newText: string): DiffPart[] {
   // Use diffWordsWithSpace instead of diffWords to preserve whitespace
   // This ensures spaces between tokens like > and { are preserved
-  const result = diffWordsWithSpace(oldText, newText, { ignoreCase: false });
+  const result = diffWordsWithSpace(oldText, newText);
 
   return result;
 }

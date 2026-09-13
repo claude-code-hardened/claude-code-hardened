@@ -1,4 +1,4 @@
-import type { StructuredPatchHunk } from 'diff';
+import type { StructuredPatchHunk } from 'src/utils/diff.js';
 import * as React from 'react';
 import { Suspense, use, useState } from 'react';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';

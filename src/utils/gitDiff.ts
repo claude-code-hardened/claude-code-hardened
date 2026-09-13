@@ -1,4 +1,4 @@
-import type { StructuredPatchHunk } from 'diff'
+import type { StructuredPatchHunk } from 'src/utils/diff.js'
 import { access, readFile } from 'fs/promises'
 import { dirname, join, relative, sep } from 'path'
 import { getCwd } from './cwd.js'

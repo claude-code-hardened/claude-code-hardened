@@ -1,11 +1,11 @@
 import type { BetaToolUnion } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
-import { createPatch } from 'diff'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { AgentId } from 'src/types/ids.js'
 import type { Message } from 'src/types/message.js'
 import { logForDebugging } from 'src/utils/debug.js'
+import { createPatch } from 'src/utils/diff.js'
 import { djb2Hash } from 'src/utils/hash.js'
 import { logError } from 'src/utils/log.js'
 import { getClaudeTempDir } from 'src/utils/permissions/filesystem.js'
@@ -718,6 +718,9 @@ async function writeCacheBreakDiff(
       'before',
       'after',
     )
+    if (patch === undefined) {
+      return undefined
+    }
     await writeFile(diffPath, patch)
     return diffPath
   } catch {

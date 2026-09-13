@@ -1,4 +1,4 @@
-import type { StructuredPatchHunk } from 'diff';
+import type { StructuredPatchHunk } from 'src/utils/diff.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
 import { useRegisterOverlay } from '../../context/overlayContext.js';

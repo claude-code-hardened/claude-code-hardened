@@ -1,4 +1,4 @@
-import type { StructuredPatchHunk } from 'diff'
+import type { StructuredPatchHunk } from 'src/utils/diff.js'
 import { useEffect, useMemo, useState } from 'react'
 import {
   fetchGitDiff,

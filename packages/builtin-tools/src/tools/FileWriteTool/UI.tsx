@@ -1,5 +1,5 @@
 import type { ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs';
-import type { StructuredPatchHunk } from 'diff';
+import type { StructuredPatchHunk } from 'src/utils/diff.js';
 import { isAbsolute, relative, resolve } from 'path';
 import * as React from 'react';
 import { Suspense, use, useState } from 'react';

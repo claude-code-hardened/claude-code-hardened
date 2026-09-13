@@ -1,4 +1,4 @@
-import type { StructuredPatchHunk } from 'diff';
+import type { StructuredPatchHunk } from 'src/utils/diff.js';
 import * as React from 'react';
 import { Box, NoSelect, Text } from '@anthropic/ink';
 import { intersperse } from '../utils/array.js';
