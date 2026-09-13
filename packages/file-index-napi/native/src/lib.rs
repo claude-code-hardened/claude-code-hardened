@@ -18,10 +18,23 @@
 //! a CJK char is 1 UTF-16 unit but 3 UTF-8 bytes, so byte-based gaps would
 //! shift scores and change result order.
 //!
-//! napi 3 note: this crate deliberately uses plain return values everywhere
-//! (no `napi::Result`). See token-counter-napi/native/src/lib.rs for why
-//! `use napi::Result` is dangerous (double-generic `Result<T, S = Status>`
-//! alias shadowing `std::result::Result`).
+//! napi 3 note: entry methods that can panic under load (`load_from_file_list`
+//! / `append_paths` / `search`) return a fully qualified `napi::Result` and
+//! are declared `#[napi(catch_unwind)]`, so a Rust panic surfaces as a JS
+//! exception instead of unwinding across the FFI boundary. The `napi::Result`
+//! type is always written out in full path — never `use napi::Result`: napi
+//! 3's `Result<T, S = Status>` is a double-generic alias that shadows
+//! `std::result::Result` (see token-counter-napi/native/src/lib.rs). Pure
+//! accessors (`path_count` / `free`) keep plain returns — their logic is
+//! trivial and cannot panic.
+//!
+//! Known limitation: case folding uses Rust `str::to_lowercase` while the TS
+//! baseline uses `String.prototype.toLowerCase`, and the two disagree on (a)
+//! the Unicode SpecialCasing final-sigma rule — JS maps a word-final "Σ" to
+//! "ς", Rust always emits "σ" — and (b) the Unicode version each ships with,
+//! so the case-insensitive (smart-case) path can judge queries containing
+//! Greek or rarely remapped uppercase letters differently from the TS
+//! implementation. ASCII, CJK and emoji queries are unaffected.
 
 use std::cmp::Ordering;
 
@@ -218,9 +231,12 @@ fn accept_path(data: &mut IndexData, line: &str) {
   if line.is_empty() {
     return;
   }
-  if !data.seen.insert(line.to_string()) {
+  // contains() first: inserting a duplicate would allocate a String that is
+  // thrown away immediately — duplicates are common when chunks overlap.
+  if data.seen.contains(line) {
     return;
   }
+  data.seen.insert(line.to_string());
   let lower = line.to_lowercase();
   let lower_bytes = encode_utf16le(&lower);
   let len_units = unit_len(&lower_bytes);
@@ -262,11 +278,11 @@ impl NativeFileIndex {
   }
 
   /// TS `loadFromFileList`: dedupe + full synchronous build.
-  #[napi]
-  pub fn load_from_file_list(&mut self, file_list: Vec<String>) {
+  #[napi(catch_unwind)]
+  pub fn load_from_file_list(&mut self, file_list: Vec<String>) -> napi::Result<()> {
     let data = match self.data.as_mut() {
       Some(d) => d,
-      None => return,
+      None => return Ok(()),
     };
     data.paths.clear();
     data.lower.clear();
@@ -278,21 +294,23 @@ impl NativeFileIndex {
     for line in file_list {
       accept_path(data, &line);
     }
+    Ok(())
   }
 
   /// Incremental build step used by the JS wrapper's chunked async build
   /// (mirrors TS `buildAsync`): dedupes against everything appended so far
   /// and indexes immediately, so `search` always sees a consistent ready
   /// prefix of the final index.
-  #[napi]
-  pub fn append_paths(&mut self, paths: Vec<String>) {
+  #[napi(catch_unwind)]
+  pub fn append_paths(&mut self, paths: Vec<String>) -> napi::Result<()> {
     let data = match self.data.as_mut() {
       Some(d) => d,
-      None => return,
+      None => return Ok(()),
     };
     for line in paths {
       accept_path(data, &line);
     }
+    Ok(())
   }
 
   /// Number of indexed (deduped, non-empty) paths.
@@ -306,29 +324,33 @@ impl NativeFileIndex {
 
   /// Fuzzy search. Mirrors TS `search` exactly, including the empty-query
   /// top-level cache and the top-k insertion order.
-  #[napi]
-  pub fn search(&self, query: String, limit: u32) -> Vec<FileSearchResult> {
+  #[napi(catch_unwind)]
+  pub fn search(
+    &self,
+    query: String,
+    limit: u32,
+  ) -> napi::Result<Vec<FileSearchResult>> {
     let limit = limit as usize;
     if limit == 0 {
-      return Vec::new();
+      return Ok(Vec::new());
     }
     let data = match self.data.as_ref() {
       Some(d) => d,
-      None => return Vec::new(),
+      None => return Ok(Vec::new()),
     };
 
     // Empty query: sorted top-level entries with score 0.0 (TS topLevelCache).
     if query.is_empty() {
       let mut sorted = data.top_level.clone();
       sorted.sort_by(|a, b| cmp_units(a, b));
-      return sorted
+      return Ok(sorted
         .into_iter()
         .take(limit)
         .map(|seg| FileSearchResult {
           path: decode_utf16le(&seg),
           score: 0.0,
         })
-        .collect();
+        .collect());
     }
 
     // Smart case: lowercase query → case-insensitive; any uppercase → sensitive.
@@ -339,7 +361,7 @@ impl NativeFileIndex {
     let n_len = needle_units.len().min(MAX_QUERY_LEN);
     needle_units.truncate(n_len);
     if n_len == 0 {
-      return Vec::new();
+      return Ok(Vec::new());
     }
 
     // Finder 借用 needle 字节序列——bytes 必须与 finders 同生命周期
@@ -505,7 +527,7 @@ impl NativeFileIndex {
         score: final_score,
       });
     }
-    results
+    Ok(results)
   }
 
   /// Release the index memory. The JS wrapper calls this before replacing
