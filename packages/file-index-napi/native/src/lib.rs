@@ -342,13 +342,12 @@ impl NativeFileIndex {
       return Vec::new();
     }
 
-    let finders: Vec<memmem::Finder> = needle_units
-      .iter()
-      .map(|&c| {
-        let bytes = c.to_le_bytes();
-        memmem::Finder::new(&bytes)
-      })
-      .collect();
+    // Finder 借用 needle 字节序列——bytes 必须与 finders 同生命周期
+    // （E0515：不能借用 map 闭包内的局部变量）。
+    let needle_bytes: Vec<[u8; 2]> =
+      needle_units.iter().map(|&c| c.to_le_bytes()).collect();
+    let finders: Vec<memmem::Finder> =
+      needle_bytes.iter().map(|b| memmem::Finder::new(b)).collect();
 
     // Only a-z bits, over the (possibly case-sensitive) needle — TS parity.
     let mut needle_bitmap: u32 = 0;
