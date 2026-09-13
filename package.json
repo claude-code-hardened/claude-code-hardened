@@ -225,6 +225,7 @@
     "follow-redirects": "1.16.0",
     "hono": "4.12.15",
     "postcss": "8.5.10",
+    "react": "19.2.5",
     "uuid": "14.0.0"
   },
   "lint-staged": {
