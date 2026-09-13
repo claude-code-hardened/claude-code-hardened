@@ -109,7 +109,6 @@ function parenDepth(s: string): number {
 const calledKeys = new Map<string, { file: string; line: number }>()
 const dynamicCallSites: string[] = []
 
-
 for (const file of files) {
   const text = readFileSync(file, 'utf8')
   const rel = relative(ROOT, file).split(sep).join('/')
