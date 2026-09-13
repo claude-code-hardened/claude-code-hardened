@@ -6,7 +6,14 @@ import { BASH_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/BashTool/t
 import { FILE_EDIT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/FileEditTool/constants.js'
 import { FILE_WRITE_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/FileWriteTool/prompt.js'
 import { REPL_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/REPLTool/constants.js'
-import { getReplPrimitiveTools } from '@claude-code-best/builtin-tools/tools/REPLTool/primitiveTools.js'
+// Lazy require: REPLTool/primitiveTools pulls AgentTool/BashTool and their UI
+// modules (-> @anthropic/ink), and this module is part of main.tsx's
+// pre-commander evaluation (attachments -> LocalAgentTask). Used inside a
+// collapse check only.
+const getReplPrimitiveTools = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/REPLTool/primitiveTools.js') as typeof import('@claude-code-best/builtin-tools/tools/REPLTool/primitiveTools.js')
+  ).getReplPrimitiveTools
 import {
   type BranchAction,
   type CommitKind,
