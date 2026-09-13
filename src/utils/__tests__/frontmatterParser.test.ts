@@ -46,6 +46,46 @@ Content`
     const result = parseFrontmatter(md)
     expect(result.frontmatter['allowed-tools']).toEqual(['Bash', 'Read'])
   })
+
+  // Bun 1.4 的 Bun.YAML 采用 YAML 1.2 核心 schema：on/yes/no/y/n/off 不再
+  // 解析为布尔，而是原样字符串。以下用例锁定该语义，防止运行时升级回归。
+  test('parses YAML 1.2 no as string (not boolean false)', () => {
+    const md = `---
+user-invocable: no
+---
+Content`
+    const result = parseFrontmatter(md)
+    expect(result.frontmatter['user-invocable']).toBe('no')
+  })
+
+  test('parses YAML 1.2 yes as string (not boolean true)', () => {
+    const md = `---
+enabled: yes
+---
+Content`
+    const result = parseFrontmatter(md)
+    expect(result.frontmatter.enabled).toBe('yes')
+  })
+
+  test('parses bare on key as string value', () => {
+    const md = `---
+on: push
+---
+Content`
+    const result = parseFrontmatter(md)
+    expect(result.frontmatter.on).toBe('push')
+  })
+
+  test('explicit booleans still parse as booleans', () => {
+    const md = `---
+disabled: false
+active: true
+---
+Content`
+    const result = parseFrontmatter(md)
+    expect(result.frontmatter.disabled).toBe(false)
+    expect(result.frontmatter.active).toBe(true)
+  })
 })
 
 describe('splitPathInFrontmatter', () => {
