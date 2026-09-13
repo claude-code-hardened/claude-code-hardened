@@ -59,3 +59,10 @@ credentials.json
 
 # Rust/NAPI build artifacts
 packages/*/native/target/
+
+# CI-built native binaries — 每次构建现场编译 Rust，产物只在工作区/打包产物中存在，
+# 不再回写仓库（vendor/clipboard 与 vendor/audio-capture 为静态提取资产，仍入库）
+vendor/token-counter/**/*.node
+vendor/transcript-parser/**/*.node
+vendor/color-diff/**/*.node
+vendor/file-index/**/*.node

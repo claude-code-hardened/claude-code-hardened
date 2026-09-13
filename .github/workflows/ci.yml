@@ -141,15 +141,14 @@ jobs:
           path: stage/
           if-no-files-found: error
 
-  # ── 打包：vendor 同步入库 + 一条 CLI 出完整 claude code ──
+  # ── 打包：native 产物只在工作区填充 vendor/（不入 git）+ 一条 CLI 出完整 claude code ──
   # scripts/build-all.mjs 与本地全流程是同一个入口（本地不带 --skip-native
-  # 时自己跑 cargo 编译多平台）。CI 端 native 来自上面矩阵的 artifact。
+  # 时自己跑 cargo 编译多平台）。CI 端 native 来自上面矩阵的 artifact——
+  # 每次构建都现场编译 Rust，保证产物永远对应当前源码；vendor/ 不再回写仓库。
   package:
     needs: [quality, native]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -174,19 +173,6 @@ jobs:
             done
           done
           find vendor/token-counter vendor/transcript-parser vendor/color-diff vendor/file-index -name '*.node' 2>/dev/null | sort
-
-      - name: Commit and push if changed
-        shell: bash
-        run: |
-          git config user.name "native-build-bot"
-          git config user.email "actions@github.com"
-          git add vendor/token-counter vendor/transcript-parser vendor/color-diff vendor/file-index
-          if git diff --cached --quiet; then
-            echo "vendor/ already up to date — nothing to commit"
-          else
-            git commit -m "chore: sync native binaries from CI [skip ci]"
-            git push
-          fi
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2, 2026-04-25
         with:
