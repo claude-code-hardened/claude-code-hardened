@@ -1,0 +1,31 @@
+name: Regen lockfile
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or commit to regenerate bun.lock on'
+        required: true
+        default: 'main'
+
+jobs:
+  regen:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Install Bun 1.4.2 (pinned)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies (regenerate lockfile)
+        run: bun install
+
+      - name: Upload lockfile artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-lockfile-${{ inputs.ref }}
+          path: bun.lock
