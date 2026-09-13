@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import type { Workflow } from '../commands/install-github-app/types.js';
 import type { ExitState } from '../hooks/useExitOnCtrlCDWithKeybindings.js';
 import { Box, Link, Text, Byline, Dialog, KeyboardShortcutHint } from '@anthropic/ink';
+import { t } from '../i18n/index.js';
 import { ConfigurableShortcutHint } from './ConfigurableShortcutHint.js';
 import { SelectMulti } from './CustomSelect/SelectMulti.js';
 
@@ -28,7 +29,7 @@ const WORKFLOWS: WorkflowOption[] = [
 
 function renderInputGuide(exitState: ExitState): React.ReactNode {
   if (exitState.pending) {
-    return <Text>Press {exitState.keyName} again to exit</Text>;
+    return <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>;
   }
   return (
     <Byline>
@@ -66,14 +67,14 @@ export function WorkflowMultiselectDialog({ onSubmit, defaultSelections }: Props
 
   return (
     <Dialog
-      title="Select GitHub workflows to install"
-      subtitle="We'll create a workflow file in your repository for each one you select."
+      title={t('Select GitHub workflows to install')}
+      subtitle={t("We'll create a workflow file in your repository for each one you select.")}
       onCancel={handleCancel}
       inputGuide={renderInputGuide}
     >
       <Box>
         <Text dimColor>
-          More workflow examples (issue triage, CI fixes, etc.) at:{' '}
+          {t('More workflow examples (issue triage, CI fixes, etc.) at:')}{' '}
           <Link url="https://github.com/anthropics/claude-code-action/blob/main/examples/">
             https://github.com/anthropics/claude-code-action/blob/main/examples/
           </Link>
@@ -82,7 +83,7 @@ export function WorkflowMultiselectDialog({ onSubmit, defaultSelections }: Props
 
       <SelectMulti
         options={WORKFLOWS.map(workflow => ({
-          label: workflow.label,
+          label: t(workflow.label),
           value: workflow.value,
         }))}
         defaultValue={defaultSelections}
@@ -94,7 +95,7 @@ export function WorkflowMultiselectDialog({ onSubmit, defaultSelections }: Props
 
       {showError && (
         <Box>
-          <Text color="error">You must select at least one workflow to continue</Text>
+          <Text color="error">{t('You must select at least one workflow to continue')}</Text>
         </Box>
       )}
     </Dialog>

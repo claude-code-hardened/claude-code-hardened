@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { checkIsGitClean, checkNeedsClaudeAiLogin } from 'src/utils/background/remote/preconditions.js';
 import { gracefulShutdownSync } from 'src/utils/gracefulShutdown.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../i18n/index.js';
 import { ConsoleOAuthFlow } from './ConsoleOAuthFlow.js';
 import { Select } from './CustomSelect/index.js';
 import { Dialog } from '@anthropic/ink';
@@ -97,15 +98,15 @@ export function TeleportError({
       }
 
       return (
-        <Dialog title="Log in to Claude" onCancel={onCancel}>
+        <Dialog title={t('Log in to Claude')} onCancel={onCancel}>
           <Box flexDirection="column">
-            <Text dimColor>Teleport requires a Claude.ai account.</Text>
-            <Text dimColor>Your Claude Pro/Max subscription will be used by Claude Code.</Text>
+            <Text dimColor>{t('Teleport requires a Claude.ai account.')}</Text>
+            <Text dimColor>{t('Your Claude Pro/Max subscription will be used by Claude Code.')}</Text>
           </Box>
           <Select
             options={[
-              { label: 'Login with Claude account', value: 'login' },
-              { label: 'Exit', value: 'exit' },
+              { label: t('Login with Claude account'), value: 'login' },
+              { label: t('Exit'), value: 'exit' },
             ]}
             onChange={handleLoginDialogSelect}
           />

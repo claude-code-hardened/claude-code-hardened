@@ -1,6 +1,7 @@
 import React from 'react';
 import { BLACK_CIRCLE } from '../../constants/figures.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useDebouncedDigitInput } from './useDebouncedDigitInput.js';
 
 export type TranscriptShareResponse = 'yes' | 'no' | 'dont_ask_again';
@@ -35,27 +36,30 @@ export function TranscriptSharePrompt({ onSelect, inputValue, setInputValue }: P
     <Box flexDirection="column" marginTop={1}>
       <Box>
         <Text color="ansi:cyan">{BLACK_CIRCLE} </Text>
-        <Text bold>Can Anthropic look at your session transcript to help us improve Claude Code?</Text>
+        <Text bold>{t('Can Anthropic look at your session transcript to help us improve Claude Code?')}</Text>
       </Box>
 
       <Box marginLeft={2}>
-        <Text dimColor>Learn more: https://code.claude.com/docs/en/data-usage#session-quality-surveys</Text>
+        <Text dimColor>
+          {t('Learn more: ')}
+          https://code.claude.com/docs/en/data-usage#session-quality-surveys
+        </Text>
       </Box>
 
       <Box marginLeft={2}>
         <Box width={10}>
           <Text>
-            <Text color="ansi:cyan">1</Text>: Yes
+            <Text color="ansi:cyan">1</Text>: {t('Yes')}
           </Text>
         </Box>
         <Box width={10}>
           <Text>
-            <Text color="ansi:cyan">2</Text>: No
+            <Text color="ansi:cyan">2</Text>: {t('No')}
           </Text>
         </Box>
         <Box>
           <Text>
-            <Text color="ansi:cyan">3</Text>: Don&apos;t ask again
+            <Text color="ansi:cyan">3</Text>: {t("Don't ask again")}
           </Text>
         </Box>
       </Box>

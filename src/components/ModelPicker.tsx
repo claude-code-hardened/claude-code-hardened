@@ -33,6 +33,7 @@ import {
   parseUserSpecifiedModel,
 } from '../utils/model/model.js';
 import { getModelOptions } from '../utils/model/modelOptions.js';
+import { t } from '../i18n/index.js';
 import { getSettingsForSource, updateSettingsForSource } from '../utils/settings/settings.js';
 import { ConfigurableShortcutHint } from './ConfigurableShortcutHint.js';
 import { Select } from './CustomSelect/index.js';
@@ -118,7 +119,7 @@ export function ModelPicker({
         {
           value: initial,
           label: modelDisplayString(initial),
-          description: 'Current model',
+          description: t('Current model'),
         },
       ];
     }
@@ -236,16 +237,17 @@ export function ModelPicker({
       <Box flexDirection="column">
         <Box marginBottom={1} flexDirection="column">
           <Text color="remember" bold>
-            Select model
+            {t('Select model')}
           </Text>
           <Text dimColor>
             {headerText ??
-              'Choose a model for this and future sessions. Use ← → to adjust effort, Space to toggle 1M context.'}
+              t('Choose a model for this and future sessions. Use ← → to adjust effort, Space to toggle 1M context.')}
           </Text>
           {sessionModel && (
             <Text dimColor>
-              Currently using {modelDisplayString(sessionModel)} for this session (set by plan mode). Selecting a model
-              will undo this.
+              {t('Currently using {{model}} for this session (set by plan mode). Selecting a model will undo this.', {
+                model: modelDisplayString(sessionModel),
+              })}
             </Text>
           )}
         </Box>
@@ -264,7 +266,7 @@ export function ModelPicker({
           </Box>
           {hiddenCount > 0 && (
             <Box paddingLeft={3}>
-              <Text dimColor>and {hiddenCount} more…</Text>
+              <Text dimColor>{t('and {{n}} more…', { n: hiddenCount })}</Text>
             </Box>
           )}
         </Box>
@@ -272,25 +274,27 @@ export function ModelPicker({
         <Box marginBottom={1} flexDirection="column">
           {focusedSupportsEffort ? (
             <Text dimColor>
-              <EffortLevelIndicator effort={displayEffort} /> {capitalize(displayEffort)} effort
-              {displayEffort === focusedDefaultEffort ? ` (default)` : ``} <Text color="subtle">← → to adjust</Text>
+              <EffortLevelIndicator effort={displayEffort} />{' '}
+              {t('{{level}} effort', { level: capitalize(displayEffort) })}
+              {displayEffort === focusedDefaultEffort ? t(' (default)') : ''}{' '}
+              <Text color="subtle">{t('← → to adjust')}</Text>
             </Text>
           ) : (
             <Text color="subtle">
-              <EffortLevelIndicator effort={undefined} /> Effort not supported
-              {focusedModelName ? ` for ${focusedModelName}` : ''}
+              <EffortLevelIndicator effort={undefined} /> {t('Effort not supported')}
+              {focusedModelName ? t(' for {{name}}', { name: focusedModelName }) : ''}
             </Text>
           )}
           {is1MMarked ? (
             <Text dimColor>
-              <EffortLevelIndicator effort={'high'} /> 1M context on
-              <Text color="subtle"> · Space to toggle</Text>
+              <EffortLevelIndicator effort={'high'} /> {t('1M context on')}
+              <Text color="subtle">{t(' · Space to toggle')}</Text>
             </Text>
           ) : (
             <Text color="subtle">
-              <EffortLevelIndicator effort={undefined} /> 1M context off
-              {focusedModelName ? ` for ${focusedModelName}` : ''}
-              <Text color="subtle"> · Space to toggle</Text>
+              <EffortLevelIndicator effort={undefined} /> {t('1M context off')}
+              {focusedModelName ? t(' for {{name}}', { name: focusedModelName }) : ''}
+              <Text color="subtle">{t(' · Space to toggle')}</Text>
             </Text>
           )}
         </Box>
@@ -299,14 +303,19 @@ export function ModelPicker({
           showFastModeNotice ? (
             <Box marginBottom={1}>
               <Text dimColor>
-                Fast mode is <Text bold>ON</Text> and available with {FAST_MODE_MODEL_DISPLAY} only (/fast). Switching
-                to other models turn off fast mode.
+                {t('Fast mode is ')}
+                <Text bold>ON</Text>
+                {t(' and available with {{m}} only (/fast). Switching to other models turn off fast mode.', {
+                  m: FAST_MODE_MODEL_DISPLAY,
+                })}
               </Text>
             </Box>
           ) : isFastModeAvailable() && !isFastModeCooldown() ? (
             <Box marginBottom={1}>
               <Text dimColor>
-                Use <Text bold>/fast</Text> to turn on Fast mode ({FAST_MODE_MODEL_DISPLAY} only).
+                {t('Use ')}
+                <Text bold>/fast</Text>
+                {t(' to turn on Fast mode ({{m}} only).', { m: FAST_MODE_MODEL_DISPLAY })}
               </Text>
             </Box>
           ) : null
@@ -316,7 +325,7 @@ export function ModelPicker({
       {isStandaloneCommand && (
         <Text dimColor italic>
           {exitState.pending ? (
-            <>Press {exitState.keyName} again to exit</>
+            <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
           ) : (
             <Byline>
               <KeyboardShortcutHint shortcut="Enter" action="confirm" />

@@ -8,6 +8,7 @@ import { useShortcutDisplay } from '../keybindings/useShortcutDisplay.js';
 import { logForDebugging } from '../utils/debug.js';
 import { detectCurrentRepository } from '../utils/detectRepository.js';
 import { formatRelativeTime } from '../utils/format.js';
+import { t } from '../i18n/index.js';
 import { ConfigurableShortcutHint } from './ConfigurableShortcutHint.js';
 import { Select } from './CustomSelect/index.js';
 import { Byline, KeyboardShortcutHint } from '@anthropic/ink';
@@ -127,9 +128,9 @@ export function ResumeTask({ onSelect, onCancel, isEmbedded = false }: Props): R
       <Box flexDirection="column" padding={1}>
         <Box flexDirection="row">
           <Spinner />
-          <Text bold>Loading Claude Code sessions…</Text>
+          <Text bold>{t('Loading Claude Code sessions…')}</Text>
         </Box>
-        <Text dimColor>{retrying ? 'Retrying…' : 'Fetching your Claude Code sessions…'}</Text>
+        <Text dimColor>{retrying ? t('Retrying…') : t('Fetching your Claude Code sessions…')}</Text>
       </Box>
     );
   }
@@ -138,13 +139,17 @@ export function ResumeTask({ onSelect, onCancel, isEmbedded = false }: Props): R
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold color="error">
-          Error loading Claude Code sessions
+          {t('Error loading Claude Code sessions')}
         </Text>
 
         {renderErrorSpecificGuidance(loadErrorType)}
 
         <Text dimColor>
-          Press <Text bold>Ctrl+R</Text> to retry · Press <Text bold>{escKey}</Text> to cancel
+          {t('Press ')}
+          <Text bold>Ctrl+R</Text>
+          {t(' to retry · Press ')}
+          <Text bold>{escKey}</Text>
+          {t(' to cancel')}
         </Text>
       </Box>
     );
@@ -154,12 +159,14 @@ export function ResumeTask({ onSelect, onCancel, isEmbedded = false }: Props): R
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>
-          No Claude Code sessions found
-          {currentRepo && <Text> for {currentRepo}</Text>}
+          {t('No Claude Code sessions found')}
+          {currentRepo && <Text>{t(' for {{name}}', { name: currentRepo })}</Text>}
         </Text>
         <Box marginTop={1}>
           <Text dimColor>
-            Press <Text bold>{escKey}</Text> to cancel
+            {t('Press ')}
+            <Text bold>{escKey}</Text>
+            {t(' to cancel')}
           </Text>
         </Box>
       </Box>
@@ -199,21 +206,16 @@ export function ResumeTask({ onSelect, onCancel, isEmbedded = false }: Props): R
   return (
     <Box flexDirection="column" padding={1} height={maxHeight}>
       <Text bold>
-        Select a session to resume
-        {showScrollPosition && (
-          <Text dimColor>
-            {' '}
-            ({focusedIndex} of {sessions.length})
-          </Text>
-        )}
-        {currentRepo && <Text dimColor> ({currentRepo})</Text>}:
+        {t('Select a session to resume')}
+        {showScrollPosition && <Text dimColor> {t('({{i}} of {{n}})', { i: focusedIndex, n: sessions.length })}</Text>}
+        {currentRepo && <Text dimColor>{t(' ({{name}})', { name: currentRepo })}</Text>}:
       </Text>
       <Box flexDirection="column" marginTop={1} flexGrow={1}>
         <Box marginLeft={2}>
           <Text bold>
-            {UPDATED_STRING.padEnd(maxTimeStringLength, ' ')}
+            {t('Updated').padEnd(maxTimeStringLength, ' ')}
             {SPACE_BETWEEN_TABLE_COLUMNS}
-            {'Session Title'}
+            {t('Session Title')}
           </Text>
         </Box>
         <Select
@@ -284,16 +286,18 @@ function renderErrorSpecificGuidance(errorType: LoadErrorType): React.ReactNode 
     case 'network':
       return (
         <Box marginY={1} flexDirection="column">
-          <Text dimColor>Check your internet connection</Text>
+          <Text dimColor>{t('Check your internet connection')}</Text>
         </Box>
       );
 
     case 'auth':
       return (
         <Box marginY={1} flexDirection="column">
-          <Text dimColor>Teleport requires a Claude account</Text>
+          <Text dimColor>{t('Teleport requires a Claude account')}</Text>
           <Text dimColor>
-            Run <Text bold>/login</Text> and select &quot;Claude account with subscription&quot;
+            {t('Run ')}
+            <Text bold>/login</Text>
+            {t(' and select "Claude account with subscription"')}
           </Text>
         </Box>
       );
@@ -301,14 +305,14 @@ function renderErrorSpecificGuidance(errorType: LoadErrorType): React.ReactNode 
     case 'api':
       return (
         <Box marginY={1} flexDirection="column">
-          <Text dimColor>Sorry, Claude encountered an error</Text>
+          <Text dimColor>{t('Sorry, Claude encountered an error')}</Text>
         </Box>
       );
 
     case 'other':
       return (
         <Box marginY={1} flexDirection="row">
-          <Text dimColor>Sorry, Claude Code encountered an error</Text>
+          <Text dimColor>{t('Sorry, Claude Code encountered an error')}</Text>
         </Box>
       );
   }
