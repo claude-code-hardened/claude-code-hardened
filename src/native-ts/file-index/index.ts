@@ -29,7 +29,9 @@ const BONUS_FIRST_CHAR = 8
 const PENALTY_GAP_START = 3
 const PENALTY_GAP_EXTENSION = 1
 
-const TOP_LEVEL_CACHE_LIMIT = 100
+// Exported for the native-backed wrapper in packages/file-index-napi — the
+// empty-query top-level cache must be computed by exactly one implementation.
+export const TOP_LEVEL_CACHE_LIMIT = 100
 const MAX_QUERY_LEN = 64
 // Yield to event loop after this many ms of sync work. Chunk sizes are
 // time-based (not count-based) so slow machines get smaller chunks and
@@ -378,7 +380,7 @@ export { CHUNK_MS }
  * Handles both Unix (/) and Windows (\) path separators.
  * Mirrors FileIndex::compute_top_level_entries in lib.rs.
  */
-function computeTopLevelEntries(
+export function computeTopLevelEntries(
   paths: string[],
   limit: number,
 ): SearchResult[] {

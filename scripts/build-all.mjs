@@ -41,6 +41,7 @@ const CRATES = [
     name: 'transcript-parser',
   },
   { pkg: 'color-diff-napi', crate: 'color_diff_napi', name: 'color-diff' },
+  { pkg: 'file-index-napi', crate: 'file_index_napi', name: 'file-index' },
 ]
 
 function artifactName(crate, platform) {

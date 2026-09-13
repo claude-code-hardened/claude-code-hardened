@@ -98,6 +98,7 @@
         "env-paths": "^4.0.0",
         "execa": "^9.6.1",
         "fflate": "^0.8.2",
+        "file-index-napi": "workspace:*",
         "figures": "^6.1.0",
         "fuse.js": "^7.3.0",
         "get-east-asian-width": "^1.5.0",
@@ -264,6 +265,10 @@
       "dependencies": {
         "highlight.js": "latest",
       },
+    },
+    "packages/file-index-napi": {
+      "name": "file-index-napi",
+      "version": "0.1.0",
     },
     "packages/image-processor-napi": {
       "name": "image-processor-napi",
@@ -1970,6 +1975,8 @@
     "fflate": ["fflate@0.8.2", "https://registry.npmmirror.com/fflate/-/fflate-0.8.2.tgz", {}, "sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A=="],
 
     "figures": ["figures@6.1.0", "https://registry.npmmirror.com/figures/-/figures-6.1.0.tgz", { "dependencies": { "is-unicode-supported": "^2.0.0" } }, "sha512-d+l3qxjSesT4V7v2fh+QnmFnUWv9lSpjarhShNTgBOfA0ttejbQUAlHLitbjkoRiDulW0OPoQPYIGhIC8ohejg=="],
+
+    "file-index-napi": ["file-index-napi@workspace:packages/file-index-napi"],
 
     "fill-range": ["fill-range@7.1.1", "https://registry.npmmirror.com/fill-range/-/fill-range-7.1.1.tgz", { "dependencies": { "to-regex-range": "^5.0.1" } }, "sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg=="],
 

@@ -1,0 +1,22 @@
+[package]
+name = "file-index-napi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", default-features = false, features = ["napi8"] }
+napi-derive = "3"
+# SIMD substring search：在 UTF-16LE 字节对上定位 ASCII needle 字符
+memchr = "2"
+# FxHash：索引去重集合（与 token-counter-napi 一致）
+rustc-hash = "1.1"
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
