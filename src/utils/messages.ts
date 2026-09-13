@@ -93,6 +93,7 @@ export {
   buildMessageLookups,
   computeMessageStructureKey,
   EMPTY_LOOKUPS,
+  MessageLookupsCache,
   updateMessageLookupsIncremental,
   type MessageLookups,
 } from './messageLookups.js'
