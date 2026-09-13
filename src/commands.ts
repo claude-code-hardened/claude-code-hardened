@@ -316,7 +316,8 @@ const tag = lazyCommand('./commands/tag/index.js')
 const outputStyle = lazyCommand('./commands/output-style/index.js')
 const remoteEnv = lazyCommand('./commands/remote-env/index.js')
 const upgrade = lazyCommand('./commands/upgrade/index.js')
-const extraUsage = lazyCommand('./commands/extra-usage/index.js')
+// extra-usage/index.ts has no default export — both commands are named.
+const extraUsage = lazyCommand('./commands/extra-usage/index.js', 'extraUsage')
 const extraUsageNonInteractive = lazyCommand(
   './commands/extra-usage/index.js',
   'extraUsageNonInteractive',
