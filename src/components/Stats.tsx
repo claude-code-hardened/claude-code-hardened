@@ -317,8 +317,8 @@ function OverviewTab({
         avgShots: (totalShots / total).toFixed(1),
         buckets: [
           { label: t('1-shot'), count: b1, pct: pct(b1) },
-          { label: t('2\u20135 shot'), count: b2_5, pct: pct(b2_5) },
-          { label: t('6\u201310 shot'), count: b6_10, pct: pct(b6_10) },
+          { label: t('2–5 shot'), count: b2_5, pct: pct(b2_5) },
+          { label: t('6–10 shot'), count: b6_10, pct: pct(b6_10) },
           { label: t('11+ shot'), count: b11, pct: pct(b11) },
         ],
       };
@@ -976,8 +976,8 @@ function renderOverviewToAnsi(stats: ClaudeCodeStats): string[] {
       const b11 = bucket(11);
       lines.push('');
       lines.push(t('Shot distribution'));
-      lines.push(row(t('1-shot'), fmtBucket(b1, pct(b1)), t('2\u20135 shot'), fmtBucket(b2_5, pct(b2_5))));
-      lines.push(row(t('6\u201310 shot'), fmtBucket(b6_10, pct(b6_10)), t('11+ shot'), fmtBucket(b11, pct(b11))));
+      lines.push(row(t('1-shot'), fmtBucket(b1, pct(b1)), t('2–5 shot'), fmtBucket(b2_5, pct(b2_5))));
+      lines.push(row(t('6–10 shot'), fmtBucket(b6_10, pct(b6_10)), t('11+ shot'), fmtBucket(b11, pct(b11))));
       lines.push(`${t('Avg/session:').padEnd(COL1_LABEL_WIDTH)}${h(avgShots)}`);
     }
   }

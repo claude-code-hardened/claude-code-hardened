@@ -2975,10 +2975,8 @@ const usageReport: Command = {
       // Show collection message if collecting
       if (collectRemote && hasRemoteHosts) {
         console.error(
-          t(`Collecting sessions from {{n}} homespace(s): {{h}}...`, {
-            n: remoteHosts.length,
-            h: remoteHosts.join(', '),
-          }),
+          // ant 内部进度行，key 未收录进 batch-8 清单与语言包，保持不包裹
+          `Collecting sessions from ${remoteHosts.length} homespace(s): ${remoteHosts.join(', ')}...`,
         )
       }
     }
