@@ -39,6 +39,71 @@ for (const d of SRC_DIRS) {
   }
 }
 
+// ── 还原源码字面量转义（\n \t \\ \' \" \uXXXX 等）──
+// 语言包中存的是真实字符（如换行、·、反斜杠），提取的 key 必须同样还原后才能对齐。
+function unescapeLiteral(raw: string): string {
+  let out = ''
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+    if (ch !== '\\' || i + 1 >= raw.length) {
+      out += ch
+      continue
+    }
+    const next = raw[++i]
+    switch (next) {
+      case 'n':
+        out += '\n'
+        break
+      case 't':
+        out += '\t'
+        break
+      case 'r':
+        out += '\r'
+        break
+      case 'b':
+        out += '\b'
+        break
+      case 'f':
+        out += '\f'
+        break
+      case 'v':
+        out += '\v'
+        break
+      case '0':
+        out += '\0'
+        break
+      case 'u': {
+        const hex = raw.slice(i + 1, i + 5)
+        if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+          out += String.fromCharCode(Number.parseInt(hex, 16))
+          i += 4
+        } else {
+          out += next
+        }
+        break
+      }
+      default:
+        // \\ \' \" 及未知转义：取转义后的字符本身
+        out += next
+    }
+  }
+  return out
+}
+
+// 字符串感知的括号深度（忽略字符串字面量内的括号）
+function parenDepth(s: string): number {
+  const stripped = s
+    .replace(/'(?:\\.|[^'\\])*'/g, "''")
+    .replace(/"(?:\\.|[^"\\])*"/g, '""')
+    .replace(/`(?:\\.|[^`\\])*`/g, '``')
+  let depth = 0
+  for (const c of stripped) {
+    if (c === '(') depth++
+    else if (c === ')') depth--
+  }
+  return depth
+}
+
 // ── 提取静态 t('...') / t("...") 调用的 key ──
 const calledKeys = new Map<string, { file: string; line: number }>()
 const dynamicCallSites: string[] = []
@@ -48,10 +113,20 @@ for (const file of files) {
   const rel = relative(ROOT, file).split(sep).join('/')
   const lines = text.split('\n')
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] as string
+    let line = lines[i] as string
     // 跳过 import 与注释行
     if (/^\s*(\/\/|\/\*|\*)/.test(line)) continue
     if (/^\s*import\b/.test(line)) continue
+    // 多行调用拼接：t( 括号未闭合时吸收后续行，否则整段调用会被漏提取
+    if (/\bt\(/.test(line) && parenDepth(line) > 0) {
+      let stmt = line
+      let end = i
+      while (end + 1 < lines.length && parenDepth(stmt) > 0 && end - i < 20) {
+        end++
+        stmt += `\n${lines[end]}`
+      }
+      line = stmt
+    }
     // 静态调用：t('...') 或 t("...")
     const staticRe = /\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1\s*[,)]/g
     let m: RegExpExecArray | null
@@ -60,7 +135,7 @@ for (const file of files) {
     while ((m = staticRe.exec(line))) {
       hasStatic = true
       hasCall = true
-      const key = m[2]?.replace(/\\'/g, "'").replace(/\\"/g, '"')
+      const key = m[2] === undefined ? undefined : unescapeLiteral(m[2])
       if (key && !(key in calledKeys)) {
         calledKeys.set(key, { file: rel, line: i + 1 })
       }
