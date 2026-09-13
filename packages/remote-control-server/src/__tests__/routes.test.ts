@@ -267,7 +267,7 @@ describe('V1 Session Routes', () => {
     const events = getEventBus(id).getEventsSince(0)
     expect(events).toHaveLength(1)
     expect(events[0]?.type).toBe('user')
-    expect((events[0]?.payload as { content?: string }).content).toBe(
+    expect((events[0]!.payload as { content?: string }).content).toBe(
       'hello from compat',
     )
   })
@@ -1888,7 +1888,7 @@ describe('V2 Worker Events Routes', () => {
     const events = getEventBus(id).getEventsSince(0)
     expect(events).toHaveLength(1)
     expect(events[0]?.type).toBe('assistant')
-    expect((events[0]?.payload as { content?: string }).content).toBe(
+    expect((events[0]!.payload as { content?: string }).content).toBe(
       'response',
     )
   })
