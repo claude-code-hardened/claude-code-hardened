@@ -83,6 +83,21 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Compile smoke: force-load every lazy command shim. In a --compile bundle a
+  // missing module surfaces as a runtime ResolveMessage; this flag turns that
+  // into a nonzero exit the packaging CI can assert on.
+  if (args.length === 1 && args[0] === '--check-commands') {
+    try {
+      const { forceLoadAllShims } = await import('../commands.js');
+      forceLoadAllShims();
+      console.log(`all command shims loaded (${MACRO.VERSION})`);
+      return;
+    } catch (error) {
+      console.error(`--check-commands failed: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
+    }
+  }
+
   // For all other paths, load the startup profiler
   const { profileCheckpoint } = await import('../utils/startupProfiler.js');
   profileCheckpoint('cli_entry');

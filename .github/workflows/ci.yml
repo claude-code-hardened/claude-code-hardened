@@ -221,6 +221,19 @@ jobs:
           check_macho dist/ccb-darwin-arm64  "12 0 0 1"    # arm64 LE bytes
           check_pe dist/ccb-windows-x64.exe
 
+      # 产物运行时冒烟：--version 验证可执行；--check-commands 强制加载全部
+      # lazy shim——compile 下缺失模块曾以 "Cannot find module
+      # './commands/add-dir/index.js'" 崩溃 REPL（uncaught → 11s 清理 → exit 0），
+      # 在此处即失败。只跑 host 架构（linux-x64），其余平台由架构断言覆盖。
+      - name: Smoke test binary (linux-x64)
+        run: |
+          set -euo pipefail
+          chmod +x dist/ccb-linux-x64
+          out=$(dist/ccb-linux-x64 --version)
+          echo "  --version → $out"
+          dist/ccb-linux-x64 --check-commands
+          echo "  ✓ --check-commands: all command shims loaded"
+
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:

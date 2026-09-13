@@ -37,6 +37,25 @@ import {
 } from './utils/model/providers.js'
 import { t } from './i18n/index.js'
 
+// Every shim's load() registers here so --check-commands (compile smoke) can
+// force-load all of them and surface missing-bundle modules as a build-time
+// failure instead of a runtime uncaughtException.
+const allShims: (() => Command)[] = []
+
+/**
+ * Compile smoke: force-load every lazy shim. Any module missing from the
+ * bundle throws ResolveMessage here, failing --check-commands with a nonzero
+ * exit instead of crashing the REPL mid-session.
+ */
+export function forceLoadAllShims(): void {
+  for (const load of allShims) {
+    const cmd = load()
+    if (!cmd || typeof (cmd as { name?: unknown }).name !== 'string') {
+      throw new Error('lazy command shim resolved to a non-Command value')
+    }
+  }
+}
+
 /**
  * Startup-lazy command shim.
  *
@@ -49,21 +68,35 @@ import { t } from './i18n/index.js'
  * the exported shape of this module and the Command objects' behavior are
  * unchanged.
  *
+ * Call sites pass a **require thunk** (`() => require('./x.js')`), NOT a
+ * module path string. Bun --compile only bundles modules reachable from the
+ * static import graph; a `require(<variable>)` inside this function body
+ * would stay a runtime lookup against $bunfs and 404 for every shim target
+ * not otherwise statically imported (shipped as
+ * "Cannot find module './commands/add-dir/index.js'"). A literal require at
+ * the call site is statically scanned into the bundle while CJS cache
+ * semantics keep evaluation deferred to the first load() — the lazy startup
+ * behavior is preserved.
+ *
  * Commands that participate in identity-based sets (REMOTE_SAFE_COMMANDS,
  * BRIDGE_SAFE_COMMANDS) must stay statically imported: Set.has() compares by
  * object identity and shims would not match objects imported directly from
  * their modules (tests do exactly that). Feature-gated require()s are also
  * left untouched.
  */
-function lazyCommand(modulePath: string, exportName = 'default'): Command {
+function lazyCommand(
+  loadModule: () => unknown,
+  exportName = 'default',
+): Command {
   let cached: Command | undefined
   const load = (): Command => {
     if (!cached) {
-      const mod = require(modulePath) as Record<string, unknown>
+      const mod = loadModule() as Record<string, unknown>
       cached = mod[exportName] as Command
     }
     return cached
   }
+  allShims.push(load)
   return new Proxy({} as Command, {
     get(_target, prop) {
       const cmd = load()
@@ -98,60 +131,90 @@ function lazyCommand(modulePath: string, exportName = 'default'): Command {
 }
 
 // Lazy shims (default exports unless a named export is given).
-const addDir = lazyCommand('./commands/add-dir/index.js')
-const autofixPr = lazyCommand('./commands/autofix-pr/index.js')
-const backfillSessions = lazyCommand('./commands/backfill-sessions/index.js')
-const goodClaude = lazyCommand('./commands/good-claude/index.js')
-const issue = lazyCommand('./commands/issue/index.js')
-const commit = lazyCommand('./commands/commit.js')
-const desktop = lazyCommand('./commands/desktop/index.js')
-const commitPushPr = lazyCommand('./commands/commit-push-pr.js')
-const config = lazyCommand('./commands/config/index.js')
-const context = lazyCommand('./commands/context/index.js', 'context')
+const addDir = lazyCommand(() => require('./commands/add-dir/index.js'))
+const autofixPr = lazyCommand(() => require('./commands/autofix-pr/index.js'))
+const backfillSessions = lazyCommand(() =>
+  require('./commands/backfill-sessions/index.js'),
+)
+const goodClaude = lazyCommand(() => require('./commands/good-claude/index.js'))
+const issue = lazyCommand(() => require('./commands/issue/index.js'))
+const commit = lazyCommand(() => require('./commands/commit.js'))
+const desktop = lazyCommand(() => require('./commands/desktop/index.js'))
+const commitPushPr = lazyCommand(() => require('./commands/commit-push-pr.js'))
+const config = lazyCommand(() => require('./commands/config/index.js'))
+const context = lazyCommand(
+  () => require('./commands/context/index.js'),
+  'context',
+)
 const contextNonInteractive = lazyCommand(
-  './commands/context/index.js',
+  () => require('./commands/context/index.js'),
   'contextNonInteractive',
 )
 // cost/index.ts re-exports usage — /cost is now an alias of /usage
-const diff = lazyCommand('./commands/diff/index.js')
-const doctor = lazyCommand('./commands/doctor/index.js')
-const memory = lazyCommand('./commands/memory/index.js')
-const mode = lazyCommand('./commands/mode/index.js')
-const ide = lazyCommand('./commands/ide/index.js')
-const init = lazyCommand('./commands/init.js')
-const initVerifiers = lazyCommand('./commands/init-verifiers.js')
-const lang = lazyCommand('./commands/lang/index.js')
-const logout = lazyCommand('./commands/logout/index.js')
-const installGitHubApp = lazyCommand('./commands/install-github-app/index.js')
-const installSlackApp = lazyCommand('./commands/install-slack-app/index.js')
-const breakCache = lazyCommand('./commands/break-cache/index.js')
+const diff = lazyCommand(() => require('./commands/diff/index.js'))
+const doctor = lazyCommand(() => require('./commands/doctor/index.js'))
+const memory = lazyCommand(() => require('./commands/memory/index.js'))
+const mode = lazyCommand(() => require('./commands/mode/index.js'))
+const ide = lazyCommand(() => require('./commands/ide/index.js'))
+const init = lazyCommand(() => require('./commands/init.js'))
+const initVerifiers = lazyCommand(() => require('./commands/init-verifiers.js'))
+const lang = lazyCommand(() => require('./commands/lang/index.js'))
+const logout = lazyCommand(() => require('./commands/logout/index.js'))
+const installGitHubApp = lazyCommand(() =>
+  require('./commands/install-github-app/index.js'),
+)
+const installSlackApp = lazyCommand(() =>
+  require('./commands/install-slack-app/index.js'),
+)
+const breakCache = lazyCommand(() => require('./commands/break-cache/index.js'))
 const breakCacheNonInteractive = lazyCommand(
-  './commands/break-cache/index.js',
+  () => require('./commands/break-cache/index.js'),
   'breakCacheNonInteractive',
 )
-const mcp = lazyCommand('./commands/mcp/index.js')
-const onboarding = lazyCommand('./commands/onboarding/index.js')
-const pr_comments = lazyCommand('./commands/pr_comments/index.js')
-const rename = lazyCommand('./commands/rename/index.js')
-const resume = lazyCommand('./commands/resume/index.js')
-const review = lazyCommand('./commands/review.js')
-const ultrareview = lazyCommand('./commands/review.js', 'ultrareview')
-const share = lazyCommand('./commands/share/index.js')
-const skills = lazyCommand('./commands/skills/index.js')
-const tasks = lazyCommand('./commands/tasks/index.js')
-const teleport = lazyCommand('./commands/teleport/index.js')
-const agentsPlatform = lazyCommand('./commands/agents-platform/index.js')
-const scheduleCommand = lazyCommand('./commands/schedule/index.js')
-const memoryStoresCommand = lazyCommand('./commands/memory-stores/index.js')
-const skillStoreCommand = lazyCommand('./commands/skill-store/index.js')
-const vaultCommand = lazyCommand('./commands/vault/index.js')
-const localVaultCommand = lazyCommand('./commands/local-vault/index.js')
-const localMemoryCommand = lazyCommand('./commands/local-memory/index.js')
-const securityReview = lazyCommand('./commands/security-review.js')
-const bughunter = lazyCommand('./commands/bughunter/index.js')
-const terminalSetup = lazyCommand('./commands/terminalSetup/index.js')
-const status = lazyCommand('./commands/status/index.js')
-const webTools = lazyCommand('./commands/web-tools/index.js')
+const mcp = lazyCommand(() => require('./commands/mcp/index.js'))
+const onboarding = lazyCommand(() => require('./commands/onboarding/index.js'))
+const pr_comments = lazyCommand(() =>
+  require('./commands/pr_comments/index.js'),
+)
+const rename = lazyCommand(() => require('./commands/rename/index.js'))
+const resume = lazyCommand(() => require('./commands/resume/index.js'))
+const review = lazyCommand(() => require('./commands/review.js'))
+const ultrareview = lazyCommand(
+  () => require('./commands/review.js'),
+  'ultrareview',
+)
+const share = lazyCommand(() => require('./commands/share/index.js'))
+const skills = lazyCommand(() => require('./commands/skills/index.js'))
+const tasks = lazyCommand(() => require('./commands/tasks/index.js'))
+const teleport = lazyCommand(() => require('./commands/teleport/index.js'))
+const agentsPlatform = lazyCommand(() =>
+  require('./commands/agents-platform/index.js'),
+)
+const scheduleCommand = lazyCommand(() =>
+  require('./commands/schedule/index.js'),
+)
+const memoryStoresCommand = lazyCommand(() =>
+  require('./commands/memory-stores/index.js'),
+)
+const skillStoreCommand = lazyCommand(() =>
+  require('./commands/skill-store/index.js'),
+)
+const vaultCommand = lazyCommand(() => require('./commands/vault/index.js'))
+const localVaultCommand = lazyCommand(() =>
+  require('./commands/local-vault/index.js'),
+)
+const localMemoryCommand = lazyCommand(() =>
+  require('./commands/local-memory/index.js'),
+)
+const securityReview = lazyCommand(() =>
+  require('./commands/security-review.js'),
+)
+const bughunter = lazyCommand(() => require('./commands/bughunter/index.js'))
+const terminalSetup = lazyCommand(() =>
+  require('./commands/terminalSetup/index.js'),
+)
+const status = lazyCommand(() => require('./commands/status/index.js'))
+const webTools = lazyCommand(() => require('./commands/web-tools/index.js'))
 import { feature } from 'bun:bundle'
 // Dead code elimination: conditional imports
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -260,43 +323,59 @@ const goalCmd = feature('GOAL')
     ).default
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
-const thinkback = lazyCommand('./commands/thinkback/index.js')
-const thinkbackPlay = lazyCommand('./commands/thinkback-play/index.js')
-const permissions = lazyCommand('./commands/permissions/index.js')
-const fast = lazyCommand('./commands/fast/index.js')
-const passes = lazyCommand('./commands/passes/index.js')
-const privacySettings = lazyCommand('./commands/privacy-settings/index.js')
-const hooks = lazyCommand('./commands/hooks/index.js')
-const branch = lazyCommand('./commands/branch/index.js')
-const artifacts = lazyCommand('./commands/artifacts/index.js')
-const agents = lazyCommand('./commands/agents/index.js')
-const plugin = lazyCommand('./commands/plugin/index.js')
-const reloadPlugins = lazyCommand('./commands/reload-plugins/index.js')
-const rewind = lazyCommand('./commands/rewind/index.js')
-const heapDump = lazyCommand('./commands/heapdump/index.js')
-const mockLimits = lazyCommand('./commands/mock-limits/index.js')
-const bridgeKick = lazyCommand('./commands/bridge-kick.js')
-const version = lazyCommand('./commands/version.js')
-const recap = lazyCommand('./commands/recap/index.js')
-const skillLearning = lazyCommand('./commands/skill-learning/index.js')
-const skillSearch = lazyCommand('./commands/skill-search/index.js')
-const resetLimits = lazyCommand('./commands/reset-limits/index.js')
+const thinkback = lazyCommand(() => require('./commands/thinkback/index.js'))
+const thinkbackPlay = lazyCommand(() =>
+  require('./commands/thinkback-play/index.js'),
+)
+const permissions = lazyCommand(() =>
+  require('./commands/permissions/index.js'),
+)
+const fast = lazyCommand(() => require('./commands/fast/index.js'))
+const passes = lazyCommand(() => require('./commands/passes/index.js'))
+const privacySettings = lazyCommand(() =>
+  require('./commands/privacy-settings/index.js'),
+)
+const hooks = lazyCommand(() => require('./commands/hooks/index.js'))
+const branch = lazyCommand(() => require('./commands/branch/index.js'))
+const artifacts = lazyCommand(() => require('./commands/artifacts/index.js'))
+const agents = lazyCommand(() => require('./commands/agents/index.js'))
+const plugin = lazyCommand(() => require('./commands/plugin/index.js'))
+const reloadPlugins = lazyCommand(() =>
+  require('./commands/reload-plugins/index.js'),
+)
+const rewind = lazyCommand(() => require('./commands/rewind/index.js'))
+const heapDump = lazyCommand(() => require('./commands/heapdump/index.js'))
+const mockLimits = lazyCommand(() => require('./commands/mock-limits/index.js'))
+const bridgeKick = lazyCommand(() => require('./commands/bridge-kick.js'))
+const version = lazyCommand(() => require('./commands/version.js'))
+const recap = lazyCommand(() => require('./commands/recap/index.js'))
+const skillLearning = lazyCommand(() =>
+  require('./commands/skill-learning/index.js'),
+)
+const skillSearch = lazyCommand(() =>
+  require('./commands/skill-search/index.js'),
+)
+const resetLimits = lazyCommand(() =>
+  require('./commands/reset-limits/index.js'),
+)
 const resetLimitsNonInteractive = lazyCommand(
-  './commands/reset-limits/index.js',
+  () => require('./commands/reset-limits/index.js'),
   'resetLimitsNonInteractive',
 )
-const antTrace = lazyCommand('./commands/ant-trace/index.js')
-const perfIssue = lazyCommand('./commands/perf-issue/index.js')
-const sandboxToggle = lazyCommand('./commands/sandbox-toggle/index.js')
-const tui = lazyCommand('./commands/tui/index.js')
+const antTrace = lazyCommand(() => require('./commands/ant-trace/index.js'))
+const perfIssue = lazyCommand(() => require('./commands/perf-issue/index.js'))
+const sandboxToggle = lazyCommand(() =>
+  require('./commands/sandbox-toggle/index.js'),
+)
+const tui = lazyCommand(() => require('./commands/tui/index.js'))
 const tuiNonInteractive = lazyCommand(
-  './commands/tui/index.js',
+  () => require('./commands/tui/index.js'),
   'tuiNonInteractive',
 )
-const chrome = lazyCommand('./commands/chrome/index.js')
-const advisor = lazyCommand('./commands/advisor.js')
-const autonomy = lazyCommand('./commands/autonomy.js')
-const provider = lazyCommand('./commands/provider.js')
+const chrome = lazyCommand(() => require('./commands/chrome/index.js'))
+const advisor = lazyCommand(() => require('./commands/advisor.js'))
+const autonomy = lazyCommand(() => require('./commands/autonomy.js'))
+const provider = lazyCommand(() => require('./commands/provider.js'))
 import {
   getSkillDirCommands,
   clearSkillCaches,
@@ -310,21 +389,28 @@ import {
   getPluginSkills,
   clearPluginSkillsCache,
 } from './utils/plugins/loadPluginCommands.js'
-const env = lazyCommand('./commands/env/index.js')
-const exportCommand = lazyCommand('./commands/export/index.js')
-const model = lazyCommand('./commands/model/index.js')
-const tag = lazyCommand('./commands/tag/index.js')
-const outputStyle = lazyCommand('./commands/output-style/index.js')
-const remoteEnv = lazyCommand('./commands/remote-env/index.js')
-const upgrade = lazyCommand('./commands/upgrade/index.js')
+const env = lazyCommand(() => require('./commands/env/index.js'))
+const exportCommand = lazyCommand(() => require('./commands/export/index.js'))
+const model = lazyCommand(() => require('./commands/model/index.js'))
+const tag = lazyCommand(() => require('./commands/tag/index.js'))
+const outputStyle = lazyCommand(() =>
+  require('./commands/output-style/index.js'),
+)
+const remoteEnv = lazyCommand(() => require('./commands/remote-env/index.js'))
+const upgrade = lazyCommand(() => require('./commands/upgrade/index.js'))
 // extra-usage/index.ts has no default export — both commands are named.
-const extraUsage = lazyCommand('./commands/extra-usage/index.js', 'extraUsage')
+const extraUsage = lazyCommand(
+  () => require('./commands/extra-usage/index.js'),
+  'extraUsage',
+)
 const extraUsageNonInteractive = lazyCommand(
-  './commands/extra-usage/index.js',
+  () => require('./commands/extra-usage/index.js'),
   'extraUsageNonInteractive',
 )
-const rateLimitOptions = lazyCommand('./commands/rate-limit-options/index.js')
-const effort = lazyCommand('./commands/effort/index.js')
+const rateLimitOptions = lazyCommand(() =>
+  require('./commands/rate-limit-options/index.js'),
+)
+const effort = lazyCommand(() => require('./commands/effort/index.js'))
 // stats/index.ts re-exports usage — /stats is now an alias of /usage
 // insights.ts is 113KB (3200 lines, includes diffLines/html rendering). Lazy
 // shim defers the heavy module until /insights is actually invoked.
@@ -341,8 +427,12 @@ const usageReport: Command = {
     return real.getPromptForCommand(args, context)
   },
 }
-const oauthRefresh = lazyCommand('./commands/oauth-refresh/index.js')
-const debugToolCall = lazyCommand('./commands/debug-tool-call/index.js')
+const oauthRefresh = lazyCommand(() =>
+  require('./commands/oauth-refresh/index.js'),
+)
+const debugToolCall = lazyCommand(() =>
+  require('./commands/debug-tool-call/index.js'),
+)
 import { getSettingSourceName } from './utils/settings/constants.js'
 import {
   type Command,
