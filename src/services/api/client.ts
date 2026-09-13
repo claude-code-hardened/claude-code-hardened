@@ -265,9 +265,11 @@ export async function getAnthropicClient({
 
     const googleAuth = isEnvTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH)
       ? ({
-          // Mock GoogleAuth for testing/proxy scenarios
+          // Mock GoogleAuth for testing/proxy scenarios.
+          // getRequestHeaders must return a Headers instance: vertex-sdk >=0.19
+          // calls `headers.get('x-goog-user-project')` on the result.
           getClient: () => ({
-            getRequestHeaders: () => ({}),
+            getRequestHeaders: () => new Headers(),
           }),
         } as unknown as GoogleAuth)
       : new GoogleAuth({
