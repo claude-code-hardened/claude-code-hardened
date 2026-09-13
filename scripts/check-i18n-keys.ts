@@ -43,6 +43,44 @@ for (const d of SRC_DIRS) {
 const calledKeys = new Map<string, { file: string; line: number }>()
 const dynamicCallSites: string[] = []
 
+/**
+ * 还原 JS 字符串字面量中的转义序列，使提取到的 key 与语言包中的实际
+ * 字符逐字节一致。只还原 \' 和 \" 会导致含 \n、\uXXXX、\\ 等转义的
+ * 调用点被误报为「漏迁」（如 t('↑↓ navigate') 写作 t('\u2191\u2193 …')）。
+ */
+function decodeJsEscapes(raw: string): string {
+  return raw.replace(
+    /\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g,
+    (_match, esc: string) => {
+      if (esc.startsWith('u{')) {
+        return String.fromCodePoint(parseInt(esc.slice(2, -1), 16))
+      }
+      if (esc.startsWith('u') || esc.startsWith('x')) {
+        return String.fromCharCode(parseInt(esc.slice(1), 16))
+      }
+      switch (esc) {
+        case 'n':
+          return '\n'
+        case 't':
+          return '\t'
+        case 'r':
+          return '\r'
+        case 'b':
+          return '\b'
+        case 'f':
+          return '\f'
+        case 'v':
+          return '\v'
+        case '0':
+          return '\0'
+        default:
+          // \' \" \\ \` 及未知转义 → 取字面字符
+          return esc
+      }
+    },
+  )
+}
+
 for (const file of files) {
   const text = readFileSync(file, 'utf8')
   const rel = relative(ROOT, file).split(sep).join('/')
@@ -60,7 +98,7 @@ for (const file of files) {
     while ((m = staticRe.exec(line))) {
       hasStatic = true
       hasCall = true
-      const key = m[2]?.replace(/\\'/g, "'").replace(/\\"/g, '"')
+      const key = m[2] ? decodeJsEscapes(m[2]) : undefined
       if (key && !(key in calledKeys)) {
         calledKeys.set(key, { file: rel, line: i + 1 })
       }
