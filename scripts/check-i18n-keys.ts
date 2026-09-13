@@ -3,7 +3,8 @@
  *   1. 源码中静态 t('...') 调用点 vs 语言包 key —— 漏迁 = error（CI 挂）
  *   2. 语言包里有但源码无静态调用的 key —— 死键 = warning
  *      （渲染层动态调用 t(cmd.description) 合法，故只警告不挂 CI）
- *   3. 跨包 key 集合不一致 —— error（与 index.test.ts 双保险）
+ *   3. 跨包 key 集合不一致 —— zh-TW 缺失/多余 = error；ja/ko 为部分包，
+ *      缺失 = warning（回退英文），多余孤儿 key = error（与 index.test.ts 双保险）
  *   4. stub 翻译（value === key）—— error
  *
  * usage: bun run scripts/check-i18n-keys.ts [--fix-report-only]
@@ -161,14 +162,29 @@ let errors = 0
 let warnings = 0
 
 // ── 1. 跨包一致性 ──
+// zh-CN 是基准。zh-TW 是完整镜像包，缺失/多余 key 都报 error；
+// ja/ko 是部分包（best-effort 维护），缺失 key 由 i18next 回退英文
+// （fallbackLng + parseMissingKeyHandler，见 src/i18n/index.ts），只警告；
+// 但 zh-CN 没有的孤儿 key 永远是 error。
+const FULL_MIRROR_TAGS = ['zh-TW'] as const
+const PARTIAL_TAGS = ['ja', 'ko'] as const
 const base = packs.get('zh-CN') as Record<string, string>
 const baseKeys = new Set(Object.keys(base))
 for (const [tag, pack] of packs) {
   const keys = new Set(Object.keys(pack))
+  const isFullMirror = (FULL_MIRROR_TAGS as readonly string[]).includes(tag)
+  const isPartial = (PARTIAL_TAGS as readonly string[]).includes(tag)
+  if (!isFullMirror && !isPartial) continue
   for (const k of baseKeys) {
     if (!keys.has(k)) {
-      console.error(`✗ [${tag}] 缺少 key: ${JSON.stringify(k)}`)
-      errors++
+      const missing = `✗ [${tag}] 缺少 key: ${JSON.stringify(k)}`
+      if (isPartial) {
+        console.warn(missing.replace('✗', '⚠'))
+        warnings++
+      } else {
+        console.error(missing)
+        errors++
+      }
     }
   }
   for (const k of keys) {

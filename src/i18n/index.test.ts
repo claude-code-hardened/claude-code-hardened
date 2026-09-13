@@ -41,14 +41,32 @@ describe('i18n locale packs', () => {
     ja,
     ko,
   }
+  // Complete packs mirror the zh-CN reference set key-for-key. Partial packs
+  // are maintained best-effort and fall back to English for missing keys.
+  const COMPLETE_PACKS = ['zh-TW'] as const
+  const PARTIAL_PACKS = ['ja', 'ko'] as const
 
-  test('all locale packs cover the same key set', () => {
-    // zh-CN is the reference set — every other locale must match exactly,
+  test('complete locale packs cover the same key set as zh-CN', () => {
+    // zh-CN is the reference set — complete packs must match key-for-key,
     // otherwise a locale silently misses translations.
     const refKeys = Object.keys(zhCN).sort()
-    for (const [locale, pack] of Object.entries(PACKS)) {
-      if (locale === 'zh-CN') continue
-      expect(Object.keys(pack).sort()).toEqual(refKeys)
+    for (const locale of COMPLETE_PACKS) {
+      expect(Object.keys(PACKS[locale]).sort()).toEqual(refKeys)
+    }
+  })
+
+  test('partial locale packs are subsets of the zh-CN key set', () => {
+    // ja/ko are partial packs: keys missing from them fall back to English
+    // (i18next fallbackLng + parseMissingKeyHandler), which is the documented
+    // graceful-degradation path. They must never carry orphan keys that
+    // zh-CN does not have.
+    const refSet = new Set(Object.keys(zhCN))
+    for (const locale of PARTIAL_PACKS) {
+      for (const key of Object.keys(PACKS[locale])) {
+        if (!refSet.has(key)) {
+          throw new Error(`${locale} has orphan key not in zh-CN: ${key}`)
+        }
+      }
     }
   })
 
