@@ -413,6 +413,7 @@ export async function* queryModelOpenAI(
 
     // Accumulate content blocks and usage, same as the Anthropic path in claude.ts
     const contentBlocks: Record<number, Record<string, unknown>> = {}
+    const textDeltas = new Map<number, string[]>()
     const collectedMessages: AssistantMessage[] = []
     let partialMessage: BetaMessage | null = null
     let stopReason: string | null = null
@@ -445,6 +446,7 @@ export async function* queryModelOpenAI(
             contentBlocks[idx] = { ...cb, input: '' }
           } else if (cb.type === 'text') {
             contentBlocks[idx] = { ...cb, text: '' }
+            textDeltas.set(idx, [])
           } else if (cb.type === 'thinking') {
             contentBlocks[idx] = { ...cb, thinking: '', signature: '' }
           } else {
@@ -458,7 +460,7 @@ export async function* queryModelOpenAI(
           const block = contentBlocks[idx]
           if (!block) break
           if (delta.type === 'text_delta') {
-            block.text = ((block.text as string | undefined) || '') + delta.text
+            textDeltas.get(idx)?.push(delta.text)
           } else if (delta.type === 'input_json_delta') {
             block.input =
               ((block.input as string | undefined) || '') + delta.partial_json
@@ -471,6 +473,14 @@ export async function* queryModelOpenAI(
           break
         }
         case 'content_block_stop': {
+          const deltas = textDeltas.get(event.index)
+          if (deltas) {
+            const block = contentBlocks[event.index]
+            if (block && block.type === 'text') {
+              block.text = deltas.join('')
+            }
+            textDeltas.delete(event.index)
+          }
           // Block accumulation is complete; assembly happens at message_stop.
           break
         }

@@ -116,6 +116,7 @@ export async function* queryModelGemini(
 
     const adaptedStream = adaptGeminiStreamToAnthropic(stream, geminiModel)
     const contentBlocks: Record<number, Record<string, unknown>> = {}
+    const textDeltas = new Map<number, string[]>()
     const collectedMessages: AssistantMessage[] = []
     let partialMessage: BetaMessage | null = null
     let ttftMs = 0
@@ -134,6 +135,7 @@ export async function* queryModelGemini(
             contentBlocks[idx] = { ...cb, input: '' }
           } else if (cb.type === 'text') {
             contentBlocks[idx] = { ...cb, text: '' }
+            textDeltas.set(idx, [])
           } else if (cb.type === 'thinking') {
             contentBlocks[idx] = { ...cb, thinking: '', signature: '' }
           } else {
@@ -148,7 +150,7 @@ export async function* queryModelGemini(
           if (!block) break
 
           if (delta.type === 'text_delta') {
-            block.text = ((block.text as string | undefined) || '') + delta.text
+            textDeltas.get(idx)?.push(delta.text)
           } else if (delta.type === 'input_json_delta') {
             block.input =
               ((block.input as string | undefined) || '') + delta.partial_json
@@ -168,6 +170,14 @@ export async function* queryModelGemini(
           const idx = event.index
           const block = contentBlocks[idx]
           if (!block || !partialMessage) break
+
+          const deltas = textDeltas.get(idx)
+          if (deltas) {
+            if (block.type === 'text') {
+              block.text = deltas.join('')
+            }
+            textDeltas.delete(idx)
+          }
 
           const message: AssistantMessage = {
             message: {
