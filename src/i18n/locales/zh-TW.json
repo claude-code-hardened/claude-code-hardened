@@ -2095,8 +2095,7 @@
   "fetching PR comments": "正在獲取 PR 評論",
   "reviewing pull request": "正在審查 PR",
   "analyzing code changes for security risks": "正在分析程式碼更改的安全風險",
-  "setting up statusLine": "正在設定 statusLine"
-,
+  "setting up statusLine": "正在設定 statusLine",
   "Gemini API · ": "Gemini API：",
   "Base URL ": "Base URL",
   "Haiku    ": "Haiku 模型",

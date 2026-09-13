@@ -2095,8 +2095,7 @@
   "analyzing code changes for security risks": "코드 변경 보안 위험 분석 중…",
   "setting up statusLine": "statusLine 설정 중…",
   "↓ {{n}} tokens": "↓ {{n}} 토큰",
-  "Async agent": "비동기 에이전트"
-,
+  "Async agent": "비동기 에이전트",
   "Gemini API · ": "Gemini API: ",
   "Base URL ": "베이스 URL",
   "Haiku    ": "Haiku 모델",
