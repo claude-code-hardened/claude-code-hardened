@@ -9,11 +9,12 @@ import { REPL_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/REPLTool/c
 // Lazy require: REPLTool/primitiveTools pulls AgentTool/BashTool and their UI
 // modules (-> @anthropic/ink), and this module is part of main.tsx's
 // pre-commander evaluation (attachments -> LocalAgentTask). Used inside a
-// collapse check only.
-const getReplPrimitiveTools = () =>
+// collapse check only. Returns the resolved tool array (same shape as the
+// original static call).
+const getReplPrimitiveTools = (): Tools =>
   (
     require('@claude-code-best/builtin-tools/tools/REPLTool/primitiveTools.js') as typeof import('@claude-code-best/builtin-tools/tools/REPLTool/primitiveTools.js')
-  ).getReplPrimitiveTools
+  ).getReplPrimitiveTools()
 import {
   type BranchAction,
   type CommitKind,
