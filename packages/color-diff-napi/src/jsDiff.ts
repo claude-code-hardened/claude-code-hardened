@@ -139,11 +139,15 @@ function buildValues(
       oldPos += component.count
     }
   }
+  // Key order matters for byte-identical JSON.stringify output: jsdiff's
+  // buildValues produces components whose enumerable keys end up in the
+  // order count, added, removed, value (previousComponent is deleted, and
+  // `value` is assigned last), so mirror that exactly.
   return components.map(c => ({
-    value: c.value ?? '',
     count: c.count,
     added: c.added,
     removed: c.removed,
+    value: c.value ?? '',
   }))
 }
 

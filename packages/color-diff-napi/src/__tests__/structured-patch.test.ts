@@ -86,11 +86,55 @@ describe('jsDiffLines', () => {
     ])
   })
 
+  // Verified against real jsdiff 8.0.4 (node_modules/diff): the last line
+  // without a trailing newline is a distinct token from the same line with
+  // one, so the shared 'a\n' stays common and only the final line is
+  // removed/re-added — jsdiff does NOT collapse this into a whole-text
+  // remove+add pair.
   test('keeps the last line without a trailing newline', () => {
     const changes = jsDiffLines('a\nb', 'a\nb\n')
     expect(changes).toEqual([
-      { value: 'a\nb', count: 2, added: false, removed: true },
-      { value: 'a\nb\n', count: 2, added: true, removed: false },
+      { value: 'a\n', count: 1, added: false, removed: false },
+      { value: 'b', count: 1, added: false, removed: true },
+      { value: 'b\n', count: 1, added: true, removed: false },
+    ])
+  })
+
+  test('matches jsdiff 8.0.4 on trailing-newline edge cases', () => {
+    // Each expectation below was probed against the real jsdiff 8.0.4
+    // package (diffLines executed directly).
+    // Only-newline difference in either direction: no common token at all.
+    expect(jsDiffLines('a\n', 'a')).toEqual([
+      { value: 'a\n', count: 1, added: false, removed: true },
+      { value: 'a', count: 1, added: true, removed: false },
+    ])
+    expect(jsDiffLines('a', 'a\n')).toEqual([
+      { value: 'a', count: 1, added: false, removed: true },
+      { value: 'a\n', count: 1, added: true, removed: false },
+    ])
+    expect(jsDiffLines('a\nb\n', 'a\nb')).toEqual([
+      { value: 'a\n', count: 1, added: false, removed: false },
+      { value: 'b\n', count: 1, added: false, removed: true },
+      { value: 'b', count: 1, added: true, removed: false },
+    ])
+    // Appending a final newline keeps earlier lines common.
+    expect(jsDiffLines('a\nb\nc', 'a\nb\nc\n')).toEqual([
+      { value: 'a\nb\n', count: 2, added: false, removed: false },
+      { value: 'c', count: 1, added: false, removed: true },
+      { value: 'c\n', count: 1, added: true, removed: false },
+    ])
+    // Trailing \r change on the unterminated last line.
+    expect(jsDiffLines('a\nb', 'a\nb\r\n')).toEqual([
+      { value: 'a\n', count: 1, added: false, removed: false },
+      { value: 'b', count: 1, added: false, removed: true },
+      { value: 'b\r\n', count: 1, added: true, removed: false },
+    ])
+    // Empty-string boundaries.
+    expect(jsDiffLines('', 'a')).toEqual([
+      { value: 'a', count: 1, added: true, removed: false },
+    ])
+    expect(jsDiffLines('a', '')).toEqual([
+      { value: 'a', count: 1, added: false, removed: true },
     ])
   })
 
