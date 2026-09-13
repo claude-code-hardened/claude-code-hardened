@@ -132,6 +132,28 @@ export function getEnumLabel(schema: EnumSchema, value: string): string {
   return index >= 0 ? (getEnumLabels(schema)[index] ?? value) : value
 }
 
+/**
+ * Apply minLength/maxLength constraints to a string schema.
+ * Extracted so the date-time union below can carry them on each member.
+ */
+function applyLengthConstraints(
+  schema: { minLength?: number; maxLength?: number },
+  base: z.ZodString,
+): z.ZodString {
+  let stringSchema = base
+  if (schema.minLength !== undefined) {
+    stringSchema = stringSchema.min(schema.minLength, {
+      message: `Must be at least ${schema.minLength} ${plural(schema.minLength, 'character')}`,
+    })
+  }
+  if (schema.maxLength !== undefined) {
+    stringSchema = stringSchema.max(schema.maxLength, {
+      message: `Must be at most ${schema.maxLength} ${plural(schema.maxLength, 'character')}`,
+    })
+  }
+  return stringSchema
+}
+
 function getZodSchema(schema: PrimitiveSchemaDefinition): z.ZodTypeAny {
   if (isEnumSchema(schema)) {
     const [first, ...rest] = getEnumValues(schema)
@@ -141,17 +163,7 @@ function getZodSchema(schema: PrimitiveSchemaDefinition): z.ZodTypeAny {
     return z.enum([first, ...rest])
   }
   if (schema.type === 'string') {
-    let stringSchema = z.string()
-    if (schema.minLength !== undefined) {
-      stringSchema = stringSchema.min(schema.minLength, {
-        message: `Must be at least ${schema.minLength} ${plural(schema.minLength, 'character')}`,
-      })
-    }
-    if (schema.maxLength !== undefined) {
-      stringSchema = stringSchema.max(schema.maxLength, {
-        message: `Must be at most ${schema.maxLength} ${plural(schema.maxLength, 'character')}`,
-      })
-    }
+    let stringSchema = applyLengthConstraints(schema, z.string())
     switch (schema.format) {
       case 'email':
         stringSchema = stringSchema.email({
@@ -168,13 +180,25 @@ function getZodSchema(schema: PrimitiveSchemaDefinition): z.ZodTypeAny {
           'Must be a valid date, e.g. 2024-03-15, today, next Monday',
         )
         break
-      case 'date-time':
-        stringSchema = stringSchema.datetime({
-          offset: true,
-          message:
-            'Must be a valid date-time, e.g. 2024-03-15T14:30:00Z, tomorrow at 3pm',
-        })
-        break
+      case 'date-time': {
+        const message =
+          'Must be a valid date-time, e.g. 2024-03-15T14:30:00Z, tomorrow at 3pm'
+        // zod >= 4.5 requires seconds whenever the time carries a Z or an
+        // offset; 4.3 also accepted minute precision (e.g.
+        // 2024-03-15T14:30+08:00). Union both forms so pre-4.5 inputs keep
+        // validating under zod 4.6.
+        return z.union([
+          applyLengthConstraints(schema, z.string()).datetime({
+            offset: true,
+            message,
+          }),
+          applyLengthConstraints(schema, z.string()).datetime({
+            precision: -1,
+            offset: true,
+            message,
+          }),
+        ])
+      }
       default:
         // No specific format validation
         break
