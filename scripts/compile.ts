@@ -127,6 +127,11 @@ for (const target of targets) {
   }
 
   // ── Bun.build --compile with embedded natives plugin ──
+  // minify：compile 此前未开压缩，产物是未压缩源码，体积直接决定 JSC 的
+  // 全量解析字节量（单文件 compile 无 splitting，--version 纯解析实测
+  // 5.6s@225MB；minify 后体积约减半）。bytecode 预编译可进一步跳过解析，
+  // 但 JSC bytecode 不支持 ESM 顶层 await（cli.tsx:382 await main()），
+  // 且动态 import 兼容性未验证——留待入口重构后再启用。
   const result = await Bun.build({
     entrypoints: ['src/entrypoints/cli.tsx'],
     target: 'bun',
@@ -136,6 +141,7 @@ for (const target of targets) {
     },
     features,
     plugins: [createEmbeddedNativesPlugin(embeddedNatives)],
+    minify: true,
     compile: {
       // 单数 target 是唯一生效的 API：复数 targets 会被静默忽略，
       // 产物退化为 host 架构（CI x86 上曾把 arm64 名字编成 x86_64 ELF）。
