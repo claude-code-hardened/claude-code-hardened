@@ -225,7 +225,7 @@ export function DiffDialog({ messages, onDone }: Props): React.ReactNode {
       color="background"
       inputGuide={exitState =>
         exitState.pending ? (
-          <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
+          <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
         ) : viewMode === 'list' ? (
           <Byline>
             {sources.length > 1 && <Text>{t('←/→ source')}</Text>}

@@ -576,7 +576,7 @@ export function BackgroundTasksDialog({ onDone, toolUseContext, initialDetailTas
 
   function renderInputGuide(exitState: ExitState): React.ReactNode {
     if (exitState.pending) {
-      return <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>;
+      return <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>;
     }
     return <Byline>{actions}</Byline>;
   }

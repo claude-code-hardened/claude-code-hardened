@@ -55,7 +55,7 @@ export function MonitorMcpDetailDialog({ task, onBack, onKill }: Props): React.R
       >
         <Box flexDirection="column" gap={1}>
           <Text>
-            <Text bold>{t('Status:')}</Text>{' '}
+            <Text bold>{t('Status: ')}</Text>
             {task.status === 'running' ? (
               <Text color="ansi:green">{t('running')}</Text>
             ) : task.status === 'completed' ? (

@@ -491,7 +491,8 @@ export function MCPRemoteServerMenu({
         )}
         <Box marginLeft={3} flexDirection="column">
           <Text color="permission">
-            {t('Press')} <Text bold>Enter</Text> {t('after authenticating in your browser.')}
+            {t('Press ')}
+            <Text bold>Enter</Text> {t('after authenticating in your browser.')}
           </Text>
           <Text dimColor italic>
             <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="back" />
@@ -525,7 +526,8 @@ export function MCPRemoteServerMenu({
             )}
             <Box marginLeft={3} flexDirection="column">
               <Text color="permission">
-                {t('Press')} <Text bold>Enter</Text> {t('when done.')}
+                {t('Press ')}
+                <Text bold>Enter</Text> {t('when done.')}
               </Text>
               <Text dimColor italic>
                 <ConfigurableShortcutHint
@@ -544,7 +546,8 @@ export function MCPRemoteServerMenu({
             </Text>
             <Box marginLeft={3} flexDirection="column">
               <Text color="permission">
-                {t('Press')} <Text bold>Enter</Text> {t('to open the browser.')}
+                {t('Press ')}
+                <Text bold>Enter</Text> {t('to open the browser.')}
               </Text>
               <Text dimColor italic>
                 <ConfigurableShortcutHint
@@ -667,7 +670,7 @@ export function MCPRemoteServerMenu({
             ) : server.client.type === 'pending' ? (
               <>
                 <Text dimColor>{figures.radioOff}</Text>
-                <Text>{t(' connecting…')}</Text>
+                <Text> {t('connecting…')}</Text>
               </>
             ) : server.client.type === 'needs-auth' ? (
               <Text>
@@ -788,7 +791,7 @@ export function MCPRemoteServerMenu({
       <Box marginTop={1}>
         <Text dimColor italic>
           {exitState.pending ? (
-            <>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</>
+            <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
           ) : (
             <Byline>
               <KeyboardShortcutHint shortcut="↑↓" action="navigate" />

@@ -107,7 +107,7 @@ export function AsyncAgentDetailDialog({ agent, onDone, onKillAgent, onBack }: P
         color="background"
         inputGuide={exitState =>
           exitState.pending ? (
-            <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
+            <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
           ) : (
             <Byline>
               {onBack && <KeyboardShortcutHint shortcut="←" action="go back" />}

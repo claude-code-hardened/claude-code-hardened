@@ -133,7 +133,7 @@ export function MCPStdioServerMenu({
             ) : server.client.type === 'pending' ? (
               <>
                 <Text dimColor>{figures.radioOff}</Text>
-                <Text>{t(' connecting…')}</Text>
+                <Text> {t('connecting…')}</Text>
               </>
             ) : (
               <Text>
@@ -208,7 +208,7 @@ export function MCPStdioServerMenu({
       <Box marginTop={1}>
         <Text dimColor italic>
           {exitState.pending ? (
-            <>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</>
+            <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
           ) : (
             <Byline>
               <KeyboardShortcutHint shortcut="↑↓" action="navigate" />

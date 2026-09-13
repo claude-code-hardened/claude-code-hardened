@@ -55,7 +55,7 @@ export function MCPToolListView({ server, onSelectTool, onBack }: Props): React.
       onCancel={onBack}
       inputGuide={exitState =>
         exitState.pending ? (
-          <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
+          <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
         ) : (
           <Byline>
             <KeyboardShortcutHint shortcut="↑↓" action="navigate" />
