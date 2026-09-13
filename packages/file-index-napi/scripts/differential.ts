@@ -14,9 +14,24 @@
  * Zero npm dependencies. Exit 0 = 100% match; any mismatch prints details
  * and exits 1.
  *
+ * Prerequisites:
+ *   - A compiled file-index native artifact must exist (this repo does not
+ *     ship one until CI's `package` job syncs it), e.g.
+ *     `vendor/file-index/x86_64-unknown-linux-gnu/file-index.node`.
+ *     Locally build it with
+ *       cd packages/file-index-napi/native && cargo build --release
+ *     and copy `target/<triple>/release/libfile_index_napi.{so,dylib}`
+ *     (or `file_index_napi.dll`) to `vendor/file-index/<triple>/file-index.node`.
+ *
  * Usage:
  *   bun run packages/file-index-napi/scripts/differential.ts \
  *     <file-index.node> [file-or-dir...]
+ *   (from the package dir: `bun run differential -- <file-index.node>`;
+ *   run from the repo root so Phase 1 walks the full repo path corpus)
+ *
+ * Expected output: every phase prints "N/N query×limit checks match" and the
+ * final line "differential: X/X checks match" — all pass, exit code 0. Any
+ * MISMATCH line means a behavioral divergence; the script then exits 1.
  */
 import { createRequire } from 'node:module'
 import { existsSync, readdirSync, statSync } from 'node:fs'

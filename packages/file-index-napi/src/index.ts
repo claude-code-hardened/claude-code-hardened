@@ -79,14 +79,6 @@ function loadModule(): NativeFileIndexModule | null {
   return cachedModule
 }
 
-/**
- * True when the native (Rust) file index is loaded and callable.
- * Never throws — a cheap capability probe.
- */
-export function isNativeFileIndexAvailable(): boolean {
-  return loadModule() !== null
-}
-
 // One native append per chunk (~2ms for 16k paths), yielding to the event
 // loop between chunks — mirrors the TS buildAsync CHUNK_MS cadence.
 const APPEND_CHUNK = 16384
@@ -97,14 +89,25 @@ export class NativeFileIndex implements FileIndexLike {
 
   loadFromFileList(fileList: string[]): void {
     const paths = dedupePaths(fileList)
-    this.topLevelCache = computeTopLevelEntries(paths, TOP_LEVEL_CACHE_LIMIT)
     const fresh = this.createHandle()
     if (fresh === null) {
       return
     }
     try {
       fresh.loadFromFileList(paths)
+      // Observable state is only touched after the load succeeds: any
+      // failure above must leave the previous index AND top-level cache
+      // fully intact (mixing an old handle with a new cache would make
+      // empty vs non-empty queries disagree).
+      this.topLevelCache = computeTopLevelEntries(paths, TOP_LEVEL_CACHE_LIMIT)
     } catch {
+      // free() is implemented and idempotent on the native side — release
+      // the fresh handle; the old state keeps serving unchanged.
+      try {
+        fresh.free()
+      } catch {
+        // already released — ignore
+      }
       return
     }
     this.swapHandle(fresh)
@@ -205,6 +208,12 @@ export class NativeFileIndex implements FileIndexLike {
     this.topLevelCache = computeTopLevelEntries(paths, TOP_LEVEL_CACHE_LIMIT)
     const fresh = this.createHandle()
     if (fresh === null) {
+      // The new cache is already published, so the old index must not
+      // survive — keeping it would pair a stale handle with the fresh cache
+      // (empty vs non-empty queries would disagree). Release it and null the
+      // slot; every query converges to empty results until a rebuild
+      // succeeds.
+      this.free()
       markQueryable()
       return
     }
