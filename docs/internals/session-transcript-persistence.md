@@ -307,10 +307,10 @@ transcript 可增长到几百 MB 甚至 GB，读取路径有几层防护。
 | fd 层跳过大 metadata | `readTranscriptForLoad()` | `attribution-snapshot` 等大 entry 不进入 buffer。 |
 | compact 前缀跳过 | `readTranscriptForLoad()` | 遇到非 preserved compact boundary 后，只保留 boundary 后内容。 |
 | pre-boundary metadata scan | `scanPreBoundaryMetadata()` | compact 前被跳过时，仍保留 title/tag/mode/worktree/PR 等展示信息。 |
-| byte-level dead branch 裁剪 | `walkChainBeforeParse()` | JSON.parse 前只拼 active chain 和 metadata，跳过 dead fork/rewind branch。 |
+| byte-level dead branch 裁剪 | `walkChainBeforeParse()` | JSON.parse 前只保留 active chain 和 metadata 的字节区间（零拷贝 `subarray` 视图 + `parseJSONLSegments` 按段 parse），跳过 dead fork/rewind branch。 |
 | lite read 限制 | `MAX_TRANSCRIPT_READ_BYTES` | 直接读 raw transcript 的调用超过约 50MB 要避开。 |
 
-`walkChainBeforeParse()` 只有预计能丢掉至少一半 buffer 时才做 concat，避免优化本身变成额外成本。
+`walkChainBeforeParse()` 只有预计能丢掉至少一半 buffer 时才返回裁剪区间（native 路径为 `scanChainRanges`），调用方按段零拷贝 parse、不再 concat，避免优化本身变成额外成本。
 
 ### preserved segment 与 snip
 
