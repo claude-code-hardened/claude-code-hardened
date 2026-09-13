@@ -35,5 +35,13 @@
   "Loading conversation…": "대화를 불러오는 중…",
   "Loading conversations…": "대화 목록을 불러오는 중…",
   "(esc to interrupt ": "(esc로 중단 ",
-  "Starting…": "시작 중…"
+  "Starting…": "시작 중…",
+  "creating commit": "커밋 생성 중…",
+  "creating commit and PR": "커밋 및 PR 생성 중…",
+  "analyzing your codebase": "코드베이스 분석 중…",
+  "analyzing your project and creating verifier skills": "프로젝트 분석 및 검증 스킬 생성 중…",
+  "fetching PR comments": "PR 댓글 가져오는 중…",
+  "reviewing pull request": "풀 리퀘스트 검토 중…",
+  "analyzing code changes for security risks": "코드 변경 보안 위험 분석 중…",
+  "setting up statusLine": "statusLine 설정 중…"
 }

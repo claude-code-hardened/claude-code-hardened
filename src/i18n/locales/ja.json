@@ -35,5 +35,13 @@
   "Loading conversation…": "会話を読み込み中…",
   "Loading conversations…": "会話リストを読み込み中…",
   "(esc to interrupt ": "（esc で中断 ",
-  "Starting…": "起動中…"
+  "Starting…": "起動中…",
+  "creating commit": "コミット作成中…",
+  "creating commit and PR": "コミットとPRを作成中…",
+  "analyzing your codebase": "コードベースを分析中…",
+  "analyzing your project and creating verifier skills": "プロジェクトを分析して検証スキルを作成中…",
+  "fetching PR comments": "PR コメントを取得中…",
+  "reviewing pull request": "プルリクエストをレビュー中…",
+  "analyzing code changes for security risks": "コード変更のセキュリティリスクを分析中…",
+  "setting up statusLine": "statusLine を設定中…"
 }
