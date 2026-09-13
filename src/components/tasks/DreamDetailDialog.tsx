@@ -70,7 +70,7 @@ export function DreamDetailDialog({ task, onDone, onBack, onKill }: Props): Reac
         color="background"
         inputGuide={exitState =>
           exitState.pending ? (
-            <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
+            <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
           ) : (
             <Byline>
               {onBack && <KeyboardShortcutHint shortcut="←" action="go back" />}
@@ -82,7 +82,7 @@ export function DreamDetailDialog({ task, onDone, onBack, onKill }: Props): Reac
       >
         <Box flexDirection="column" gap={1}>
           <Text>
-            <Text bold>{t('Status:')}</Text>{' '}
+            <Text bold>{t('Status: ')}</Text>
             {task.status === 'running' ? (
               <Text color="background">{t('running')}</Text>
             ) : task.status === 'completed' ? (

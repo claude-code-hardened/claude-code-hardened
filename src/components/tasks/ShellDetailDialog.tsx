@@ -99,7 +99,7 @@ export function ShellDetailDialog({ shell, onDone, onKillShell, onBack }: Props)
         color="background"
         inputGuide={exitState =>
           exitState.pending ? (
-            <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
+            <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
           ) : (
             <Byline>
               {onBack && <KeyboardShortcutHint shortcut="←" action="go back" />}
@@ -111,7 +111,7 @@ export function ShellDetailDialog({ shell, onDone, onKillShell, onBack }: Props)
       >
         <Box flexDirection="column">
           <Text>
-            <Text bold>{t('Status:')}</Text>{' '}
+            <Text bold>{t('Status: ')}</Text>
             {shell.status === 'running' ? (
               <Text color="background">
                 {shell.status}

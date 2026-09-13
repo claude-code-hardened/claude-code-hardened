@@ -220,7 +220,7 @@ export function TrustDialog({ onDone, commands }: Props): React.ReactNode {
 
         <Text dimColor>
           {exitState.pending ? (
-            <>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</>
+            <>{t('Press {{key}} again to exit', { key: exitState.keyName })}</>
           ) : (
             <>{t('Enter to confirm · Esc to cancel')}</>
           )}

@@ -133,7 +133,7 @@ export function MCPAgentServerMenu({ agentServer, onCancel, onComplete }: Props)
       onCancel={onCancel}
       inputGuide={exitState =>
         exitState.pending ? (
-          <Text>{t('Press {{keyName}} again to exit', { keyName: exitState.keyName })}</Text>
+          <Text>{t('Press {{key}} again to exit', { key: exitState.keyName })}</Text>
         ) : (
           <Byline>
             <KeyboardShortcutHint shortcut="↑↓" action="navigate" />
