@@ -3,11 +3,15 @@
  *
  * The Rust version uses syntect+bat for syntax highlighting and the similar
  * crate for word diffing. This port uses highlight.js (already a dep via
- * cli-highlight) and the diff npm package's diffArrays.
+ * cli-highlight) and the pure-TS jsdiff port in ./jsDiff.
  *
- * API matches vendor/color-diff-src/index.d.ts exactly so callers don't change.
+ * The exported ColorDiff/ColorFile/getSyntaxTheme/diffLines/
+ * diffWordsWithSpace/structuredPatch are native-first: they use the Rust
+ * module when the .node binary loads and fall back to this file's
+ * implementations otherwise. API matches vendor/color-diff-src/index.d.ts
+ * exactly so callers don't change.
  *
- * Key semantic differences from the native module:
+ * Key semantic differences between the TS fallback and the native module:
  * - Syntax highlighting uses highlight.js. Scope colors were measured from
  *   syntect's output so most tokens match, but hljs's grammar has gaps:
  *   plain identifiers and operators like `=` `:` aren't scoped, so they
@@ -15,19 +19,23 @@
  *   numbers, markers, backgrounds, word-diff) is identical.
  * - BAT_THEME env support is a stub: highlight.js has no bat theme set, so
  *   getSyntaxTheme always returns the default for the given Claude theme.
+ * - render() clamps width instead of returning null (the native module
+ *   returns null for width < 1; callers already handle both).
  */
 
-import {
-  diffArrays,
-  diffLines as jsDiffLines,
-  diffWordsWithSpace as jsDiffWordsWithSpace,
-} from 'diff'
 import hljs from 'highlight.js'
 import { basename, extname, resolve } from 'path'
 import { existsSync } from 'fs'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { loadNativeModule } from '../../../src/utils/embeddedNative'
+import {
+  jsDiffArraysString,
+  jsDiffLines,
+  jsDiffWordsWithSpace,
+  jsStructuredPatch,
+  type JsStructuredPatchHunk,
+} from './jsDiff'
 
 // Static import — createRequire(import.meta.url) fails in Bun --compile mode
 // because the resolved path points to the internal bunfs binary path where
@@ -71,12 +79,35 @@ export type SyntaxTheme = {
   source: string | null
 }
 
+// Structural type of a rendered diff class instance (shared by the native
+// module's ColorDiff/ColorFile and this file's TS implementations).
+export type Renderable = {
+  render: (themeName: string, width: number, dim: boolean) => string[] | null
+}
+
+export type ColorDiffConstructor = new (
+  hunk: Hunk,
+  firstLine: string | null,
+  filePath: string,
+  prefixContent?: string | null,
+) => Renderable
+
+export type ColorFileConstructor = new (
+  code: string,
+  filePath: string,
+) => Renderable
+
 export type NativeModule = {
-  ColorDiff: typeof ColorDiff
-  ColorFile: typeof ColorFile
+  ColorDiff: ColorDiffConstructor
+  ColorFile: ColorFileConstructor
   getSyntaxTheme: (themeName: string) => SyntaxTheme
   diffLines?: (oldStr: string, newStr: string) => Change[]
   diffWordsWithSpace?: (oldStr: string, newStr: string) => Change[]
+  structuredPatch?: (
+    oldStr: string,
+    newStr: string,
+    context: number,
+  ) => StructuredPatchHunk[]
 }
 
 // jsdiff `Change` shape: { value, count, added, removed }
@@ -89,26 +120,77 @@ export type Change = {
 
 /**
  * jsdiff-compatible line diff. Native (Rust/similar) when available,
- * falls back to the `diff` npm package.
+ * falls back to the pure-TS jsdiff port in ./jsDiff.
  */
 export function diffLines(oldStr: string, newStr: string): Change[] {
   const native = tryLoadNative()
   if (typeof native?.diffLines === 'function') {
-    return native.diffLines(oldStr, newStr)
+    try {
+      return native.diffLines(oldStr, newStr)
+    } catch (error) {
+      logError(error)
+    }
   }
-  return jsDiffLines(oldStr, newStr) as Change[]
+  return jsDiffLines(oldStr, newStr) ?? []
 }
 
 /**
  * jsdiff-compatible word diff with preserved whitespace. Native when
- * available, falls back to the `diff` npm package.
+ * available, falls back to the pure-TS jsdiff port in ./jsDiff.
  */
 export function diffWordsWithSpace(oldStr: string, newStr: string): Change[] {
   const native = tryLoadNative()
   if (typeof native?.diffWordsWithSpace === 'function') {
-    return native.diffWordsWithSpace(oldStr, newStr)
+    try {
+      return native.diffWordsWithSpace(oldStr, newStr)
+    } catch (error) {
+      logError(error)
+    }
   }
-  return jsDiffWordsWithSpace(oldStr, newStr) as Change[]
+  return jsDiffWordsWithSpace(oldStr, newStr) ?? []
+}
+
+// jsdiff-compatible structured patch (unified-diff hunks).
+export type StructuredPatchHunk = JsStructuredPatchHunk
+
+export type StructuredPatchOptions = {
+  context?: number
+  /** Compare whitespace-trimmed lines (pure-JS path only — the native diff
+   *  has no trim-equality mode, so this option forces the fallback). */
+  ignoreWhitespace?: boolean
+  /** Milliseconds; only honored by the pure-JS fallback path (the native
+   *  Myers diff is orders of magnitude faster and has no deadline). */
+  timeout?: number
+}
+
+export type StructuredPatch = { hunks: StructuredPatchHunk[] }
+
+/**
+ * jsdiff `structuredPatch(...).hunks` equivalent: unified-diff hunks with
+ * ' '/'-'/'+' prefixed lines and "\ No newline at end of file" markers.
+ * Native (Rust/similar) when available; never throws — falls back to the
+ * pure-TS jsdiff port in ./jsDiff and returns null when that times out.
+ */
+export function structuredPatch(
+  oldStr: string,
+  newStr: string,
+  options?: StructuredPatchOptions,
+): StructuredPatch | null {
+  const opts = options ?? {}
+  if (!opts.ignoreWhitespace) {
+    const native = tryLoadNative()
+    if (typeof native?.structuredPatch === 'function') {
+      try {
+        return {
+          hunks: native.structuredPatch(oldStr, newStr, opts.context ?? 4),
+        }
+      } catch (error) {
+        logError(error)
+      }
+    }
+  }
+  const hunks = jsStructuredPatch(oldStr, newStr, opts)
+  return hunks ? { hunks } : null
 }
 
 // ---------------------------------------------------------------------------
@@ -924,7 +1006,7 @@ function findAdjacentPairs(markers: Marker[]): [number, number][] {
 function wordDiffStrings(oldStr: string, newStr: string): [Range[], Range[]] {
   const oldTokens = tokenize(oldStr)
   const newTokens = tokenize(newStr)
-  const ops = diffArrays(oldTokens, newTokens)
+  const ops = jsDiffArraysString(oldTokens, newTokens) ?? []
 
   const totalLen = oldStr.length + newStr.length
   let changedLen = 0
@@ -1159,7 +1241,7 @@ function parseMarker(s: string): Marker {
   return s === '+' || s === '-' ? s : ' '
 }
 
-export class ColorDiff {
+export class TsColorDiff {
   private hunk: Hunk
   private filePath: string
   private firstLine: string | null
@@ -1252,7 +1334,7 @@ export class ColorDiff {
   }
 }
 
-export class ColorFile {
+export class TsColorFile {
   private code: string
   private filePath: string
 
@@ -1287,7 +1369,7 @@ export class ColorFile {
   }
 }
 
-export function getSyntaxTheme(themeName: string): SyntaxTheme {
+function tsGetSyntaxTheme(themeName: string): SyntaxTheme {
   // When BAT_THEME selects a parseable .tmTheme it IS the active theme —
   // report its name truthfully. Otherwise the built-in tables render.
   const envTheme =
@@ -1331,13 +1413,16 @@ function tryLoadNative(): NativeModule | null {
     cachedModule = {
       ColorDiff: mod.ColorDiff,
       ColorFile: mod.ColorFile,
-      getSyntaxTheme: mod.getSyntaxTheme ?? getSyntaxTheme,
+      getSyntaxTheme: mod.getSyntaxTheme ?? tsGetSyntaxTheme,
       // Optional: only present in builds with the diff functions included
       ...(typeof mod.diffLines === 'function'
         ? { diffLines: mod.diffLines }
         : {}),
       ...(typeof mod.diffWordsWithSpace === 'function'
         ? { diffWordsWithSpace: mod.diffWordsWithSpace }
+        : {}),
+      ...(typeof mod.structuredPatch === 'function'
+        ? { structuredPatch: mod.structuredPatch }
         : {}),
     }
   }
@@ -1350,11 +1435,65 @@ export function isNativeColorDiffAvailable(): boolean {
 
 export function getNativeModule(): NativeModule | null {
   if (cachedModule) return cachedModule
-  cachedModule = tryLoadNative() ?? { ColorDiff, ColorFile, getSyntaxTheme }
+  cachedModule = tryLoadNative() ?? {
+    ColorDiff: TsColorDiff,
+    ColorFile: TsColorFile,
+    getSyntaxTheme: tsGetSyntaxTheme,
+  }
   return cachedModule
 }
 
-export type { ColorDiff as ColorDiffClass, ColorFile as ColorFileClass }
+// ---------------------------------------------------------------------------
+// Native-first public API
+//
+// Same signatures as the TS implementations above (callers don't change), but
+// each entry point uses the Rust native module when the .node binary loads —
+// gaining syntect's exact tokenization — and transparently falls back to the
+// TS implementation otherwise.
+// ---------------------------------------------------------------------------
+
+export class ColorDiff implements Renderable {
+  private readonly inner: Renderable
+
+  constructor(
+    hunk: Hunk,
+    firstLine: string | null,
+    filePath: string,
+    prefixContent?: string | null,
+  ) {
+    const native = tryLoadNative()
+    const Impl = native ? native.ColorDiff : TsColorDiff
+    this.inner = new Impl(hunk, firstLine, filePath, prefixContent)
+  }
+
+  render(themeName: string, width: number, dim: boolean): string[] | null {
+    return this.inner.render(themeName, width, dim)
+  }
+}
+
+export class ColorFile implements Renderable {
+  private readonly inner: Renderable
+
+  constructor(code: string, filePath: string) {
+    const native = tryLoadNative()
+    const Impl = native ? native.ColorFile : TsColorFile
+    this.inner = new Impl(code, filePath)
+  }
+
+  render(themeName: string, width: number, dim: boolean): string[] | null {
+    return this.inner.render(themeName, width, dim)
+  }
+}
+
+export function getSyntaxTheme(themeName: string): SyntaxTheme {
+  const native = tryLoadNative()
+  if (native) {
+    return native.getSyntaxTheme(themeName)
+  }
+  return tsGetSyntaxTheme(themeName)
+}
+
+export type { TsColorDiff as ColorDiffClass, TsColorFile as ColorFileClass }
 
 // Exported for testing
 export const __test = {
