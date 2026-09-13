@@ -52,6 +52,11 @@ export function isNativeTranscriptParserAvailable(): boolean {
  * Returns null when the native module is unavailable — callers fall back
  * to the JS byte scanner in that case.
  *
+ * Legacy full-scan wrapper, kept as public API. Its underlying `scanChain`
+ * export is also the fallback that powers {@link nativeScanChainRanges} on
+ * .node builds predating `scanChainRanges` — same byte-identical scan, just
+ * returns the extra msgIndex/metaRanges the range-only variant skips.
+ *
  * parentStart == 0xffffffff in msgIndex means null parent (JS reference
  * uses -1; u32 keeps the array typed).
  */
@@ -69,18 +74,28 @@ export function nativeScanChain(buf: Buffer): ChainScan | null {
  * Range-only variant of {@link nativeScanChain}: returns just the kept byte
  * ranges [start, end, ...] pairs so callers can parse zero-copy
  * `buf.subarray(start, end)` views per line instead of materializing a
- * concatenated copy of the active chain. Returns null when the native module
- * is unavailable or predates scanChainRanges — callers fall back to
- * {@link nativeScanChain} or the JS byte scanner.
+ * concatenated copy of the active chain.
+ *
+ * Fallback chain: native module missing → null (callers use the JS byte
+ * scanner); module predates `scanChainRanges` or the call fails → legacy
+ * {@link nativeScanChain} scan, re-shaped to the range-only result (same
+ * scan, same kept-ranges/keepAll semantics — see ChainScan). Never throws.
  */
 export function nativeScanChainRanges(buf: Buffer): ChainScanRanges | null {
   const mod = loadModule()
-  if (mod === null || typeof mod.scanChainRanges !== 'function') {
-    return null
+  if (mod === null) return null
+  if (typeof mod.scanChainRanges === 'function') {
+    try {
+      return mod.scanChainRanges(buf)
+    } catch {
+      // Fall through to the legacy scanChain export below — same scan.
+    }
   }
-  try {
-    return mod.scanChainRanges(buf)
-  } catch {
-    return null
+  const legacy = nativeScanChain(buf)
+  if (legacy === null) return null
+  return {
+    keptRanges: legacy.keptRanges,
+    chainBytes: legacy.chainBytes,
+    keepAll: legacy.keepAll,
   }
 }

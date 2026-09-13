@@ -2709,8 +2709,17 @@ async function scanAllSessions(): Promise<LiteSessionInfo[]> {
 // Main Function
 // ============================================================================
 
+/**
+ * Default recency window for the full-message load in /insights: sessions not
+ * modified within the last 30 days are skipped before their JSONL is read
+ * (mtime pre-filter, "先过滤再读"). `/insights --all` restores the unfiltered
+ * full-scan behavior.
+ */
+const DEFAULT_INSIGHTS_MTIME_LIMIT_MS = 30 * 24 * 60 * 60 * 1000
+
 export async function generateUsageReport(options?: {
   collectRemote?: boolean
+  mtimeLimitMs?: number
 }): Promise<{
   insights: InsightResults
   htmlPath: string
@@ -2783,7 +2792,11 @@ export async function generateUsageReport(options?: {
     const batchResults = await Promise.all(
       batch.map(async sessionInfo => {
         try {
-          return await loadAllLogsFromSessionFile(sessionInfo.path)
+          return await loadAllLogsFromSessionFile(
+            sessionInfo.path,
+            undefined,
+            options?.mtimeLimitMs,
+          )
         } catch {
           return []
         }
@@ -2994,7 +3007,12 @@ const usageReport: Command = {
     }
 
     const { insights, htmlPath, data, remoteStats } = await generateUsageReport(
-      { collectRemote },
+      {
+        collectRemote,
+        mtimeLimitMs: args?.includes('--all')
+          ? undefined
+          : DEFAULT_INSIGHTS_MTIME_LIMIT_MS,
+      },
     )
 
     let reportUrl = `file://${htmlPath}`

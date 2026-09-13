@@ -127,7 +127,9 @@ pub fn has_native_transcript_parser() -> bool {
 
 /// Rust port of `walkChainBeforeParse`. See ChainScan for the contract.
 /// Note: parentStart == u32::MAX in msg_index means null parent (JS uses -1).
-#[napi]
+/// `catch_unwind` converts a panic into a `Status::GenericFailure` Error
+/// instead of unwinding across the FFI boundary.
+#[napi(catch_unwind)]
 pub fn scan_chain(buf: Buffer) -> Result<ChainScan> {
   let core = scan_core(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))?;
   Ok(ChainScan {
@@ -144,7 +146,9 @@ pub fn scan_chain(buf: Buffer) -> Result<ChainScan> {
 /// per line instead of materializing a concatenated copy. Skips copying
 /// `msg_index`/`meta_ranges` across the ABI (the scan itself still needs
 /// them internally). Same classification algorithm, byte-identical ranges.
-#[napi]
+/// `catch_unwind` converts a panic into a `Status::GenericFailure` Error
+/// instead of unwinding across the FFI boundary.
+#[napi(catch_unwind)]
 pub fn scan_chain_ranges(buf: Buffer) -> Result<ChainScanRanges> {
   let core = scan_core(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))?;
   Ok(ChainScanRanges {
