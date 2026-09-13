@@ -31,6 +31,9 @@ export const McpStdioServerConfigSchema = lazySchema(() =>
     command: z.string().min(1, 'Command cannot be empty'),
     args: z.array(z.string()).default([]),
     env: z.record(z.string(), z.string()).optional(),
+    // MCP SDK 1.30 起 stdio 读取缓冲默认 10MB，超限断连。大结果工具可按
+    // server 覆盖（MB 单位），未设置时客户端用 32MB 兜底。
+    maxBufferSizeMb: z.number().int().positive().optional(),
   }),
 )
 

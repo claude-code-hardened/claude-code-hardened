@@ -976,6 +976,10 @@ export const connectToServer = memoize(
             ...stdioRef.env,
           } as Record<string, string>,
           stderr: 'pipe', // prevents error output from the MCP server from printing to the UI
+          // MCP SDK 1.30 起 stdio 读取缓冲默认 10MB，超限清空缓冲并断连。
+          // 大结果工具（数据库 dump、文件导出类）20MB+ 场景按 32MB 兜底；
+          // 更大需求在 mcpServers 配置里加 maxBufferSizeMb 覆盖。
+          maxBufferSize: (stdioRef.maxBufferSizeMb ?? 32) * 1024 * 1024,
         })
       } else {
         throw new Error(
