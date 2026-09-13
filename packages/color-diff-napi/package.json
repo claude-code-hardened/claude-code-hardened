@@ -6,6 +6,6 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
-    "highlight.js": "latest"
+    "highlight.js": "^11.12.0"
   }
 }

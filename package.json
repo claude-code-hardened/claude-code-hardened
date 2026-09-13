@@ -71,7 +71,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.19.0",
-    "@claude-code-best/mcp-chrome-bridge": "^3.0.1",
+    "@claude-code-best/mcp-chrome-bridge": "^3.0.2",
     "highlight.js": "^11.11.1",
     "i18next": "^26.4.2",
     "ws": "^8.20.0"
@@ -84,7 +84,7 @@
     "@ant/computer-use-swift": "workspace:*",
     "@ant/model-provider": "workspace:*",
     "@anthropic-ai/bedrock-sdk": "^0.29.0",
-    "@anthropic-ai/claude-agent-sdk": "^0.2.114",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.141",
     "@anthropic-ai/foundry-sdk": "^0.2.3",
     "@anthropic-ai/mcpb": "^2.1.2",
     "@anthropic-ai/sandbox-runtime": "^0.0.44",
@@ -149,7 +149,7 @@
     "asciichart": "^1.5.25",
     "audio-capture-napi": "workspace:*",
     "auto-bind": "^5.0.1",
-    "axios": "^1.15.2",
+    "axios": "^1.20.0",
     "bidi-js": "^1.0.3",
     "cacache": "^20.0.4",
     "chalk": "^6.0.0",
@@ -221,10 +221,10 @@
   },
   "overrides": {
     "@inquirer/prompts": "8.4.2",
-    "@xmldom/xmldom": "0.8.13",
+    "@xmldom/xmldom": "0.9.12",
     "follow-redirects": "1.16.0",
-    "hono": "4.12.15",
-    "postcss": "8.5.10",
+    "hono": "4.13.7",
+    "postcss": "8.5.28",
     "react": "19.2.5",
     "uuid": "14.0.0"
   },
