@@ -60,7 +60,14 @@ for (const file of files) {
     while ((m = staticRe.exec(line))) {
       hasStatic = true
       hasCall = true
-      const key = m[2]?.replace(/\\'/g, "'").replace(/\\"/g, '"')
+      // 与 TS 字面量一致地反转义（\uXXXX、\'、\"），否则 t('...\u2019...')
+      // 会被误判为漏迁（语言包存的是真实 U+2019 字符）
+      const key = m[2]
+        ?.replace(/\\u([0-9a-fA-F]{4})/g, (_, h: string) =>
+          String.fromCharCode(Number.parseInt(h, 16)),
+        )
+        .replace(/\\'/g, "'")
+        .replace(/\\"/g, '"')
       if (key && !(key in calledKeys)) {
         calledKeys.set(key, { file: rel, line: i + 1 })
       }
