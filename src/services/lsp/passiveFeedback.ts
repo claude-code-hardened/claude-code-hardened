@@ -61,25 +61,24 @@ export function formatDiagnosticsForAttachment(
   }
 
   const diagnostics = params.diagnostics.map(diag => ({
-      message: diag.message,
-      severity: mapLSPSeverity(diag.severity),
-      range: {
-        start: {
-          line: diag.range.start.line,
-          character: diag.range.start.character,
-        },
-        end: {
-          line: diag.range.end.line,
-          character: diag.range.end.character,
-        },
+    message: diag.message,
+    severity: mapLSPSeverity(diag.severity),
+    range: {
+      start: {
+        line: diag.range.start.line,
+        character: diag.range.start.character,
       },
-      source: diag.source,
-      code:
-        diag.code !== undefined && diag.code !== null
-          ? String(diag.code)
-          : undefined,
-    }),
-  )
+      end: {
+        line: diag.range.end.line,
+        character: diag.range.end.character,
+      },
+    },
+    source: diag.source,
+    code:
+      diag.code !== undefined && diag.code !== null
+        ? String(diag.code)
+        : undefined,
+  }))
 
   return [
     {
