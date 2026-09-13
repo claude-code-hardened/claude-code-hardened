@@ -67,7 +67,14 @@ import { getPlatform } from 'src/utils/platform.js'
 import { SandboxManager } from 'src/utils/sandbox/sandbox-adapter.js'
 import { jsonStringify } from 'src/utils/slowOperations.js'
 import { windowsPathToPosixPath } from 'src/utils/windowsPaths.js'
-import { BashTool } from './BashTool.js'
+import type { BashTool } from './BashTool.js'
+
+// Lazy require: importing BashTool eagerly would evaluate its UI (->
+// @anthropic/ink) for every consumer of bashPermissions (permission checks,
+// shouldUseSandbox, PromptSuggestion speculation) at module load. Only
+// .name is read at runtime; inputSchema is referenced via `typeof` types.
+const getBashTool = () =>
+  (require('./BashTool.js') as typeof import('./BashTool.js')).BashTool
 import { checkCommandOperatorPermissions } from './bashCommandHelpers.js'
 import {
   bashCommandIsSafeAsync_DEPRECATED,
@@ -269,7 +276,7 @@ function suggestionForExactCommand(command: string): PermissionUpdate[] {
   // stable prefix before the heredoc operator and suggest a prefix rule instead.
   const heredocPrefix = extractPrefixBeforeHeredoc(command)
   if (heredocPrefix) {
-    return sharedSuggestionForPrefix(BashTool.name, heredocPrefix)
+    return sharedSuggestionForPrefix(getBashTool().name, heredocPrefix)
   }
 
   // Multiline commands without heredoc also make poor exact-match rules.
@@ -279,7 +286,7 @@ function suggestionForExactCommand(command: string): PermissionUpdate[] {
   if (command.includes('\n')) {
     const firstLine = command.split('\n')[0]!.trim()
     if (firstLine) {
-      return sharedSuggestionForPrefix(BashTool.name, firstLine)
+      return sharedSuggestionForPrefix(getBashTool().name, firstLine)
     }
   }
 
@@ -288,10 +295,10 @@ function suggestionForExactCommand(command: string): PermissionUpdate[] {
   // invocations with different arguments.
   const prefix = getSimpleCommandPrefix(command)
   if (prefix) {
-    return sharedSuggestionForPrefix(BashTool.name, prefix)
+    return sharedSuggestionForPrefix(getBashTool().name, prefix)
   }
 
-  return sharedSuggestionForExactCommand(BashTool.name, command)
+  return sharedSuggestionForExactCommand(getBashTool().name, command)
 }
 
 /**
@@ -337,7 +344,7 @@ function extractPrefixBeforeHeredoc(command: string): string | null {
 }
 
 function suggestionForPrefix(prefix: string): PermissionUpdate[] {
-  return sharedSuggestionForPrefix(BashTool.name, prefix)
+  return sharedSuggestionForPrefix(getBashTool().name, prefix)
 }
 
 /**
@@ -1000,7 +1007,7 @@ export const bashToolCheckExactMatchPermission = (
   if (matchingDenyRules[0] !== undefined) {
     return {
       behavior: 'deny',
-      message: `Permission to use ${BashTool.name} with command ${command} has been denied.`,
+      message: `Permission to use ${getBashTool().name} with command ${command} has been denied.`,
       decisionReason: {
         type: 'rule',
         rule: matchingDenyRules[0],
@@ -1012,7 +1019,7 @@ export const bashToolCheckExactMatchPermission = (
   if (matchingAskRules[0] !== undefined) {
     return {
       behavior: 'ask',
-      message: createPermissionRequestMessage(BashTool.name),
+      message: createPermissionRequestMessage(getBashTool().name),
       decisionReason: {
         type: 'rule',
         rule: matchingAskRules[0],
@@ -1039,7 +1046,7 @@ export const bashToolCheckExactMatchPermission = (
   }
   return {
     behavior: 'passthrough',
-    message: createPermissionRequestMessage(BashTool.name, decisionReason),
+    message: createPermissionRequestMessage(getBashTool().name, decisionReason),
     decisionReason,
     // Suggest exact match rule to user
     // this may be overridden by prefix suggestions in `checkCommandAndSuggestRules()`
@@ -1083,7 +1090,7 @@ export const bashToolCheckPermission = (
   if (matchingDenyRules[0] !== undefined) {
     return {
       behavior: 'deny',
-      message: `Permission to use ${BashTool.name} with command ${command} has been denied.`,
+      message: `Permission to use ${getBashTool().name} with command ${command} has been denied.`,
       decisionReason: {
         type: 'rule',
         rule: matchingDenyRules[0],
@@ -1095,7 +1102,7 @@ export const bashToolCheckPermission = (
   if (matchingAskRules[0] !== undefined) {
     return {
       behavior: 'ask',
-      message: createPermissionRequestMessage(BashTool.name),
+      message: createPermissionRequestMessage(getBashTool().name),
       decisionReason: {
         type: 'rule',
         rule: matchingAskRules[0],
@@ -1169,7 +1176,7 @@ export const bashToolCheckPermission = (
   }
   return {
     behavior: 'passthrough',
-    message: createPermissionRequestMessage(BashTool.name, decisionReason),
+    message: createPermissionRequestMessage(getBashTool().name, decisionReason),
     decisionReason,
     // Suggest exact match rule to user
     // this may be overridden by prefix suggestions in `checkCommandAndSuggestRules()`
@@ -1231,7 +1238,7 @@ export async function checkCommandAndSuggestRules(
 
       return {
         behavior: 'ask',
-        message: createPermissionRequestMessage(BashTool.name, decisionReason),
+        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
         decisionReason,
         suggestions: [], // Don't suggest saving a potentially dangerous command
       }
@@ -1284,7 +1291,7 @@ function checkSandboxAutoAllow(
   if (matchingDenyRules[0] !== undefined) {
     return {
       behavior: 'deny',
-      message: `Permission to use ${BashTool.name} with command ${command} has been denied.`,
+      message: `Permission to use ${getBashTool().name} with command ${command} has been denied.`,
       decisionReason: {
         type: 'rule',
         rule: matchingDenyRules[0],
@@ -1313,7 +1320,7 @@ function checkSandboxAutoAllow(
       if (subResult.matchingDenyRules[0] !== undefined) {
         return {
           behavior: 'deny',
-          message: `Permission to use ${BashTool.name} with command ${command} has been denied.`,
+          message: `Permission to use ${getBashTool().name} with command ${command} has been denied.`,
           decisionReason: {
             type: 'rule',
             rule: subResult.matchingDenyRules[0],
@@ -1326,7 +1333,7 @@ function checkSandboxAutoAllow(
     if (firstAskRule) {
       return {
         behavior: 'ask',
-        message: createPermissionRequestMessage(BashTool.name),
+        message: createPermissionRequestMessage(getBashTool().name),
         decisionReason: {
           type: 'rule',
           rule: firstAskRule,
@@ -1339,7 +1346,7 @@ function checkSandboxAutoAllow(
   if (matchingAskRules[0] !== undefined) {
     return {
       behavior: 'ask',
-      message: createPermissionRequestMessage(BashTool.name),
+      message: createPermissionRequestMessage(getBashTool().name),
       decisionReason: {
         type: 'rule',
         rule: matchingAskRules[0],
@@ -1407,7 +1414,7 @@ function checkEarlyExitDeny(
   if (denyMatch !== undefined) {
     return {
       behavior: 'deny',
-      message: `Permission to use ${BashTool.name} with command ${input.command} has been denied.`,
+      message: `Permission to use ${getBashTool().name} with command ${input.command} has been denied.`,
       decisionReason: { type: 'rule', rule: denyMatch },
     }
   }
@@ -1444,7 +1451,7 @@ function checkSemanticsDeny(
     if (subDeny !== undefined) {
       return {
         behavior: 'deny',
-        message: `Permission to use ${BashTool.name} with command ${input.command} has been denied.`,
+        message: `Permission to use ${getBashTool().name} with command ${input.command} has been denied.`,
         decisionReason: { type: 'rule', rule: subDeny },
       }
     }
@@ -1755,7 +1762,7 @@ export async function bashToolHasPermission(
     return {
       behavior: 'ask',
       decisionReason,
-      message: createPermissionRequestMessage(BashTool.name, decisionReason),
+      message: createPermissionRequestMessage(getBashTool().name, decisionReason),
       suggestions: [],
       ...(feature('BASH_CLASSIFIER')
         ? {
@@ -1788,7 +1795,7 @@ export async function bashToolHasPermission(
       return {
         behavior: 'ask',
         decisionReason,
-        message: createPermissionRequestMessage(BashTool.name, decisionReason),
+        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
         suggestions: [],
       }
     }
@@ -1821,7 +1828,7 @@ export async function bashToolHasPermission(
       return {
         behavior: 'ask',
         decisionReason,
-        message: createPermissionRequestMessage(BashTool.name, decisionReason),
+        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
       }
     }
   }
@@ -1951,7 +1958,7 @@ export async function bashToolHasPermission(
         }
         return {
           behavior: 'ask',
-          message: createPermissionRequestMessage(BashTool.name),
+          message: createPermissionRequestMessage(getBashTool().name),
           decisionReason: {
             type: 'other',
             reason: `Required by Bash prompt rule: "${askResult.matchedDescription}"`,
@@ -2012,7 +2019,7 @@ export async function bashToolHasPermission(
         appState = context.getAppState()
         return {
           behavior: 'ask',
-          message: createPermissionRequestMessage(BashTool.name, {
+          message: createPermissionRequestMessage(getBashTool().name, {
             type: 'other',
             reason:
               safetyResult.message ??
@@ -2123,7 +2130,7 @@ export async function bashToolHasPermission(
         return {
           behavior: 'ask',
           message: createPermissionRequestMessage(
-            BashTool.name,
+            getBashTool().name,
             decisionReason,
           ),
           decisionReason,
@@ -2173,7 +2180,7 @@ export async function bashToolHasPermission(
     }
     return {
       behavior: 'ask',
-      message: createPermissionRequestMessage(BashTool.name, decisionReason),
+      message: createPermissionRequestMessage(getBashTool().name, decisionReason),
       decisionReason,
     }
   }
@@ -2191,7 +2198,7 @@ export async function bashToolHasPermission(
     return {
       behavior: 'ask',
       decisionReason,
-      message: createPermissionRequestMessage(BashTool.name, decisionReason),
+      message: createPermissionRequestMessage(getBashTool().name, decisionReason),
     }
   }
 
@@ -2219,7 +2226,7 @@ export async function bashToolHasPermission(
       return {
         behavior: 'ask',
         decisionReason,
-        message: createPermissionRequestMessage(BashTool.name, decisionReason),
+        message: createPermissionRequestMessage(getBashTool().name, decisionReason),
       }
     }
   }
@@ -2252,7 +2259,7 @@ export async function bashToolHasPermission(
   if (deniedSubresult !== undefined) {
     return {
       behavior: 'deny',
-      message: `Permission to use ${BashTool.name} with command ${input.command} has been denied.`,
+      message: `Permission to use ${getBashTool().name} with command ${input.command} has been denied.`,
       decisionReason: {
         type: 'subcommandResults',
         reasons: new Map(
@@ -2542,7 +2549,7 @@ export async function bashToolHasPermission(
   // so this path only saw 'passthrough' subcommands and hardcoded that.
   return {
     behavior: askSubresult !== undefined ? 'ask' : 'passthrough',
-    message: createPermissionRequestMessage(BashTool.name, decisionReason),
+    message: createPermissionRequestMessage(getBashTool().name, decisionReason),
     decisionReason,
     suggestions: suggestedUpdates,
     ...(feature('BASH_CLASSIFIER')

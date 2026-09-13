@@ -12,4 +12,4 @@ export {
   keystrokeToDisplayString,
   chordToDisplayString,
   parseBindings,
-} from '../../../packages/@ant/ink/src/keybindings/parser.js'
+} from '../../packages/@ant/ink/src/keybindings/parser.js'
