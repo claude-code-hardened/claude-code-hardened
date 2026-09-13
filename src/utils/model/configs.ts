@@ -116,6 +116,16 @@ export const CLAUDE_OPUS_4_7_CONFIG = {
   grok: 'claude-opus-4-7',
 } as const satisfies ModelConfig
 
+export const CLAUDE_OPUS_5_CONFIG = {
+  firstParty: 'claude-opus-5',
+  bedrock: 'us.anthropic.claude-opus-5-v1',
+  vertex: 'claude-opus-5',
+  foundry: 'claude-opus-5',
+  openai: 'claude-opus-5',
+  gemini: 'claude-opus-5',
+  grok: 'claude-opus-5',
+} as const satisfies ModelConfig
+
 export const CLAUDE_SONNET_4_6_CONFIG = {
   firstParty: 'claude-sonnet-4-6',
   bedrock: 'us.anthropic.claude-sonnet-4-6',
@@ -140,6 +150,7 @@ export const ALL_MODEL_CONFIGS = {
   opus45: CLAUDE_OPUS_4_5_CONFIG,
   opus46: CLAUDE_OPUS_4_6_CONFIG,
   opus47: CLAUDE_OPUS_4_7_CONFIG,
+  opus5: CLAUDE_OPUS_5_CONFIG,
 } as const satisfies Record<string, ModelConfig>
 
 export type ModelKey = keyof typeof ALL_MODEL_CONFIGS
