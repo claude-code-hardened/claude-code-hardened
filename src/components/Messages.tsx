@@ -34,16 +34,14 @@ import { getGlobalConfig } from '../utils/config.js';
 import { isEnvTruthy } from '../utils/envUtils.js';
 import { applyGrouping } from '../utils/groupToolUses.js';
 import {
-  buildMessageLookups,
-  computeMessageStructureKey,
-  type MessageLookups,
-  updateMessageLookupsIncremental,
   createAssistantMessage,
   deriveUUID,
   getToolUseID,
   getToolUseIDs,
   hasUnresolvedHooksFromLookup,
   isNotEmptyMessage,
+  type MessageLookups,
+  MessageLookupsCache,
   normalizeMessages,
   reorderMessagesInUI,
   type StreamingThinking,
@@ -516,14 +514,26 @@ const MessagesImpl = ({
   // Cache for buildMessageLookups: avoids rebuilding 8 Maps/Sets when only
   // message content changed during streaming (text/thinking deltas). The key
   // captures only structural info (types, IDs), so content-only deltas skip
-  // the rebuild entirely.
-  const lookupsCacheRef = useRef<{
-    key: string;
-    lookups: MessageLookups;
-    normalizedCount: number;
-    messageCount: number;
-    lastAssistantMsgId: string | undefined;
-  } | null>(null);
+  // the rebuild entirely. Pure appends go through the incremental updater;
+  // every LOOKUPS_FULL_REBUILD_INTERVAL-th change and every non-append change
+  // force a full rebuild (see MessageLookupsCache).
+  const lookupsCacheRef = useRef<MessageLookupsCache | null>(null);
+  if (lookupsCacheRef.current === null) {
+    lookupsCacheRef.current = new MessageLookupsCache();
+  }
+  // 回合结束（isLoading → false）与 unmount 时清空增量缓存：下一次渲染
+  // 从权威数据源全量重编，作为每第 4 次变更兜底之外的最后一道防线。
+  useEffect(() => {
+    if (!isLoading) {
+      lookupsCacheRef.current?.reset();
+    }
+  }, [isLoading]);
+  useEffect(
+    () => () => {
+      lookupsCacheRef.current?.reset();
+    },
+    [],
+  );
 
   // Expensive message transforms — filter, reorder, group, collapse, lookups.
   // All O(n) over 27k messages. Split from the renderRange slice so scrolling
@@ -594,59 +604,17 @@ const MessagesImpl = ({
       verbose,
     );
 
-    const lookupsKey = computeMessageStructureKey(normalizedMessages, messagesToShow as MessageType[]);
     const currentLastAssistantMsgId = (() => {
       const lastMsg = (messagesToShow as MessageType[]).at(-1);
       return lastMsg?.type === 'assistant' ? (lastMsg as AssistantMessage).message?.id : undefined;
     })();
-    let lookups: MessageLookups;
-    if (lookupsCacheRef.current && lookupsCacheRef.current.key === lookupsKey) {
-      lookups = lookupsCacheRef.current.lookups;
-    } else if (
-      lookupsCacheRef.current &&
-      normalizedMessages.length >= lookupsCacheRef.current.normalizedCount &&
-      (messagesToShow as MessageType[]).length >= lookupsCacheRef.current.messageCount &&
-      // If lastAssistantMsgId changed, previous "in-progress" assistant may
-      // now be orphaned — force a full rebuild to pick up the new status.
-      lookupsCacheRef.current.lastAssistantMsgId === currentLastAssistantMsgId
-    ) {
-      // Try incremental update when only new messages were appended
-      const updated = updateMessageLookupsIncremental(
-        lookupsCacheRef.current.lookups,
-        lookupsCacheRef.current.normalizedCount,
-        lookupsCacheRef.current.messageCount,
-        normalizedMessages,
-        messagesToShow as MessageType[],
-      );
-      if (updated) {
-        lookups = updated;
-        lookupsCacheRef.current = {
-          key: lookupsKey,
-          lookups,
-          normalizedCount: normalizedMessages.length,
-          messageCount: (messagesToShow as MessageType[]).length,
-          lastAssistantMsgId: currentLastAssistantMsgId,
-        };
-      } else {
-        lookups = buildMessageLookups(normalizedMessages, messagesToShow as MessageType[]);
-        lookupsCacheRef.current = {
-          key: lookupsKey,
-          lookups,
-          normalizedCount: normalizedMessages.length,
-          messageCount: (messagesToShow as MessageType[]).length,
-          lastAssistantMsgId: currentLastAssistantMsgId,
-        };
-      }
-    } else {
-      lookups = buildMessageLookups(normalizedMessages, messagesToShow as MessageType[]);
-      lookupsCacheRef.current = {
-        key: lookupsKey,
-        lookups,
-        normalizedCount: normalizedMessages.length,
-        messageCount: (messagesToShow as MessageType[]).length,
-        lastAssistantMsgId: currentLastAssistantMsgId,
-      };
-    }
+    // 结构键命中 → 复用；纯追加 → 增量更新；其余（含每第 4 次变更兜底）
+    // → 从权威数据源全量重编。策略见 MessageLookupsCache。
+    const lookups = lookupsCacheRef.current!.get(
+      normalizedMessages,
+      messagesToShow as MessageType[],
+      currentLastAssistantMsgId,
+    );
 
     const hiddenMessageCount = messagesToShowNotTruncated.length - MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE;
 
@@ -1056,7 +1024,7 @@ export function shouldRenderStatically(
   inProgressToolUseIDs: Set<string>,
   siblingToolUseIDs: ReadonlySet<string>,
   screen: Screen,
-  lookups: ReturnType<typeof buildMessageLookups>,
+  lookups: MessageLookups,
 ): boolean {
   if (screen === 'transcript') {
     return true;
