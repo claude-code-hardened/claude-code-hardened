@@ -4810,11 +4810,26 @@ type LiteMetadata = {
 /**
  * Loads all logs from a single session file with full message data.
  * Builds a LogOption for each leaf message in the file.
+ * @param mtimeLimitMs Opt-in pre-read filter: skip files not modified within
+ *   the last N milliseconds. Omitted (undefined) → load unconditionally.
+ * @returns LogOption[] — empty when the file is older than the mtime window.
  */
 export async function loadAllLogsFromSessionFile(
   sessionFile: string,
   projectPathOverride?: string,
+  mtimeLimitMs?: number,
 ): Promise<LogOption[]> {
+  // Pre-read filter ("先过滤再读"): one fs.stat up front is negligible next
+  // to the full JSONL read it can avoid. stat failure → fall through and let
+  // loadTranscriptFile surface the read error (fail-open, same as elsewhere).
+  if (mtimeLimitMs !== undefined) {
+    try {
+      const st = await stat(sessionFile)
+      if (Date.now() - st.mtimeMs > mtimeLimitMs) return []
+    } catch {
+      // unreadable/unstatable — let the load below produce the error
+    }
+  }
   const {
     messages,
     summaries,
