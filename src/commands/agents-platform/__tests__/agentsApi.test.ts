@@ -270,7 +270,7 @@ describe('createAgent M3: timezone uses system TZ not hardcoded UTC', () => {
     // Must NOT be the hardcoded 'UTC' string — must be a real timezone string
     // In CI the system TZ may be UTC, but the field must still be present and a string.
     expect(typeof body?.timezone).toBe('string')
-    expect((body?.timezone as string).length).toBeGreaterThan(0)
+    expect((body!.timezone as string).length).toBeGreaterThan(0)
   })
 })
 
