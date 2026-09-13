@@ -6,7 +6,12 @@ import {
   getSlashCommandToolSkills,
 } from 'src/commands.js'
 import { COMMAND_NAME_TAG } from 'src/constants/xml.js'
-import { stringWidth } from '@anthropic/ink'
+
+// Lazy require: stringWidth lives in the @anthropic/ink barrel; a static
+// import pulled the whole Ink framework into module evaluation for every
+// consumer of the SkillTool prompt builder.
+const getStringWidth = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).stringWidth
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
@@ -83,7 +88,7 @@ export function formatCommandsWithinBudget(
   }))
   // join('\n') produces N-1 newlines for N entries
   const fullTotal =
-    fullEntries.reduce((sum, e) => sum + stringWidth(e.full), 0) +
+    fullEntries.reduce((sum, e) => sum + getStringWidth()(e.full), 0) +
     (fullEntries.length - 1)
 
   if (fullTotal <= budget) {
@@ -105,7 +110,7 @@ export function formatCommandsWithinBudget(
   // Compute space used by bundled skills (full descriptions, always preserved)
   const bundledChars = fullEntries.reduce(
     (sum, e, i) =>
-      bundledIndices.has(i) ? sum + stringWidth(e.full) + 1 : sum,
+      bundledIndices.has(i) ? sum + getStringWidth()(e.full) + 1 : sum,
     0,
   )
   const remainingBudget = budget - bundledChars
@@ -116,7 +121,7 @@ export function formatCommandsWithinBudget(
   }
 
   const restNameOverhead =
-    restCommands.reduce((sum, cmd) => sum + stringWidth(cmd.name) + 4, 0) +
+    restCommands.reduce((sum, cmd) => sum + getStringWidth()(cmd.name) + 4, 0) +
     (restCommands.length - 1)
   const availableForDescs = remainingBudget - restNameOverhead
   const maxDescLen = Math.floor(availableForDescs / restCommands.length)
@@ -145,7 +150,7 @@ export function formatCommandsWithinBudget(
   // Truncate non-bundled descriptions to fit within budget
   const truncatedCount = count(
     restCommands,
-    cmd => stringWidth(getCommandDescription(cmd)) > maxDescLen,
+    cmd => getStringWidth()(getCommandDescription(cmd)) > maxDescLen,
   )
   if (process.env.USER_TYPE === 'ant') {
     logEvent('tengu_skill_descriptions_truncated', {

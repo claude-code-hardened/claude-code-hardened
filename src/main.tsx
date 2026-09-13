@@ -58,10 +58,10 @@ import {
 } from './services/policyLimits/index.js';
 import { loadRemoteManagedSettings, refreshRemoteManagedSettings } from './services/remoteManagedSettings/index.js';
 import type { ToolInputJSONSchema } from './Tool.js';
-import {
-  createSyntheticOutputTool,
-  isSyntheticOutputToolEnabled,
-} from '@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js';
+// Lazy require: the SyntheticOutputTool module pulls @anthropic/ink, which
+// must stay out of pre-commander evaluation. Only used inside action handlers.
+const getSyntheticOutputModule = () =>
+  require('@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js');
 import { getTools } from './tools.js';
 import {
   canUserConfigureAdvisor,
@@ -155,7 +155,8 @@ import {
   launchTeleportRepoMismatchDialog,
   launchTeleportResumeWrapper,
 } from './dialogLaunchers.js';
-import { SHOW_CURSOR } from '@anthropic/ink';
+// SHOW_CURSOR is loaded lazily in resetCursor() — importing it here would
+// pull @anthropic/ink (reconciler/yoga) into pre-commander evaluation.
 import {
   exitWithError,
   exitWithMessage,
@@ -267,7 +268,8 @@ import {
 } from 'src/services/mcp/config.js';
 import { excludeCommandsByServer, excludeResourcesByServer } from 'src/services/mcp/utils.js';
 import { isXaaEnabled } from 'src/services/mcp/xaaIdpLogin.js';
-import { getRelevantTips } from 'src/services/tips/tipRegistry.js';
+// getRelevantTips is resolved lazily below — tipRegistry (and the Ink-based
+// components it imports) must stay out of pre-commander evaluation.
 import { logContextMetrics } from 'src/utils/api.js';
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME, isClaudeInChromeMCPServer } from 'src/utils/claudeInChrome/common.js';
 import { registerCleanup } from 'src/utils/cleanupRegistry.js';
@@ -554,7 +556,7 @@ export function startDeferredPrefetches(): void {
   void initUser();
   void getUserContext();
   prefetchSystemContextIfSafe();
-  void getRelevantTips();
+  void import('src/services/tips/tipRegistry.js').then(m => m.getRelevantTips());
   if (isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) && !isEnvTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH)) {
     void prefetchAwsCredentialsAndBedRockInfoIfSafe();
   }
@@ -2392,12 +2394,12 @@ async function run(): Promise<CommanderCommand> {
       profileCheckpoint('action_tools_loaded');
 
       let jsonSchema: ToolInputJSONSchema | undefined;
-      if (isSyntheticOutputToolEnabled({ isNonInteractiveSession }) && options.jsonSchema) {
+      if (getSyntheticOutputModule().isSyntheticOutputToolEnabled({ isNonInteractiveSession }) && options.jsonSchema) {
         jsonSchema = jsonParse(options.jsonSchema) as ToolInputJSONSchema;
       }
 
       if (jsonSchema) {
-        const syntheticOutputResult = createSyntheticOutputTool(jsonSchema);
+        const syntheticOutputResult = getSyntheticOutputModule().createSyntheticOutputTool(jsonSchema);
         if ('tool' in syntheticOutputResult) {
           // Add SyntheticOutputTool to the tools array AFTER getTools() filtering.
           // This tool is excluded from normal filtering (see tools.ts) because it's
@@ -5697,6 +5699,9 @@ function maybeActivateBrief(options: unknown): void {
 
 function resetCursor() {
   const terminal = process.stderr.isTTY ? process.stderr : process.stdout.isTTY ? process.stdout : undefined;
+  // Lazy require keeps @anthropic/ink out of pre-commander module evaluation;
+  // by the time this runs (render teardown / exit paths) ink is loaded anyway.
+  const { SHOW_CURSOR } = require('@anthropic/ink') as typeof import('@anthropic/ink');
   terminal?.write(SHOW_CURSOR);
 }
 

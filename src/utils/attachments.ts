@@ -10,12 +10,22 @@ import {
   type ToolUseContext,
   type ToolPermissionContext,
 } from '../Tool.js'
-import {
-  FileReadTool,
-  MaxFileReadTokenExceededError,
-  type Output as FileReadToolOutput,
-  readImageWithTokenBudget,
-} from '@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js'
+import type { Output as FileReadToolOutput } from '@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js'
+// Lazy require: FileReadTool's module pulls its UI -> @anthropic/ink, and
+// attachments.ts is part of main.tsx's pre-commander evaluation. Uses are
+// inside async functions, so the tool loads on first attachment handling.
+const getFileReadTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+  ).FileReadTool
+const getReadImageWithTokenBudget = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+  ).readImageWithTokenBudget
+const getMaxFileReadTokenExceededError = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+  ).MaxFileReadTokenExceededError
 import { FileTooLargeError, readFileInRange } from './readFileInRange.js'
 import { expandPath } from './path.js'
 import { countCharInString } from './stringUtils.js'
@@ -2145,7 +2155,7 @@ export async function getChangedFiles(
         const fileInput = { file_path: normalizedPath }
 
         // Validate file path is valid
-        const isValid = await FileReadTool.validateInput(
+        const isValid = await getFileReadTool().validateInput(
           fileInput,
           toolUseContext,
         )
@@ -2153,7 +2163,7 @@ export async function getChangedFiles(
           return null
         }
 
-        const result = await FileReadTool.call(fileInput, toolUseContext)
+        const result = await getFileReadTool().call(fileInput, toolUseContext)
         // Extract only the changed section
         if (result.data.type === 'text') {
           const snippet = getSnippetForTwoFileDiff(
@@ -2176,7 +2186,7 @@ export async function getChangedFiles(
         // For non-text files (images), apply the same token limit logic as FileReadTool
         if (result.data.type === 'image') {
           try {
-            const data = await readImageWithTokenBudget(normalizedPath)
+            const data = await getReadImageWithTokenBudget()(normalizedPath)
             return {
               type: 'edited_image_file' as const,
               filename: normalizedPath,
@@ -3234,7 +3244,10 @@ export async function generateFileAttachment(
           offset: offset ?? 1,
           limit: MAX_LINES_TO_READ,
         }
-        const result = await FileReadTool.call(truncatedInput, toolUseContext)
+        const result = await getFileReadTool().call(
+          truncatedInput,
+          toolUseContext,
+        )
         logEvent(successEventName, {})
 
         return {
@@ -3251,13 +3264,16 @@ export async function generateFileAttachment(
     }
 
     // Validate file path is valid
-    const isValid = await FileReadTool.validateInput(fileInput, toolUseContext)
+    const isValid = await getFileReadTool().validateInput(
+      fileInput,
+      toolUseContext,
+    )
     if (!isValid.result) {
       return null
     }
 
     try {
-      const result = await FileReadTool.call(fileInput, toolUseContext)
+      const result = await getFileReadTool().call(fileInput, toolUseContext)
       logEvent(successEventName, {})
       return {
         type: 'file',
@@ -3267,7 +3283,7 @@ export async function generateFileAttachment(
       }
     } catch (error) {
       if (
-        error instanceof MaxFileReadTokenExceededError ||
+        error instanceof getMaxFileReadTokenExceededError() ||
         error instanceof FileTooLargeError
       ) {
         return await readTruncatedFile()

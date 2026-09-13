@@ -1,9 +1,15 @@
-import { stringWidth, wrapAnsi } from '@anthropic/ink'
 import {
   firstGrapheme,
   getGraphemeSegmenter,
   getWordSegmenter,
 } from './intl.js'
+
+// Lazy require: stringWidth/wrapAnsi live in the @anthropic/ink barrel
+// (see truncate.ts).
+const getStringWidth = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).stringWidth
+const getWrapAnsi = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).wrapAnsi
 
 /**
  * Kill ring for storing killed (cut) text that can be yanked (pasted) with Ctrl+Y.
@@ -233,7 +239,7 @@ export class Cursor {
             afterCursor += segment
             continue
           }
-          const nextWidth = currentWidth + stringWidth(segment)
+          const nextWidth = currentWidth + getStringWidth()(segment)
           if (nextWidth > column) {
             atCursor = segment
             cursorFound = true
@@ -336,7 +342,7 @@ export class Cursor {
       return this
     }
 
-    const prevLineDisplayWidth = stringWidth(prevLine)
+    const prevLineDisplayWidth = getStringWidth()(prevLine)
     if (column > prevLineDisplayWidth) {
       const newOffset = this.getOffset({
         line: line - 1,
@@ -365,7 +371,7 @@ export class Cursor {
 
     // If the current column is past the end of the next line,
     // move to the end of the next line
-    const nextLineDisplayWidth = stringWidth(nextLine)
+    const nextLineDisplayWidth = getStringWidth()(nextLine)
     if (column > nextLineDisplayWidth) {
       const newOffset = this.getOffset({
         line: line + 1,
@@ -1207,8 +1213,8 @@ export class MeasuredText {
   // Convert string index to display width
   public stringIndexToDisplayWidth(text: string, index: number): number {
     if (index <= 0) return 0
-    if (index >= text.length) return stringWidth(text)
-    return stringWidth(text.substring(0, index))
+    if (index >= text.length) return getStringWidth()(text)
+    return getStringWidth()(text.substring(0, index))
   }
 
   // Convert display width to string index
@@ -1226,7 +1232,7 @@ export class MeasuredText {
     let currentOffset = 0
 
     for (const { segment, index } of getGraphemeSegmenter().segment(text)) {
-      const segmentWidth = stringWidth(segment)
+      const segmentWidth = getStringWidth()(segment)
 
       if (currentWidth + segmentWidth > targetWidth) {
         break
@@ -1254,7 +1260,7 @@ export class MeasuredText {
       const end = boundaries[i + 1]
       if (start === undefined || end === undefined) continue
       const segment = this.text.substring(start, end)
-      const segmentWidth = stringWidth(segment)
+      const segmentWidth = getStringWidth()(segment)
 
       if (currentWidth + segmentWidth > targetWidth) {
         return start
@@ -1266,7 +1272,7 @@ export class MeasuredText {
   }
 
   private measureWrappedText(): WrappedLine[] {
-    const wrappedText = wrapAnsi(this.text, this.columns, {
+    const wrappedText = getWrapAnsi()(this.text, this.columns, {
       hard: true,
       trim: false,
     })
@@ -1387,7 +1393,7 @@ export class MeasuredText {
     // Don't allow going past the end of the current line into the next line
     // unless we're at the very end of the text
     let maxOffset = lineEnd
-    const lineDisplayWidth = stringWidth(wrappedLine.text)
+    const lineDisplayWidth = getStringWidth()(wrappedLine.text)
     if (wrappedLine.endsWithNewline && position.column > lineDisplayWidth) {
       // Allow positioning after the newline
       maxOffset = lineEnd + 1
@@ -1398,7 +1404,7 @@ export class MeasuredText {
 
   public getLineLength(line: number): number {
     const wrappedLine = this.getLine(line)
-    return stringWidth(wrappedLine.text)
+    return getStringWidth()(wrappedLine.text)
   }
 
   public getPositionFromOffset(offset: number): Position {
@@ -1451,7 +1457,7 @@ export class MeasuredText {
     const lastLine = this.wrappedLines[line]!
     return {
       line,
-      column: stringWidth(lastLine.text),
+      column: getStringWidth()(lastLine.text),
     }
   }
 

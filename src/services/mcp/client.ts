@@ -50,13 +50,25 @@ import {
   type ToolCallProgress,
   toolMatchesName,
 } from '../../Tool.js'
-import { ListMcpResourcesTool } from '@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js'
-import {
-  type MCPProgress,
-  MCPTool,
-} from '@claude-code-best/builtin-tools/tools/MCPTool/MCPTool.js'
+// Lazy requires: these tool modules pull @anthropic/ink via their UI files,
+// and mcp/client.ts is part of main.tsx's pre-commander evaluation. Uses are
+// inside functions, so the tools load on first MCP connect.
+const getListMcpResourcesTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js')
+  ).ListMcpResourcesTool
+import type { MCPProgress } from '@claude-code-best/builtin-tools/tools/MCPTool/MCPTool.js'
+// Lazy require: MCPTool's module pulls its UI -> @anthropic/ink. Only used
+// inside connect functions (tool pool assembly), after ink would be loaded.
+const getMCPTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/MCPTool/MCPTool.js') as typeof import('@claude-code-best/builtin-tools/tools/MCPTool/MCPTool.js')
+  ).MCPTool
 import { createMcpAuthTool } from '@claude-code-best/builtin-tools/tools/McpAuthTool/McpAuthTool.js'
-import { ReadMcpResourceTool } from '@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js'
+const getReadMcpResourceTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js')
+  ).ReadMcpResourceTool
 import { createAbortController } from '../../utils/abortController.js'
 import { count } from '../../utils/array.js'
 import {
@@ -1779,7 +1791,7 @@ export const fetchToolsForClient = memoizeWithLRU(
         .map((tool): Tool => {
           const fullyQualifiedName = buildMcpToolName(client.name, tool.name)
           return {
-            ...MCPTool,
+            ...getMCPTool(),
             // In skip-prefix mode, use the original name for model invocation so MCP tools
             // can override builtins by name. mcpInfo is used for permission checking.
             name: skipPrefix ? tool.name : fullyQualifiedName,
@@ -2194,11 +2206,12 @@ export async function reconnectMcpServerImpl(
     const resourceTools: Tool[] = []
     if (supportsResources) {
       // Only add resource tools if no other server has them
-      const hasResourceTools = [ListMcpResourcesTool, ReadMcpResourceTool].some(
-        tool => tools.some(t => toolMatchesName(t, tool.name)),
-      )
+      const hasResourceTools = [
+        getListMcpResourcesTool(),
+        getReadMcpResourceTool(),
+      ].some(tool => tools.some(t => toolMatchesName(t, tool.name)))
       if (!hasResourceTools) {
-        resourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool)
+        resourceTools.push(getListMcpResourcesTool(), getReadMcpResourceTool())
       }
     }
 
@@ -2372,7 +2385,7 @@ export async function getMcpToolsCommandsAndResources(
       const resourceTools: Tool[] = []
       if (supportsResources && !resourceToolsAdded) {
         resourceToolsAdded = true
-        resourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool)
+        resourceTools.push(getListMcpResourcesTool(), getReadMcpResourceTool())
       }
 
       onConnectionAttempt({

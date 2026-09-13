@@ -1,163 +1,8 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import { toolMatchesName, type Tool, type Tools } from './Tool.js'
-import { AgentTool } from '@claude-code-best/builtin-tools/tools/AgentTool/AgentTool.js'
-import { SkillTool } from '@claude-code-best/builtin-tools/tools/SkillTool/SkillTool.js'
-import { BashTool } from '@claude-code-best/builtin-tools/tools/BashTool/BashTool.js'
-import { FileEditTool } from '@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js'
-import { FileReadTool } from '@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js'
-import { FileWriteTool } from '@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js'
-import { GlobTool } from '@claude-code-best/builtin-tools/tools/GlobTool/GlobTool.js'
-import { NotebookEditTool } from '@claude-code-best/builtin-tools/tools/NotebookEditTool/NotebookEditTool.js'
-import { WebFetchTool } from '@claude-code-best/builtin-tools/tools/WebFetchTool/WebFetchTool.js'
-import { TaskStopTool } from '@claude-code-best/builtin-tools/tools/TaskStopTool/TaskStopTool.js'
-import { BriefTool } from '@claude-code-best/builtin-tools/tools/BriefTool/BriefTool.js'
-// Dead code elimination: conditional import for ant-only tools
-/* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
-const REPLTool =
-  process.env.USER_TYPE === 'ant'
-    ? require('@claude-code-best/builtin-tools/tools/REPLTool/REPLTool.js')
-        .REPLTool
-    : null
-const SuggestBackgroundPRTool =
-  process.env.USER_TYPE === 'ant'
-    ? require('@claude-code-best/builtin-tools/tools/SuggestBackgroundPRTool/SuggestBackgroundPRTool.js')
-        .SuggestBackgroundPRTool
-    : null
-const SleepTool =
-  feature('PROACTIVE') || feature('KAIROS')
-    ? require('@claude-code-best/builtin-tools/tools/SleepTool/SleepTool.js')
-        .SleepTool
-    : null
-const cronTools = [
-  require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronCreateTool.js')
-    .CronCreateTool,
-  require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronDeleteTool.js')
-    .CronDeleteTool,
-  require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronListTool.js')
-    .CronListTool,
-]
-const RemoteTriggerTool = feature('AGENT_TRIGGERS_REMOTE')
-  ? require('@claude-code-best/builtin-tools/tools/RemoteTriggerTool/RemoteTriggerTool.js')
-      .RemoteTriggerTool
-  : null
-const MonitorTool = feature('MONITOR_TOOL')
-  ? require('@claude-code-best/builtin-tools/tools/MonitorTool/MonitorTool.js')
-      .MonitorTool
-  : null
-const SendUserFileTool = feature('KAIROS')
-  ? require('@claude-code-best/builtin-tools/tools/SendUserFileTool/SendUserFileTool.js')
-      .SendUserFileTool
-  : null
-const PushNotificationTool =
-  feature('KAIROS') || feature('KAIROS_PUSH_NOTIFICATION')
-    ? require('@claude-code-best/builtin-tools/tools/PushNotificationTool/PushNotificationTool.js')
-        .PushNotificationTool
-    : null
-const SubscribePRTool = feature('KAIROS_GITHUB_WEBHOOKS')
-  ? require('@claude-code-best/builtin-tools/tools/SubscribePRTool/SubscribePRTool.js')
-      .SubscribePRTool
-  : null
-/* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
-import { TaskOutputTool } from '@claude-code-best/builtin-tools/tools/TaskOutputTool/TaskOutputTool.js'
-import { WebSearchTool } from '@claude-code-best/builtin-tools/tools/WebSearchTool/WebSearchTool.js'
-import { TodoWriteTool } from '@claude-code-best/builtin-tools/tools/TodoWriteTool/TodoWriteTool.js'
-import { ExitPlanModeV2Tool } from '@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js'
-import { ArtifactTool } from '@claude-code-best/builtin-tools/tools/ArtifactTool/ArtifactTool.js'
-import { TestingPermissionTool } from '@claude-code-best/builtin-tools/tools/testing/TestingPermissionTool.js'
-import { GrepTool } from '@claude-code-best/builtin-tools/tools/GrepTool/GrepTool.js'
-import { TungstenTool } from '@claude-code-best/builtin-tools/tools/TungstenTool/TungstenTool.js'
-// Lazy require to break circular dependency: tools.ts -> TeamCreateTool/TeamDeleteTool -> ... -> tools.ts
-/* eslint-disable @typescript-eslint/no-require-imports */
-const getTeamCreateTool = () =>
-  require('@claude-code-best/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js')
-    .TeamCreateTool as typeof import('@claude-code-best/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js').TeamCreateTool
-const getTeamDeleteTool = () =>
-  require('@claude-code-best/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js')
-    .TeamDeleteTool as typeof import('@claude-code-best/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js').TeamDeleteTool
-const getSendMessageTool = () =>
-  require('@claude-code-best/builtin-tools/tools/SendMessageTool/SendMessageTool.js')
-    .SendMessageTool as typeof import('@claude-code-best/builtin-tools/tools/SendMessageTool/SendMessageTool.js').SendMessageTool
-/* eslint-enable @typescript-eslint/no-require-imports */
-import { AskUserQuestionTool } from '@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js'
-import { LSPTool } from '@claude-code-best/builtin-tools/tools/LSPTool/LSPTool.js'
-import { ListMcpResourcesTool } from '@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js'
-import { ReadMcpResourceTool } from '@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js'
-import { SearchExtraToolsTool } from '@claude-code-best/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js'
-import { ExecuteTool } from '@claude-code-best/builtin-tools/tools/ExecuteTool/ExecuteTool.js'
-import { EnterPlanModeTool } from '@claude-code-best/builtin-tools/tools/EnterPlanModeTool/EnterPlanModeTool.js'
-import { EnterWorktreeTool } from '@claude-code-best/builtin-tools/tools/EnterWorktreeTool/EnterWorktreeTool.js'
-import { ExitWorktreeTool } from '@claude-code-best/builtin-tools/tools/ExitWorktreeTool/ExitWorktreeTool.js'
-import { ConfigTool } from '@claude-code-best/builtin-tools/tools/ConfigTool/ConfigTool.js'
-const GoalTool = feature('GOAL')
-  ? require('@claude-code-best/builtin-tools/tools/GoalTool/GoalTool.js')
-      .GoalTool
-  : null
-import { LocalMemoryRecallTool } from '@claude-code-best/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js'
-import { VaultHttpFetchTool } from '@claude-code-best/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js'
-import { TaskCreateTool } from '@claude-code-best/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js'
-import { TaskGetTool } from '@claude-code-best/builtin-tools/tools/TaskGetTool/TaskGetTool.js'
-import { TaskUpdateTool } from '@claude-code-best/builtin-tools/tools/TaskUpdateTool/TaskUpdateTool.js'
-import { TaskListTool } from '@claude-code-best/builtin-tools/tools/TaskListTool/TaskListTool.js'
 import uniqBy from 'lodash-es/uniqBy.js'
 import { isSearchExtraToolsEnabledOptimistic } from './utils/searchExtraTools.js'
 import { isTodoV2Enabled } from './utils/tasks.js'
-// Dead code elimination: conditional import for CLAUDE_CODE_VERIFY_PLAN
-/* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
-const VerifyPlanExecutionTool =
-  process.env.CLAUDE_CODE_VERIFY_PLAN === 'true'
-    ? require('@claude-code-best/builtin-tools/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js')
-        .VerifyPlanExecutionTool
-    : null
-/* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
-import { SYNTHETIC_OUTPUT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js'
-export {
-  ALL_AGENT_DISALLOWED_TOOLS,
-  CUSTOM_AGENT_DISALLOWED_TOOLS,
-  ASYNC_AGENT_ALLOWED_TOOLS,
-  COORDINATOR_MODE_ALLOWED_TOOLS,
-} from './constants/tools.js'
-import { feature } from 'bun:bundle'
-// Dead code elimination: conditional import for OVERFLOW_TEST_TOOL
-/* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
-const OverflowTestTool = feature('OVERFLOW_TEST_TOOL')
-  ? require('@claude-code-best/builtin-tools/tools/OverflowTestTool/OverflowTestTool.js')
-      .OverflowTestTool
-  : null
-const CtxInspectTool = feature('CONTEXT_COLLAPSE')
-  ? require('@claude-code-best/builtin-tools/tools/CtxInspectTool/CtxInspectTool.js')
-      .CtxInspectTool
-  : null
-const TerminalCaptureTool = feature('TERMINAL_PANEL')
-  ? require('@claude-code-best/builtin-tools/tools/TerminalCaptureTool/TerminalCaptureTool.js')
-      .TerminalCaptureTool
-  : null
-const WebBrowserTool = feature('WEB_BROWSER_TOOL')
-  ? require('@claude-code-best/builtin-tools/tools/WebBrowserTool/WebBrowserTool.js')
-      .WebBrowserTool
-  : null
-const coordinatorModeModule = feature('COORDINATOR_MODE')
-  ? (require('./coordinator/coordinatorMode.js') as typeof import('./coordinator/coordinatorMode.js'))
-  : null
-const SnipTool = feature('HISTORY_SNIP')
-  ? require('@claude-code-best/builtin-tools/tools/SnipTool/SnipTool.js')
-      .SnipTool
-  : null
-const DiscoverSkillsTool = feature('EXPERIMENTAL_SKILL_SEARCH')
-  ? require('@claude-code-best/builtin-tools/tools/DiscoverSkillsTool/DiscoverSkillsTool.js')
-      .DiscoverSkillsTool
-  : null
-const ReviewArtifactTool = feature('REVIEW_ARTIFACT')
-  ? require('@claude-code-best/builtin-tools/tools/ReviewArtifactTool/ReviewArtifactTool.js')
-      .ReviewArtifactTool
-  : null
-const ListPeersTool = feature('UDS_INBOX')
-  ? require('@claude-code-best/builtin-tools/tools/ListPeersTool/ListPeersTool.js')
-      .ListPeersTool
-  : null
-const WorkflowTool = feature('WORKFLOW_SCRIPTS')
-  ? require('./workflow/wiring.js').createWorkflowToolCore()
-  : null
-/* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import type { ToolPermissionContext } from './Tool.js'
 import { getDenyRuleForTool } from './utils/permissions/permissions.js'
 import { hasEmbeddedSearchTools } from './utils/embeddedTools.js'
@@ -171,14 +16,329 @@ import {
   isReplModeEnabled,
 } from '@claude-code-best/builtin-tools/tools/REPLTool/constants.js'
 export { REPL_ONLY_TOOLS }
+export {
+  ALL_AGENT_DISALLOWED_TOOLS,
+  CUSTOM_AGENT_DISALLOWED_TOOLS,
+  ASYNC_AGENT_ALLOWED_TOOLS,
+  COORDINATOR_MODE_ALLOWED_TOOLS,
+} from './constants/tools.js'
+import { feature } from 'bun:bundle'
+
+/**
+ * Startup-lazy tool bodies. tools.ts is part of main.tsx's static import
+ * closure, so every statically imported tool implementation (40+ modules,
+ * most of which pull in @anthropic/ink for their renderUI) used to be
+ * evaluated before commander parsed argv. Each getter below requires its
+ * tool module on first call instead; require() caches the module, so
+ * repeated calls are cheap. Exported tool-name constants (TOOL_PRESETS,
+ * REPL_ONLY_TOOLS) and types stay static — only implementation modules are
+ * deferred. Feature-gated loaders keep feature() in the same top-level
+ * ternary position as before.
+ */
 /* eslint-disable @typescript-eslint/no-require-imports */
+const getAgentTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/AgentTool/AgentTool.js') as typeof import('@claude-code-best/builtin-tools/tools/AgentTool/AgentTool.js')
+  ).AgentTool
+const getSkillTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/SkillTool/SkillTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SkillTool/SkillTool.js')
+  ).SkillTool
+const getBashTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js')
+  ).BashTool
+const getFileEditTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js')
+  ).FileEditTool
+const getFileReadTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+  ).FileReadTool
+const getFileWriteTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
+  ).FileWriteTool
+const getGlobTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/GlobTool/GlobTool.js') as typeof import('@claude-code-best/builtin-tools/tools/GlobTool/GlobTool.js')
+  ).GlobTool
+const getNotebookEditTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/NotebookEditTool/NotebookEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/NotebookEditTool/NotebookEditTool.js')
+  ).NotebookEditTool
+const getWebFetchTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/WebFetchTool/WebFetchTool.js') as typeof import('@claude-code-best/builtin-tools/tools/WebFetchTool/WebFetchTool.js')
+  ).WebFetchTool
+const getTaskStopTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TaskStopTool/TaskStopTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskStopTool/TaskStopTool.js')
+  ).TaskStopTool
+const getBriefTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/BriefTool/BriefTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BriefTool/BriefTool.js')
+  ).BriefTool
+const getTaskOutputTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TaskOutputTool/TaskOutputTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskOutputTool/TaskOutputTool.js')
+  ).TaskOutputTool
+const getWebSearchTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/WebSearchTool/WebSearchTool.js') as typeof import('@claude-code-best/builtin-tools/tools/WebSearchTool/WebSearchTool.js')
+  ).WebSearchTool
+const getTodoWriteTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TodoWriteTool/TodoWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TodoWriteTool/TodoWriteTool.js')
+  ).TodoWriteTool
+const getExitPlanModeV2Tool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js')
+  ).ExitPlanModeV2Tool
+const getArtifactTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ArtifactTool/ArtifactTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ArtifactTool/ArtifactTool.js')
+  ).ArtifactTool
+const getTestingPermissionTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/testing/TestingPermissionTool.js') as typeof import('@claude-code-best/builtin-tools/tools/testing/TestingPermissionTool.js')
+  ).TestingPermissionTool
+const getGrepTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/GrepTool/GrepTool.js') as typeof import('@claude-code-best/builtin-tools/tools/GrepTool/GrepTool.js')
+  ).GrepTool
+const getTungstenTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TungstenTool/TungstenTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TungstenTool/TungstenTool.js')
+  ).TungstenTool
+const getAskUserQuestionTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js') as typeof import('@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js')
+  ).AskUserQuestionTool
+const getLSPTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/LSPTool/LSPTool.js') as typeof import('@claude-code-best/builtin-tools/tools/LSPTool/LSPTool.js')
+  ).LSPTool
+const getListMcpResourcesTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js')
+  ).ListMcpResourcesTool
+const getReadMcpResourceTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js')
+  ).ReadMcpResourceTool
+const getSearchExtraToolsTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js')
+  ).SearchExtraToolsTool
+const getExecuteTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ExecuteTool/ExecuteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExecuteTool/ExecuteTool.js')
+  ).ExecuteTool
+const getEnterPlanModeTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/EnterPlanModeTool/EnterPlanModeTool.js') as typeof import('@claude-code-best/builtin-tools/tools/EnterPlanModeTool/EnterPlanModeTool.js')
+  ).EnterPlanModeTool
+const getEnterWorktreeTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/EnterWorktreeTool/EnterWorktreeTool.js') as typeof import('@claude-code-best/builtin-tools/tools/EnterWorktreeTool/EnterWorktreeTool.js')
+  ).EnterWorktreeTool
+const getExitWorktreeTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ExitWorktreeTool/ExitWorktreeTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExitWorktreeTool/ExitWorktreeTool.js')
+  ).ExitWorktreeTool
+const getConfigTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ConfigTool/ConfigTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ConfigTool/ConfigTool.js')
+  ).ConfigTool
+const getLocalMemoryRecallTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js') as typeof import('@claude-code-best/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js')
+  ).LocalMemoryRecallTool
+const getVaultHttpFetchTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js') as typeof import('@claude-code-best/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js')
+  ).VaultHttpFetchTool
+const getTaskCreateTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js')
+  ).TaskCreateTool
+const getTaskGetTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TaskGetTool/TaskGetTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskGetTool/TaskGetTool.js')
+  ).TaskGetTool
+const getTaskUpdateTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TaskUpdateTool/TaskUpdateTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskUpdateTool/TaskUpdateTool.js')
+  ).TaskUpdateTool
+const getTaskListTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/TaskListTool/TaskListTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskListTool/TaskListTool.js')
+  ).TaskListTool
+const getSyntheticOutputToolName = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js')
+  ).SYNTHETIC_OUTPUT_TOOL_NAME
+
+// Dead code elimination: conditional loaders (feature() must stay in the
+// top-level ternary condition for Bun's compiler).
+const REPLToolLoader =
+  process.env.USER_TYPE === 'ant'
+    ? () =>
+        (
+          require('@claude-code-best/builtin-tools/tools/REPLTool/REPLTool.js') as typeof import('@claude-code-best/builtin-tools/tools/REPLTool/REPLTool.js')
+        ).REPLTool
+    : null
+const SuggestBackgroundPRToolLoader =
+  process.env.USER_TYPE === 'ant'
+    ? () =>
+        (
+          require('@claude-code-best/builtin-tools/tools/SuggestBackgroundPRTool/SuggestBackgroundPRTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SuggestBackgroundPRTool/SuggestBackgroundPRTool.js')
+        ).SuggestBackgroundPRTool
+    : null
+const SleepToolLoader =
+  feature('PROACTIVE') || feature('KAIROS')
+    ? () =>
+        (
+          require('@claude-code-best/builtin-tools/tools/SleepTool/SleepTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SleepTool/SleepTool.js')
+        ).SleepTool
+    : null
+const getCronTools = (): Tool[] => [
+  (
+    require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronCreateTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronCreateTool.js')
+  ).CronCreateTool,
+  (
+    require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronDeleteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronDeleteTool.js')
+  ).CronDeleteTool,
+  (
+    require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronListTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronListTool.js')
+  ).CronListTool,
+]
+const RemoteTriggerToolLoader = feature('AGENT_TRIGGERS_REMOTE')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/RemoteTriggerTool/RemoteTriggerTool.js') as typeof import('@claude-code-best/builtin-tools/tools/RemoteTriggerTool/RemoteTriggerTool.js')
+      ).RemoteTriggerTool
+  : null
+const MonitorToolLoader = feature('MONITOR_TOOL')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/MonitorTool/MonitorTool.js') as typeof import('@claude-code-best/builtin-tools/tools/MonitorTool/MonitorTool.js')
+      ).MonitorTool
+  : null
+const SendUserFileToolLoader = feature('KAIROS')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/SendUserFileTool/SendUserFileTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SendUserFileTool/SendUserFileTool.js')
+      ).SendUserFileTool
+  : null
+const PushNotificationToolLoader =
+  feature('KAIROS') || feature('KAIROS_PUSH_NOTIFICATION')
+    ? () =>
+        (
+          require('@claude-code-best/builtin-tools/tools/PushNotificationTool/PushNotificationTool.js') as typeof import('@claude-code-best/builtin-tools/tools/PushNotificationTool/PushNotificationTool.js')
+        ).PushNotificationTool
+    : null
+const SubscribePRToolLoader = feature('KAIROS_GITHUB_WEBHOOKS')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/SubscribePRTool/SubscribePRTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SubscribePRTool/SubscribePRTool.js')
+      ).SubscribePRTool
+  : null
+
+// Lazy require to break circular dependency: tools.ts -> TeamCreateTool/TeamDeleteTool -> ... -> tools.ts
+const getTeamCreateTool = () =>
+  require('@claude-code-best/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js')
+    .TeamCreateTool as typeof import('@claude-code-best/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js').TeamCreateTool
+const getTeamDeleteTool = () =>
+  require('@claude-code-best/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js')
+    .TeamDeleteTool as typeof import('@claude-code-best/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js').TeamDeleteTool
+const getSendMessageTool = () =>
+  require('@claude-code-best/builtin-tools/tools/SendMessageTool/SendMessageTool.js')
+    .SendMessageTool as typeof import('@claude-code-best/builtin-tools/tools/SendMessageTool/SendMessageTool.js').SendMessageTool
+
+const GoalToolLoader = feature('GOAL')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/GoalTool/GoalTool.js') as typeof import('@claude-code-best/builtin-tools/tools/GoalTool/GoalTool.js')
+      ).GoalTool
+  : null
+// Dead code elimination: conditional import for CLAUDE_CODE_VERIFY_PLAN
+const VerifyPlanExecutionToolLoader =
+  process.env.CLAUDE_CODE_VERIFY_PLAN === 'true'
+    ? () =>
+        (
+          require('@claude-code-best/builtin-tools/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js') as typeof import('@claude-code-best/builtin-tools/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js')
+        ).VerifyPlanExecutionTool
+    : null
+// Dead code elimination: conditional import for OVERFLOW_TEST_TOOL
+const OverflowTestToolLoader = feature('OVERFLOW_TEST_TOOL')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/OverflowTestTool/OverflowTestTool.js') as typeof import('@claude-code-best/builtin-tools/tools/OverflowTestTool/OverflowTestTool.js')
+      ).OverflowTestTool
+  : null
+const CtxInspectToolLoader = feature('CONTEXT_COLLAPSE')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/CtxInspectTool/CtxInspectTool.js') as typeof import('@claude-code-best/builtin-tools/tools/CtxInspectTool/CtxInspectTool.js')
+      ).CtxInspectTool
+  : null
+const TerminalCaptureToolLoader = feature('TERMINAL_PANEL')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/TerminalCaptureTool/TerminalCaptureTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TerminalCaptureTool/TerminalCaptureTool.js')
+      ).TerminalCaptureTool
+  : null
+const WebBrowserToolLoader = feature('WEB_BROWSER_TOOL')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/WebBrowserTool/WebBrowserTool.js') as typeof import('@claude-code-best/builtin-tools/tools/WebBrowserTool/WebBrowserTool.js')
+      ).WebBrowserTool
+  : null
+const coordinatorModeModuleLoader = feature('COORDINATOR_MODE')
+  ? () =>
+      require('./coordinator/coordinatorMode.js') as typeof import('./coordinator/coordinatorMode.js')
+  : null
+const SnipToolLoader = feature('HISTORY_SNIP')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/SnipTool/SnipTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SnipTool/SnipTool.js')
+      ).SnipTool
+  : null
+const DiscoverSkillsToolLoader = feature('EXPERIMENTAL_SKILL_SEARCH')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/DiscoverSkillsTool/DiscoverSkillsTool.js') as typeof import('@claude-code-best/builtin-tools/tools/DiscoverSkillsTool/DiscoverSkillsTool.js')
+      ).DiscoverSkillsTool
+  : null
+const ReviewArtifactToolLoader = feature('REVIEW_ARTIFACT')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/ReviewArtifactTool/ReviewArtifactTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ReviewArtifactTool/ReviewArtifactTool.js')
+      ).ReviewArtifactTool
+  : null
+const ListPeersToolLoader = feature('UDS_INBOX')
+  ? () =>
+      (
+        require('@claude-code-best/builtin-tools/tools/ListPeersTool/ListPeersTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ListPeersTool/ListPeersTool.js')
+      ).ListPeersTool
+  : null
+const WorkflowToolLoader = feature('WORKFLOW_SCRIPTS')
+  ? () =>
+      (
+        require('./workflow/wiring.js') as typeof import('./workflow/wiring.js')
+      ).createWorkflowToolCore()
+  : null
+/* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
+/* eslint-enable @typescript-eslint/no-require-imports */
 const getPowerShellTool = () => {
   if (!isPowerShellToolEnabled()) return null
   return (
     require('@claude-code-best/builtin-tools/tools/PowerShellTool/PowerShellTool.js') as typeof import('@claude-code-best/builtin-tools/tools/PowerShellTool/PowerShellTool.js')
   ).PowerShellTool
 }
-/* eslint-enable @typescript-eslint/no-require-imports */
 
 /**
  * Predefined tool presets that can be used with --tools flag
@@ -217,69 +377,80 @@ export function getToolsForDefaultPreset(): string[] {
  */
 export function getAllBaseTools(): Tools {
   return [
-    AgentTool,
-    TaskOutputTool,
-    BashTool,
+    getAgentTool(),
+    getTaskOutputTool(),
+    getBashTool(),
     // Ant-native builds have bfs/ugrep embedded in the bun binary (same ARGV0
     // trick as ripgrep). When available, find/grep in Claude's shell are aliased
     // to these fast tools, so the dedicated Glob/Grep tools are unnecessary.
-    ...(hasEmbeddedSearchTools() ? [] : [GlobTool, GrepTool]),
-    ExitPlanModeV2Tool,
-    FileReadTool,
-    FileEditTool,
-    FileWriteTool,
-    NotebookEditTool,
-    ArtifactTool,
-    WebFetchTool,
-    TodoWriteTool,
-    WebSearchTool,
-    TaskStopTool,
-    AskUserQuestionTool,
-    SkillTool,
-    EnterPlanModeTool,
-    LocalMemoryRecallTool,
-    VaultHttpFetchTool,
-    ...(process.env.USER_TYPE === 'ant' ? [ConfigTool] : []),
-    ...(GoalTool ? [GoalTool] : []),
-    ...(process.env.USER_TYPE === 'ant' ? [TungstenTool] : []),
-    ...(SuggestBackgroundPRTool ? [SuggestBackgroundPRTool] : []),
-    ...(WebBrowserTool ? [WebBrowserTool] : []),
+    ...(hasEmbeddedSearchTools() ? [] : [getGlobTool(), getGrepTool()]),
+    getExitPlanModeV2Tool(),
+    getFileReadTool(),
+    getFileEditTool(),
+    getFileWriteTool(),
+    getNotebookEditTool(),
+    getArtifactTool(),
+    getWebFetchTool(),
+    getTodoWriteTool(),
+    getWebSearchTool(),
+    getTaskStopTool(),
+    getAskUserQuestionTool(),
+    getSkillTool(),
+    getEnterPlanModeTool(),
+    getLocalMemoryRecallTool(),
+    getVaultHttpFetchTool(),
+    ...(process.env.USER_TYPE === 'ant' ? [getConfigTool()] : []),
+    ...(GoalToolLoader ? [GoalToolLoader()] : []),
+    ...(process.env.USER_TYPE === 'ant' ? [getTungstenTool()] : []),
+    ...(SuggestBackgroundPRToolLoader ? [SuggestBackgroundPRToolLoader()] : []),
+    ...(WebBrowserToolLoader ? [WebBrowserToolLoader()] : []),
     ...(isTodoV2Enabled()
-      ? [TaskCreateTool, TaskGetTool, TaskUpdateTool, TaskListTool]
+      ? [
+          getTaskCreateTool(),
+          getTaskGetTool(),
+          getTaskUpdateTool(),
+          getTaskListTool(),
+        ]
       : []),
-    ...(OverflowTestTool ? [OverflowTestTool] : []),
-    ...(CtxInspectTool ? [CtxInspectTool] : []),
-    ...(TerminalCaptureTool ? [TerminalCaptureTool] : []),
-    ...(isEnvTruthy(process.env.ENABLE_LSP_TOOL) ? [LSPTool] : []),
-    ...(isWorktreeModeEnabled() ? [EnterWorktreeTool, ExitWorktreeTool] : []),
+    ...(OverflowTestToolLoader ? [OverflowTestToolLoader()] : []),
+    ...(CtxInspectToolLoader ? [CtxInspectToolLoader()] : []),
+    ...(TerminalCaptureToolLoader ? [TerminalCaptureToolLoader()] : []),
+    ...(isEnvTruthy(process.env.ENABLE_LSP_TOOL) ? [getLSPTool()] : []),
+    ...(isWorktreeModeEnabled()
+      ? [getEnterWorktreeTool(), getExitWorktreeTool()]
+      : []),
     getSendMessageTool(),
-    ...(ListPeersTool ? [ListPeersTool] : []),
+    ...(ListPeersToolLoader ? [ListPeersToolLoader()] : []),
     getTeamCreateTool(),
     getTeamDeleteTool(),
-    ...(VerifyPlanExecutionTool ? [VerifyPlanExecutionTool] : []),
-    ...(process.env.USER_TYPE === 'ant' && REPLTool ? [REPLTool] : []),
-    ...(WorkflowTool ? [WorkflowTool] : []),
-    ...(SleepTool ? [SleepTool] : []),
-    ...cronTools,
-    ...(RemoteTriggerTool ? [RemoteTriggerTool] : []),
-    ...(MonitorTool ? [MonitorTool] : []),
-    BriefTool,
-    ...(SendUserFileTool ? [SendUserFileTool] : []),
-    ...(PushNotificationTool ? [PushNotificationTool] : []),
-    ...(SubscribePRTool ? [SubscribePRTool] : []),
-    ...(ReviewArtifactTool ? [ReviewArtifactTool] : []),
+    ...(VerifyPlanExecutionToolLoader ? [VerifyPlanExecutionToolLoader()] : []),
+    ...(process.env.USER_TYPE === 'ant' && REPLToolLoader
+      ? [REPLToolLoader()]
+      : []),
+    ...(WorkflowToolLoader ? [WorkflowToolLoader()] : []),
+    ...(SleepToolLoader ? [SleepToolLoader()] : []),
+    ...getCronTools(),
+    ...(RemoteTriggerToolLoader ? [RemoteTriggerToolLoader()] : []),
+    ...(MonitorToolLoader ? [MonitorToolLoader()] : []),
+    getBriefTool(),
+    ...(SendUserFileToolLoader ? [SendUserFileToolLoader()] : []),
+    ...(PushNotificationToolLoader ? [PushNotificationToolLoader()] : []),
+    ...(SubscribePRToolLoader ? [SubscribePRToolLoader()] : []),
+    ...(ReviewArtifactToolLoader ? [ReviewArtifactToolLoader()] : []),
     ...(getPowerShellTool() ? [getPowerShellTool()] : []),
-    ...(SnipTool ? [SnipTool] : []),
-    ...(DiscoverSkillsTool ? [DiscoverSkillsTool] : []),
-    ...(process.env.NODE_ENV === 'test' ? [TestingPermissionTool] : []),
-    ListMcpResourcesTool,
-    ReadMcpResourceTool,
+    ...(SnipToolLoader ? [SnipToolLoader()] : []),
+    ...(DiscoverSkillsToolLoader ? [DiscoverSkillsToolLoader()] : []),
+    ...(process.env.NODE_ENV === 'test' ? [getTestingPermissionTool()] : []),
+    getListMcpResourcesTool(),
+    getReadMcpResourceTool(),
     // Include SearchExtraToolsTool when tool search might be enabled (optimistic check)
     // The actual decision to defer tools happens at request time in claude.ts
-    ...(isSearchExtraToolsEnabledOptimistic() ? [SearchExtraToolsTool] : []),
+    ...(isSearchExtraToolsEnabledOptimistic()
+      ? [getSearchExtraToolsTool()]
+      : []),
     // ExecuteExtraTool (ExecuteTool) is a first-class tool — always available, not deferred.
     // Models use it to invoke deferred tools discovered via SearchExtraTools.
-    ExecuteTool,
+    getExecuteTool(),
   ]
 }
 
@@ -307,34 +478,38 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
     // --bare + REPL mode: REPL wraps Bash/Read/Edit/etc inside the VM, so
     // return REPL instead of the raw primitives. Matches the non-bare path
     // below which also hides REPL_ONLY_TOOLS when REPL is enabled.
-    if (isReplModeEnabled() && REPLTool) {
-      const replSimple: Tool[] = [REPLTool]
+    if (isReplModeEnabled() && REPLToolLoader) {
+      const replSimple: Tool[] = [REPLToolLoader()]
       if (
         feature('COORDINATOR_MODE') &&
-        coordinatorModeModule?.isCoordinatorMode()
+        coordinatorModeModuleLoader?.().isCoordinatorMode()
       ) {
-        replSimple.push(TaskStopTool, getSendMessageTool())
+        replSimple.push(getTaskStopTool(), getSendMessageTool())
       }
       return filterToolsByDenyRules(replSimple, permissionContext)
     }
-    const simpleTools: Tool[] = [BashTool, FileReadTool, FileEditTool]
+    const simpleTools: Tool[] = [
+      getBashTool(),
+      getFileReadTool(),
+      getFileEditTool(),
+    ]
     // When coordinator mode is also active, include AgentTool and TaskStopTool
     // so the coordinator gets Task+TaskStop (via useMergedTools filtering) and
     // workers get Bash/Read/Edit (via filterToolsForAgent filtering).
     if (
       feature('COORDINATOR_MODE') &&
-      coordinatorModeModule?.isCoordinatorMode()
+      coordinatorModeModuleLoader?.().isCoordinatorMode()
     ) {
-      simpleTools.push(AgentTool, TaskStopTool, getSendMessageTool())
+      simpleTools.push(getAgentTool(), getTaskStopTool(), getSendMessageTool())
     }
     return filterToolsByDenyRules(simpleTools, permissionContext)
   }
 
   // Get all base tools and filter out special tools that get added conditionally
   const specialTools = new Set([
-    ListMcpResourcesTool.name,
-    ReadMcpResourceTool.name,
-    SYNTHETIC_OUTPUT_TOOL_NAME,
+    getListMcpResourcesTool().name,
+    getReadMcpResourceTool().name,
+    getSyntheticOutputToolName(),
   ])
 
   const tools = getAllBaseTools().filter(tool => !specialTools.has(tool.name))

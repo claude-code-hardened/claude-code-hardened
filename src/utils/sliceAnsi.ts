@@ -6,7 +6,10 @@ import {
   tokenize,
   undoAnsiCodes,
 } from '@alcalzone/ansi-tokenize'
-import { stringWidth } from '@anthropic/ink'
+
+// Lazy require: stringWidth lives in the @anthropic/ink barrel (see truncate.ts).
+const getStringWidth = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).stringWidth
 
 // A code is an "end code" if its code equals its endCode (e.g., hyperlink close)
 function isEndCode(code: AnsiCode): boolean {
@@ -49,7 +52,7 @@ export default function sliceAnsi(
         : token.type === 'char'
           ? token.fullWidth
             ? 2
-            : stringWidth(token.value)
+            : getStringWidth()(token.value)
           : 0
 
     // Break AFTER trailing zero-width marks — a combining mark attaches to

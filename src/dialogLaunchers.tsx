@@ -11,7 +11,6 @@ import type { AssistantSession } from './assistant/sessionDiscovery.js';
 import type { StatsStore } from './context/stats.js';
 import type { Root } from '@anthropic/ink';
 import { renderAndRun, showSetupDialog } from './interactiveHelpers.js';
-import { KeybindingSetup } from './keybindings/KeybindingProviderSetup.js';
 import type { AppState } from './state/AppStateStore.js';
 import type { AgentMemoryScope } from '@claude-code-best/builtin-tools/tools/AgentTool/agentMemory.js';
 import type { TeleportRemoteResponse } from './utils/conversationRecovery.js';
@@ -155,10 +154,11 @@ export async function launchResumeChooser(
   worktreePathsPromise: Promise<string[]>,
   resumeProps: Omit<ResumeConversationProps, 'worktreePaths'>,
 ): Promise<void> {
-  const [worktreePaths, { ResumeConversation }, { App }] = await Promise.all([
+  const [worktreePaths, { ResumeConversation }, { App }, { KeybindingSetup }] = await Promise.all([
     worktreePathsPromise,
     import('./screens/ResumeConversation.js'),
     import('./components/App.js'),
+    import('./keybindings/KeybindingProviderSetup.js'),
   ]);
   await renderAndRun(
     root,

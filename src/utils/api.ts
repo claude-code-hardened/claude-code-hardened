@@ -17,13 +17,25 @@ import {
 } from 'src/services/analytics/index.js'
 import { prefetchAllMcpResources } from 'src/services/mcp/client.js'
 import type { ScopedMcpServerConfig } from 'src/services/mcp/types.js'
-import { BashTool } from '@claude-code-best/builtin-tools/tools/BashTool/BashTool.js'
-import { FileEditTool } from '@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js'
+// Lazy requires: these tool modules pull @anthropic/ink via their UI files,
+// and api.ts is part of main.tsx's pre-commander evaluation. Uses are inside
+// functions (input normalization switch), so tools load on first use.
+const getBashTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js')
+  ).BashTool
+const getFileWriteTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
+  ).FileWriteTool
+const getFileEditTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js')
+  ).FileEditTool
 import {
   normalizeFileEditInput,
   stripTrailingWhitespace,
 } from '@claude-code-best/builtin-tools/tools/FileEditTool/utils.js'
-import { FileWriteTool } from '@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js'
 import { getTools } from 'src/tools.js'
 import type { AgentId } from 'src/types/ids.js'
 import type { z } from 'zod/v4'
@@ -589,9 +601,9 @@ export function normalizeToolInput<T extends Tool>(
       void persistFileSnapshotIfRemote()
       return plan !== null ? { ...input, plan, planFilePath } : input
     }
-    case BashTool.name: {
+    case getBashTool().name: {
       // Validated upstream, won't throw
-      const parsed = BashTool.inputSchema.parse(input)
+      const parsed = getBashTool().inputSchema.parse(input)
       const { command, timeout, description } = parsed
       const cwd = getCwd()
       let normalizedCommand = command.replace(`cd ${cwd} && `, '')
@@ -630,9 +642,9 @@ export function normalizeToolInput<T extends Tool>(
           }),
       } as z.infer<T['inputSchema']>
     }
-    case FileEditTool.name: {
+    case getFileEditTool().name: {
       // Validated upstream, won't throw
-      const parsedInput = FileEditTool.inputSchema.parse(input)
+      const parsedInput = getFileEditTool().inputSchema.parse(input)
 
       // This is a workaround for tokens claude can't see
       const { file_path, edits } = normalizeFileEditInput({
@@ -654,9 +666,9 @@ export function normalizeToolInput<T extends Tool>(
         new_string: edits[0]!.new_string,
       } as z.infer<T['inputSchema']>
     }
-    case FileWriteTool.name: {
+    case getFileWriteTool().name: {
       // Validated upstream, won't throw
-      const parsedInput = FileWriteTool.inputSchema.parse(input)
+      const parsedInput = getFileWriteTool().inputSchema.parse(input)
 
       // Markdown uses two trailing spaces as a hard line break — don't strip.
       const isMarkdown = /\.(md|mdx)$/i.test(parsedInput.file_path)
@@ -710,7 +722,7 @@ export function normalizeToolInputForAPI<T extends Tool>(
       }
       return input
     }
-    case FileEditTool.name: {
+    case getFileEditTool().name: {
       // Strip synthetic old_string/new_string/replace_all from OLD sessions
       // that were resumed from transcripts written before PR #20357, where
       // normalizeToolInput used to synthesize these. Needed so old --resume'd
