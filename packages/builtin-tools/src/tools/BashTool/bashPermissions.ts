@@ -949,7 +949,7 @@ function matchingRulesForInput(
 ) {
   const denyRuleByContents = getRuleByContentsForTool(
     toolPermissionContext,
-    BashTool,
+    getBashTool(),
     'deny',
   )
   // SECURITY: Deny/ask rules use aggressive env var stripping so that
@@ -963,7 +963,7 @@ function matchingRulesForInput(
 
   const askRuleByContents = getRuleByContentsForTool(
     toolPermissionContext,
-    BashTool,
+    getBashTool(),
     'ask',
   )
   const matchingAskRules = filterRulesByContentsMatchingInput(
@@ -975,7 +975,7 @@ function matchingRulesForInput(
 
   const allowRuleByContents = getRuleByContentsForTool(
     toolPermissionContext,
-    BashTool,
+    getBashTool(),
     'allow',
   )
   const matchingAllowRules = filterRulesByContentsMatchingInput(
@@ -1158,7 +1158,7 @@ export const bashToolCheckPermission = (
   }
 
   // 7. Check read-only rules
-  if (BashTool.isReadOnly(input)) {
+  if (getBashTool().isReadOnly(input)) {
     return {
       behavior: 'allow',
       updatedInput: input,
