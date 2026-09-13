@@ -4,7 +4,7 @@
 
 **技术栈:** TypeScript, Bun, Zod, TF-IDF (复用 localSearch.ts), buildTool 框架
 
-**设计文档:** spec/feature_20260508_F001_tool-search/spec-design.md
+**设计文档:** docs/specs/feature_20260508_F001_tool-search/spec-design.md
 
 ## 改动总览
 

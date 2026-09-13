@@ -1,8 +1,8 @@
 # Fork Agent 显式参数触发重构 人工验收清单
 
 **生成时间:** 2026-05-02
-**关联计划:** spec/feature_20260502_F001_fork-agent-redesign/spec-plan.md
-**关联设计:** spec/feature_20260502_F001_fork-agent-redesign/spec-design.md
+**关联计划:** docs/specs/feature_20260502_F001_fork-agent-redesign/spec-plan.md
+**关联设计:** docs/specs/feature_20260502_F001_fork-agent-redesign/spec-design.md
 
 ---
 

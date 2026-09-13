@@ -144,7 +144,7 @@
           "docs/auto-updater",
           "docs/lsp-integration",
           "docs/external-dependencies",
-          "docs/telemetry-remote-config-audit"
+          "docs/audits/telemetry-remote-config-audit"
         ]
       }
     ]

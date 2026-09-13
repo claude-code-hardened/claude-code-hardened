@@ -830,7 +830,7 @@ GrowthBook 功能开关系统原为 Anthropic 内部构建设计，硬编码 SDK
 | 文件 | 变更 |
 |------|------|
 | `src/services/analytics/datadog.ts` | `DATADOG_LOGS_ENDPOINT` 和 `DATADOG_CLIENT_TOKEN` 从硬编码常量改为读取 `process.env.DATADOG_LOGS_ENDPOINT` / `process.env.DATADOG_API_KEY`，默认空字符串；`initializeDatadog()` 增加守卫：端点或 Token 未配置时直接返回 `false` |
-| `docs/telemetry-remote-config-audit.md` | 更新第 1 节，反映新的环境变量配置方式 |
+| `docs/audits/telemetry-remote-config-audit.md` | 更新第 1 节，反映新的环境变量配置方式 |
 
 **效果：** 默认不向任何外部发送数据；设置两个环境变量即可接入自己的 Datadog 实例。原有 `DISABLE_TELEMETRY`、privacy level、sink killswitch 等防线保留。
 

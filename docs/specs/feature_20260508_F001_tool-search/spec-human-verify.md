@@ -1,8 +1,8 @@
 # Tool Search 基础设施层 人工验收清单
 
 **生成时间:** 2026-05-08
-**关联计划:** spec/feature_20260508_F001_tool-search/spec-plan-1.md
-**关联设计:** spec/feature_20260508_F001_tool-search/spec-design.md
+**关联计划:** docs/specs/feature_20260508_F001_tool-search/spec-plan-1.md
+**关联设计:** docs/specs/feature_20260508_F001_tool-search/spec-design.md
 
 > 所有验收项均可自动化验证，无需人类参与。仍将生成清单用于自动执行。
 

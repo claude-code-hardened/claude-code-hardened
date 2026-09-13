@@ -4,7 +4,7 @@
 
 **技术栈:** TypeScript, Zod schema, Bun test, React/Ink (prompt UI)
 
-**设计文档:** spec/feature_20260502_F001_fork-agent-redesign/spec-design.md
+**设计文档:** docs/specs/feature_20260502_F001_fork-agent-redesign/spec-design.md
 
 ## 改动总览
 

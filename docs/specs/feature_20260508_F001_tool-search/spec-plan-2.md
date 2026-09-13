@@ -4,7 +4,7 @@
 
 **技术栈:** TypeScript, React (Ink), Bun, Zod
 
-**设计文档:** spec/feature_20260508_F001_tool-search/spec-design.md
+**设计文档:** docs/specs/feature_20260508_F001_tool-search/spec-design.md
 
 **前置:** spec-plan-1.md（Task 1-4）已完成
 
