@@ -283,7 +283,7 @@ export async function* queryModelOpenAI(
     )
 
     // 7. Filter out non-standard tools (server tools like advisor)
-    const standardTools = toolSchemas.filter(
+    const standardTools: BetaToolUnion[] = toolSchemas.filter(
       (t): t is BetaToolUnion & { type: string } => {
         const anyT = t as unknown as Record<string, unknown>
         return (

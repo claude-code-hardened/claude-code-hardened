@@ -64,7 +64,7 @@ export async function* queryModelGemini(
       ),
     )
 
-    const standardTools = toolSchemas.filter(
+    const standardTools: BetaToolUnion[] = toolSchemas.filter(
       (t): t is BetaToolUnion & { type: string } => {
         const anyTool = t as unknown as Record<string, unknown>
         return (
