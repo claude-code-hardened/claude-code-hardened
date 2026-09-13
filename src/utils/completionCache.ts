@@ -3,13 +3,19 @@ import { mkdir, readFile, writeFile } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
 import { pathToFileURL } from 'url'
-import { color } from '@anthropic/ink'
-import { supportsHyperlinks } from '@anthropic/ink'
 import { logForDebugging } from './debug.js'
 import { isENOENT } from './errors.js'
 import { execFileNoThrow } from './execFileNoThrow.js'
 import { logError } from './log.js'
 import type { ThemeName } from './theme.js'
+
+// Lazy require: color/supportsHyperlinks live in the @anthropic/ink barrel
+// (see truncate.ts).
+const getColor = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).color
+const getSupportsHyperlinks = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink'))
+    .supportsHyperlinks
 
 const EOL = '\n'
 
@@ -61,7 +67,7 @@ function detectShell(): ShellInfo | null {
 }
 
 function formatPathLink(filePath: string): string {
-  if (!supportsHyperlinks()) {
+  if (!getSupportsHyperlinks()()) {
     return filePath
   }
   const fileUrl = pathToFileURL(filePath).href
@@ -83,7 +89,7 @@ export async function setupShellCompletion(theme: ThemeName): Promise<string> {
     await mkdir(dirname(shell.cacheFile), { recursive: true })
   } catch (e: unknown) {
     logError(e)
-    return `${EOL}${color('warning', theme)(`Could not write ${shell.name} completion cache`)}${EOL}${chalk.dim(`Run manually: claude completion ${shell.shellFlag} > ${shell.cacheFile}`)}${EOL}`
+    return `${EOL}${getColor()('warning', theme)(`Could not write ${shell.name} completion cache`)}${EOL}${chalk.dim(`Run manually: claude completion ${shell.shellFlag} > ${shell.cacheFile}`)}${EOL}`
   }
 
   // Generate the completion script by writing directly to the cache file.
@@ -97,7 +103,7 @@ export async function setupShellCompletion(theme: ThemeName): Promise<string> {
     shell.cacheFile,
   ])
   if (result.code !== 0) {
-    return `${EOL}${color('warning', theme)(`Could not generate ${shell.name} shell completions`)}${EOL}${chalk.dim(`Run manually: claude completion ${shell.shellFlag} > ${shell.cacheFile}`)}${EOL}`
+    return `${EOL}${getColor()('warning', theme)(`Could not generate ${shell.name} shell completions`)}${EOL}${chalk.dim(`Run manually: claude completion ${shell.shellFlag} > ${shell.cacheFile}`)}${EOL}`
   }
 
   // Check if rc file already sources completions
@@ -108,12 +114,12 @@ export async function setupShellCompletion(theme: ThemeName): Promise<string> {
       existing.includes('claude completion') ||
       existing.includes(shell.cacheFile)
     ) {
-      return `${EOL}${color('success', theme)(`Shell completions updated for ${shell.name}`)}${EOL}${chalk.dim(`See ${formatPathLink(shell.rcFile)}`)}${EOL}`
+      return `${EOL}${getColor()('success', theme)(`Shell completions updated for ${shell.name}`)}${EOL}${chalk.dim(`See ${formatPathLink(shell.rcFile)}`)}${EOL}`
     }
   } catch (e: unknown) {
     if (!isENOENT(e)) {
       logError(e)
-      return `${EOL}${color('warning', theme)(`Could not install ${shell.name} shell completions`)}${EOL}${chalk.dim(`Add this to ${formatPathLink(shell.rcFile)}:`)}${EOL}${chalk.dim(shell.completionLine)}${EOL}`
+      return `${EOL}${getColor()('warning', theme)(`Could not install ${shell.name} shell completions`)}${EOL}${chalk.dim(`Add this to ${formatPathLink(shell.rcFile)}:`)}${EOL}${chalk.dim(shell.completionLine)}${EOL}`
     }
   }
 
@@ -126,10 +132,10 @@ export async function setupShellCompletion(theme: ThemeName): Promise<string> {
     const content = `${existing}${separator}\n# Claude Code shell completions\n${shell.completionLine}\n`
     await writeFile(shell.rcFile, content, { encoding: 'utf-8' })
 
-    return `${EOL}${color('success', theme)(`Installed ${shell.name} shell completions`)}${EOL}${chalk.dim(`Added to ${formatPathLink(shell.rcFile)}`)}${EOL}${chalk.dim(`Run: source ${shell.rcFile}`)}${EOL}`
+    return `${EOL}${getColor()('success', theme)(`Installed ${shell.name} shell completions`)}${EOL}${chalk.dim(`Added to ${formatPathLink(shell.rcFile)}`)}${EOL}${chalk.dim(`Run: source ${shell.rcFile}`)}${EOL}`
   } catch (error) {
     logError(error)
-    return `${EOL}${color('warning', theme)(`Could not install ${shell.name} shell completions`)}${EOL}${chalk.dim(`Add this to ${formatPathLink(shell.rcFile)}:`)}${EOL}${chalk.dim(shell.completionLine)}${EOL}`
+    return `${EOL}${getColor()('warning', theme)(`Could not install ${shell.name} shell completions`)}${EOL}${chalk.dim(`Add this to ${formatPathLink(shell.rcFile)}:`)}${EOL}${chalk.dim(shell.completionLine)}${EOL}`
   }
 }
 

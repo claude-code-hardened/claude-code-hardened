@@ -1,6 +1,9 @@
 import { getDirectConnectServerUrl, getSessionId } from '../bootstrap/state.js'
-import { stringWidth } from '@anthropic/ink'
 import type { LogOption } from '../types/logs.js'
+
+// Lazy require: stringWidth lives in the @anthropic/ink barrel (see truncate.ts).
+const getStringWidth = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).stringWidth
 import { getSubscriptionName, isClaudeAISubscriber } from './auth.js'
 import { getCwd } from './cwd.js'
 import { getDisplayPath } from './file.js'
@@ -83,9 +86,9 @@ export function calculateOptimalLeftWidth(
   modelLine: string,
 ): number {
   const contentWidth = Math.max(
-    stringWidth(welcomeMessage),
-    stringWidth(truncatedCwd),
-    stringWidth(modelLine),
+    getStringWidth()(welcomeMessage),
+    getStringWidth()(truncatedCwd),
+    getStringWidth()(modelLine),
     20, // Minimum for clawd art
   )
   return Math.min(contentWidth + 4, MAX_LEFT_WIDTH) // +4 for padding
@@ -106,7 +109,7 @@ export function formatWelcomeMessage(username: string | null): string {
  * Width-aware: uses stringWidth() for correct CJK/emoji measurement.
  */
 export function truncatePath(path: string, maxLength: number): string {
-  if (stringWidth(path) <= maxLength) return path
+  if (getStringWidth()(path) <= maxLength) return path
 
   const separator = '/'
   const ellipsis = '…'
@@ -116,8 +119,8 @@ export function truncatePath(path: string, maxLength: number): string {
   const parts = path.split(separator)
   const first = parts[0] || ''
   const last = parts[parts.length - 1] || ''
-  const firstWidth = stringWidth(first)
-  const lastWidth = stringWidth(last)
+  const firstWidth = getStringWidth()(first)
+  const lastWidth = getStringWidth()(last)
 
   // Only one part, so show as much of it as we can
   if (parts.length === 1) {
@@ -164,9 +167,9 @@ export function truncatePath(path: string, maxLength: number): string {
   const middleParts = []
   for (let i = parts.length - 2; i > 0; i--) {
     const part = parts[i]
-    if (part && stringWidth(part) + separatorWidth <= available) {
+    if (part && getStringWidth()(part) + separatorWidth <= available) {
       middleParts.unshift(part)
-      available -= stringWidth(part) + separatorWidth
+      available -= getStringWidth()(part) + separatorWidth
     } else {
       break
     }
@@ -280,7 +283,9 @@ export function formatModelAndBilling(
 } {
   const separator = ' · '
   const combinedWidth =
-    stringWidth(modelName) + separator.length + stringWidth(billingType)
+    getStringWidth()(modelName) +
+    separator.length +
+    getStringWidth()(billingType)
   const shouldSplit = combinedWidth > availableWidth
 
   if (shouldSplit) {
@@ -296,7 +301,7 @@ export function formatModelAndBilling(
     truncatedModel: truncate(
       modelName,
       Math.max(
-        availableWidth - stringWidth(billingType) - separator.length,
+        availableWidth - getStringWidth()(billingType) - separator.length,
         10,
       ),
     ),

@@ -115,14 +115,29 @@ import { PLAN_AGENT } from '@claude-code-best/builtin-tools/tools/AgentTool/buil
 import { areExplorePlanAgentsEnabled } from '@claude-code-best/builtin-tools/tools/AgentTool/builtInAgents.js'
 import { AGENT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/AgentTool/constants.js'
 import { ASK_USER_QUESTION_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/AskUserQuestionTool/prompt.js'
-import { BashTool } from '@claude-code-best/builtin-tools/tools/BashTool/BashTool.js'
-import { ExitPlanModeV2Tool } from '@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js'
-import { FileEditTool } from '@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js'
+// Lazy requires: these tool implementations pull @anthropic/ink via their UI
+// modules, and messages.ts is part of main.tsx's pre-commander evaluation.
+// All uses are inside functions, so tools load on first message rendering.
+const getBashTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js')
+  ).BashTool
+const getExitPlanModeV2Tool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js')
+  ).ExitPlanModeV2Tool
+const getFileEditTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js')
+  ).FileEditTool
+const getFileWriteTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
+  ).FileWriteTool
 import {
   FILE_READ_TOOL_NAME,
   MAX_LINES_TO_READ,
 } from '@claude-code-best/builtin-tools/tools/FileReadTool/prompt.js'
-import { FileWriteTool } from '@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js'
 import { GLOB_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/GrepTool/prompt.js'
 import type { DeepImmutable } from 'src/types/utils.js'
@@ -142,10 +157,12 @@ import {
   type Tools,
   toolMatchesName,
 } from '../Tool.js'
-import {
-  FileReadTool,
-  type Output as FileReadToolOutput,
-} from '@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js'
+import type { Output as FileReadToolOutput } from '@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js'
+// Lazy require (see comment above): FileReadTool's module pulls its UI -> ink.
+const getFileReadTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+  ).FileReadTool
 import { SEND_MESSAGE_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/SendMessageTool/constants.js'
 import { TASK_CREATE_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/TaskCreateTool/constants.js'
 import { TASK_OUTPUT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/TaskOutputTool/constants.js'
@@ -3147,8 +3164,8 @@ function getPlanModeV2Instructions(attachment: {
   const agentCount = getPlanModeV2AgentCount()
   const exploreAgentCount = getPlanModeV2ExploreAgentCount()
   const planFileInfo = attachment.planExists
-    ? `A plan file already exists at ${attachment.planFilePath}. You MUST use ${FileReadTool.name} to read it first before making any changes. Make incremental edits using the ${FileEditTool.name} tool — do NOT overwrite the entire file unless the user explicitly asks for a complete rewrite.`
-    : `No plan file exists yet. You should create your plan at ${attachment.planFilePath} using the ${FileWriteTool.name} tool.`
+    ? `A plan file already exists at ${attachment.planFilePath}. You MUST use ${getFileReadTool().name} to read it first before making any changes. Make incremental edits using the ${getFileEditTool().name} tool — do NOT overwrite the entire file unless the user explicitly asks for a complete rewrite.`
+    : `No plan file exists yet. You should create your plan at ${attachment.planFilePath} using the ${getFileWriteTool().name} tool.`
 
   const content = `Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supercedes any other instructions you have received.
 
@@ -3209,11 +3226,11 @@ Goal: Review the plan(s) from Phase 2 and ensure alignment with the user's inten
 
 ${getPlanPhase4Section()}
 
-### Phase 5: Call ${ExitPlanModeV2Tool.name}
-At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call ${ExitPlanModeV2Tool.name} to indicate to the user that you are done planning.
-This is critical - your turn should only end with either using the ${ASK_USER_QUESTION_TOOL_NAME} tool OR calling ${ExitPlanModeV2Tool.name}. Do not stop unless it's for these 2 reasons
+### Phase 5: Call ${getExitPlanModeV2Tool().name}
+At the very end of your turn, once you have asked the user questions and are happy with your final plan file - you should always call ${getExitPlanModeV2Tool().name} to indicate to the user that you are done planning.
+This is critical - your turn should only end with either using the ${ASK_USER_QUESTION_TOOL_NAME} tool OR calling ${getExitPlanModeV2Tool().name}. Do not stop unless it's for these 2 reasons
 
-**Important:** Use ${ASK_USER_QUESTION_TOOL_NAME} ONLY to clarify requirements or choose between approaches. Use ${ExitPlanModeV2Tool.name} to request plan approval. Do NOT ask about plan approval in any other way - no text questions, no AskUserQuestion. Phrases like "Is this plan okay?", "Should I proceed?", "How does this plan look?", "Any changes before we start?", or similar MUST use ${ExitPlanModeV2Tool.name}.
+**Important:** Use ${ASK_USER_QUESTION_TOOL_NAME} ONLY to clarify requirements or choose between approaches. Use ${getExitPlanModeV2Tool().name} to request plan approval. Do NOT ask about plan approval in any other way - no text questions, no AskUserQuestion. Phrases like "Is this plan okay?", "Should I proceed?", "How does this plan look?", "Any changes before we start?", or similar MUST use ${getExitPlanModeV2Tool().name}.
 
 NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications using the ${ASK_USER_QUESTION_TOOL_NAME} tool. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.`
 
@@ -3251,8 +3268,8 @@ function getPlanModeInterviewInstructions(attachment: {
   planExists?: boolean
 }): UserMessage[] {
   const planFileInfo = attachment.planExists
-    ? `A plan file already exists at ${attachment.planFilePath}. You MUST use ${FileReadTool.name} to read it first before making any changes. Make incremental edits using the ${FileEditTool.name} tool — do NOT overwrite the entire file unless the user explicitly asks for a complete rewrite.`
-    : `No plan file exists yet. You should create your plan at ${attachment.planFilePath} using the ${FileWriteTool.name} tool.`
+    ? `A plan file already exists at ${attachment.planFilePath}. You MUST use ${getFileReadTool().name} to read it first before making any changes. Make incremental edits using the ${getFileEditTool().name} tool — do NOT overwrite the entire file unless the user explicitly asks for a complete rewrite.`
+    : `No plan file exists yet. You should create your plan at ${attachment.planFilePath} using the ${getFileWriteTool().name} tool.`
 
   const content = `Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supercedes any other instructions you have received.
 
@@ -3293,15 +3310,15 @@ Your plan file should be divided into clear sections using markdown headers, bas
 
 ### When to Converge
 
-Your plan is ready when you've addressed all ambiguities and it covers: what to change, which files to modify, what existing code to reuse (with file paths), and how to verify the changes. Call ${ExitPlanModeV2Tool.name} when the plan is ready for approval.
+Your plan is ready when you've addressed all ambiguities and it covers: what to change, which files to modify, what existing code to reuse (with file paths), and how to verify the changes. Call ${getExitPlanModeV2Tool().name} when the plan is ready for approval.
 
 ### Ending Your Turn
 
 Your turn should only end by either:
 - Using ${ASK_USER_QUESTION_TOOL_NAME} to gather more information
-- Calling ${ExitPlanModeV2Tool.name} when the plan is ready for approval
+- Calling ${getExitPlanModeV2Tool().name} when the plan is ready for approval
 
-**Important:** Use ${ExitPlanModeV2Tool.name} to request plan approval. Do NOT ask about plan approval via text or AskUserQuestion.`
+**Important:** Use ${getExitPlanModeV2Tool().name} to request plan approval. Do NOT ask about plan approval via text or AskUserQuestion.`
 
   return wrapMessagesInSystemReminder([
     createUserMessage({ content, isMeta: true }),
@@ -3315,7 +3332,7 @@ function getPlanModeV2SparseInstructions(attachment: {
     ? 'Follow iterative workflow: explore codebase, interview user, write to plan incrementally.'
     : `Follow 5-phase workflow. Phase 1: use ${EXPLORE_AGENT.agentType} agents for code exploration.`
 
-  const content = `Plan mode still active (see full instructions earlier in conversation). Read-only except plan file (${attachment.planFilePath}). ${workflowDescription} End turns with ${ASK_USER_QUESTION_TOOL_NAME} (for clarifications) or ${ExitPlanModeV2Tool.name} (for plan approval). Never ask about plan approval via text or AskUserQuestion.`
+  const content = `Plan mode still active (see full instructions earlier in conversation). Read-only except plan file (${attachment.planFilePath}). ${workflowDescription} End turns with ${ASK_USER_QUESTION_TOOL_NAME} (for clarifications) or ${getExitPlanModeV2Tool().name} (for plan approval). Never ask about plan approval via text or AskUserQuestion.`
 
   return wrapMessagesInSystemReminder([
     createUserMessage({ content, isMeta: true }),
@@ -3327,8 +3344,8 @@ function getPlanModeV2SubAgentInstructions(attachment: {
   planExists: boolean
 }): UserMessage[] {
   const planFileInfo = attachment.planExists
-    ? `A plan file already exists at ${attachment.planFilePath}. You can read it and make incremental edits using the ${FileEditTool.name} tool if you need to.`
-    : `No plan file exists yet. You should create your plan at ${attachment.planFilePath} using the ${FileWriteTool.name} tool if you need to.`
+    ? `A plan file already exists at ${attachment.planFilePath}. You can read it and make incremental edits using the ${getFileEditTool().name} tool if you need to.`
+    : `No plan file exists yet. You should create your plan at ${attachment.planFilePath} using the ${getFileWriteTool().name} tool if you need to.`
 
   const content = `Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits, run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supercedes any other instructions you have received (for example, to make edits). Instead, you should:
 
@@ -3491,11 +3508,11 @@ Read the team config to discover your teammates' names. Check the task list peri
   switch (attachment.type) {
     case 'directory': {
       return wrapMessagesInSystemReminder([
-        createToolUseMessage(BashTool.name, {
+        createToolUseMessage(getBashTool().name, {
           command: `ls ${quote([attachment.path])}`,
           description: `Lists files in ${attachment.path}`,
         }),
-        createToolResultMessage(BashTool, {
+        createToolResultMessage(getBashTool(), {
           stdout: attachment.content,
           stderr: '',
           interrupted: false,
@@ -3514,22 +3531,22 @@ Read the team config to discover your teammates' names. Check the task list peri
       switch (fileContent.type) {
         case 'image': {
           return wrapMessagesInSystemReminder([
-            createToolUseMessage(FileReadTool.name, {
+            createToolUseMessage(getFileReadTool().name, {
               file_path: attachment.filename,
             }),
-            createToolResultMessage(FileReadTool, fileContent),
+            createToolResultMessage(getFileReadTool(), fileContent),
           ])
         }
         case 'text': {
           return wrapMessagesInSystemReminder([
-            createToolUseMessage(FileReadTool.name, {
+            createToolUseMessage(getFileReadTool().name, {
               file_path: attachment.filename,
             }),
-            createToolResultMessage(FileReadTool, fileContent),
+            createToolResultMessage(getFileReadTool(), fileContent),
             ...(attachment.truncated
               ? [
                   createUserMessage({
-                    content: `Note: The file ${attachment.filename} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${FileReadTool.name} to read more of the file if you need.`,
+                    content: `Note: The file ${attachment.filename} was too large and has been truncated to the first ${MAX_LINES_TO_READ} lines. Don't tell the user about this truncation. Use ${getFileReadTool().name} to read more of the file if you need.`,
                     isMeta: true, // only claude will see this
                   }),
                 ]
@@ -3538,19 +3555,19 @@ Read the team config to discover your teammates' names. Check the task list peri
         }
         case 'notebook': {
           return wrapMessagesInSystemReminder([
-            createToolUseMessage(FileReadTool.name, {
+            createToolUseMessage(getFileReadTool().name, {
               file_path: attachment.filename,
             }),
-            createToolResultMessage(FileReadTool, fileContent),
+            createToolResultMessage(getFileReadTool(), fileContent),
           ])
         }
         case 'pdf': {
           // PDFs are handled via supplementalContent in the tool result
           return wrapMessagesInSystemReminder([
-            createToolUseMessage(FileReadTool.name, {
+            createToolUseMessage(getFileReadTool().name, {
               file_path: attachment.filename,
             }),
-            createToolResultMessage(FileReadTool, fileContent),
+            createToolResultMessage(getFileReadTool(), fileContent),
           ])
         }
       }
@@ -3559,7 +3576,7 @@ Read the team config to discover your teammates' names. Check the task list peri
     case 'compact_file_reference': {
       return wrapMessagesInSystemReminder([
         createUserMessage({
-          content: `Note: ${attachment.filename} was read before the last conversation was summarized, but the contents are too large to include. Use ${FileReadTool.name} tool if you need to access it.`,
+          content: `Note: ${attachment.filename} was read before the last conversation was summarized, but the contents are too large to include. Use ${getFileReadTool().name} tool if you need to access it.`,
           isMeta: true,
         }),
       ])
@@ -3803,7 +3820,7 @@ You are returning to plan mode after having previously exited it. A plan file ex
 3. Decide how to proceed:
    - **Different task**: If the user's request is for a different task—even if it's similar or related—start fresh by overwriting the existing plan
    - **Same task, continuing**: If this is explicitly a continuation or refinement of the exact same task, modify the existing plan while cleaning up outdated or irrelevant sections
-4. Continue on with the plan process and most importantly you should always edit the plan file one way or the other before calling ${ExitPlanModeV2Tool.name}
+4. Continue on with the plan process and most importantly you should always edit the plan file one way or the other before calling ${getExitPlanModeV2Tool().name}
 
 Treat this as a fresh planning session. Do not assume the existing plan is relevant without evaluating it first.`
 

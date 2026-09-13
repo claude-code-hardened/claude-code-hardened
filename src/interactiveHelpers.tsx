@@ -15,17 +15,20 @@ import type { Command } from './commands.js';
 import { createStatsStore, type StatsStore } from './context/stats.js';
 import { getSystemContext } from './context.js';
 import { initializeTelemetryAfterTrust } from './entrypoints/init.js';
-import { isSynchronizedOutputSupported } from '@anthropic/ink';
 import type { RenderOptions, Root, TextProps } from '@anthropic/ink';
-import { KeybindingSetup } from './keybindings/KeybindingProviderSetup.js';
 import { startDeferredPrefetches } from './main.js';
 import { initializeGrowthBook, resetGrowthBook } from './services/analytics/growthbook.js';
 import { isQualifiedForGrove } from './services/api/grove.js';
 import { handleMcpjsonServerApprovals } from './services/mcpServerApproval.js';
 import { AppStateProvider } from './state/AppState.js';
 import { onChangeAppState } from './state/onChangeAppState.js';
-import { ThemeProvider } from '@anthropic/ink';
 import { normalizeApiKeyForConfig } from './utils/authPortable.js';
+
+// Lazy require: ThemeProvider/KeybindingSetup/isSynchronizedOutputSupported
+// pull @anthropic/ink (reconciler/yoga). Keeping them out of the static
+// import graph defers the whole framework until first render. require()
+// hits the module cache once ink is loaded.
+const getInkModule = () => require('@anthropic/ink') as typeof import('@anthropic/ink');
 import {
   getExternalClaudeMdIncludes,
   getMemoryFiles,
@@ -100,11 +103,17 @@ export async function exitWithMessage(
  * Show a setup dialog wrapped in AppStateProvider + KeybindingSetup.
  * Reduces boilerplate in showSetupScreens() where every dialog needs these wrappers.
  */
-export function showSetupDialog<T = void>(
+export async function showSetupDialog<T = void>(
   root: Root,
   renderer: (done: (result: T) => void) => React.ReactNode,
   options?: { onChangeAppState?: typeof onChangeAppState },
 ): Promise<T> {
+  // Resolved lazily so @anthropic/ink and KeybindingProviderSetup are not
+  // evaluated until a setup dialog is actually shown.
+  const [{ ThemeProvider }, { KeybindingSetup }] = await Promise.all([
+    import('@anthropic/ink'),
+    import('./keybindings/KeybindingProviderSetup.js'),
+  ]);
   return showDialog<T>(root, done => (
     <ThemeProvider
       initialState={getGlobalConfig().theme}
@@ -345,7 +354,7 @@ export function getRenderContext(exitOnCtrlC: boolean): {
         }
         // Skip flicker reporting for terminals with synchronized output —
         // DEC 2026 buffers between BSU/ESU so clear+redraw is atomic.
-        if (isSynchronizedOutputSupported()) {
+        if (getInkModule().isSynchronizedOutputSupported()) {
           return;
         }
         for (const flicker of event.flickers) {

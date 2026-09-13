@@ -1,6 +1,9 @@
 import figures from 'figures'
-import { color } from '@anthropic/ink'
 import type { Theme, ThemeName } from './theme.js'
+
+// Lazy require: color lives in the @anthropic/ink barrel (see truncate.ts).
+const getColor = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).color
 
 export type TreeNode = {
   [key: string]: TreeNode | string | undefined
@@ -49,7 +52,7 @@ export function treeify(obj: TreeNode, options: TreeifyOptions = {}): string {
 
   function colorize(text: string, colorKey?: keyof Theme): string {
     if (!colorKey) return text
-    return color(colorKey, themeName)(text)
+    return getColor()(colorKey, themeName)(text)
   }
 
   function growBranch(

@@ -10,21 +10,12 @@ import {
   getSessionId,
   isSessionPersistenceDisabled,
 } from '../bootstrap/state.js'
-import {
-  DISABLE_KITTY_KEYBOARD,
-  DISABLE_MODIFY_OTHER_KEYS,
-  DBP,
-  DFE,
-  DISABLE_MOUSE_TRACKING,
-  EXIT_ALT_SCREEN,
-  SHOW_CURSOR,
-  CLEAR_ITERM2_PROGRESS,
-  CLEAR_TAB_STATUS,
-  CLEAR_TERMINAL_TITLE,
-  instances,
-  supportsTabStatus,
-  wrapForMultiplexer,
-} from '@anthropic/ink'
+// Lazy require: the terminal-mode constants/helpers below live in the
+// @anthropic/ink barrel; a static import pulled the whole Ink framework
+// (react-reconciler, yoga) into pre-commander evaluation. They are only
+// needed inside shutdown paths, after ink has been loaded anyway.
+const getInk = () =>
+  require('@anthropic/ink') as typeof import('@anthropic/ink')
 import { shutdownDatadog } from '../services/analytics/datadog.js'
 import { shutdown1PEventLogging } from '../services/analytics/firstPartyEventLogger.js'
 import {
@@ -64,7 +55,7 @@ function cleanupTerminalModes(): void {
     // events; doing it now (not after unmount) gives that time while
     // we're busy unmounting. Otherwise events arrive during cooked-mode
     // cleanup and either echo to the screen or leak to the shell.
-    writeSync(1, DISABLE_MOUSE_TRACKING)
+    writeSync(1, getInk().DISABLE_MOUSE_TRACKING)
     // Exit alt screen FIRST so printResumeHint() (and all sequences below)
     // land on the main buffer.
     //
@@ -80,14 +71,14 @@ function cleanupTerminalModes(): void {
     //      here first makes onRender() scribble a REPL frame onto main.
     // Calling unmount() now does the final render on the alt buffer,
     // unsubscribes from signal-exit, and writes 1049l exactly once.
-    const inst = instances.get(process.stdout)
+    const inst = getInk().instances.get(process.stdout)
     if (inst?.isAltScreenActive) {
       try {
         inst.unmount()
       } catch {
         // Reconciler/render threw — fall back to manual alt-screen exit
         // so printResumeHint still hits the main buffer.
-        writeSync(1, EXIT_ALT_SCREEN)
+        writeSync(1, getInk().EXIT_ALT_SCREEN)
       }
     }
     // Catches events that arrived during the unmount tree-walk.
@@ -103,19 +94,21 @@ function cleanupTerminalModes(): void {
     inst?.detachForShutdown()
     // Disable extended key reporting — always send both since terminals
     // silently ignore whichever they don't implement
-    writeSync(1, DISABLE_MODIFY_OTHER_KEYS)
-    writeSync(1, DISABLE_KITTY_KEYBOARD)
+    writeSync(1, getInk().DISABLE_MODIFY_OTHER_KEYS)
+    writeSync(1, getInk().DISABLE_KITTY_KEYBOARD)
     // Disable focus events (DECSET 1004)
-    writeSync(1, DFE)
+    writeSync(1, getInk().DFE)
     // Disable bracketed paste mode
-    writeSync(1, DBP)
+    writeSync(1, getInk().DBP)
     // Show cursor
-    writeSync(1, SHOW_CURSOR)
+    writeSync(1, getInk().SHOW_CURSOR)
     // Clear iTerm2 progress bar - prevents lingering progress indicator
     // that can cause bell sounds when returning to the terminal tab
-    writeSync(1, CLEAR_ITERM2_PROGRESS)
+    writeSync(1, getInk().CLEAR_ITERM2_PROGRESS)
     // Clear tab status (OSC 21337) so a stale dot doesn't linger
-    if (supportsTabStatus()) writeSync(1, wrapForMultiplexer(CLEAR_TAB_STATUS))
+    if (getInk().supportsTabStatus()) {
+      writeSync(1, getInk().wrapForMultiplexer(getInk().CLEAR_TAB_STATUS))
+    }
     // Clear terminal title so the tab doesn't show stale session info.
     // Respect CLAUDE_CODE_DISABLE_TERMINAL_TITLE — if the user opted out of
     // title changes, don't clear their existing title on exit either.
@@ -123,7 +116,7 @@ function cleanupTerminalModes(): void {
       if (process.platform === 'win32') {
         process.title = ''
       } else {
-        writeSync(1, CLEAR_TERMINAL_TITLE)
+        writeSync(1, getInk().CLEAR_TERMINAL_TITLE)
       }
     }
   } catch {
@@ -201,7 +194,7 @@ function forceExit(exitCode: number): never {
   // class method knows about it; the standalone function defaults to
   // process.stdin which would early-return on isTTY=false.
   try {
-    instances.get(process.stdout)?.drainStdin()
+    getInk().instances.get(process.stdout)?.drainStdin()
   } catch {
     // Terminal may be gone (SIGHUP). Ignore — we are about to exit.
   }

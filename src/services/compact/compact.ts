@@ -14,7 +14,13 @@ import type { QuerySource } from '../../constants/querySource.js'
 import type { CanUseToolFn } from '../../hooks/useCanUseTool.js'
 import type { Tool, ToolUseContext } from '../../Tool.js'
 import type { LocalAgentTaskState } from '../../tasks/LocalAgentTask/LocalAgentTask.js'
-import { FileReadTool } from '@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js'
+// Lazy require: FileReadTool's module pulls its UI -> @anthropic/ink, and
+// compact.ts is part of main.tsx's pre-commander evaluation (attachments ->
+// autoCompact -> compact). Used inside the compaction query only.
+const getFileReadTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+  ).FileReadTool
 import {
   FILE_READ_TOOL_NAME,
   FILE_UNCHANGED_STUB,
@@ -1322,13 +1328,13 @@ async function streamCompactSummary({
       const tools: Tool[] = useSearchExtraTools
         ? uniqBy(
             [
-              FileReadTool,
+              getFileReadTool(),
               SearchExtraToolsTool,
               ...context.options.tools.filter(t => t.isMcp),
             ],
             'name',
           )
-        : [FileReadTool]
+        : [getFileReadTool()]
 
       const streamingGen = queryModelWithStreaming({
         messages: normalizeMessagesForAPI(

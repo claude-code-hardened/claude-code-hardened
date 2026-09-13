@@ -1,5 +1,9 @@
 import chalk from 'chalk'
-import { supportsHyperlinks } from '@anthropic/ink'
+
+// Lazy require: supportsHyperlinks lives in the @anthropic/ink barrel (see truncate.ts).
+const getSupportsHyperlinks = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink'))
+    .supportsHyperlinks
 
 // OSC 8 hyperlink escape sequences
 // Format: \e]8;;URL\e\\TEXT\e]8;;\e\\
@@ -26,7 +30,7 @@ export function createHyperlink(
   content?: string,
   options?: HyperlinkOptions,
 ): string {
-  const hasSupport = options?.supportsHyperlinks ?? supportsHyperlinks()
+  const hasSupport = options?.supportsHyperlinks ?? getSupportsHyperlinks()()
   if (!hasSupport) {
     return url
   }

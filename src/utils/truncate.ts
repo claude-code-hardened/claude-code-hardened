@@ -1,7 +1,12 @@
 // Width-aware truncation/wrapping — needs ink/stringWidth (not leaf-safe).
 
-import { stringWidth } from '@anthropic/ink'
 import { getGraphemeSegmenter } from './intl.js'
+
+// Lazy require: stringWidth lives in the @anthropic/ink barrel, so a static
+// import pulled the whole Ink framework (react-reconciler, yoga) into
+// pre-commander evaluation for every module that measures text width.
+const getStringWidth = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).stringWidth
 
 /**
  * Truncates a file path in the middle to preserve both directory context and filename.
@@ -15,7 +20,7 @@ import { getGraphemeSegmenter } from './intl.js'
  */
 export function truncatePathMiddle(path: string, maxLength: number): string {
   // No truncation needed
-  if (stringWidth(path) <= maxLength) {
+  if (getStringWidth()(path) <= maxLength) {
     return path
   }
 
@@ -34,7 +39,7 @@ export function truncatePathMiddle(path: string, maxLength: number): string {
   // Include the leading slash in filename for display
   const filename = lastSlash >= 0 ? path.slice(lastSlash) : path
   const directory = lastSlash >= 0 ? path.slice(0, lastSlash) : ''
-  const filenameWidth = stringWidth(filename)
+  const filenameWidth = getStringWidth()(filename)
 
   // If filename alone is too long, truncate from start
   if (filenameWidth >= maxLength - 1) {
@@ -61,12 +66,12 @@ export function truncatePathMiddle(path: string, maxLength: number): string {
  * Appends '…' when truncation occurs.
  */
 export function truncateToWidth(text: string, maxWidth: number): string {
-  if (stringWidth(text) <= maxWidth) return text
+  if (getStringWidth()(text) <= maxWidth) return text
   if (maxWidth <= 1) return '…'
   let width = 0
   let result = ''
   for (const { segment } of getGraphemeSegmenter().segment(text)) {
-    const segWidth = stringWidth(segment)
+    const segWidth = getStringWidth()(segment)
     if (width + segWidth > maxWidth - 1) break
     result += segment
     width += segWidth
@@ -80,13 +85,13 @@ export function truncateToWidth(text: string, maxWidth: number): string {
  * Width-aware and grapheme-safe.
  */
 export function truncateStartToWidth(text: string, maxWidth: number): string {
-  if (stringWidth(text) <= maxWidth) return text
+  if (getStringWidth()(text) <= maxWidth) return text
   if (maxWidth <= 1) return '…'
   const segments = [...getGraphemeSegmenter().segment(text)]
   let width = 0
   let startIdx = segments.length
   for (let i = segments.length - 1; i >= 0; i--) {
-    const segWidth = stringWidth(segments[i]!.segment)
+    const segWidth = getStringWidth()(segments[i]!.segment)
     if (width + segWidth > maxWidth - 1) break // -1 for '…'
     width += segWidth
     startIdx = i
@@ -109,12 +114,12 @@ export function truncateToWidthNoEllipsis(
   text: string,
   maxWidth: number,
 ): string {
-  if (stringWidth(text) <= maxWidth) return text
+  if (getStringWidth()(text) <= maxWidth) return text
   if (maxWidth <= 0) return ''
   let width = 0
   let result = ''
   for (const { segment } of getGraphemeSegmenter().segment(text)) {
-    const segWidth = stringWidth(segment)
+    const segWidth = getStringWidth()(segment)
     if (width + segWidth > maxWidth) break
     result += segment
     width += segWidth
@@ -145,14 +150,14 @@ export function truncate(
     if (firstNewline !== -1) {
       result = str.substring(0, firstNewline)
       // Ensure total width including ellipsis doesn't exceed maxWidth
-      if (stringWidth(result) + 1 > maxWidth) {
+      if (getStringWidth()(result) + 1 > maxWidth) {
         return truncateToWidth(result, maxWidth)
       }
       return `${result}…`
     }
   }
 
-  if (stringWidth(result) <= maxWidth) {
+  if (getStringWidth()(result) <= maxWidth) {
     return result
   }
   return truncateToWidth(result, maxWidth)
@@ -164,7 +169,7 @@ export function wrapText(text: string, width: number): string[] {
   let currentWidth = 0
 
   for (const { segment } of getGraphemeSegmenter().segment(text)) {
-    const segWidth = stringWidth(segment)
+    const segWidth = getStringWidth()(segment)
     if (currentWidth + segWidth <= width) {
       currentLine += segment
       currentWidth += segWidth

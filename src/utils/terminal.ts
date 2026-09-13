@@ -1,7 +1,10 @@
 import chalk from 'chalk'
 import { ctrlOToExpand } from '../components/CtrlOToExpand.js'
-import { stringWidth } from '@anthropic/ink'
 import sliceAnsi from './sliceAnsi.js'
+
+// Lazy require: stringWidth lives in the @anthropic/ink barrel (see truncate.ts).
+const getStringWidth = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink')).stringWidth
 
 // Text rendering utilities for terminal display
 const MAX_LINES_TO_SHOW = 3
@@ -24,7 +27,7 @@ function wrapText(
   const wrappedLines: string[] = []
 
   for (const line of lines) {
-    const visibleWidth = stringWidth(line)
+    const visibleWidth = getStringWidth()(line)
     if (visibleWidth <= wrapWidth) {
       wrappedLines.push(line.trimEnd())
     } else {

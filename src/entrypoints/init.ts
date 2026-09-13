@@ -56,8 +56,14 @@ import { setShellIfWindows } from '../utils/windowsPaths.js'
 import { initSentry } from '../utils/sentry.js'
 import { initUser } from '../utils/user.js'
 import { initLangfuse, shutdownLangfuse } from '../services/langfuse/index.js'
-import { setThemeConfigCallbacks } from '@anthropic/ink'
 import { t } from '../i18n/index.js'
+
+// Lazy require: setThemeConfigCallbacks lives in the @anthropic/ink barrel; a
+// static import pulled the whole Ink framework into init.ts's evaluation.
+// Called inside init(), after ink is loaded on interactive paths anyway.
+const getSetThemeConfigCallbacks = () =>
+  (require('@anthropic/ink') as typeof import('@anthropic/ink'))
+    .setThemeConfigCallbacks
 
 // initialize1PEventLogging is dynamically imported to defer OpenTelemetry sdk-logs/resources
 
@@ -73,7 +79,7 @@ export const init = memoize(async (): Promise<void> => {
   try {
     const configsStart = Date.now()
     enableConfigs()
-    setThemeConfigCallbacks({
+    getSetThemeConfigCallbacks()({
       loadTheme: () => getGlobalConfig().theme,
       saveTheme: setting =>
         saveGlobalConfig(current => ({ ...current, theme: setting })),

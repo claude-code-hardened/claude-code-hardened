@@ -1,6 +1,12 @@
 import { randomUUID } from 'crypto'
 import type { Tool, ToolUseContext } from '../Tool.js'
-import { BashTool } from '@claude-code-best/builtin-tools/tools/BashTool/BashTool.js'
+// Lazy require: BashTool's module pulls its UI -> @anthropic/ink, and this
+// module is part of main.tsx's pre-commander evaluation. Only used inside
+// executeShellCommandsInPrompt().
+const getBashTool = () =>
+  (
+    require('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js')
+  ).BashTool
 import { logForDebugging } from './debug.js'
 import { errorMessage, MalformedCommandError, ShellError } from './errors.js'
 import type { FrontmatterShell } from './frontmatterParser.js'
@@ -80,7 +86,7 @@ export async function executeShellCommandsInPrompt(
   const shellTool: PromptShellTool =
     shell === 'powershell' && isPowerShellToolEnabled()
       ? getPowerShellTool()
-      : BashTool
+      : getBashTool()
 
   // INLINE_PATTERN's lookbehind is ~100x slower than BLOCK_PATTERN on large
   // skill content (265µs vs 2µs @ 17KB). 93% of skills have no !` at all,
