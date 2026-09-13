@@ -16,6 +16,7 @@ import {
 } from '../../utils/hooks/hooksSettings.js';
 import { Select } from '../CustomSelect/select.js';
 import { Dialog } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   selectedEvent: HookEvent;
@@ -36,7 +37,7 @@ export function SelectHookMode({
 }: Props): React.ReactNode {
   const title =
     hookEventMetadata.matcherMetadata !== undefined
-      ? `${selectedEvent} - Matcher: ${selectedMatcher || '(all)'}`
+      ? t('{{e}} - Matcher: {{m}}', { e: selectedEvent, m: selectedMatcher || t('(all)') })
       : selectedEvent;
 
   if (hooksForSelectedMatcher.length === 0) {
@@ -45,11 +46,11 @@ export function SelectHookMode({
         title={title}
         subtitle={hookEventMetadata.description}
         onCancel={onCancel}
-        inputGuide={() => <Text>Esc to go back</Text>}
+        inputGuide={() => <Text>{t('Esc to go back')}</Text>}
       >
         <Box flexDirection="column" gap={1}>
-          <Text dimColor>No hooks configured for this event.</Text>
-          <Text dimColor>To add hooks, edit settings.json directly or ask Claude.</Text>
+          <Text dimColor>{t('No hooks configured for this event.')}</Text>
+          <Text dimColor>{t('To add hooks, edit settings.json directly or ask Claude.')}</Text>
         </Box>
       </Dialog>
     );

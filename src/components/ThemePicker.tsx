@@ -14,6 +14,7 @@ import { Select } from './CustomSelect/index.js';
 import { Byline, KeyboardShortcutHint } from '@anthropic/ink';
 import { getColorModuleUnavailableReason, getSyntaxTheme } from './StructuredDiff/colorDiff.js';
 import { StructuredDiff } from './StructuredDiff.js';
+import { t } from '../i18n/index.js';
 
 export type ThemePickerProps = {
   onThemeSelect: (setting: ThemeSetting) => void;
@@ -70,23 +71,23 @@ export function ThemePicker({
   const exitState = useExitOnCtrlCDWithKeybindings(skipExitHandling ? () => {} : undefined);
 
   const themeOptions: { label: string; value: ThemeSetting }[] = [
-    ...(feature('AUTO_THEME') ? [{ label: 'Auto (match terminal)', value: 'auto' as const }] : []),
-    { label: 'Dark mode', value: 'dark' },
-    { label: 'Light mode', value: 'light' },
+    ...(feature('AUTO_THEME') ? [{ label: t('Auto (match terminal)'), value: 'auto' as const }] : []),
+    { label: t('Dark mode'), value: 'dark' },
+    { label: t('Light mode'), value: 'light' },
     {
-      label: 'Dark mode (colorblind-friendly)',
+      label: t('Dark mode (colorblind-friendly)'),
       value: 'dark-daltonized',
     },
     {
-      label: 'Light mode (colorblind-friendly)',
+      label: t('Light mode (colorblind-friendly)'),
       value: 'light-daltonized',
     },
     {
-      label: 'Dark mode (ANSI colors only)',
+      label: t('Dark mode (ANSI colors only)'),
       value: 'dark-ansi',
     },
     {
-      label: 'Light mode (ANSI colors only)',
+      label: t('Light mode (ANSI colors only)'),
       value: 'light-ansi',
     },
   ];
@@ -95,14 +96,14 @@ export function ThemePicker({
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column" gap={1}>
         {showIntroText ? (
-          <Text>Let&apos;s get started.</Text>
+          <Text>{t("Let's get started.")}</Text>
         ) : (
           <Text bold color="permission">
-            Theme
+            {t('Theme')}
           </Text>
         )}
         <Box flexDirection="column">
-          <Text bold>Choose the text style that looks best with your terminal</Text>
+          <Text bold>{t('Choose the text style that looks best with your terminal')}</Text>
           {helpText && !showHelpTextBelow && <Text dimColor>{helpText}</Text>}
         </Box>
         <Select
@@ -162,12 +163,18 @@ export function ThemePicker({
         <Text dimColor>
           {' '}
           {colorModuleUnavailableReason === 'env'
-            ? `Syntax highlighting disabled (via CLAUDE_CODE_SYNTAX_HIGHLIGHT=${process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT})`
+            ? t('Syntax highlighting disabled (via CLAUDE_CODE_SYNTAX_HIGHLIGHT={{v}})', {
+                v: process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT,
+              })
             : syntaxHighlightingDisabled
-              ? `Syntax highlighting disabled (${syntaxToggleShortcut} to enable)`
+              ? t('Syntax highlighting disabled ({{k}} to enable)', { k: syntaxToggleShortcut })
               : syntaxTheme
-                ? `Syntax theme: ${syntaxTheme.theme}${syntaxTheme.source ? ` (from ${syntaxTheme.source})` : ''} (${syntaxToggleShortcut} to disable)`
-                : `Syntax highlighting enabled (${syntaxToggleShortcut} to disable)`}
+                ? t('Syntax theme: {{t}}{{s}} ({{k}} to disable)', {
+                    t: syntaxTheme.theme,
+                    s: syntaxTheme.source ? t(' (from {{v}})', { v: syntaxTheme.source }) : '',
+                    k: syntaxToggleShortcut,
+                  })
+                : t('Syntax highlighting enabled ({{k}} to disable)', { k: syntaxToggleShortcut })}
         </Text>
       </Box>
     </Box>
@@ -188,7 +195,7 @@ export function ThemePicker({
             <Box>
               <Text dimColor italic>
                 {exitState.pending ? (
-                  <>Press {exitState.keyName} again to exit</>
+                  <>{t('Press {{k}} again to exit', { k: exitState.keyName })}</>
                 ) : (
                   <Byline>
                     <KeyboardShortcutHint shortcut="Enter" action="select" />

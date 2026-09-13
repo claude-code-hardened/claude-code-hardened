@@ -13,6 +13,7 @@ import { jsonStringify } from '../../utils/slowOperations.js';
 import { ConfigurableShortcutHint } from '../ConfigurableShortcutHint.js';
 import { Byline, ProgressBar } from '@anthropic/ink';
 import { isEligibleForOverageCreditGrant, OverageCreditUpsell } from '../LogoV2/OverageCreditUpsell.js';
+import { t } from '../../i18n/index.js';
 
 type LimitBarProps = {
   title: string;
@@ -29,11 +30,11 @@ function LimitBar({ title, limit, maxWidth, showTimeInReset = true, extraSubtext
   }
 
   // Calculate usage percentage
-  const usedText = `${Math.floor(utilization)}% used`;
+  const usedText = t('{{n}}% used', { n: Math.floor(utilization) });
 
   let subtext: string | undefined;
   if (resets_at) {
-    subtext = `Resets ${formatResetText(resets_at, true, showTimeInReset)}`;
+    subtext = t('Resets {{v}}', { v: formatResetText(resets_at, true, showTimeInReset) });
   }
 
   if (extraSubtext) {
@@ -105,7 +106,9 @@ export function Usage(): React.ReactNode {
       logError(err as Error);
       const axiosError = err as { response?: { data?: unknown } };
       const responseBody = axiosError.response?.data ? jsonStringify(axiosError.response.data) : undefined;
-      setError(responseBody ? `Failed to load usage data: ${responseBody}` : 'Failed to load usage data');
+      setError(
+        responseBody ? t('Failed to load usage data: {{v}}', { v: responseBody }) : t('Failed to load usage data'),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -126,7 +129,7 @@ export function Usage(): React.ReactNode {
   if (error) {
     return (
       <Box flexDirection="column" gap={1}>
-        <Text color="error">Error: {error}</Text>
+        <Text color="error">{t('Error: {{e}}', { e: error })}</Text>
         <Text dimColor>
           <Byline>
             <ConfigurableShortcutHint action="settings:retry" context="Settings" fallback="r" description="retry" />
@@ -140,7 +143,7 @@ export function Usage(): React.ReactNode {
   if (!utilization) {
     return (
       <Box flexDirection="column" gap={1}>
-        <Text dimColor>Loading usage data…</Text>
+        <Text dimColor>{t('Loading usage data…')}</Text>
         <Text dimColor>
           <ConfigurableShortcutHint action="confirm:no" context="Settings" fallback="Esc" description="cancel" />
         </Text>
@@ -157,17 +160,17 @@ export function Usage(): React.ReactNode {
 
   const limits = [
     {
-      title: 'Current session',
+      title: t('Current session'),
       limit: utilization.five_hour,
     },
     {
-      title: 'Current week (all models)',
+      title: t('Current week (all models)'),
       limit: utilization.seven_day,
     },
     ...(showSonnetBar
       ? [
           {
-            title: 'Current week (Sonnet only)',
+            title: t('Current week (Sonnet only)'),
             limit: utilization.seven_day_sonnet,
           },
         ]
@@ -176,7 +179,9 @@ export function Usage(): React.ReactNode {
 
   return (
     <Box flexDirection="column" gap={1} width="100%">
-      {limits.some(({ limit }) => limit) || <Text dimColor>/usage is only available for subscription plans.</Text>}
+      {limits.some(({ limit }) => limit) || (
+        <Text dimColor>{t('/usage is only available for subscription plans.')}</Text>
+      )}
 
       {limits.map(
         ({ title, limit }) => limit && <LimitBar key={title} title={title} limit={limit} maxWidth={maxWidth} />,
@@ -212,8 +217,8 @@ function ExtraUsageSection({ extraUsage, maxWidth }: ExtraUsageSectionProps): Re
     if (extraUsageCommand.isEnabled()) {
       return (
         <Box flexDirection="column">
-          <Text bold>{EXTRA_USAGE_SECTION_TITLE}</Text>
-          <Text dimColor>Extra usage not enabled · /extra-usage to enable</Text>
+          <Text bold>{t(EXTRA_USAGE_SECTION_TITLE)}</Text>
+          <Text dimColor>{t('Extra usage not enabled · /extra-usage to enable')}</Text>
         </Box>
       );
     }
@@ -224,8 +229,8 @@ function ExtraUsageSection({ extraUsage, maxWidth }: ExtraUsageSectionProps): Re
   if (extraUsage.monthly_limit === null) {
     return (
       <Box flexDirection="column">
-        <Text bold>{EXTRA_USAGE_SECTION_TITLE}</Text>
-        <Text dimColor>Unlimited</Text>
+        <Text bold>{t(EXTRA_USAGE_SECTION_TITLE)}</Text>
+        <Text dimColor>{t('Unlimited')}</Text>
       </Box>
     );
   }
@@ -241,14 +246,14 @@ function ExtraUsageSection({ extraUsage, maxWidth }: ExtraUsageSectionProps): Re
 
   return (
     <LimitBar
-      title={EXTRA_USAGE_SECTION_TITLE}
+      title={t(EXTRA_USAGE_SECTION_TITLE)}
       limit={{
         utilization: extraUsage.utilization,
         // Not applicable for enterprises, but for now we don't render this for them
         resets_at: oneMonthReset.toISOString(),
       }}
       showTimeInReset={false}
-      extraSubtext={`${formattedUsedCredits} / ${formattedMonthlyLimit} spent`}
+      extraSubtext={t('{{u}} / {{l}} spent', { u: formattedUsedCredits, l: formattedMonthlyLimit })}
       maxWidth={maxWidth}
     />
   );

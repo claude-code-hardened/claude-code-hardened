@@ -25,6 +25,7 @@ import { CHINA_LLM_PROVIDERS, type ProviderPreset, resolveChinaProviderBaseURL }
 import { Select } from './CustomSelect/select.js';
 import { Spinner } from './Spinner.js';
 import TextInput from './TextInput.js';
+import { t } from '../i18n/index.js';
 
 type Props = {
   onDone(): void;
@@ -95,9 +96,9 @@ export function ConsoleOAuthFlow({
   const orgUUID = settings.forceLoginOrgUUID;
   const forcedMethodMessage =
     forceLoginMethod === 'claudeai'
-      ? 'Login method pre-selected: Subscription Plan (Claude Pro/Max)'
+      ? t('Login method pre-selected: Subscription Plan (Claude Pro/Max)')
       : forceLoginMethod === 'console'
-        ? 'Login method pre-selected: API Usage Billing (Anthropic Console)'
+        ? t('Login method pre-selected: API Usage Billing (Anthropic Console)')
         : null;
 
   const terminal = useTerminalNotification();
@@ -206,7 +207,7 @@ export function ConsoleOAuthFlow({
       if (!authorizationCode || !state) {
         setOAuthStatus({
           state: 'error',
-          message: 'Invalid code. Please make sure the full code was copied',
+          message: t('Invalid code. Please make sure the full code was copied'),
           toRetry: { state: 'waiting_for_login', url },
         });
         return;
@@ -256,7 +257,7 @@ export function ConsoleOAuthFlow({
             message:
               sslHint ??
               (isTokenExchangeError
-                ? 'Failed to exchange authorization code for access token. Please try again.'
+                ? t('Failed to exchange authorization code for access token. Please try again.')
                 : err.message),
             toRetry: mode === 'setup-token' ? { state: 'ready_to_start' } : { state: 'idle' },
           });
@@ -286,7 +287,7 @@ export function ConsoleOAuthFlow({
         setOAuthStatus({ state: 'success' });
         void sendNotification(
           {
-            message: 'Claude Code login successful',
+            message: t('Claude Code login successful'),
             notificationType: 'auth_success',
           },
           terminal,
@@ -351,9 +352,9 @@ export function ConsoleOAuthFlow({
       {oauthStatus.state === 'waiting_for_login' && showPastePrompt && (
         <Box flexDirection="column" key="urlToCopy" gap={1} paddingBottom={1}>
           <Box paddingX={1}>
-            <Text dimColor>Browser didn&apos;t open? Use the url below to sign in </Text>
+            <Text dimColor>{t("Browser didn't open? Use the url below to sign in ")}</Text>
             {urlCopied ? (
-              <Text color="success">(Copied!)</Text>
+              <Text color="success">{t('(Copied!)')}</Text>
             ) : (
               <Text dimColor>
                 <KeyboardShortcutHint shortcut="c" action="copy" parens />
@@ -367,12 +368,12 @@ export function ConsoleOAuthFlow({
       )}
       {mode === 'setup-token' && oauthStatus.state === 'success' && oauthStatus.token && (
         <Box key="tokenOutput" flexDirection="column" gap={1} paddingTop={1}>
-          <Text color="success">✓ Long-lived authentication token created successfully!</Text>
+          <Text color="success">{t('✓ Long-lived authentication token created successfully!')}</Text>
           <Box flexDirection="column" gap={1}>
-            <Text>Your OAuth token (valid for 1 year):</Text>
+            <Text>{t('Your OAuth token (valid for 1 year):')}</Text>
             <Text color="warning">{oauthStatus.token}</Text>
-            <Text dimColor>Store this token securely. You won&apos;t be able to see it again.</Text>
-            <Text dimColor>Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=&lt;token&gt;</Text>
+            <Text dimColor>{t("Store this token securely. You won't be able to see it again.")}</Text>
+            <Text dimColor>{t('Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>')}</Text>
           </Box>
         </Box>
       )}
@@ -438,10 +439,12 @@ function OAuthStatusMessage({
           <Text bold>
             {startingMessage
               ? startingMessage
-              : `Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.`}
+              : t(
+                  'Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.',
+                )}
           </Text>
 
-          <Text>Select login method:</Text>
+          <Text>{t('Select login method:')}</Text>
 
           <Box>
             <Select
@@ -449,7 +452,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      Anthropic Compatible · <Text dimColor>Configure your own API endpoint</Text>
+                      {t('Anthropic Compatible · ')}
+                      <Text dimColor>{t('Configure your own API endpoint')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -458,7 +462,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      OpenAI Compatible · <Text dimColor>Ollama, DeepSeek, vLLM, One API, etc.</Text>
+                      {t('OpenAI Compatible · ')}
+                      <Text dimColor>{t('Ollama, DeepSeek, vLLM, One API, etc.')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -467,7 +472,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      China LLM Providers · <Text dimColor>DeepSeek, Zhipu GLM, Qwen, MiMo</Text>
+                      {t('China LLM Providers · ')}
+                      <Text dimColor>{t('DeepSeek, Zhipu GLM, Qwen, MiMo')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -476,7 +482,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      ChatGPT account with subscription · <Text dimColor>Plus, Pro, Business, Edu, or Enterprise</Text>
+                      {t('ChatGPT account with subscription · ')}
+                      <Text dimColor>{t('Plus, Pro, Business, Edu, or Enterprise')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -485,7 +492,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      Gemini API · <Text dimColor>Google Gemini native REST/SSE</Text>
+                      {t('Gemini API · ')}
+                      <Text dimColor>{t('Google Gemini native REST/SSE')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -494,14 +502,16 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      Claude account with subscription · <Text dimColor>Pro, Max, Team, or Enterprise</Text>
+                      {t('Claude account with subscription · ')}
+                      <Text dimColor>{t('Pro, Max, Team, or Enterprise')}</Text>
                       {process.env.USER_TYPE === 'ant' && (
                         <Text>
                           {'\n'}
                           <Text color="warning">[ANT-ONLY]</Text>{' '}
                           <Text dimColor>
-                            Please use this option unless you need to login to a special org for accessing sensitive
-                            data (e.g. customer data, HIPI data) with the Console option
+                            {t(
+                              'Please use this option unless you need to login to a special org for accessing sensitive data (e.g. customer data, HIPI data) with the Console option',
+                            )}
                           </Text>
                         </Text>
                       )}
@@ -513,7 +523,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      Anthropic Console account · <Text dimColor>API usage billing</Text>
+                      {t('Anthropic Console account · ')}
+                      <Text dimColor>{t('API usage billing')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -522,7 +533,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      3rd-party platform · <Text dimColor>Amazon Bedrock, Microsoft Foundry, or Vertex AI</Text>
+                      {t('3rd-party platform · ')}
+                      <Text dimColor>{t('Amazon Bedrock, Microsoft Foundry, or Vertex AI')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -662,7 +674,9 @@ function OAuthStatusMessage({
           } catch {
             setOAuthStatus({
               state: 'error',
-              message: 'Invalid base URL: please enter a full URL including protocol (e.g., https://api.example.com)',
+              message: t(
+                'Invalid base URL: please enter a full URL including protocol (e.g., https://api.example.com)',
+              ),
               toRetry: {
                 state: 'custom_platform',
                 baseUrl: '',
@@ -689,7 +703,7 @@ function OAuthStatusMessage({
         if (error) {
           setOAuthStatus({
             state: 'error',
-            message: 'Failed to save settings. Please try again.',
+            message: t('Failed to save settings. Please try again.'),
             toRetry: {
               state: 'custom_platform',
               baseUrl: finalVals.base_url ?? '',
@@ -785,15 +799,15 @@ function OAuthStatusMessage({
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Text bold>Anthropic Compatible Setup</Text>
+          <Text bold>{t('Anthropic Compatible Setup')}</Text>
           <Box flexDirection="column" gap={1}>
-            {renderRow('base_url', 'Base URL ')}
-            {renderRow('api_key', 'API Key  ', { mask: true })}
-            {renderRow('haiku_model', 'Haiku    ')}
-            {renderRow('sonnet_model', 'Sonnet   ')}
-            {renderRow('opus_model', 'Opus     ')}
+            {renderRow('base_url', t('Base URL '))}
+            {renderRow('api_key', t('API Key  '), { mask: true })}
+            {renderRow('haiku_model', t('Haiku    '))}
+            {renderRow('sonnet_model', t('Sonnet   '))}
+            {renderRow('opus_model', t('Opus     '))}
           </Box>
-          <Text dimColor>↑↓/Tab to switch · Enter on last field to save · Esc to go back</Text>
+          <Text dimColor>{t('↑↓/Tab to switch · Enter on last field to save · Esc to go back')}</Text>
         </Box>
       );
     }
@@ -864,7 +878,9 @@ function OAuthStatusMessage({
           } catch {
             setOAuthStatus({
               state: 'error',
-              message: 'Invalid base URL: please enter a full URL including protocol (e.g., https://api.example.com)',
+              message: t(
+                'Invalid base URL: please enter a full URL including protocol (e.g., https://api.example.com)',
+              ),
               toRetry: {
                 state: 'openai_chat_api',
                 baseUrl: '',
@@ -892,7 +908,7 @@ function OAuthStatusMessage({
         if (error) {
           setOAuthStatus({
             state: 'error',
-            message: 'Failed to save settings. Please try again.',
+            message: t('Failed to save settings. Please try again.'),
             toRetry: {
               state: 'openai_chat_api',
               baseUrl: finalVals.base_url ?? '',
@@ -999,16 +1015,18 @@ function OAuthStatusMessage({
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Text bold>OpenAI Compatible API Setup</Text>
-          <Text dimColor>Configure an OpenAI Chat Completions compatible endpoint (e.g. Ollama, DeepSeek, vLLM).</Text>
+          <Text bold>{t('OpenAI Compatible API Setup')}</Text>
+          <Text dimColor>
+            {t('Configure an OpenAI Chat Completions compatible endpoint (e.g. Ollama, DeepSeek, vLLM).')}
+          </Text>
           <Box flexDirection="column" gap={1}>
-            {renderOpenAIRow('base_url', 'Base URL ')}
-            {renderOpenAIRow('api_key', 'API Key  ', { mask: true })}
-            {renderOpenAIRow('haiku_model', 'Haiku    ')}
-            {renderOpenAIRow('sonnet_model', 'Sonnet   ')}
-            {renderOpenAIRow('opus_model', 'Opus     ')}
+            {renderOpenAIRow('base_url', t('Base URL '))}
+            {renderOpenAIRow('api_key', t('API Key  '), { mask: true })}
+            {renderOpenAIRow('haiku_model', t('Haiku    '))}
+            {renderOpenAIRow('sonnet_model', t('Sonnet   '))}
+            {renderOpenAIRow('opus_model', t('Opus     '))}
           </Box>
-          <Text dimColor>↑↓/Tab to switch · Enter on last field to save · Esc to go back</Text>
+          <Text dimColor>{t('↑↓/Tab to switch · Enter on last field to save · Esc to go back')}</Text>
         </Box>
       );
     }
@@ -1047,7 +1065,7 @@ function OAuthStatusMessage({
             };
             const { error } = updateSettingsForSource('userSettings', settingsUpdate);
             if (error) {
-              throw new Error('Failed to save settings. Please try again.');
+              throw new Error(t('Failed to save settings. Please try again.'));
             }
             for (const [k, v] of Object.entries(env)) process.env[k] = v;
             // Drop any cached OpenAI client built from prior OpenAI Compatible
@@ -1078,29 +1096,30 @@ function OAuthStatusMessage({
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Text bold>ChatGPT Account Setup</Text>
+          <Text bold>{t('ChatGPT Account Setup')}</Text>
           {status.phase === 'requesting' && (
             <Box>
               <Spinner />
-              <Text>Requesting sign-in code…</Text>
+              <Text>{t('Requesting sign-in code…')}</Text>
             </Box>
           )}
           {status.phase === 'waiting' && status.deviceCode && (
             <Box flexDirection="column" gap={1}>
-              <Text>Open this link and sign in with your ChatGPT account:</Text>
+              <Text>{t('Open this link and sign in with your ChatGPT account:')}</Text>
               <Link url={status.deviceCode.verificationUrl}>
                 <Text dimColor>{status.deviceCode.verificationUrl}</Text>
               </Link>
               <Text>
-                Enter code: <Text bold>{status.deviceCode.userCode}</Text>
+                {t('Enter code: ')}
+                <Text bold>{status.deviceCode.userCode}</Text>
               </Text>
               <Box>
                 <Spinner />
-                <Text>Waiting for ChatGPT authorization…</Text>
+                <Text>{t('Waiting for ChatGPT authorization…')}</Text>
               </Box>
             </Box>
           )}
-          <Text dimColor>Esc to go back. Device codes expire after 15 minutes.</Text>
+          <Text dimColor>{t('Esc to go back. Device codes expire after 15 minutes.')}</Text>
         </Box>
       );
     }
@@ -1163,7 +1182,7 @@ function OAuthStatusMessage({
         if (!finalVals.haiku_model || !finalVals.sonnet_model || !finalVals.opus_model) {
           setOAuthStatus({
             state: 'error',
-            message: 'Gemini setup requires Haiku, Sonnet, and Opus model names.',
+            message: t('Gemini setup requires Haiku, Sonnet, and Opus model names.'),
             toRetry: {
               state: 'gemini_api',
               baseUrl: finalVals.base_url,
@@ -1190,7 +1209,7 @@ function OAuthStatusMessage({
         if (error) {
           setOAuthStatus({
             state: 'error',
-            message: `Failed to save: ${error.message}`,
+            message: t('Failed to save: {{m}}', { m: error.message }),
             toRetry: {
               state: 'gemini_api',
               baseUrl: '',
@@ -1286,19 +1305,20 @@ function OAuthStatusMessage({
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Text bold>Gemini API Setup</Text>
+          <Text bold>{t('Gemini API Setup')}</Text>
           <Text dimColor>
-            Configure a Gemini Generate Content compatible endpoint. Base URL is optional and defaults to Google&apos;s
-            v1beta API.
+            {t(
+              "Configure a Gemini Generate Content compatible endpoint. Base URL is optional and defaults to Google's v1beta API.",
+            )}
           </Text>
           <Box flexDirection="column" gap={1}>
-            {renderGeminiRow('base_url', 'Base URL ')}
-            {renderGeminiRow('api_key', 'API Key  ', { mask: true })}
-            {renderGeminiRow('haiku_model', 'Haiku    ')}
-            {renderGeminiRow('sonnet_model', 'Sonnet   ')}
-            {renderGeminiRow('opus_model', 'Opus     ')}
+            {renderGeminiRow('base_url', t('Base URL '))}
+            {renderGeminiRow('api_key', t('API Key  '), { mask: true })}
+            {renderGeminiRow('haiku_model', t('Haiku    '))}
+            {renderGeminiRow('sonnet_model', t('Sonnet   '))}
+            {renderGeminiRow('opus_model', t('Opus     '))}
           </Box>
-          <Text dimColor>↑↓/Tab to switch · Enter on last field to save · Esc to go back</Text>
+          <Text dimColor>{t('↑↓/Tab to switch · Enter on last field to save · Esc to go back')}</Text>
         </Box>
       );
     }
@@ -1306,8 +1326,8 @@ function OAuthStatusMessage({
     case 'china_provider_select': {
       return (
         <Box flexDirection="column" gap={1} marginTop={1}>
-          <Text bold>Select China LLM Provider</Text>
-          <Text dimColor>Direct connection, no proxy needed. All providers are OpenAI-compatible.</Text>
+          <Text bold>{t('Select China LLM Provider')}</Text>
+          <Text dimColor>{t('Direct connection, no proxy needed. All providers are OpenAI-compatible.')}</Text>
           <Box>
             <Select
               options={CHINA_LLM_PROVIDERS.map(p => ({
@@ -1338,13 +1358,13 @@ function OAuthStatusMessage({
     case 'china_mode_select': {
       const { provider } = oauthStatus;
       const modeOptions = [
-        { id: 'api' as const, label: 'Pay-as-you-go (API)', desc: 'Top up freely, pay per use' },
-        { id: 'coding-plan' as const, label: 'Coding Plan', desc: 'Fixed monthly fee, high usage' },
+        { id: 'api' as const, label: t('Pay-as-you-go (API)'), desc: t('Top up freely, pay per use') },
+        { id: 'coding-plan' as const, label: t('Coding Plan'), desc: t('Fixed monthly fee, high usage') },
       ];
       return (
         <Box flexDirection="column" gap={1} marginTop={1}>
           <Text bold>
-            {provider.icon} {provider.label} — Select Access Mode
+            {provider.icon} {t('{{n}} — Select Access Mode', { n: provider.label })}
           </Text>
           <Box>
             <Select
@@ -1369,8 +1389,8 @@ function OAuthStatusMessage({
             />
           </Box>
           <Text dimColor>
-            No plan? Select "Pay-as-you-go"
-            {provider.id === 'zhipu' ? ' · GLM-4.7-Flash is free forever' : ''}
+            {t('No plan? Select "Pay-as-you-go"')}
+            {provider.id === 'zhipu' ? t(' · GLM-4.7-Flash is free forever') : ''}
           </Text>
         </Box>
       );
@@ -1382,7 +1402,7 @@ function OAuthStatusMessage({
       return (
         <Box flexDirection="column" gap={1} marginTop={1}>
           <Text bold>
-            {provider.icon} {provider.label} — Select Model
+            {provider.icon} {t('{{n}} — Select Model', { n: provider.label })}
           </Text>
           <Box>
             <Select
@@ -1390,7 +1410,7 @@ function OAuthStatusMessage({
                 ...models.map(m => {
                   const priceLabel =
                     m.inputPricePerMTok === 0 && m.outputPricePerMTok === 0
-                      ? 'Free'
+                      ? t('Free')
                       : `¥${m.inputPricePerMTok}/¥${m.outputPricePerMTok}`;
                   const tagLabel = m.tags?.length ? ` [${m.tags.join(', ')}]` : '';
                   return {
@@ -1410,8 +1430,8 @@ function OAuthStatusMessage({
                 {
                   label: (
                     <Text>
-                      ✏️ Custom model
-                      <Text dimColor> · enter model name manually</Text>
+                      {t('✏️ Custom model')}
+                      <Text dimColor>{t(' · enter model name manually')}</Text>
                       {'\n'}
                     </Text>
                   ),
@@ -1438,7 +1458,7 @@ function OAuthStatusMessage({
       const doChinaSave = useCallback(() => {
         const effectiveModelId = modelId === '__custom__' ? chinaKeyValue.trim() : modelId;
         if (!effectiveModelId) {
-          setChinaKeyError(modelId === '__custom__' ? 'Please enter a model name' : 'Please enter an API key');
+          setChinaKeyError(modelId === '__custom__' ? t('Please enter a model name') : t('Please enter an API key'));
           return;
         }
         if (modelId === '__custom__') {
@@ -1449,7 +1469,7 @@ function OAuthStatusMessage({
           return;
         }
         if (!chinaKeyValue.trim()) {
-          setChinaKeyError('Please enter an API key');
+          setChinaKeyError(t('Please enter an API key'));
           return;
         }
         const baseUrl = resolveChinaProviderBaseURL(provider.id, accessMode);
@@ -1469,7 +1489,7 @@ function OAuthStatusMessage({
         if (error) {
           setOAuthStatus({
             state: 'error',
-            message: 'Failed to save settings. Please try again.',
+            message: t('Failed to save settings. Please try again.'),
             toRetry: { state: 'china_apikey', provider, mode: accessMode, modelId, apiKey: chinaKeyValue },
           });
         } else {
@@ -1521,24 +1541,28 @@ function OAuthStatusMessage({
       return (
         <Box flexDirection="column" gap={1} marginTop={1}>
           <Text bold>
-            {provider.icon} {provider.label} {isCustomModelEntry ? '— Custom Model' : 'API Key'}
+            {provider.icon} {provider.label} {isCustomModelEntry ? t('— Custom Model') : t('API Key')}
           </Text>
           <Box flexDirection="column" gap={0}>
             {isCustomModelEntry ? (
-              <Text dimColor> Enter any model ID supported by this provider. Browse models: {provider.modelsPage}</Text>
+              <Text dimColor>
+                {t(' Enter any model ID supported by this provider. Browse models: {{v}}', {
+                  v: provider.modelsPage,
+                })}
+              </Text>
             ) : (
               <>
-                <Text dimColor> Get your key: {keyPage}</Text>
+                <Text dimColor>{t(' Get your key: {{v}}', { v: keyPage })}</Text>
                 <Text dimColor>
                   {' '}
-                  {accessMode === 'coding-plan' ? 'Use your Coding Plan credential here' : provider.freeTier}
+                  {accessMode === 'coding-plan' ? t('Use your Coding Plan credential here') : provider.freeTier}
                 </Text>
-                <Text dimColor> Key format: {keyFormat}</Text>
+                <Text dimColor>{t(' Key format: {{v}}', { v: keyFormat })}</Text>
               </>
             )}
           </Box>
           <Box>
-            <Text>{isCustomModelEntry ? 'Model name: ' : 'API Key: '}</Text>
+            <Text>{isCustomModelEntry ? t('Model name: ') : t('API Key: ')}</Text>
             <TextInput
               value={chinaKeyValue}
               onChange={v => {
@@ -1556,7 +1580,7 @@ function OAuthStatusMessage({
           {chinaKeyError ? <Text color="error">{chinaKeyError}</Text> : null}
           {isCustomModelEntry && modelSuggestions.length > 0 && (
             <Box flexDirection="column" gap={0}>
-              <Text dimColor>{chinaKeyValue.trim() ? 'Matching models:' : 'Known models:'}</Text>
+              <Text dimColor>{chinaKeyValue.trim() ? t('Matching models:') : t('Known models:')}</Text>
               {modelSuggestions.map(m => (
                 <Text key={m.id} dimColor>
                   {' '}
@@ -1569,7 +1593,7 @@ function OAuthStatusMessage({
             </Box>
           )}
           <Text dimColor>
-            {isCustomModelEntry ? 'Enter to continue · Esc to go back' : 'Enter to confirm · Esc to go back'}
+            {isCustomModelEntry ? t('Enter to continue · Esc to go back') : t('Enter to confirm · Esc to go back')}
           </Text>
         </Box>
       );
@@ -1578,34 +1602,35 @@ function OAuthStatusMessage({
     case 'platform_setup':
       return (
         <Box flexDirection="column" gap={1} marginTop={1}>
-          <Text bold>Using 3rd-party platforms</Text>
+          <Text bold>{t('Using 3rd-party platforms')}</Text>
 
           <Box flexDirection="column" gap={1}>
             <Text>
-              Claude Code supports Amazon Bedrock, Microsoft Foundry, and Vertex AI. Set the required environment
-              variables, then restart Claude Code.
+              {t(
+                'Claude Code supports Amazon Bedrock, Microsoft Foundry, and Vertex AI. Set the required environment variables, then restart Claude Code.',
+              )}
             </Text>
 
             <Text>
-              If you are part of an enterprise organization, contact your administrator for setup instructions.
+              {t('If you are part of an enterprise organization, contact your administrator for setup instructions.')}
             </Text>
 
             <Box flexDirection="column" marginTop={1}>
-              <Text bold>Documentation:</Text>
+              <Text bold>{t('Documentation:')}</Text>
               <Text>
-                · Amazon Bedrock:{' '}
+                {t('· Amazon Bedrock: ')}
                 <Link url="https://code.claude.com/docs/en/amazon-bedrock">
                   https://code.claude.com/docs/en/amazon-bedrock
                 </Link>
               </Text>
               <Text>
-                · Microsoft Foundry:{' '}
+                {t('· Microsoft Foundry: ')}
                 <Link url="https://code.claude.com/docs/en/microsoft-foundry">
                   https://code.claude.com/docs/en/microsoft-foundry
                 </Link>
               </Text>
               <Text>
-                · Vertex AI:{' '}
+                {t('· Vertex AI: ')}
                 <Link url="https://code.claude.com/docs/en/google-vertex-ai">
                   https://code.claude.com/docs/en/google-vertex-ai
                 </Link>
@@ -1614,7 +1639,9 @@ function OAuthStatusMessage({
 
             <Box marginTop={1}>
               <Text dimColor>
-                Press <Text bold>Enter</Text> to go back to login options.
+                {t('Press ')}
+                <Text bold>Enter</Text>
+                {t(' to go back to login options.')}
               </Text>
             </Box>
           </Box>
@@ -1633,13 +1660,13 @@ function OAuthStatusMessage({
           {!showPastePrompt && (
             <Box>
               <Spinner />
-              <Text>Opening browser to sign in…</Text>
+              <Text>{t('Opening browser to sign in…')}</Text>
             </Box>
           )}
 
           {showPastePrompt && (
             <Box>
-              <Text>{PASTE_HERE_MSG}</Text>
+              <Text>{t(PASTE_HERE_MSG)}</Text>
               <TextInput
                 value={pastedCode}
                 onChange={setPastedCode}
@@ -1659,7 +1686,7 @@ function OAuthStatusMessage({
         <Box flexDirection="column" gap={1}>
           <Box>
             <Spinner />
-            <Text>Creating API key for Claude Code…</Text>
+            <Text>{t('Creating API key for Claude Code…')}</Text>
           </Box>
         </Box>
       );
@@ -1667,7 +1694,7 @@ function OAuthStatusMessage({
     case 'about_to_retry':
       return (
         <Box flexDirection="column" gap={1}>
-          <Text color="permission">Retrying…</Text>
+          <Text color="permission">{t('Retrying…')}</Text>
         </Box>
       );
 
@@ -1678,11 +1705,14 @@ function OAuthStatusMessage({
             <>
               {getOauthAccountInfo()?.emailAddress ? (
                 <Text dimColor>
-                  Logged in as <Text>{getOauthAccountInfo()?.emailAddress}</Text>
+                  {t('Logged in as ')}
+                  <Text>{getOauthAccountInfo()?.emailAddress}</Text>
                 </Text>
               ) : null}
               <Text color="success">
-                Login successful. Press <Text bold>Enter</Text> to continue…
+                {t('Login successful. Press ')}
+                <Text bold>Enter</Text>
+                {t(' to continue…')}
               </Text>
             </>
           )}
@@ -1692,12 +1722,14 @@ function OAuthStatusMessage({
     case 'error':
       return (
         <Box flexDirection="column" gap={1}>
-          <Text color="error">OAuth error: {oauthStatus.message}</Text>
+          <Text color="error">{t('OAuth error: {{m}}', { m: oauthStatus.message })}</Text>
 
           {oauthStatus.toRetry && (
             <Box marginTop={1}>
               <Text color="permission">
-                Press <Text bold>Enter</Text> to retry.
+                {t('Press ')}
+                <Text bold>Enter</Text>
+                {t(' to retry.')}
               </Text>
             </Box>
           )}

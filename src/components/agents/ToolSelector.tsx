@@ -26,6 +26,7 @@ import { useKeybinding } from '../../keybindings/useKeybinding.js';
 import { count } from '../../utils/array.js';
 import { plural } from '../../utils/stringUtils.js';
 import { Divider } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   tools: Tools;
@@ -216,7 +217,7 @@ export function ToolSelector({ tools, initialTools, onComplete, onCancel }: Prop
   // Continue button
   navigableItems.push({
     id: 'continue',
-    label: 'Continue',
+    label: t('Continue'),
     action: handleConfirm,
     isContinue: true,
   });
@@ -224,7 +225,7 @@ export function ToolSelector({ tools, initialTools, onComplete, onCancel }: Prop
   // All tools
   navigableItems.push({
     id: 'bucket-all',
-    label: `${isAllSelected ? figures.checkboxOn : figures.checkboxOff} All tools`,
+    label: `${isAllSelected ? figures.checkboxOn : figures.checkboxOff} ${t('All tools')}`,
     action: () => {
       const allToolNames = customAgentTools.map(t => t.name);
       handleToggleTools(allToolNames, !isAllSelected);
@@ -278,7 +279,7 @@ export function ToolSelector({ tools, initialTools, onComplete, onCancel }: Prop
   const toggleButtonIndex = navigableItems.length;
   navigableItems.push({
     id: 'toggle-individual',
-    label: showIndividualTools ? 'Hide advanced options' : 'Show advanced options',
+    label: showIndividualTools ? t('Hide advanced options') : t('Show advanced options'),
     action: () => {
       setShowIndividualTools(!showIndividualTools);
       // If hiding tools and focus is on an individual tool, move focus to toggle button
@@ -298,7 +299,7 @@ export function ToolSelector({ tools, initialTools, onComplete, onCancel }: Prop
     if (mcpServerBuckets.length > 0) {
       navigableItems.push({
         id: 'mcp-servers-header',
-        label: 'MCP Servers:',
+        label: t('MCP Servers:'),
         action: () => {}, // No action - just a header
         isHeader: true,
       });
@@ -320,7 +321,7 @@ export function ToolSelector({ tools, initialTools, onComplete, onCancel }: Prop
       // Add separator header before individual tools
       navigableItems.push({
         id: 'tools-header',
-        label: 'Individual Tools:',
+        label: t('Individual Tools:'),
         action: () => {},
         isHeader: true,
       });

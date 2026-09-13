@@ -8,6 +8,7 @@ import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { hookSourceDescriptionDisplayString, type IndividualHookConfig } from '../../utils/hooks/hooksSettings.js';
 import { Dialog } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   selectedHook: IndividualHookConfig;
@@ -17,26 +18,31 @@ type Props = {
 
 export function ViewHookMode({ selectedHook, eventSupportsMatcher, onCancel }: Props): React.ReactNode {
   return (
-    <Dialog title="Hook details" onCancel={onCancel} inputGuide={() => <Text>Esc to go back</Text>}>
+    <Dialog title={t('Hook details')} onCancel={onCancel} inputGuide={() => <Text>{t('Esc to go back')}</Text>}>
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="column">
           <Text>
-            Event: <Text bold>{selectedHook.event}</Text>
+            {t('Event: ')}
+            <Text bold>{selectedHook.event}</Text>
           </Text>
           {eventSupportsMatcher && (
             <Text>
-              Matcher: <Text bold>{selectedHook.matcher || '(all)'}</Text>
+              {t('Matcher: ')}
+              <Text bold>{selectedHook.matcher || t('(all)')}</Text>
             </Text>
           )}
           <Text>
-            Type: <Text bold>{selectedHook.config.type}</Text>
+            {t('Type: ')}
+            <Text bold>{selectedHook.config.type}</Text>
           </Text>
           <Text>
-            Source: <Text dimColor>{hookSourceDescriptionDisplayString(selectedHook.source)}</Text>
+            {t('Source: ')}
+            <Text dimColor>{hookSourceDescriptionDisplayString(selectedHook.source)}</Text>
           </Text>
           {selectedHook.pluginName && (
             <Text>
-              Plugin: <Text dimColor>{selectedHook.pluginName}</Text>
+              {t('Plugin: ')}
+              <Text dimColor>{selectedHook.pluginName}</Text>
             </Text>
           )}
         </Box>
@@ -48,10 +54,11 @@ export function ViewHookMode({ selectedHook, eventSupportsMatcher, onCancel }: P
         </Box>
         {'statusMessage' in selectedHook.config && selectedHook.config.statusMessage && (
           <Text>
-            Status message: <Text dimColor>{selectedHook.config.statusMessage}</Text>
+            {t('Status message: ')}
+            <Text dimColor>{selectedHook.config.statusMessage}</Text>
           </Text>
         )}
-        <Text dimColor>To modify or remove this hook, edit settings.json directly or ask Claude to help.</Text>
+        <Text dimColor>{t('To modify or remove this hook, edit settings.json directly or ask Claude to help.')}</Text>
       </Box>
     </Dialog>
   );

@@ -22,6 +22,7 @@ import { ColorPicker } from './ColorPicker.js';
 import { ModelSelector } from './ModelSelector.js';
 import { ToolSelector } from './ToolSelector.js';
 import { getAgentSourceDisplayName } from './utils.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   agent: AgentDefinition;
@@ -111,10 +112,10 @@ export function AgentEditor({ agent, tools, onSaved, onBack }: Props): React.Rea
           };
         });
 
-        onSaved(`Updated agent: ${chalk.bold(agent.agentType)}`);
+        onSaved(t('Updated agent: {{n}}', { n: chalk.bold(agent.agentType) }));
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save agent');
+        setError(err instanceof Error ? err.message : t('Failed to save agent'));
         return false;
       }
     },
@@ -123,10 +124,10 @@ export function AgentEditor({ agent, tools, onSaved, onBack }: Props): React.Rea
 
   const menuItems = useMemo(
     () => [
-      { label: 'Open in editor', action: handleOpenInEditor },
-      { label: 'Edit tools', action: () => setEditMode('edit-tools') },
-      { label: 'Edit model', action: () => setEditMode('edit-model') },
-      { label: 'Edit color', action: () => setEditMode('edit-color') },
+      { label: t('Open in editor'), action: handleOpenInEditor },
+      { label: t('Edit tools'), action: () => setEditMode('edit-tools') },
+      { label: t('Edit model'), action: () => setEditMode('edit-model') },
+      { label: t('Edit color'), action: () => setEditMode('edit-color') },
     ],
     [handleOpenInEditor],
   );
@@ -163,7 +164,7 @@ export function AgentEditor({ agent, tools, onSaved, onBack }: Props): React.Rea
 
   const renderMenu = (): React.ReactNode => (
     <Box flexDirection="column" tabIndex={0} autoFocus onKeyDown={handleMenuKeyDown}>
-      <Text dimColor>Source: {getAgentSourceDisplayName(agent.source)}</Text>
+      <Text dimColor>{t('Source: {{v}}', { v: getAgentSourceDisplayName(agent.source) })}</Text>
 
       <Box marginTop={1} flexDirection="column">
         {menuItems.map((item, index) => (

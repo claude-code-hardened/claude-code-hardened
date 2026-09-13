@@ -9,6 +9,7 @@ import { Select } from '../CustomSelect/select.js';
 import { SandboxConfigTab } from './SandboxConfigTab.js';
 import { SandboxDependenciesTab } from './SandboxDependenciesTab.js';
 import { SandboxOverridesTab } from './SandboxOverridesTab.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   onComplete: (result?: string, options?: { display?: CommandResultDisplay }) => void;
@@ -41,19 +42,19 @@ export function SandboxSettings({ onComplete, depCheck }: Props): React.ReactNod
     {
       label:
         currentMode === 'auto-allow'
-          ? `Sandbox BashTool, with auto-allow ${currentIndicator}`
-          : 'Sandbox BashTool, with auto-allow',
+          ? t('Sandbox BashTool, with auto-allow {{v}}', { v: currentIndicator })
+          : t('Sandbox BashTool, with auto-allow'),
       value: 'auto-allow',
     },
     {
       label:
         currentMode === 'regular'
-          ? `Sandbox BashTool, with regular permissions ${currentIndicator}`
-          : 'Sandbox BashTool, with regular permissions',
+          ? t('Sandbox BashTool, with regular permissions {{v}}', { v: currentIndicator })
+          : t('Sandbox BashTool, with regular permissions'),
       value: 'regular',
     },
     {
-      label: currentMode === 'disabled' ? `No Sandbox ${currentIndicator}` : 'No Sandbox',
+      label: currentMode === 'disabled' ? t('No Sandbox {{v}}', { v: currentIndicator }) : t('No Sandbox'),
       value: 'disabled',
     },
   ];
@@ -67,21 +68,21 @@ export function SandboxSettings({ onComplete, depCheck }: Props): React.ReactNod
           enabled: true,
           autoAllowBashIfSandboxed: true,
         });
-        onComplete('✓ Sandbox enabled with auto-allow for bash commands');
+        onComplete(t('✓ Sandbox enabled with auto-allow for bash commands'));
         break;
       case 'regular':
         await SandboxManager.setSandboxSettings({
           enabled: true,
           autoAllowBashIfSandboxed: false,
         });
-        onComplete('✓ Sandbox enabled with regular bash permissions');
+        onComplete(t('✓ Sandbox enabled with regular bash permissions'));
         break;
       case 'disabled':
         await SandboxManager.setSandboxSettings({
           enabled: false,
           autoAllowBashIfSandboxed: false,
         });
-        onComplete('○ Sandbox disabled');
+        onComplete(t('○ Sandbox disabled'));
         break;
     }
   }
@@ -94,7 +95,7 @@ export function SandboxSettings({ onComplete, depCheck }: Props): React.ReactNod
   );
 
   const modeTab = (
-    <Tab key="mode" title="Mode">
+    <Tab key="mode" title={t('Mode')}>
       <SandboxModeTab
         showSocketWarning={showSocketWarning}
         options={options}
@@ -105,13 +106,13 @@ export function SandboxSettings({ onComplete, depCheck }: Props): React.ReactNod
   );
 
   const overridesTab = (
-    <Tab key="overrides" title="Overrides">
+    <Tab key="overrides" title={t('Overrides')}>
       <SandboxOverridesTab onComplete={onComplete} />
     </Tab>
   );
 
   const configTab = (
-    <Tab key="config" title="Config">
+    <Tab key="config" title={t('Config')}>
       <SandboxConfigTab />
     </Tab>
   );
@@ -122,7 +123,7 @@ export function SandboxSettings({ onComplete, depCheck }: Props): React.ReactNod
   // If only optional deps missing, show all tabs
   const tabs = hasErrors
     ? [
-        <Tab key="dependencies" title="Dependencies">
+        <Tab key="dependencies" title={t('Dependencies')}>
           <SandboxDependenciesTab depCheck={depCheck} />
         </Tab>,
       ]
@@ -130,7 +131,7 @@ export function SandboxSettings({ onComplete, depCheck }: Props): React.ReactNod
         modeTab,
         ...(hasWarnings
           ? [
-              <Tab key="dependencies" title="Dependencies">
+              <Tab key="dependencies" title={t('Dependencies')}>
                 <SandboxDependenciesTab depCheck={depCheck} />
               </Tab>,
             ]
@@ -141,7 +142,7 @@ export function SandboxSettings({ onComplete, depCheck }: Props): React.ReactNod
 
   return (
     <Pane color="permission">
-      <Tabs title="Sandbox:" color="permission" defaultTab="Mode">
+      <Tabs title={t('Sandbox:')} color="permission" defaultTab="Mode">
         {tabs}
       </Tabs>
     </Pane>
@@ -164,11 +165,11 @@ function SandboxModeTab({
     <Box flexDirection="column" paddingY={1}>
       {showSocketWarning && (
         <Box marginBottom={1}>
-          <Text color="warning">Cannot block unix domain sockets (see Dependencies tab)</Text>
+          <Text color="warning">{t('Cannot block unix domain sockets (see Dependencies tab)')}</Text>
         </Box>
       )}
       <Box marginBottom={1}>
-        <Text bold>Configure Mode:</Text>
+        <Text bold>{t('Configure Mode:')}</Text>
       </Box>
       <Select
         options={options}
@@ -180,13 +181,15 @@ function SandboxModeTab({
       <Box flexDirection="column" marginTop={1} gap={1}>
         <Text dimColor>
           <Text bold dimColor>
-            Auto-allow mode:
+            {t('Auto-allow mode:')}
           </Text>{' '}
-          Commands will try to run in the sandbox automatically, and attempts to run outside of the sandbox fallback to
-          regular permissions. Explicit ask/deny rules are always respected.
+          {t(
+            'Commands will try to run in the sandbox automatically, and attempts to run outside of the sandbox fallback to regular permissions. Explicit ask/deny rules are always respected.',
+          )}
         </Text>
         <Text dimColor>
-          Learn more: <Link url="https://code.claude.com/docs/en/sandboxing">code.claude.com/docs/en/sandboxing</Link>
+          {t('Learn more: ')}
+          <Link url="https://code.claude.com/docs/en/sandboxing">code.claude.com/docs/en/sandboxing</Link>
         </Text>
       </Box>
     </Box>

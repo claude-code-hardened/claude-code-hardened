@@ -3,6 +3,7 @@ import { useExitOnCtrlCDWithKeybindings } from '../../hooks/useExitOnCtrlCDWithK
 import { Box, Text } from '@anthropic/ink';
 import { ConfigurableShortcutHint } from '../ConfigurableShortcutHint.js';
 import { Byline, KeyboardShortcutHint } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   instructions?: ReactNode;
@@ -21,7 +22,9 @@ export function WizardNavigationFooter({
 
   return (
     <Box marginLeft={3} marginTop={1}>
-      <Text dimColor>{exitState.pending ? `Press ${exitState.keyName} again to exit` : instructions}</Text>
+      <Text dimColor>
+        {exitState.pending ? t('Press {{k}} again to exit', { k: exitState.keyName }) : instructions}
+      </Text>
     </Box>
   );
 }

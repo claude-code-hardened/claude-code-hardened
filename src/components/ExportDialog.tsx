@@ -9,6 +9,7 @@ import { writeFileSync_DEPRECATED } from '../utils/slowOperations.js';
 import { ConfigurableShortcutHint } from './ConfigurableShortcutHint.js';
 import { Select } from './CustomSelect/select.js';
 import TextInput from './TextInput.js';
+import { t } from '../i18n/index.js';
 
 type ExportDialogProps = {
   content: string;
@@ -36,7 +37,7 @@ export function ExportDialog({ content, defaultFilename, onDone }: ExportDialogP
       // Copy to clipboard immediately
       const raw = await setClipboard(content);
       if (raw) process.stdout.write(raw);
-      onDone({ success: true, message: 'Conversation copied to clipboard' });
+      onDone({ success: true, message: t('Conversation copied to clipboard') });
     } else if (value === 'file') {
       setSelectedOption('file');
       setShowFilenameInput(true);
@@ -54,12 +55,14 @@ export function ExportDialog({ content, defaultFilename, onDone }: ExportDialogP
       });
       onDone({
         success: true,
-        message: `Conversation exported to: ${filepath}`,
+        message: t('Conversation exported to: {{v}}', { v: filepath }),
       });
     } catch (error) {
       onDone({
         success: false,
-        message: `Failed to export conversation: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: t('Failed to export conversation: {{m}}', {
+          m: error instanceof Error ? error.message : t('Unknown error'),
+        }),
       });
     }
   };
@@ -70,20 +73,20 @@ export function ExportDialog({ content, defaultFilename, onDone }: ExportDialogP
     if (showFilenameInput) {
       handleGoBack();
     } else {
-      onDone({ success: false, message: 'Export cancelled' });
+      onDone({ success: false, message: t('Export cancelled') });
     }
   }, [showFilenameInput, handleGoBack, onDone]);
 
   const options = [
     {
-      label: 'Copy to clipboard',
+      label: t('Copy to clipboard'),
       value: 'clipboard',
-      description: 'Copy the conversation to your system clipboard',
+      description: t('Copy the conversation to your system clipboard'),
     },
     {
-      label: 'Save to file',
+      label: t('Save to file'),
       value: 'file',
-      description: 'Save the conversation to a file in the current directory',
+      description: t('Save the conversation to a file in the current directory'),
     },
   ];
 
@@ -99,7 +102,7 @@ export function ExportDialog({ content, defaultFilename, onDone }: ExportDialogP
     }
 
     if (exitState.pending) {
-      return <Text>Press {exitState.keyName} again to exit</Text>;
+      return <Text>{t('Press {{k}} again to exit', { k: exitState.keyName })}</Text>;
     }
 
     return <ConfigurableShortcutHint action="confirm:no" context="Confirmation" fallback="Esc" description="cancel" />;
@@ -113,8 +116,8 @@ export function ExportDialog({ content, defaultFilename, onDone }: ExportDialogP
 
   return (
     <Dialog
-      title="Export Conversation"
-      subtitle="Select export method:"
+      title={t('Export Conversation')}
+      subtitle={t('Select export method:')}
       color="permission"
       onCancel={handleCancel}
       inputGuide={renderInputGuide}
@@ -124,7 +127,7 @@ export function ExportDialog({ content, defaultFilename, onDone }: ExportDialogP
         <Select options={options} onChange={handleSelectOption} onCancel={handleCancel} />
       ) : (
         <Box flexDirection="column">
-          <Text>Enter filename:</Text>
+          <Text>{t('Enter filename:')}</Text>
           <Box flexDirection="row" gap={1} marginTop={1}>
             <Text>&gt;</Text>
             <TextInput

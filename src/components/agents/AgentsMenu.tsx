@@ -27,6 +27,7 @@ import { AgentsList } from './AgentsList.js';
 import { deleteAgentFromFile } from './agentFileUtils.js';
 import { CreateAgentWizard } from './new-agent-creation/CreateAgentWizard.js';
 import type { ModeState } from './types.js';
+import { t } from '../../i18n/index.js';
 
 type Props = {
   tools: Tools;
@@ -163,14 +164,14 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
       const isEditable =
         agentToUse.source !== 'built-in' && agentToUse.source !== 'plugin' && agentToUse.source !== 'flagSettings';
       const menuItems = [
-        { label: 'View agent', value: 'view' },
+        { label: t('View agent'), value: 'view' },
         ...(isEditable
           ? [
-              { label: 'Edit agent', value: 'edit' },
-              { label: 'Delete agent', value: 'delete' },
+              { label: t('Edit agent'), value: 'edit' },
+              { label: t('Delete agent'), value: 'delete' },
             ]
           : []),
-        { label: 'Back', value: 'back' },
+        { label: t('Back'), value: 'back' },
       ];
 
       const handleMenuSelect = (value: string): void => {
@@ -260,31 +261,33 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
               }
             />
           </Dialog>
-          <AgentNavigationFooter instructions="Press Enter or Esc to go back" />
+          <AgentNavigationFooter instructions={t('Press Enter or Esc to go back')} />
         </>
       );
     }
 
     case 'delete-confirm': {
       const deleteOptions = [
-        { label: 'Yes, delete', value: 'yes' },
-        { label: 'No, cancel', value: 'no' },
+        { label: t('Yes, delete'), value: 'yes' },
+        { label: t('No, cancel'), value: 'no' },
       ];
 
       return (
         <>
           <Dialog
-            title="Delete agent"
+            title={t('Delete agent')}
             onCancel={() => {
               if ('previousMode' in modeState) setModeState(modeState.previousMode);
             }}
             color="error"
           >
             <Text>
-              Are you sure you want to delete the agent <Text bold>{modeState.agent.agentType}</Text>?
+              {t('Are you sure you want to delete the agent ')}
+              <Text bold>{modeState.agent.agentType}</Text>
+              {t('?')}
             </Text>
             <Box marginTop={1}>
-              <Text dimColor>Source: {modeState.agent.source}</Text>
+              <Text dimColor>{t('Source: {{v}}', { v: modeState.agent.source })}</Text>
             </Box>
             <Box marginTop={1}>
               <Select
@@ -306,7 +309,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
               />
             </Box>
           </Dialog>
-          <AgentNavigationFooter instructions="Press ↑↓ to navigate, Enter to select, Esc to cancel" />
+          <AgentNavigationFooter instructions={t('Press ↑↓ to navigate, Enter to select, Esc to cancel')} />
         </>
       );
     }
@@ -321,7 +324,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
       return (
         <>
           <Dialog
-            title={`Edit agent: ${agentToEdit.agentType}`}
+            title={t('Edit agent: {{n}}', { n: agentToEdit.agentType })}
             onCancel={() => setModeState(modeState.previousMode)}
             hideInputGuide
           >

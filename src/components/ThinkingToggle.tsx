@@ -6,6 +6,7 @@ import { useKeybinding } from '../keybindings/useKeybinding.js';
 import { ConfigurableShortcutHint } from './ConfigurableShortcutHint.js';
 import { Select } from './CustomSelect/index.js';
 import { Byline, KeyboardShortcutHint, Pane } from '@anthropic/ink';
+import { t } from '../i18n/index.js';
 
 export type Props = {
   currentValue: boolean;
@@ -21,13 +22,13 @@ export function ThinkingToggle({ currentValue, onSelect, onCancel, isMidConversa
   const options = [
     {
       value: 'true',
-      label: 'Enabled',
-      description: 'Claude will think before responding',
+      label: t('Enabled'),
+      description: t('Claude will think before responding'),
     },
     {
       value: 'false',
-      label: 'Disabled',
-      description: 'Claude will respond without extended thinking',
+      label: t('Disabled'),
+      description: t('Claude will respond without extended thinking'),
     },
   ];
 
@@ -69,18 +70,19 @@ export function ThinkingToggle({ currentValue, onSelect, onCancel, isMidConversa
       <Box flexDirection="column">
         <Box marginBottom={1} flexDirection="column">
           <Text color="remember" bold>
-            Toggle thinking mode
+            {t('Toggle thinking mode')}
           </Text>
-          <Text dimColor>Enable or disable thinking for this session.</Text>
+          <Text dimColor>{t('Enable or disable thinking for this session.')}</Text>
         </Box>
 
         {confirmationPending !== null ? (
           <Box flexDirection="column" marginBottom={1} gap={1}>
             <Text color="warning">
-              Changing thinking mode mid-conversation will increase latency and may reduce quality. For best results,
-              set this at the start of a session.
+              {t(
+                'Changing thinking mode mid-conversation will increase latency and may reduce quality. For best results, set this at the start of a session.',
+              )}
             </Text>
-            <Text color="warning">Do you want to proceed?</Text>
+            <Text color="warning">{t('Do you want to proceed?')}</Text>
           </Box>
         ) : (
           <Box flexDirection="column" marginBottom={1}>
@@ -97,7 +99,7 @@ export function ThinkingToggle({ currentValue, onSelect, onCancel, isMidConversa
       </Box>
       <Text dimColor italic>
         {exitState.pending ? (
-          <>Press {exitState.keyName} again to exit</>
+          <>{t('Press {{k}} again to exit', { k: exitState.keyName })}</>
         ) : confirmationPending !== null ? (
           <Byline>
             <KeyboardShortcutHint shortcut="Enter" action="confirm" />
