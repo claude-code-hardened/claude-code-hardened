@@ -572,7 +572,7 @@ class Project {
   private flushTimer: ReturnType<typeof setTimeout> | null = null
   private activeDrain: Promise<void> | null = null
   private FLUSH_INTERVAL_MS = 100
-  private readonly MAX_CHUNK_BYTES = 100 * 1024 * 1024
+  private readonly MAX_CHUNK_BYTES = 2 * 1024 * 1024
 
   constructor() {}
 
