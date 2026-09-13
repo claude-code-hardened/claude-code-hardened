@@ -223,6 +223,7 @@
     "@inquirer/prompts": "8.4.2",
     "@xmldom/xmldom": "0.9.12",
     "follow-redirects": "1.16.0",
+    "fuse.js": "7.3.0",
     "hono": "4.13.7",
     "postcss": "8.5.28",
     "react": "19.2.5",
