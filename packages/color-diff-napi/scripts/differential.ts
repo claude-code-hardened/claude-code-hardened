@@ -25,6 +25,7 @@ import { join } from 'node:path'
 import {
   jsDiffLines,
   jsStructuredPatch,
+  type JsChange,
   type JsStructuredPatchHunk,
 } from '../src/jsDiff'
 
@@ -51,7 +52,9 @@ const napi = nodeRequire(nodePath) as {
     newStr: string,
     context?: number,
   ) => JsStructuredPatchHunk[]
-  diffLines?: (oldStr: string, newStr: string) => unknown[]
+  // The native module returns full jsdiff-shaped changes ({value, count,
+  // added, removed}) — same struct as src/jsDiff.ts's JsChange.
+  diffLines?: (oldStr: string, newStr: string) => JsChange[]
 }
 if (typeof napi.structuredPatch !== 'function') {
   console.error(
@@ -326,13 +329,11 @@ function compareCase(oldStr: string, newStr: string, context: number): void {
   if (typeof napi.diffLines === 'function') {
     const jsChanges = jsDiffLines(oldStr, newStr) ?? []
     try {
-      const rsChanges = (napi.diffLines!(oldStr, newStr) ?? []) as Array<{
-        added?: boolean
-        removed?: boolean
-        count?: number
-      }>
-      const sum = (arr: typeof jsChanges, pick: 'added' | 'removed'): number =>
-        arr.reduce((s, c) => s + (c[pick] ? c.count || 0 : 0), 0)
+      const rsChanges = napi.diffLines!(oldStr, newStr) ?? []
+      const sum = (
+        arr: readonly JsChange[],
+        pick: 'added' | 'removed',
+      ): number => arr.reduce((s, c) => s + (c[pick] ? c.count || 0 : 0), 0)
       if (
         sum(jsChanges, 'added') !== sum(rsChanges, 'added') ||
         sum(jsChanges, 'removed') !== sum(rsChanges, 'removed')

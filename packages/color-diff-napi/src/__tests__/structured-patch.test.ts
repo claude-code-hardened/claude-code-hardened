@@ -71,7 +71,7 @@ describe('structuredPatch (native-first wrapper)', () => {
     const newStr = 'alpha\nbeta\nGAMMA\ndelta'
     const viaWrapper = structuredPatch(oldStr, newStr, { context: 1 })
     const viaJs = jsStructuredPatch(oldStr, newStr, { context: 1 })
-    expect(viaWrapper!.hunks).toEqual(viaJs)
+    expect(viaWrapper!.hunks).toEqual(viaJs!)
   })
 })
 

@@ -135,18 +135,14 @@ export function diffLines(oldStr: string, newStr: string): Change[] {
 }
 
 /**
- * jsdiff-compatible word diff with preserved whitespace. Native when
- * available, falls back to the pure-TS jsdiff port in ./jsDiff.
+ * jsdiff-compatible word diff with preserved whitespace. Always uses the
+ * pure-TS jsdiff port in ./jsDiff: the native module's similar-backed word
+ * diff tokenizes differently (punctuation attaches to words, newlines are
+ * not separate tokens), so its change boundaries and count semantics differ
+ * from jsdiff. The StructuredDiff fallback renders these changes verbatim
+ * and gates word highlighting on them, so it needs jsdiff-identical output.
  */
 export function diffWordsWithSpace(oldStr: string, newStr: string): Change[] {
-  const native = tryLoadNative()
-  if (typeof native?.diffWordsWithSpace === 'function') {
-    try {
-      return native.diffWordsWithSpace(oldStr, newStr)
-    } catch (error) {
-      logError(error)
-    }
-  }
   return jsDiffWordsWithSpace(oldStr, newStr) ?? []
 }
 
