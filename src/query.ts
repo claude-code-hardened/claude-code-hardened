@@ -1516,11 +1516,10 @@ async function* queryLoop(
           })
 
           const next: State = {
-            messages: [
-              ...messagesForQuery,
-              ...assistantMessages,
+            messages: messagesForQuery.concat(
+              assistantMessages,
               recoveryMessage,
-            ],
+            ),
             toolUseContext,
             autoCompactTracking: tracking,
             maxOutputTokensRecoveryCount: maxOutputTokensRecoveryCount + 1,
@@ -1571,11 +1570,10 @@ async function* queryLoop(
 
       if (stopHookResult.blockingErrors.length > 0) {
         const next: State = {
-          messages: [
-            ...messagesForQuery,
-            ...assistantMessages,
-            ...stopHookResult.blockingErrors,
-          ],
+          messages: messagesForQuery.concat(
+            assistantMessages,
+            stopHookResult.blockingErrors,
+          ),
           toolUseContext,
           autoCompactTracking: tracking,
           maxOutputTokensRecoveryCount: 0,
@@ -1609,14 +1607,13 @@ async function* queryLoop(
             `Token budget continuation #${decision.continuationCount}: ${decision.pct}% (${decision.turnTokens.toLocaleString()} / ${decision.budget.toLocaleString()})`,
           )
           state = {
-            messages: [
-              ...messagesForQuery,
-              ...assistantMessages,
+            messages: messagesForQuery.concat(
+              assistantMessages,
               createUserMessage({
                 content: decision.nudgeMessage,
                 isMeta: true,
               }),
-            ],
+            ),
             toolUseContext,
             autoCompactTracking: tracking,
             maxOutputTokensRecoveryCount: 0,
