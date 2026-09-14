@@ -306,9 +306,9 @@ describe('AcpAgent', () => {
       expect(caps.list).toBeDefined()
       expect(caps.resume).toBeDefined()
       expect(caps.close).toBeDefined()
-      // fork is UNSTABLE — advertised under _meta.claudeCode.forkSession, not
-      // under sessionCapabilities (which is stable-v1 only).
-      expect(caps.fork).toBeUndefined()
+      // fork is UNSTABLE — SDK 1.x types it in sessionCapabilities (still
+      // UNSTABLE); _meta.claudeCode.forkSession is kept for pre-1.x clients.
+      expect(caps.fork).toBeDefined()
       expect(
         (res.agentCapabilities?._meta as any)?.claudeCode?.forkSession,
       ).toBe(true)
