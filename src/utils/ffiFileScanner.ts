@@ -17,10 +17,10 @@
  *     libfile_index_napi.so（存在才用）直接 bun:ffi dlopen。
  *
  * 符号协议（换行分隔 = `rg --files` 行语义，无需 JSON）：
- *   ccb_scan_files_into(root, excludes, buf, buf_len) -> isize
+ *   ccb_scan_files_into(root, excludes, buf, buf_len, deadline_ms) -> isize
  *   - 成功：`\n` 分隔的绝对路径写入 buf，返回内容字节数（不含结尾 \0）
  *   - buf_len 不足：返回 -(所需字节数)，JS 按绝对值扩容重试一次
- *   - 其他错误：-1（excludes 为 \n 分隔的目录名串）
+ *   - 其他错误（含 deadline_ms 超时）：-1（excludes 为 \n 分隔的目录名串）
  */
 
 import { dlopen } from 'bun:ffi'
@@ -37,7 +37,7 @@ import { EMBEDDED_NATIVES } from './embeddedNatives.gen'
  */
 const SCAN_SYMBOLS = {
   ccb_scan_files_into: {
-    args: ['cstring', 'cstring', 'ptr', 'usize'],
+    args: ['cstring', 'cstring', 'ptr', 'usize', 'u64'],
     returns: 'isize',
     async: true,
   },
@@ -48,6 +48,7 @@ type ScanFilesFn = (
   excludes: string,
   buf: Buffer,
   bufLen: number,
+  deadlineMs: number,
 ) => Promise<number>
 
 let cachedScanFn: ScanFilesFn | null = null
@@ -66,9 +67,10 @@ function bindScanSymbols(path: string): ScanFilesFn | null {
       excludes: string,
       buf: Buffer,
       bufLen: number,
+      deadlineMs: number,
     ) => Promise<bigint>
-    return async (root, excludes, buf, bufLen) =>
-      Number(await raw(root, excludes, buf, bufLen))
+    return async (root, excludes, buf, bufLen, deadlineMs) =>
+      Number(await raw(root, excludes, buf, bufLen, deadlineMs))
   } catch {
     return null
   }
@@ -190,12 +192,17 @@ const INITIAL_BUF_LEN = 16 * 1024 * 1024
 
 /**
  * 并行目录扫描（bun:ffi async → Bun 线程池）。返回绝对路径数组；原生库
- * 不可用、同步抛错、reject、返回 -1 或两次扩容后仍放不下时返回 null，
- * 调用方降级到 ripgrep。
+ * 不可用、同步抛错、reject、超时（deadlineMs 后由 Rust 线程内自检返回
+ * -1）、返回 -1 或两次扩容后仍放不下时返回 null，调用方降级到 ripgrep。
+ *
+ * deadlineMs 必须由 Rust 侧自检（Instant::elapsed）而非 JS setTimeout：
+ * Bun 1.4.2 在事件循环等待线程池 FFI Promise 期间不触发 setTimeout
+ * （2026-09-15 实测，unref 与否无关），JS 侧 race 超时是死路。
  */
 export async function scanProjectFilesFfi(
   root: string,
   excludes: string[],
+  deadlineMs: number,
 ): Promise<string[] | null> {
   const scan = ensureFfiScanner() as ScanFilesFn | null
   if (scan === null) {
@@ -206,11 +213,11 @@ export async function scanProjectFilesFfi(
   // 局部变量足够防止 GC 回收底层内存。
   let buf = Buffer.allocUnsafe(INITIAL_BUF_LEN)
   try {
-    let n = await scan(root, excludesArg, buf, buf.length)
+    let n = await scan(root, excludesArg, buf, buf.length, deadlineMs)
     if (n < 0 && n !== -1) {
       // -(所需字节数)：按绝对值扩容重试一次
       buf = Buffer.allocUnsafe(-n)
-      n = await scan(root, excludesArg, buf, buf.length)
+      n = await scan(root, excludesArg, buf, buf.length, deadlineMs)
     }
     if (n < 0) {
       return null

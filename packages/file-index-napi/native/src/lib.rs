@@ -557,7 +557,11 @@ impl NativeFileIndex {
 /// 并行遍历 `root`，返回绝对路径列表（目录内按文件名排序，结果确定）。
 /// `excludes` 按**目录名**匹配（JS 传入 node_modules/.git/…），命中即整棵
 /// 剪枝；隐藏文件包含在结果中；符号链接被跟随（--follow）。
-fn scan_project_files_impl(root: &str, excludes: &[String]) -> Result<Vec<String>, String> {
+fn scan_project_files_impl(
+  root: &str,
+  excludes: &[String],
+  deadline_ms: u64,
+) -> Result<Vec<String>, String> {
   let root_path = Path::new(root);
   let metadata = fs::metadata(root_path)
     .map_err(|err| format!("scan_project_files: root metadata failed: {err}"))?;
@@ -567,6 +571,7 @@ fn scan_project_files_impl(root: &str, excludes: &[String]) -> Result<Vec<String
 
   let excludes_set: FxHashSet<String> = excludes.iter().cloned().collect();
   let mut files: Vec<String> = Vec::new();
+  let scan_start = std::time::Instant::now();
 
   // sort(true)：每个目录的条目按名字排序，配合 jwalk 的有序并行队列输出
   // 全序确定的结果（rg --files 同样可复现）。
@@ -581,6 +586,15 @@ fn scan_project_files_impl(root: &str, excludes: &[String]) -> Result<Vec<String
     .skip_hidden(false)
     .follow_links(false)
     .process_read_dir(move |_depth, _path, _state, children| {
+      // deadline 自限：JS 侧 setTimeout race 在 Bun 等待线程池 async FFI
+      // Promise 期间不触发（2026-09-15 实测 45-67s 扫描时 10s timer 回调
+      // 一次都不执行，unref 与否无关）——超时预算必须在扫描线程内自洽。
+      // 超时后清空 children：该目录的子树不再展开，已在飞的并行 read_dir
+      // 自然收尾，整体返回 -1 让 JS 降级 ripgrep。
+      if deadline_ms > 0 && scan_start.elapsed().as_millis() as u64 > deadline_ms {
+        children.clear();
+        return;
+      }
       // 剪枝：目录名命中 excludes 的条目从 children 中移除，其子树不再
       // 被 read_dir（node_modules / VCS 目录 / .claude 转录）。单项
       // read_dir 失败的 Err 条目同样丢弃——rg 亦静默跳过。
@@ -614,11 +628,14 @@ fn scan_project_files_impl(root: &str, excludes: &[String]) -> Result<Vec<String
 ///
 /// 协议（对齐 `rg --files` 的行语义）：
 ///   - `root` / `excludes` 为 C 字符串；`excludes` 是 `\n` 分隔的目录名串。
+///   - `deadline_ms`：扫描超时预算（毫秒），在扫描线程内用
+///     `Instant::elapsed` 自洽检查（JS 侧 setTimeout 在 Bun 等待线程池
+///     FFI Promise 期间不触发，预算只能放这里）；0 = 无限制。超时返回 -1。
 ///   - 成功：把结果以 `\n` 分隔的绝对路径写入 `buf`（末尾补一个 `\0`），
 ///     返回**内容字节数**（不含结尾 `\0`）。
 ///   - `buf_len` 不足：返回 `-(所需字节数)`（含 `\0`），JS 按该值扩容后
 ///     重试一次。
-///   - 其他错误（空 root / 非目录 / 空指针 / 非 UTF-8 / panic）：-1。
+///   - 其他错误（空 root / 非目录 / 空指针 / 非 UTF-8 / panic / 超时）：-1。
 ///
 /// panic 跨 `extern "C"` 边界会直接 abort 进程——jwalk/rayon 在极端
 /// 文件系统状态下可能 panic，必须用 `catch_unwind` 隔离在边界之内。
@@ -628,9 +645,10 @@ pub extern "C" fn ccb_scan_files_into(
   excludes: *const c_char,
   buf: *mut u8,
   buf_len: usize,
+  deadline_ms: u64,
 ) -> isize {
   let outcome = panic::catch_unwind(AssertUnwindSafe(|| unsafe {
-    ccb_scan_files_into_impl(root, excludes, buf, buf_len)
+    ccb_scan_files_into_impl(root, excludes, buf, buf_len, deadline_ms)
   }));
   match outcome {
     Ok(code) => code,
@@ -649,6 +667,7 @@ unsafe fn ccb_scan_files_into_impl(
   excludes: *const c_char,
   buf: *mut u8,
   buf_len: usize,
+  deadline_ms: u64,
 ) -> isize {
   if root.is_null() || excludes.is_null() || buf.is_null() {
     return -1;
@@ -670,7 +689,7 @@ unsafe fn ccb_scan_files_into_impl(
     .map(str::to_string)
     .collect();
 
-  let files = match scan_project_files_impl(root, &excludes) {
+  let files = match scan_project_files_impl(root, &excludes, deadline_ms) {
     Ok(files) => files,
     Err(_) => return -1,
   };
