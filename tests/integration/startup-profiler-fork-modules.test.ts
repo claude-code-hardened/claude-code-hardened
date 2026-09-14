@@ -176,11 +176,11 @@ describe('startup profiler: fork-module checkpoints', () => {
       join(REPO_ROOT, 'src/commands/_shared/launchCommand.ts'),
       'utf-8',
     )
-    expect(source).toContain(
-      'launch_${checkpointSegment(opts.commandName)}_start',
+    expect(source).toMatch(
+      /profileCheckpoint\(`launch_\$\{checkpointSegment\(opts\.commandName\)\}_start`\)/,
     )
-    expect(source).toContain(
-      'launch_${checkpointSegment(opts.commandName)}_dispatched',
+    expect(source).toMatch(
+      /profileCheckpoint\(`launch_\$\{checkpointSegment\(opts\.commandName\)\}_dispatched`\)/,
     )
     // Dash-containing command names (vault, memory-stores, ...) must be
     // sanitized to underscores so checkpoint names stay <module>_<stage>.
@@ -235,8 +235,7 @@ describe('startup profiler: fork-module checkpoints', () => {
       }
 
       // Report lines: [+  123.456ms] (+   12.345ms) checkpoint_name | RSS: ...
-      const linePattern =
-        /\[\+\s*\d+\.\d+ms\] \(\+\s*\d+\.\d+ms\) (\S+) \|/
+      const linePattern = /\[\+\s*\d+\.\d+ms\] \(\+\s*\d+\.\d+ms\) (\S+) \|/
       let matchedLines = 0
       for (const line of report.split('\n')) {
         const match = line.match(linePattern)
