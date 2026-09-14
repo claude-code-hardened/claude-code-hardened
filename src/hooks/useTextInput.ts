@@ -19,6 +19,7 @@ import {
   yankPop,
 } from '../utils/Cursor.js'
 import { env } from '../utils/env.js'
+import { logForDebugging } from '../utils/debug.js'
 import { isFullscreenEnvEnabled } from '../utils/fullscreen.js'
 import type { ImageDimensions } from '../utils/imageResizer.js'
 import { isModifierPressed, prewarmModifiers } from '../utils/modifiers.js'
@@ -429,11 +430,35 @@ export function useTextInput({
     return (key.ctrl || key.meta) && input === 'y'
   }
 
+  // 按键标识（仅 debug 用）：只记按键类型与输入长度，不记录文本内容。
+  function describeKeystroke(key: Key, inputLen: number): string {
+    const parts: string[] = []
+    if (key.leftArrow) parts.push('left')
+    if (key.rightArrow) parts.push('right')
+    if (key.upArrow) parts.push('up')
+    if (key.downArrow) parts.push('down')
+    if (key.backspace) parts.push('backspace')
+    if (key.delete) parts.push('delete')
+    if (key.return) parts.push('return')
+    if (key.escape) parts.push('escape')
+    if (key.tab) parts.push('tab')
+    if (key.home) parts.push('home')
+    if (key.end) parts.push('end')
+    if (key.ctrl) parts.push('ctrl')
+    if (key.meta) parts.push('meta')
+    if (key.shift) parts.push('shift')
+    if (parts.length === 0) parts.push(`char*${inputLen}`)
+    return parts.join('+')
+  }
+
   function onInput(input: string, key: Key): void {
     // Note: Image paste shortcut (chat:imagePaste) is handled via useKeybindings in PromptInput
 
     // Apply filter if provided
     const filteredInput = inputFilter ? inputFilter(input, key) : input
+    logForDebugging(
+      `[keystroke] in key=${describeKeystroke(key, filteredInput.length)} offset=${offset} len=${originalValue.length}`,
+    )
 
     // If the input was filtered out, do nothing
     if (filteredInput === '' && input !== '') {
@@ -477,6 +502,9 @@ export function useTextInput({
 
     const nextCursor = mapKey(key)(filteredInput)
     if (nextCursor) {
+      logForDebugging(
+        `[keystroke] out key=${describeKeystroke(key, filteredInput.length)} offset=${offset}→${nextCursor.offset} len=${originalValue.length}→${nextCursor.text.length}`,
+      )
       if (!cursor.equals(nextCursor)) {
         if (cursor.text !== nextCursor.text) {
           onChange(nextCursor.text)
