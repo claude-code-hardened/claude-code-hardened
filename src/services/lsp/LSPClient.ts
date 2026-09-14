@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from 'child_process'
 import {
   createMessageConnection,
+  type GenericRequestHandler,
   type MessageConnection,
   StreamMessageReader,
   StreamMessageWriter,
@@ -367,7 +368,10 @@ export function createLSPClient(
 
       checkStartFailed()
 
-      connection.onRequest(method, handler)
+      connection.onRequest(
+        method,
+        handler as unknown as GenericRequestHandler<TResult, never>,
+      )
     },
 
     async stop(): Promise<void> {
