@@ -20,6 +20,7 @@ import { existsSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { EMBEDDED_NATIVES } from './embeddedNatives.gen'
+import { logForDebugging } from './debug.js'
 
 const nodeRequire = createRequire(import.meta.url)
 
@@ -93,11 +94,22 @@ export function loadNativeModule<T>(
     if (base64) {
       try {
         const fromMemory = accept(loadNativeFromMemory(moduleName, base64))
-        if (fromMemory) return fromMemory
+        if (fromMemory) {
+          logForDebugging(`[native] ${moduleName}: loaded from embedded (dlopen ok)`)
+          return fromMemory
+        }
+        logForDebugging(
+          `[native] ${moduleName}: embedded load returned invalid module → vendor fallback`,
+        )
       } catch (e) {
+        logForDebugging(
+          `[native] ${moduleName}: embedded dlopen FAILED → vendor fallback: ${String(e).slice(0, 200)}`,
+        )
         console.error(`[embedded-native] 内存加载失败 ${moduleName}:`, e)
         // 继续尝试 vendor 回退
       }
+    } else {
+      logForDebugging(`[native] ${moduleName}: no embedded payload in binary`)
     }
   }
 
