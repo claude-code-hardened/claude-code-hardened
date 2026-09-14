@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { ButtonGroup, ButtonGroupText } from '../ui/button-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '../../src/lib/utils';
+import { code } from '@streamdown/code';
 import type { FileUIPart, UIMessage } from 'ai';
 import { ChevronLeftIcon, ChevronRightIcon, PaperclipIcon, XIcon } from 'lucide-react';
 import type { ComponentProps, HTMLAttributes, ReactElement } from 'react';
@@ -262,6 +263,7 @@ export const MessageResponse = memo(
           'size-full break-words [overflow-wrap:anywhere] [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
           className,
         )}
+        plugins={{ code }}
         {...props}
       >
         {children}
