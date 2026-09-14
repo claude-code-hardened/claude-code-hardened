@@ -16,14 +16,13 @@
  *
  * 用法：bun scripts/bench-startup.ts <binary路径> [--runs 3]
  */
+import { basename } from 'node:path'
 import { existsSync } from 'node:fs'
 
 const BASELINE = {
   'non-bytecode': { version: 1160, checkCommands: 1486 },
   bytecode: { version: 199, checkCommands: 1280 },
 }
-
-const BYTECODE_VERSION_REGRESSION_MS = 500
 
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b)
@@ -65,7 +64,11 @@ async function probe(
 
 const binaryArg = process.argv[2]
 const runsFlag = process.argv.indexOf('--runs')
-const runs = runsFlag > -1 ? Number(process.argv[runsFlag + 1]) || 3 : 3
+// 校验为正整数：负数/0/小数/NaN 一律回退 3（空 samples 会让 median=NaN，
+// NaN > 阈值恒为 false，曾造成非法输入假 PASS）
+const parsedRuns = runsFlag > -1 ? Number(process.argv[runsFlag + 1]) : 3
+const runs =
+  Number.isInteger(parsedRuns) && parsedRuns > 0 ? parsedRuns : 3
 
 if (!binaryArg || !existsSync(binaryArg)) {
   console.error('用法: bun scripts/bench-startup.ts <binary路径> [--runs 3]')
@@ -74,9 +77,19 @@ if (!binaryArg || !existsSync(binaryArg)) {
 }
 const binary = binaryArg
 
-console.log(`target: ${binary} (runs=${runs} + 1 warmup)`)
-const version = await probe(binary, ['--version'], runs)
-const check = await probe(binary, ['--check-commands'], runs)
+// timeOnce 计的是父进程 spawn→exited 墙钟（含 fork/exec 数十 ms 开销），
+// x64 host 普遍慢于本基线所在的 aarch64——阈值按架构归一。
+const REGRESSION_MS = process.arch === 'arm64' ? 500 : 800
+
+console.log(`target: ${basename(binary)} (arch=${process.arch}, runs=${runs} + 1 warmup)`)
+let version, check
+try {
+  version = await probe(binary, ['--version'], runs)
+  check = await probe(binary, ['--check-commands'], runs)
+} catch (err) {
+  console.error(`✗ probe failed: ${err instanceof Error ? err.message : err}`)
+  process.exit(1)
+}
 
 console.log('\n┌─ startup perf probes (ms) ─────────────────────')
 console.log(
@@ -95,12 +108,12 @@ console.log(
   `  non-bytecode: --version ${BASELINE['non-bytecode'].version}ms / --check-commands ${BASELINE['non-bytecode'].checkCommands}ms`,
 )
 
-if (version.median > BYTECODE_VERSION_REGRESSION_MS) {
+if (version.median > REGRESSION_MS) {
   console.error(
-    `\n✗ --version median ${version.median}ms 超过 bytecode 回归阈值 ${BYTECODE_VERSION_REGRESSION_MS}ms——产物可能未启用 bytecode 预编译或启动路径回归`,
+    `\n✗ --version median ${version.median}ms 超过 bytecode 回归阈值 ${REGRESSION_MS}ms——产物可能未启用 bytecode 预编译或启动路径回归`,
   )
   process.exit(2)
 }
 console.log(
-  `\n✓ --version median ${version.median}ms ≤ ${BYTECODE_VERSION_REGRESSION_MS}ms（bytecode 生效）`,
+  `\n✓ --version median ${version.median}ms ≤ ${REGRESSION_MS}ms（bytecode 生效）`,
 )
