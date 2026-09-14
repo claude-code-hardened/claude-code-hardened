@@ -48,7 +48,7 @@ jobs:
           rm -rf node_modules packages/remote-control-server/node_modules
           bun install --linker hoisted --frozen-lockfile 2>&1 | tail -2
           ls node_modules | grep -i streamdown || echo "HOISTED ROOT: no streamdown"
-          bun test tests/integration/dependency-overrides.test.ts 2>&1 | tail -6
+          bun test tests/integration/dependency-overrides.test.ts 2>&1 | tail -40
 
       - name: Lint and format check
         run: bunx biome ci .
