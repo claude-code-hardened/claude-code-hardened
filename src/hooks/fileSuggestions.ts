@@ -515,13 +515,17 @@ async function getProjectFiles(
     // 超时预算：bun:ffi async 在线程池执行、不阻塞事件循环，race 超时后
     // 后台扫描继续（结果被丢弃），UI 立即落到 rg 路径——对齐旧实现的
     // 10s Promise.race 降级（jwalk 0.8 无符号链接环检测，防御性预算）。
+    // 不用 timer.unref()：Bun 1.4.2 实测（对真实 .node 扫 /root，45-67s）
+    // unref timer 在事件循环等待线程池 FFI Promise 期间被跳过，race 完全
+    // 由 scan 结算驱动——10s 保护形同虚设。改 race 结算后 clearTimeout。
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     const ffiFiles = await Promise.race([
       scanProjectFilesFfi(getCwd(), FFI_SCAN_EXCLUDES),
       new Promise<null>(resolve => {
-        const timer = setTimeout(() => resolve(null), 10_000)
-        timer.unref?.()
+        timeoutTimer = setTimeout(() => resolve(null), 10_000)
       }),
     ])
+    clearTimeout(timeoutTimer)
     if (ffiFiles) {
       const relativePaths = ffiFiles.map(f => path.relative(getCwd(), f))
       const duration = Date.now() - ffiScanStart
