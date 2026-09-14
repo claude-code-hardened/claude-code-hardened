@@ -20,7 +20,6 @@ import { getCwd } from '../utils/cwd.js'
 import { logForDebugging } from '../utils/debug.js'
 import { errorMessage } from '../utils/errors.js'
 import { execFileNoThrowWithCwd } from '../utils/execFileNoThrow.js'
-import { scanProjectFilesFfi } from '../utils/ffiFileScanner.js'
 import { getFsImplementation } from '../utils/fsOperations.js'
 import { findGitRoot, gitExe } from '../utils/git.js'
 import {
@@ -463,26 +462,6 @@ async function getClaudeConfigFiles(cwd: string): Promise<string[]> {
 }
 
 /**
- * Directory names pruned whole-subtree by the pure-FFI parallel scan (Rust
- * jwalk behind `ccb_scan_files_into`), mirroring the rg fallback's
- * `--glob '!<name>/'` args plus `.claude`: the git branch lists only
- * git-tracked files, and untracked `.claude/` (1.5GB of session transcripts
- * under .claude/projects) never appears there, so the scan aligns with that
- * behavior.
- */
-const FFI_SCAN_EXCLUDES = [
-  'node_modules',
-  '.bun',
-  '.git',
-  '.svn',
-  '.hg',
-  '.bzr',
-  '.jj',
-  '.sl',
-  '.claude',
-]
-
-/**
  * Gets project files using git ls-files (fast) or ripgrep (fallback)
  */
 async function getProjectFiles(
@@ -502,40 +481,12 @@ async function getProjectFiles(
     return gitFiles
   }
 
-  // Non-git fallback, native-first: jwalk parallel walk through the pure-FFI
-  // export (bun:ffi async → Bun thread pool) replaces the ripgrep subprocess
-  // (spawn + stdout parse + relative post-processing). 144k files took 56-64s
-  // under rg on proot/Android (slow I/O competing with the UI); the parallel
-  // native scan targets seconds. Any failure (missing library, -1, buffer
-  // still too small after one retry) degrades to the untouched ripgrep path
-  // below. Same kill switch as the native index itself:
-  // FEATURE_FILE_INDEX_NATIVE=0 must restore the fully-TS/rg path.
-  if (feature('FILE_INDEX_NATIVE')) {
-    const ffiScanStart = Date.now()
-    // 超时预算（10s，对齐旧实现的降级语义）在 Rust 扫描线程内自检：
-    // bun:ffi async 在线程池执行、不阻塞事件循环；但 JS 侧 setTimeout
-    // 在 Bun 等待线程池 FFI Promise 期间不触发（2026-09-15 实测，
-    // unref 与否无关），race 超时是死路——deadline 只能由 Rust 自限。
-    const ffiFiles = await scanProjectFilesFfi(
-      getCwd(),
-      FFI_SCAN_EXCLUDES,
-      10_000,
-    )
-    if (ffiFiles) {
-      const relativePaths = ffiFiles.map(f => path.relative(getCwd(), f))
-      const duration = Date.now() - ffiScanStart
-      logForDebugging(
-        `[FileIndex] ffi scan: ${relativePaths.length} files in ${duration}ms`,
-      )
-      logEvent('tengu_file_suggestions_ffi_scan', {
-        file_count: relativePaths.length,
-        duration_ms: duration,
-      })
-      return relativePaths
-    }
-  }
-
-  // Fall back to ripgrep
+  // Non-git fallback: ripgrep subprocess collects the file list, which is
+  // then fed into the native (Rust) index — rg owns listing, Rust owns
+  // search. The previous pure-FFI jwalk scan was removed (2026-09-15):
+  // unstable under proot (symlink-loop blowup, then a Bun runtime quirk
+  // where setTimeout never fires while awaiting thread-pool FFI promises),
+  // while rg with node_modules/.bun globs is reliably seconds.
   logForDebugging(
     `[FileIndex] git ls-files returned null, falling back to ripgrep`,
   )
