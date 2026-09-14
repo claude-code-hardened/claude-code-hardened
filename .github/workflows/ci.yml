@@ -33,11 +33,6 @@ jobs:
           CLAUDE_CODE_SKIP_CHROME_MCP_SETUP: "1"
         run: bun install --frozen-lockfile
 
-      - name: Tmp debug install layout (diagnostic, to be removed)
-        run: |
-          echo "=== single test on native (isolated) layout ==="
-          bun test tests/integration/dependency-overrides.test.ts 2>&1 | tail -20
-
       - name: Lint and format check
         run: bunx biome ci .
 
