@@ -54,9 +54,9 @@ describe('resolveBytecodeEnabled', () => {
 
   test('is disabled by garbage strings', () => {
     for (const garbage of ['yes', '2', 'on', ' true', 'true ', '1.0']) {
-      expect(
-        resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: garbage }),
-      ).toBe(false)
+      expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: garbage })).toBe(
+        false,
+      )
     }
   })
 
