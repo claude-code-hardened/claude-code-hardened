@@ -1,11 +1,7 @@
 import { feature } from 'bun:bundle'
 import { statSync } from 'fs'
 import ignore from 'ignore'
-import {
-  createNativeFileIndex,
-  scanProjectFilesNative,
-  type FileIndexLike,
-} from 'file-index-napi'
+import { createNativeFileIndex, type FileIndexLike } from 'file-index-napi'
 import * as path from 'path'
 import {
   CLAUDE_CONFIG_DIRECTORIES,
@@ -24,6 +20,7 @@ import { getCwd } from '../utils/cwd.js'
 import { logForDebugging } from '../utils/debug.js'
 import { errorMessage } from '../utils/errors.js'
 import { execFileNoThrowWithCwd } from '../utils/execFileNoThrow.js'
+import { scanProjectFilesFfi } from '../utils/ffiFileScanner.js'
 import { getFsImplementation } from '../utils/fsOperations.js'
 import { findGitRoot, gitExe } from '../utils/git.js'
 import {
@@ -466,13 +463,14 @@ async function getClaudeConfigFiles(cwd: string): Promise<string[]> {
 }
 
 /**
- * Directory names pruned whole-subtree by the native parallel scan (Rust
- * jwalk), mirroring the rg fallback's `--glob '!<name>/'` args plus `.claude`:
- * the git branch lists only git-tracked files, and untracked `.claude/`
- * (1.5GB of session transcripts under .claude/projects) never appears there,
- * so the native scan aligns with that behavior.
+ * Directory names pruned whole-subtree by the pure-FFI parallel scan (Rust
+ * jwalk behind `ccb_scan_files_into`), mirroring the rg fallback's
+ * `--glob '!<name>/'` args plus `.claude`: the git branch lists only
+ * git-tracked files, and untracked `.claude/` (1.5GB of session transcripts
+ * under .claude/projects) never appears there, so the scan aligns with that
+ * behavior.
  */
-const NATIVE_SCAN_EXCLUDES = [
+const FFI_SCAN_EXCLUDES = [
   'node_modules',
   '.bun',
   '.git',
@@ -483,54 +481,6 @@ const NATIVE_SCAN_EXCLUDES = [
   '.sl',
   '.claude',
 ]
-
-// Same budget as getPathsForSuggestions' AbortSignal.timeout(10_000).
-const NATIVE_SCAN_TIMEOUT_MS = 10_000
-
-/**
- * Native parallel scan for the non-git fallback path. Mirrors
- * `rg --files --follow --hidden` + the directory globs of the rg branch:
- * hidden files included, excluded directory names pruned with their whole
- * subtree. Returns paths relative to cwd (the rg branch's post-processing
- * shape) or null — feature flag off, missing native module, sync throw,
- * rejection, abort or timeout — so the caller degrades to ripgrep. The
- * napi AsyncTask cannot observe a JS AbortSignal (an already-started napi
- * async work is not cancellable), so Promise.race implements the degrade
- * path; a timed-out scan just finishes in the background and its result
- * is discarded.
- */
-async function getProjectFilesNativeScan(
-  abortSignal: AbortSignal,
-): Promise<string[] | null> {
-  // Same kill switch as the native index itself: FEATURE_FILE_INDEX_NATIVE=0
-  // must restore the fully-TS/rg path, scan included.
-  if (!feature('FILE_INDEX_NATIVE')) {
-    return null
-  }
-  const scan = scanProjectFilesNative(getCwd(), NATIVE_SCAN_EXCLUDES)
-  if (scan === null) {
-    return null
-  }
-  let resolveFallback: (value: null) => void = () => {}
-  const degrade = new Promise<null>(resolve => {
-    resolveFallback = resolve
-  })
-  const onAbort = (): void => {
-    resolveFallback(null)
-  }
-  abortSignal.addEventListener('abort', onAbort, { once: true })
-  const timer = setTimeout(onAbort, NATIVE_SCAN_TIMEOUT_MS)
-  try {
-    const files = await Promise.race([scan.catch(() => null), degrade])
-    if (files === null) {
-      return null
-    }
-    return files.map(f => path.relative(getCwd(), f))
-  } finally {
-    clearTimeout(timer)
-    abortSignal.removeEventListener('abort', onAbort)
-  }
-}
 
 /**
  * Gets project files using git ls-files (fast) or ripgrep (fallback)
@@ -552,19 +502,29 @@ async function getProjectFiles(
     return gitFiles
   }
 
-  // Non-git fallback, native-first: jwalk parallel walk on the Rust thread
-  // pool replaces the ripgrep subprocess (spawn + stdout parse + relative
-  // post-processing). 144k files took 56-64s under rg on proot/Android
-  // (slow I/O competing with the UI); the parallel native scan targets
-  // seconds. Any failure/timeout degrades to the untouched ripgrep path
-  // below.
-  const nativeScanStart = Date.now()
-  const nativeFiles = await getProjectFilesNativeScan(abortSignal)
-  if (nativeFiles !== null) {
-    logForDebugging(
-      `[FileIndex] native scan: ${nativeFiles.length} files in ${Date.now() - nativeScanStart}ms`,
-    )
-    return nativeFiles
+  // Non-git fallback, native-first: jwalk parallel walk through the pure-FFI
+  // export (bun:ffi async → Bun thread pool) replaces the ripgrep subprocess
+  // (spawn + stdout parse + relative post-processing). 144k files took 56-64s
+  // under rg on proot/Android (slow I/O competing with the UI); the parallel
+  // native scan targets seconds. Any failure (missing library, -1, buffer
+  // still too small after one retry) degrades to the untouched ripgrep path
+  // below. Same kill switch as the native index itself:
+  // FEATURE_FILE_INDEX_NATIVE=0 must restore the fully-TS/rg path.
+  if (feature('FILE_INDEX_NATIVE')) {
+    const ffiScanStart = Date.now()
+    const ffiFiles = await scanProjectFilesFfi(getCwd(), FFI_SCAN_EXCLUDES)
+    if (ffiFiles) {
+      const relativePaths = ffiFiles.map(f => path.relative(getCwd(), f))
+      const duration = Date.now() - ffiScanStart
+      logForDebugging(
+        `[FileIndex] ffi scan: ${relativePaths.length} files in ${duration}ms`,
+      )
+      logEvent('tengu_file_suggestions_ffi_scan', {
+        file_count: relativePaths.length,
+        duration_ms: duration,
+      })
+      return relativePaths
+    }
   }
 
   // Fall back to ripgrep

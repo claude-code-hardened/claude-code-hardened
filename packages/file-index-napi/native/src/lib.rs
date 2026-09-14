@@ -36,22 +36,21 @@
 //! Greek or rarely remapped uppercase letters differently from the TS
 //! implementation. ASCII, CJK and emoji queries are unaffected.
 //!
-//! Besides the fuzzy index, this crate also exposes `scan_project_files`:
-//! a jwalk (rayon) parallel directory walk that replaces the ripgrep
-//! subprocess fallback in `src/hooks/fileSuggestions.ts` for non-git
-//! directories. It runs on the libuv thread pool via napi's AsyncTask, so a
-//! 144k-file scan never blocks the JS event loop, and resolves to absolute
-//! paths in the same shape `rg --files --follow --hidden` produces.
+//! Besides the fuzzy index, this crate also exposes `ccb_scan_files_into`:
+//! a pure `extern "C"` (no napi macro) export over the same jwalk (rayon)
+//! parallel directory walk that replaces the ripgrep subprocess fallback in
+//! `src/hooks/fileSuggestions.ts` for non-git directories. The JS side binds
+//! it with bun:ffi `async: true`, so the scan runs on Bun's own thread pool
+//! and never blocks the JS event loop; the export itself stays synchronous.
 
 use std::cmp::Ordering;
+use std::ffi::{c_char, CStr};
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use jwalk::WalkDir;
 use memchr::memmem;
-use napi::bindgen_prelude::AsyncTask;
-use napi::{Env, Task};
 use napi_derive::napi;
 use rustc_hash::FxHashSet;
 
@@ -552,70 +551,16 @@ impl NativeFileIndex {
   }
 }
 
-/// libuv 线程池任务体：目录扫描可能涉及十万级文件（非 git 目录 fallback
-/// 场景），必须离开 JS 主线程执行——同步跑会阻塞事件循环、UI 冻结，正是
-/// 本导出要修的问题。compute 在 libuv worker 上跑，resolve 回主线程后仅
-/// 透传结果（Vec<String> 的 N-API 转换由 napi 完成）。
-struct ScanProjectFilesTask {
-  root: String,
-  excludes: Vec<String>,
-}
-
-impl Task for ScanProjectFilesTask {
-  type Output = Vec<String>;
-  type JsValue = Vec<String>;
-
-  fn compute(&mut self) -> napi::Result<Self::Output> {
-    // 与 crate 其余入口一致做 panic 隔离：panic 在 libuv 的 C 回调里展开
-    // 会直接 abort 进程，这里降级为 Promise rejection（JS 侧再降级到
-    // ripgrep 路径）。
-    panic::catch_unwind(AssertUnwindSafe(|| {
-      scan_project_files_impl(&self.root, &self.excludes)
-    }))
-    .unwrap_or_else(|payload| {
-      let detail = payload
-        .downcast_ref::<&str>()
-        .map(|s| (*s).to_string())
-        .or_else(|| payload.downcast_ref::<String>().cloned())
-        .unwrap_or_else(|| "unknown panic".to_string());
-      Err(napi::Error::new(
-        napi::Status::GenericFailure,
-        format!("scan_project_files panicked: {detail}"),
-      ))
-    })
-  }
-
-  fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
-    Ok(output)
-  }
-}
-
 /// Non-git 目录的文件列举——`rg --files --follow --hidden` 的原生替代。
-/// 在 libuv 线程池并行遍历 `root`，返回绝对路径数组（目录内按文件名排序，
-/// 结果确定）。`excludes` 按**目录名**匹配（JS 传入 node_modules/.git/…），
-/// 命中即整棵剪枝；隐藏文件包含在结果中；符号链接被跟随（--follow）。
-/// JS 侧拿到 Promise<string[]>，拒绝时降级到 ripgrep。
-#[napi]
-pub fn scan_project_files(
-  root: String,
-  excludes: Vec<String>,
-) -> AsyncTask<ScanProjectFilesTask> {
-  AsyncTask::new(ScanProjectFilesTask { root, excludes })
-}
-
-fn scan_project_files_impl(root: &str, excludes: &[String]) -> napi::Result<Vec<String>> {
+/// 并行遍历 `root`，返回绝对路径列表（目录内按文件名排序，结果确定）。
+/// `excludes` 按**目录名**匹配（JS 传入 node_modules/.git/…），命中即整棵
+/// 剪枝；隐藏文件包含在结果中；符号链接被跟随（--follow）。
+fn scan_project_files_impl(root: &str, excludes: &[String]) -> Result<Vec<String>, String> {
   let root_path = Path::new(root);
-  let metadata = fs::metadata(root_path).map_err(|err| {
-    napi::Error::new(
-      napi::Status::GenericFailure,
-      format!("scan_project_files: root metadata failed: {err}"),
-    )
-  })?;
+  let metadata = fs::metadata(root_path)
+    .map_err(|err| format!("scan_project_files: root metadata failed: {err}"))?;
   if !metadata.is_dir() {
-    return Err(napi::Error::new(
-      napi::Status::GenericFailure,
-      format!("scan_project_files: root is not a directory: {root}"),
-    ));
+    return Err(format!("scan_project_files: root is not a directory: {root}"));
   }
 
   let excludes_set: FxHashSet<String> = excludes.iter().cloned().collect();
@@ -659,4 +604,83 @@ fn scan_project_files_impl(root: &str, excludes: &[String]) -> napi::Result<Vec<
   }
 
   Ok(files)
+}
+
+/// 纯 FFI 导出（不走 napi 宏）：JS 侧用 bun:ffi `async: true` 直调，扫描
+/// 在 Bun 线程池执行，事件循环不阻塞；同步导出自身无需再开线程。
+///
+/// 协议（对齐 `rg --files` 的行语义）：
+///   - `root` / `excludes` 为 C 字符串；`excludes` 是 `\n` 分隔的目录名串。
+///   - 成功：把结果以 `\n` 分隔的绝对路径写入 `buf`（末尾补一个 `\0`），
+///     返回**内容字节数**（不含结尾 `\0`）。
+///   - `buf_len` 不足：返回 `-(所需字节数)`（含 `\0`），JS 按该值扩容后
+///     重试一次。
+///   - 其他错误（空 root / 非目录 / 空指针 / 非 UTF-8 / panic）：-1。
+///
+/// panic 跨 `extern "C"` 边界会直接 abort 进程——jwalk/rayon 在极端
+/// 文件系统状态下可能 panic，必须用 `catch_unwind` 隔离在边界之内。
+#[no_mangle]
+pub extern "C" fn ccb_scan_files_into(
+  root: *const c_char,
+  excludes: *const c_char,
+  buf: *mut u8,
+  buf_len: usize,
+) -> isize {
+  let outcome = panic::catch_unwind(AssertUnwindSafe(|| unsafe {
+    ccb_scan_files_into_impl(root, excludes, buf, buf_len)
+  }));
+  match outcome {
+    Ok(code) => code,
+    Err(_) => -1,
+  }
+}
+
+/// `ccb_scan_files_into` 的 unsafe 主体：指针解引用只发生在被
+/// `catch_unwind` 包裹的调用内。
+///
+/// # Safety
+/// `root` / `excludes` 必须是以 NUL 结尾的有效 C 字符串（可为 \0 空串），
+/// `buf` 必须可写且至少 `buf_len` 字节——由 JS 侧 bun:ffi 调用约定保证。
+unsafe fn ccb_scan_files_into_impl(
+  root: *const c_char,
+  excludes: *const c_char,
+  buf: *mut u8,
+  buf_len: usize,
+) -> isize {
+  if root.is_null() || excludes.is_null() || buf.is_null() {
+    return -1;
+  }
+  let root = match CStr::from_ptr(root).to_str() {
+    Ok(s) => s,
+    Err(_) => return -1,
+  };
+  if root.is_empty() {
+    return -1;
+  }
+  let excludes_raw = match CStr::from_ptr(excludes).to_str() {
+    Ok(s) => s,
+    Err(_) => return -1,
+  };
+  let excludes: Vec<String> = excludes_raw
+    .split('\n')
+    .filter(|name| !name.is_empty())
+    .map(str::to_string)
+    .collect();
+
+  let files = match scan_project_files_impl(root, &excludes) {
+    Ok(files) => files,
+    Err(_) => return -1,
+  };
+
+  // 换行分隔 = rg --files 行语义；无需 JSON 序列化。
+  let data = files.join("\n").into_bytes();
+  let needed = data.len() + 1; // 结尾 \0
+  if needed > buf_len {
+    return -(needed as isize);
+  }
+  if !data.is_empty() {
+    std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
+  }
+  *buf.add(data.len()) = 0;
+  data.len() as isize
 }
