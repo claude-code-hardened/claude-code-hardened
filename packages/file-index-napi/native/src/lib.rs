@@ -570,13 +570,14 @@ fn scan_project_files_impl(root: &str, excludes: &[String]) -> Result<Vec<String
   // 全序确定的结果（rg --files 同样可复现）。
   // skip_hidden(false)：包含隐藏文件（--hidden 语义；jwalk 默认**跳过**
   // 隐藏条目，必须显式关闭）。
-  // follow_links(true)：跟随符号链接（--follow 语义；jwalk 在 process_
-  // read_dir 回调之前逐项解析符号链接，指向目录的链接 file_type 即为
-  // dir，同样按名剪枝——对齐 rg 对路径组件的 --glob '!node_modules/'）。
+  // follow_links(false)：**不**跟随符号链接——jwalk 0.8 无已访问 inode 环
+  // 检测（rg 内部有），/root 实测 follow 遇符号链接环产生 137MB/约 200 万
+  // 条爆炸性路径、扫描 404s（2026-09-15）。语义收窄：符号链接指向的路径
+  // 不进 @-mention 建议（rg 的无 --follow 模式同此行为）。
   for entry in WalkDir::new(root_path)
     .sort(true)
     .skip_hidden(false)
-    .follow_links(true)
+    .follow_links(false)
     .process_read_dir(move |_depth, _path, _state, children| {
       // 剪枝：目录名命中 excludes 的条目从 children 中移除，其子树不再
       // 被 read_dir（node_modules / VCS 目录 / .claude 转录）。单项
@@ -673,8 +674,15 @@ unsafe fn ccb_scan_files_into_impl(
   };
 
   // 换行分隔 = rg --files 行语义；无需 JSON 序列化。
+  // 输出上限 64MB（约 100 万条路径）：follow_links(false) 后正常项目远低于
+  // 此值；若仍超限（极端 symlink 展开/病态目录树）直接 -1，防止 JS 侧按
+  // -(所需) 无限扩容。实测 /root 环爆炸时曾达 137MB。
+  const SCAN_OUTPUT_LIMIT: usize = 64 * 1024 * 1024;
   let data = files.join("\n").into_bytes();
   let needed = data.len() + 1; // 结尾 \0
+  if needed > SCAN_OUTPUT_LIMIT {
+    return -1;
+  }
   if needed > buf_len {
     return -(needed as isize);
   }
