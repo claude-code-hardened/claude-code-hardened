@@ -52,18 +52,17 @@ type NativeIndexHandle = {
   free(): void
 }
 
-type NativeFileIndexModule = {
-  createNativeFileIndex(): NativeIndexHandle
-  isNativeFileIndex(): boolean
-}
-
 /**
- * `scan_project_files` export (added later than the index surface). Validated
- * separately so an older embedded binary without the export still loads the
- * index module — only the scan degrades to the caller's fallback.
+ * napi 导出面（Rust lib.rs 实测）：`isNativeFileIndex()` 自由函数 +
+ * `NativeFileIndex` 类（#[napi(factory)] create_native_file_index → JS 侧
+ * 用 `new NativeFileIndex()` 构造，不存在顶层 createNativeFileIndex 自由
+ * 函数——此前 validate 检查它导致 embedded 加载永远 "invalid module"）。
+ * 类方法经 napi 驼峰化：loadFromFileList / appendPaths / search /
+ * pathCount / free。
  */
-type NativeScanModule = {
-  scanProjectFiles(root: string, excludes: string[]): Promise<string[]>
+type NativeFileIndexModule = {
+  NativeFileIndex: new () => NativeIndexHandle
+  isNativeFileIndex(): boolean
 }
 
 let cachedModule: NativeFileIndexModule | null = null
@@ -79,59 +78,13 @@ function loadModule(): NativeFileIndexModule | null {
     'file-index',
     'file-index',
     m =>
-      typeof m.createNativeFileIndex === 'function' &&
-      typeof m.isNativeFileIndex === 'function',
+      typeof m.isNativeFileIndex === 'function' &&
+      typeof m.NativeFileIndex === 'function',
   )
   if (mod) {
     cachedModule = mod
   }
   return cachedModule
-}
-
-let cachedScanModule: NativeScanModule | null = null
-let scanLoadAttempted = false
-
-function loadScanModule(): NativeScanModule | null {
-  if (scanLoadAttempted) {
-    return cachedScanModule
-  }
-  scanLoadAttempted = true
-
-  // Same underlying .node (same cache key in loadNativeModule) — only the
-  // validator differs. When the shared cache already holds a newer binary
-  // both validators pass and the instance is reused.
-  const mod = loadNativeModule<NativeScanModule>(
-    'file-index',
-    'file-index',
-    m => typeof m.scanProjectFiles === 'function',
-  )
-  if (mod) {
-    cachedScanModule = mod
-  }
-  return cachedScanModule
-}
-
-/**
- * Parallel directory scan of `root` in the Rust thread pool (jwalk walk
- * behind `scan_project_files`). Resolves to absolute file paths in the same
- * shape `rg --files --follow --hidden` produces, with whole subtrees pruned
- * by directory name from `excludes`. Returns null (caller falls back to the
- * ripgrep subprocess path) when the native module is missing or throws
- * synchronously; async failures surface as a rejected promise.
- */
-export function scanProjectFilesNative(
-  root: string,
-  excludes: string[],
-): Promise<string[]> | null {
-  const mod = loadScanModule()
-  if (mod === null) {
-    return null
-  }
-  try {
-    return mod.scanProjectFiles(root, excludes)
-  } catch {
-    return null
-  }
 }
 
 // One native append per chunk (~2ms for 16k paths), yielding to the event
@@ -218,7 +171,7 @@ export class NativeFileIndex implements FileIndexLike {
       return null
     }
     try {
-      return mod.createNativeFileIndex()
+      return new mod.NativeFileIndex()
     } catch {
       return null
     }
