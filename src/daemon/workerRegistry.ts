@@ -1,5 +1,5 @@
 import { resolve } from 'path'
-import { profileCheckpoint } from '../utils/startupProfiler.js'
+import { profileCheckpoint, profileReport } from '../utils/startupProfiler.js'
 import {
   type HeadlessBridgeOpts,
   BridgeHeadlessPermanentError,
@@ -26,19 +26,31 @@ const EXIT_CODE_TRANSIENT = 1
  */
 export async function runDaemonWorker(kind?: string): Promise<void> {
   profileCheckpoint('daemon_worker_entry')
-  if (!kind) {
-    console.error('Error: --daemon-worker requires a worker kind')
-    process.exitCode = EXIT_CODE_PERMANENT
-    return
-  }
-
-  switch (kind) {
-    case 'remoteControl':
-      await runRemoteControlWorker()
-      break
-    default:
-      console.error(`Error: unknown daemon worker kind '${kind}'`)
+  try {
+    if (!kind) {
+      console.error('Error: --daemon-worker requires a worker kind')
       process.exitCode = EXIT_CODE_PERMANENT
+      return
+    }
+
+    switch (kind) {
+      case 'remoteControl':
+        await runRemoteControlWorker()
+        break
+      default:
+        console.error(`Error: unknown daemon worker kind '${kind}'`)
+        process.exitCode = EXIT_CODE_PERMANENT
+    }
+  } finally {
+    // Worker exit outlet: the worker process spawned via spawnCli skips the
+    // main.tsx / gracefulShutdown report paths, so without this flush the
+    // daemon_worker_* checkpoints never reach disk. profileReport() is
+    // one-shot and only writes when detailed profiling is enabled.
+    try {
+      profileReport()
+    } catch {
+      // Ignore profiling errors during worker shutdown
+    }
   }
 }
 

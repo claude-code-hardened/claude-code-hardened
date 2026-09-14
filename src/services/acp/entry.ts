@@ -1,7 +1,10 @@
 import { AgentSideConnection, ndJsonStream } from '@agentclientprotocol/sdk'
 import type { Stream } from '@agentclientprotocol/sdk'
 import { Readable, Writable } from 'node:stream'
-import { profileCheckpoint } from '../../utils/startupProfiler.js'
+import {
+  profileCheckpoint,
+  profileReport,
+} from '../../utils/startupProfiler.js'
 import { AcpAgent } from './agent.js'
 import { enableConfigs } from '../../utils/config.js'
 import { applySafeConfigEnvironmentVariables } from '../../utils/managedEnv.js'
@@ -59,6 +62,15 @@ export async function runAcpAgent(): Promise<void> {
       } catch {
         // Best-effort cleanup
       }
+    }
+    // The ACP process exits here (never returns through cli.tsx or
+    // gracefulShutdown), so this is the only outlet that persists the
+    // acp_* startup checkpoints. profileReport() is one-shot and only
+    // writes when detailed profiling is enabled.
+    try {
+      profileReport()
+    } catch {
+      // Ignore profiling errors during shutdown
     }
     process.exit(0)
   }

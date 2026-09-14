@@ -5,7 +5,10 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import { profileCheckpoint } from '../../../src/utils/startupProfiler.js'
+import {
+  profileCheckpoint,
+  profileReport,
+} from '../../../src/utils/startupProfiler.js'
 import {
   CDN_BASE_URL,
   DEFAULT_BASE_URL,
@@ -249,6 +252,14 @@ export async function runWeixinMcpServer(
     process.stderr.write(
       '[weixin] No account configured. Run `ccb weixin login` to connect your WeChat account.\n',
     )
+    // Flush before the analytics shutdown tears down the sinks the sampled
+    // Statsig report still needs. profileReport() is one-shot and only
+    // writes the report file when detailed profiling is enabled.
+    try {
+      profileReport()
+    } catch {
+      // Ignore profiling errors during shutdown
+    }
     await Promise.all([deps.shutdown1PEventLogging(), deps.shutdownDatadog()])
     process.exit(1)
   }
@@ -300,6 +311,14 @@ export async function runWeixinMcpServer(
     exiting = true
     if (!controller.signal.aborted) {
       controller.abort()
+    }
+    // The weixin serve process exits here (never returns through cli.tsx or
+    // gracefulShutdown), so this is the only outlet that persists the
+    // weixin_* startup checkpoints.
+    try {
+      profileReport()
+    } catch {
+      // Ignore profiling errors during shutdown
     }
     await Promise.all([deps.shutdown1PEventLogging(), deps.shutdownDatadog()])
     process.exit(0)

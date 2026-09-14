@@ -99,8 +99,20 @@ async function main(): Promise<void> {
   }
 
   // For all other paths, load the startup profiler
-  const { profileCheckpoint } = await import('../utils/startupProfiler.js');
+  const { profileCheckpoint, profileReport } = await import('../utils/startupProfiler.js');
   profileCheckpoint('cli_entry');
+
+  // Flush the startup profile before a fork fast-path exits. profileReport()
+  // is self-guarding — one-shot, and the report file is only written when
+  // CLAUDE_CODE_PROFILE_STARTUP=1 — so without profiling this is a zero-output
+  // no-op. Errors are swallowed: profiling must never break a fast-path exit.
+  const flushStartupProfile = (): void => {
+    try {
+      profileReport();
+    } catch {
+      // Ignore profiling errors on fast-path exit.
+    }
+  };
 
   // Fast-path for --dump-system-prompt: output the rendered system prompt and exit.
   // Used by prompt sensitivity evals to extract the system prompt at a specific commit.
@@ -115,6 +127,7 @@ async function main(): Promise<void> {
     const { getSystemPrompt } = await import('../constants/prompts.js');
     const prompt = await getSystemPrompt([], model);
     console.log(prompt.join('\n'));
+    flushStartupProfile();
     return;
   }
 
@@ -122,16 +135,19 @@ async function main(): Promise<void> {
     profileCheckpoint('cli_claude_in_chrome_mcp_path');
     const { runClaudeInChromeMcpServer } = await import('../utils/claudeInChrome/mcpServer.js');
     await runClaudeInChromeMcpServer();
+    flushStartupProfile();
     return;
   } else if (process.argv[2] === '--chrome-native-host') {
     profileCheckpoint('cli_chrome_native_host_path');
     const { runChromeNativeHost } = await import('../utils/claudeInChrome/chromeNativeHost.js');
     await runChromeNativeHost();
+    flushStartupProfile();
     return;
   } else if (feature('CHICAGO_MCP') && process.argv[2] === '--computer-use-mcp') {
     profileCheckpoint('cli_computer_use_mcp_path');
     const { runComputerUseMcpServer } = await import('../utils/computerUse/mcpServer.js');
     await runComputerUseMcpServer();
+    flushStartupProfile();
     return;
   }
 
@@ -140,6 +156,7 @@ async function main(): Promise<void> {
     profileCheckpoint('cli_acp_path');
     const { runAcpAgent } = await import('../services/acp/entry.js');
     await runAcpAgent();
+    flushStartupProfile();
     return;
   }
 
@@ -168,6 +185,7 @@ async function main(): Promise<void> {
       },
       MACRO.VERSION,
     );
+    flushStartupProfile();
     return;
   }
 
@@ -182,11 +200,13 @@ async function main(): Promise<void> {
         'Error: --daemon-worker requires DAEMON feature to be enabled. Set FEATURE_DAEMON=1 or add DAEMON to DEFAULT_BUILD_FEATURES.',
       );
       process.exitCode = 1;
+      flushStartupProfile();
       return;
     }
     const kind = args[0] === '--daemon-worker' ? args[1] : args[0].split('=')[1];
     const { runDaemonWorker } = await import('../daemon/workerRegistry.js');
     await runDaemonWorker(kind);
+    flushStartupProfile();
     return;
   }
 
@@ -218,15 +238,18 @@ async function main(): Promise<void> {
     const { getClaudeAIOAuthTokens } = await import('../utils/auth.js');
     const { getBridgeAccessToken } = await import('../bridge/bridgeConfig.js');
     if (!getClaudeAIOAuthTokens()?.accessToken && !getBridgeAccessToken()) {
+      flushStartupProfile();
       exitWithError(BRIDGE_LOGIN_ERROR);
     }
     const disabledReason = await getBridgeDisabledReason();
     if (disabledReason) {
       const { t } = await import('../i18n/index.js');
+      flushStartupProfile();
       exitWithError(t('Error: {{msg}}', { msg: disabledReason }));
     }
     const versionError = checkBridgeMinVersion();
     if (versionError) {
+      flushStartupProfile();
       exitWithError(versionError);
     }
 
@@ -235,10 +258,12 @@ async function main(): Promise<void> {
     await waitForPolicyLimitsToLoad();
     if (!isPolicyAllowed('allow_remote_control')) {
       const { t } = await import('../i18n/index.js');
+      flushStartupProfile();
       exitWithError(t("Error: Remote Control is disabled by your organization's policy."));
     }
 
     await bridgeMain(args.slice(1));
+    flushStartupProfile();
     return;
   }
 
@@ -255,6 +280,7 @@ async function main(): Promise<void> {
     initSinks();
     const { daemonMain } = await import('../daemon/main.js');
     await daemonMain(args.slice(1));
+    flushStartupProfile();
     return;
   }
 
@@ -276,6 +302,7 @@ async function main(): Promise<void> {
         resolve();
       });
     });
+    flushStartupProfile();
     process.exit(0);
   }
 
@@ -288,6 +315,7 @@ async function main(): Promise<void> {
     setShellIfWindows();
     const bg = await import('../cli/bg.js');
     await bg.handleBgStart(args.filter(a => a !== '--bg' && a !== '--background'));
+    flushStartupProfile();
     return;
   }
 
@@ -308,6 +336,7 @@ async function main(): Promise<void> {
     initSinks();
     const { daemonMain } = await import('../daemon/main.js');
     await daemonMain([args[0] === 'ps' ? 'status' : args[0]!, ...args.slice(1)]);
+    flushStartupProfile();
     return;
   }
 
@@ -316,6 +345,7 @@ async function main(): Promise<void> {
     profileCheckpoint('cli_templates_path');
     const { templatesMain } = await import('../cli/handlers/templateJobs.js');
     await templatesMain(args.slice(1));
+    flushStartupProfile();
     // process.exit (not return) — mountFleetView's Ink TUI can leave event
     // loop handles that prevent natural exit.
     // eslint-disable-next-line custom-rules/no-process-exit
@@ -329,6 +359,7 @@ async function main(): Promise<void> {
     profileCheckpoint('cli_templates_path');
     const { templatesMain } = await import('../cli/handlers/templateJobs.js');
     await templatesMain(args);
+    flushStartupProfile();
     // eslint-disable-next-line custom-rules/no-process-exit
     process.exit(0);
   }
@@ -347,11 +378,13 @@ async function main(): Promise<void> {
       const { execIntoTmuxWorktree } = await import('../utils/worktree.js');
       const result = await execIntoTmuxWorktree(args);
       if (result.handled) {
+        flushStartupProfile();
         return;
       }
       // If not handled (e.g., error), fall through to normal CLI
       if (result.error) {
         const { exitWithError } = await import('../utils/process.js');
+        flushStartupProfile();
         exitWithError(result.error);
       }
     }

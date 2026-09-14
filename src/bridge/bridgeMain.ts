@@ -20,7 +20,7 @@ import { errorMessage } from '../utils/errors.js'
 import { truncateToWidth } from '../utils/format.js'
 import { logError } from '../utils/log.js'
 import { sleep } from '../utils/sleep.js'
-import { profileCheckpoint } from '../utils/startupProfiler.js'
+import { profileCheckpoint, profileReport } from '../utils/startupProfiler.js'
 import { createAgentWorktree, removeAgentWorktree } from '../utils/worktree.js'
 import {
   BridgeFatalError,
@@ -2768,7 +2768,15 @@ export async function bridgeMain(args: string[]): Promise<void> {
   }
 
   // The bridge bypasses init.ts (and its graceful shutdown handler), so we
-  // must exit explicitly.
+  // must exit explicitly. Flush the startup profile first — this process
+  // never reaches the main.tsx / gracefulShutdown report outlets, so this is
+  // the only place the bridge_* checkpoints get persisted. profileReport()
+  // is one-shot and only writes when detailed profiling is enabled.
+  try {
+    profileReport()
+  } catch {
+    // Ignore profiling errors during shutdown
+  }
   // eslint-disable-next-line custom-rules/no-process-exit
   process.exit(0)
 }

@@ -114,6 +114,20 @@ const FORK_MODULE_PREFIXES = [
 /** `<module>_<stage>` shape: lowercase segments joined by underscores. */
 const CHECKPOINT_NAME_PATTERN = /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/
 
+/**
+ * Fork fast-path processes that exit outside the main.tsx / gracefulShutdown
+ * report outlets, mapped to the minimum number of profileReport() call sites
+ * each file must have. Without a flush on the exit path, the checkpoints
+ * these processes record are never persisted to startup-perf/<sid>.txt.
+ */
+const FAST_PATH_REPORT_OUTLETS: Array<[string, number]> = [
+  ['src/entrypoints/cli.tsx', 1],
+  ['src/daemon/workerRegistry.ts', 1],
+  ['src/bridge/bridgeMain.ts', 1],
+  ['src/services/acp/entry.ts', 1],
+  ['packages/weixin/src/server.ts', 2],
+]
+
 describe('startup profiler: fork-module checkpoints', () => {
   test('profiler calls are no-ops when profiling is disabled', async () => {
     const {
@@ -169,6 +183,32 @@ describe('startup profiler: fork-module checkpoints', () => {
           `${relFile} must register '${name}'`,
         ).toBe(true)
       }
+    }
+  })
+
+  test('fork fast-path processes flush profileReport before exiting', () => {
+    for (const [relFile, minCalls] of FAST_PATH_REPORT_OUTLETS) {
+      const source = readFileSync(join(REPO_ROOT, relFile), 'utf-8')
+      const calls = source.match(/profileReport\(\)/g)?.length ?? 0
+      const message = `${relFile} must flush profileReport() on its exit path — without it the fork-module checkpoints are never persisted`
+      expect(calls, message).toBeGreaterThanOrEqual(minCalls)
+    }
+  })
+
+  test('fork fast-path report flush precedes process.exit', () => {
+    // ACP and weixin serve processes exit via process.exit() inside their own
+    // entrypoints (they never return through cli.tsx), so the flush must be
+    // ordered before the exit to have any effect.
+    for (const relFile of [
+      'src/services/acp/entry.ts',
+      'packages/weixin/src/server.ts',
+    ]) {
+      const source = readFileSync(join(REPO_ROOT, relFile), 'utf-8')
+      const flushIdx = source.indexOf('profileReport()')
+      const exitIdx = source.indexOf('process.exit(')
+      expect(flushIdx, `${relFile} flushes the profile`).toBeGreaterThan(-1)
+      expect(exitIdx, `${relFile} exits via process.exit`).toBeGreaterThan(-1)
+      expect(flushIdx < exitIdx, `${relFile} flushes before exit`).toBe(true)
     }
   })
 
