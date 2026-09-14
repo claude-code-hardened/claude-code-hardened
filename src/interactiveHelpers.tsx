@@ -46,6 +46,7 @@ import { type FpsMetrics, FpsTracker } from './utils/fpsTracker.js';
 import { updateGithubRepoPathMapping } from './utils/githubRepoPathMapping.js';
 import { applyConfigEnvironmentVariables } from './utils/managedEnv.js';
 import type { PermissionMode } from './utils/permissions/PermissionMode.js';
+import { profileCheckpoint } from './utils/startupProfiler.js';
 import { getBaseRenderOptions } from './utils/renderOptions.js';
 import { getSettingsWithAllErrors } from './utils/settings/allErrors.js';
 import { hasSkipDangerousModePermissionPrompt } from './utils/settings/settings.js';
@@ -131,7 +132,9 @@ export async function showSetupDialog<T = void>(
  * Handles the common epilogue: start deferred prefetches, wait for exit, graceful shutdown.
  */
 export async function renderAndRun(root: Root, element: React.ReactNode): Promise<void> {
+  profileCheckpoint('repl_ink_mount_start');
   root.render(element);
+  profileCheckpoint('repl_ink_mount_done');
   startDeferredPrefetches();
   await root.waitUntilExit();
   await gracefulShutdown(0);

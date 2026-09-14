@@ -121,6 +121,7 @@ import {
   isCommandEnabled,
 } from '../commands.js';
 import type { PromptInputMode, QueuedCommand, VimMode } from '../types/textInputTypes.js';
+import { profileCheckpoint } from '../utils/startupProfiler.js';
 import {
   MessageSelector,
   selectableUserMessagesFilter,
@@ -872,6 +873,10 @@ export function REPL({
   // Log REPL mount/unmount lifecycle
   useEffect(() => {
     logForDebugging(`[REPL:mount] REPL mounted, disabled=${disabled}`);
+    // Startup profiling: REPL screen effects committed (children — including
+    // PromptInput — mounted before this parent effect fires). One-shot, and
+    // zero-cost unless the profiler is sampling.
+    profileCheckpoint('repl_screen_mount_effect_done');
     return () => logForDebugging(`[REPL:unmount] REPL unmounting`);
   }, [disabled]);
 

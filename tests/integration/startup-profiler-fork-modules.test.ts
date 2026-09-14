@@ -186,6 +186,52 @@ describe('startup profiler: fork-module checkpoints', () => {
     }
   })
 
+  // Startup → REPL homepage → interactive pipeline checkpoints. These live
+  // outside the fork feature modules (main / ink mount / REPL screen / query
+  // loop), so they are asserted separately from FORK_MODULE_CHECKPOINTS —
+  // whose <module> prefix whitelist (daemon/bridge/acp/...) does not cover
+  // the repl_*/action_* names.
+  const REPL_PIPELINE_CHECKPOINTS: Array<[string, string[]]> = [
+    ['src/main.tsx', ['action_commands_joined', 'mcp_connections_kicked']],
+    [
+      'src/interactiveHelpers.tsx',
+      ['repl_ink_mount_start', 'repl_ink_mount_done'],
+    ],
+    ['src/screens/REPL.tsx', ['repl_screen_mount_effect_done']],
+    ['src/components/PromptInput/PromptInput.tsx', ['repl_prompt_ready']],
+    ['src/query.ts', ['skillsearch_prefetch_kicked']],
+  ]
+
+  test('REPL pipeline checkpoints are registered in sources', () => {
+    for (const [relFile, expectedNames] of REPL_PIPELINE_CHECKPOINTS) {
+      const source = readFileSync(join(REPO_ROOT, relFile), 'utf-8')
+      for (const name of expectedNames) {
+        expect(
+          name,
+          `${relFile}: '${name}' must match <module>_<stage>`,
+        ).toMatch(CHECKPOINT_NAME_PATTERN)
+        expect(
+          source.includes(`profileCheckpoint('${name}')`),
+          `${relFile} must register '${name}'`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  test('ink log-update registers frame checkpoints', () => {
+    const source = readFileSync(
+      join(REPO_ROOT, 'packages/@ant/ink/src/core/log-update.ts'),
+      'utf-8',
+    )
+    // First visible frame of the REPL homepage.
+    expect(source).toContain("profileCheckpoint('repl_ink_first_frame')")
+    // Frame stalls are dynamic — a unique name per stall with the gap
+    // encoded, so marks stay unique and memorySnapshots stay order-aligned.
+    expect(source).toMatch(
+      /profileCheckpoint\(\s*`render_stall_\$\{stallCount\}_\$\{Math\.round\(frameGap\)\}ms`,?\s*\)/,
+    )
+  })
+
   test('fork fast-path processes flush profileReport before exiting', () => {
     for (const [relFile, minCalls] of FAST_PATH_REPORT_OUTLETS) {
       const source = readFileSync(join(REPO_ROOT, relFile), 'utf-8')

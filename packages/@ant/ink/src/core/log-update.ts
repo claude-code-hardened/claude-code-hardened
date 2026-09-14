@@ -33,6 +33,9 @@ import {
   legacyConsoleMode,
   legacyConsoleResetMs,
 } from './legacyConsole.js'
+// Startup profiling (pure observation — profileCheckpoint is a zero-cost
+// early-return unless the profiler is sampling this process).
+import { profileCheckpoint } from '../../../../../src/utils/startupProfiler.js'
 
 type State = {
   previousOutput: string
@@ -45,6 +48,17 @@ type Options = {
 
 const CARRIAGE_RETURN = { type: 'carriageReturn' } as const
 const NEWLINE = { type: 'stdout', content: '\n' } as const
+
+// Startup profiling state (module-level, process-wide):
+//  - repl_ink_first_frame fires once, on the first TTY render — the moment the
+//    REPL homepage becomes visible to the user.
+//  - Frame-stall detection: when the gap between consecutive TTY renders
+//    exceeds 250ms, a uniquely-named `render_stall_<n>_<gap>ms` checkpoint is
+//    recorded. A "homepage freezes for a minute" report shows up as a stall
+//    sequence with the gap encoded in each name.
+let firstFrameReported = false
+let lastFrameTime = 0
+let stallCount = 0
 
 export class LogUpdate {
   private state: State
@@ -139,6 +153,22 @@ export class LogUpdate {
     }
 
     const startTime = performance.now()
+
+    // Startup profiling — pure observation, no control-flow impact.
+    if (!firstFrameReported) {
+      firstFrameReported = true
+      profileCheckpoint('repl_ink_first_frame')
+    } else {
+      const frameGap = startTime - lastFrameTime
+      if (frameGap > 250) {
+        stallCount++
+        profileCheckpoint(
+          `render_stall_${stallCount}_${Math.round(frameGap)}ms`,
+        )
+      }
+    }
+    lastFrameTime = startTime
+
     const stylePool = this.options.stylePool
 
     // Since we assume the cursor is at the bottom on the screen, we only need

@@ -2579,6 +2579,7 @@ async function run(): Promise<CommanderCommand> {
         commandsPromise ?? getCommands(currentCwd),
         agentDefsPromise ?? getAgentDefinitionsWithOverrides(currentCwd),
       ]);
+      profileCheckpoint('action_commands_joined');
       logForDebugging(`[STARTUP] Commands and agents loaded in ${Date.now() - commandsStart}ms`);
       profileCheckpoint('action_commands_loaded');
 
@@ -3017,6 +3018,8 @@ async function run(): Promise<CommanderCommand> {
       }
 
       profileCheckpoint('action_mcp_configs_loaded');
+
+      profileCheckpoint('mcp_connections_kicked');
 
       // Prefetch MCP resources after trust dialog (this is where execution happens).
       // Interactive mode only: print mode defers connects until headlessStore exists

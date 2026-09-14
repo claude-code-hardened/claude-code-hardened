@@ -14,6 +14,7 @@ import { type AppState, useAppState, useAppStateStore, useSetAppState } from 'sr
 import type { FooterItem } from 'src/state/AppStateStore.js';
 import { getCwd } from 'src/utils/cwd.js';
 import { isQueuedCommandEditable, popAllEditable } from 'src/utils/messageQueueManager.js';
+import { profileCheckpoint } from 'src/utils/startupProfiler.js';
 import stripAnsi from 'strip-ansi';
 import { companionReservedColumns } from '../../buddy/CompanionSprite.js';
 import { findBuddyTriggerPositions, useBuddyNotification } from '../../buddy/useBuddyNotification.js';
@@ -447,6 +448,12 @@ function PromptInput({
     [tasks],
   );
   const minCoordinatorIndex = hasBgTaskPill ? -1 : 0;
+  // Startup profiling: the prompt input is mounted (PromptInput is rendered
+  // only by the REPL screen, so this fires once when the homepage input is
+  // ready). One-shot, and zero-cost unless the profiler is sampling.
+  useEffect(() => {
+    profileCheckpoint('repl_prompt_ready');
+  }, []);
   // Clamp index when tasks complete and the list shrinks beneath the cursor
   useEffect(() => {
     if (coordinatorTaskIndex >= coordinatorTaskCount) {

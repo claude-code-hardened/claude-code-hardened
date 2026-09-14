@@ -88,6 +88,7 @@ import {
 } from './utils/autonomyQueueLifecycle.js'
 import { notifyCommandLifecycle } from './utils/commandLifecycle.js'
 import { headlessProfilerCheckpoint } from './utils/headlessProfiler.js'
+import { profileCheckpoint } from './utils/startupProfiler.js'
 import {
   getRuntimeMainLoopModel,
   renderModelName,
@@ -481,6 +482,9 @@ async function* queryLoop(
     // nothing in prod). Turn-0 user-input discovery still blocks in
     // userInputAttachments — that's the one signal where there's no prior
     // work to hide under.
+    // Startup profiling: marks the skill-search prefetch kick point (first
+    // firing = turn-0 kick, the post-REPL heavy-work attribution marker).
+    profileCheckpoint('skillsearch_prefetch_kicked')
     const pendingSkillPrefetch = skillPrefetch?.startSkillDiscoveryPrefetch(
       null,
       messages,
