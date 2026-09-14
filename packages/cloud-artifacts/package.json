@@ -10,7 +10,7 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "nanoid": "^5.0.0"
+    "nanoid": "^6.0.0"
   },
   "devDependencies": {
     "typescript": "^6.0.0",

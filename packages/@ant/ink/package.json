@@ -11,7 +11,7 @@
   "dependencies": {
     "auto-bind": "^5.0.1",
     "bidi-js": "^1.0.3",
-    "chalk": "^5.6.2",
+    "chalk": "^6.0.0",
     "cli-boxes": "^4.0.1",
     "emoji-regex": "^10.6.0",
     "figures": "^6.1.0",

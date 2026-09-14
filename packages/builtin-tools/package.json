@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "@claude-code-best/agent-tools": "workspace:*",
-    "marked": "^17.0.6"
+    "marked": "^18.0.0"
   }
 }
