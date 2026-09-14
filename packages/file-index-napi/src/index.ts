@@ -57,6 +57,15 @@ type NativeFileIndexModule = {
   isNativeFileIndex(): boolean
 }
 
+/**
+ * `scan_project_files` export (added later than the index surface). Validated
+ * separately so an older embedded binary without the export still loads the
+ * index module — only the scan degrades to the caller's fallback.
+ */
+type NativeScanModule = {
+  scanProjectFiles(root: string, excludes: string[]): Promise<string[]>
+}
+
 let cachedModule: NativeFileIndexModule | null = null
 let loadAttempted = false
 
@@ -77,6 +86,52 @@ function loadModule(): NativeFileIndexModule | null {
     cachedModule = mod
   }
   return cachedModule
+}
+
+let cachedScanModule: NativeScanModule | null = null
+let scanLoadAttempted = false
+
+function loadScanModule(): NativeScanModule | null {
+  if (scanLoadAttempted) {
+    return cachedScanModule
+  }
+  scanLoadAttempted = true
+
+  // Same underlying .node (same cache key in loadNativeModule) — only the
+  // validator differs. When the shared cache already holds a newer binary
+  // both validators pass and the instance is reused.
+  const mod = loadNativeModule<NativeScanModule>(
+    'file-index',
+    'file-index',
+    m => typeof m.scanProjectFiles === 'function',
+  )
+  if (mod) {
+    cachedScanModule = mod
+  }
+  return cachedScanModule
+}
+
+/**
+ * Parallel directory scan of `root` in the Rust thread pool (jwalk walk
+ * behind `scan_project_files`). Resolves to absolute file paths in the same
+ * shape `rg --files --follow --hidden` produces, with whole subtrees pruned
+ * by directory name from `excludes`. Returns null (caller falls back to the
+ * ripgrep subprocess path) when the native module is missing or throws
+ * synchronously; async failures surface as a rejected promise.
+ */
+export function scanProjectFilesNative(
+  root: string,
+  excludes: string[],
+): Promise<string[]> | null {
+  const mod = loadScanModule()
+  if (mod === null) {
+    return null
+  }
+  try {
+    return mod.scanProjectFiles(root, excludes)
+  } catch {
+    return null
+  }
 }
 
 // One native append per chunk (~2ms for 16k paths), yielding to the event

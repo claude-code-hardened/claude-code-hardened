@@ -35,10 +35,23 @@
 //! so the case-insensitive (smart-case) path can judge queries containing
 //! Greek or rarely remapped uppercase letters differently from the TS
 //! implementation. ASCII, CJK and emoji queries are unaffected.
+//!
+//! Besides the fuzzy index, this crate also exposes `scan_project_files`:
+//! a jwalk (rayon) parallel directory walk that replaces the ripgrep
+//! subprocess fallback in `src/hooks/fileSuggestions.ts` for non-git
+//! directories. It runs on the libuv thread pool via napi's AsyncTask, so a
+//! 144k-file scan never blocks the JS event loop, and resolves to absolute
+//! paths in the same shape `rg --files --follow --hidden` produces.
 
 use std::cmp::Ordering;
+use std::fs;
+use std::panic::{self, AssertUnwindSafe};
+use std::path::Path;
 
+use jwalk::WalkDir;
 use memchr::memmem;
+use napi::bindgen_prelude::AsyncTask;
+use napi::{Env, Task};
 use napi_derive::napi;
 use rustc_hash::FxHashSet;
 
@@ -537,4 +550,113 @@ impl NativeFileIndex {
   pub fn free(&mut self) {
     self.data = None;
   }
+}
+
+/// libuv 线程池任务体：目录扫描可能涉及十万级文件（非 git 目录 fallback
+/// 场景），必须离开 JS 主线程执行——同步跑会阻塞事件循环、UI 冻结，正是
+/// 本导出要修的问题。compute 在 libuv worker 上跑，resolve 回主线程后仅
+/// 透传结果（Vec<String> 的 N-API 转换由 napi 完成）。
+struct ScanProjectFilesTask {
+  root: String,
+  excludes: Vec<String>,
+}
+
+impl Task for ScanProjectFilesTask {
+  type Output = Vec<String>;
+  type JsValue = Vec<String>;
+
+  fn compute(&mut self) -> napi::Result<Self::Output> {
+    // 与 crate 其余入口一致做 panic 隔离：panic 在 libuv 的 C 回调里展开
+    // 会直接 abort 进程，这里降级为 Promise rejection（JS 侧再降级到
+    // ripgrep 路径）。
+    panic::catch_unwind(AssertUnwindSafe(|| {
+      scan_project_files_impl(&self.root, &self.excludes)
+    }))
+    .unwrap_or_else(|payload| {
+      let detail = payload
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "unknown panic".to_string());
+      Err(napi::Error::new(
+        napi::Status::GenericFailure,
+        format!("scan_project_files panicked: {detail}"),
+      ))
+    })
+  }
+
+  fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
+    Ok(output)
+  }
+}
+
+/// Non-git 目录的文件列举——`rg --files --follow --hidden` 的原生替代。
+/// 在 libuv 线程池并行遍历 `root`，返回绝对路径数组（目录内按文件名排序，
+/// 结果确定）。`excludes` 按**目录名**匹配（JS 传入 node_modules/.git/…），
+/// 命中即整棵剪枝；隐藏文件包含在结果中；符号链接被跟随（--follow）。
+/// JS 侧拿到 Promise<string[]>，拒绝时降级到 ripgrep。
+#[napi]
+pub fn scan_project_files(
+  root: String,
+  excludes: Vec<String>,
+) -> AsyncTask<ScanProjectFilesTask> {
+  AsyncTask::new(ScanProjectFilesTask { root, excludes })
+}
+
+fn scan_project_files_impl(root: &str, excludes: &[String]) -> napi::Result<Vec<String>> {
+  let root_path = Path::new(root);
+  let metadata = fs::metadata(root_path).map_err(|err| {
+    napi::Error::new(
+      napi::Status::GenericFailure,
+      format!("scan_project_files: root metadata failed: {err}"),
+    )
+  })?;
+  if !metadata.is_dir() {
+    return Err(napi::Error::new(
+      napi::Status::GenericFailure,
+      format!("scan_project_files: root is not a directory: {root}"),
+    ));
+  }
+
+  let excludes_set: FxHashSet<String> = excludes.iter().cloned().collect();
+  let mut files: Vec<String> = Vec::new();
+
+  // sort(true)：每个目录的条目按名字排序，配合 jwalk 的有序并行队列输出
+  // 全序确定的结果（rg --files 同样可复现）。
+  // skip_hidden(false)：包含隐藏文件（--hidden 语义；jwalk 默认**跳过**
+  // 隐藏条目，必须显式关闭）。
+  // follow_links(true)：跟随符号链接（--follow 语义；jwalk 在 process_
+  // read_dir 回调之前逐项解析符号链接，指向目录的链接 file_type 即为
+  // dir，同样按名剪枝——对齐 rg 对路径组件的 --glob '!node_modules/'）。
+  for entry in WalkDir::new(root_path)
+    .sort(true)
+    .skip_hidden(false)
+    .follow_links(true)
+    .process_read_dir(move |_depth, _path, _state, children| {
+      // 剪枝：目录名命中 excludes 的条目从 children 中移除，其子树不再
+      // 被 read_dir（node_modules / VCS 目录 / .claude 转录）。单项
+      // read_dir 失败的 Err 条目同样丢弃——rg 亦静默跳过。
+      children.retain(|entry| {
+        let dir_entry = match entry {
+          Ok(e) => e,
+          Err(_) => return false,
+        };
+        if dir_entry.file_type.is_dir() {
+          let name = dir_entry.file_name.to_string_lossy();
+          return !excludes_set.contains(name.as_ref());
+        }
+        true
+      })
+    })
+  {
+    // 只收集文件（目录本身跳过）；符号链接经 --follow 解析后 is_file()
+    // 反映目标类型，断链/循环产生的 Err 条目直接跳过。
+    if let Ok(dir_entry) = entry {
+      if dir_entry.file_type.is_file() {
+        files.push(dir_entry.path().to_string_lossy().into_owned());
+      }
+    }
+  }
+
+  Ok(files)
 }

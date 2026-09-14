@@ -13,6 +13,11 @@ napi-derive = "3"
 memchr = "2"
 # FxHash：索引去重集合（与 token-counter-napi 一致）
 rustc-hash = "1.1"
+# rayon 并行目录遍历：scan_project_files 用它在 Rust 线程池里直接出
+# 文件列表，替代 JS 侧 spawn ripgrep 子进程 + stdout 解析的 fallback
+# （非 git 目录 14.4 万文件实测 56-64s，proot I/O 放大）。jwalk 无 2.x
+# 版本线（那是 walkdir 的），crates.io 最新稳定线为 0.8。
+jwalk = "0.8"
 
 [build-dependencies]
 napi-build = "2"
