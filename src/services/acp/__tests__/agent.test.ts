@@ -139,8 +139,16 @@ mockModulePreservingExports('../../../utils/model/model.ts', {
   getMainLoopModel: mockGetMainLoopModel,
 })
 
+const mockGetModelOptions = mock(
+  () =>
+    [] as Array<{
+      value?: string | null
+      label?: string
+      description?: string
+    }>,
+)
 mockModulePreservingExports('../../../utils/model/modelOptions.ts', {
-  getModelOptions: mock(() => []),
+  getModelOptions: mockGetModelOptions,
 })
 
 const mockApplySafeEnvVars = mock(() => {})
@@ -333,17 +341,19 @@ describe('AcpAgent', () => {
       expect(res.sessionId.length).toBeGreaterThan(0)
     })
 
-    test('returns modes, configOptions, and models (clients need models to populate selector)', async () => {
+    test('returns modes and configOptions (model selection rides on config options)', async () => {
       const agent = new AcpAgent(makeConn())
       const res = await agent.newSession({ cwd: '/tmp' } as any)
       expect(res.modes).toBeDefined()
+      expect(Array.isArray(res.modes!.availableModes)).toBe(true)
+      expect(typeof res.modes!.currentModeId).toBe('string')
       expect(res.configOptions).toBeDefined()
-      // SDK 0.19.2 marks NewSessionResponse.models as UNSTABLE but the schema allows it, and
-      // standard clients (Cursor/Zed/VS Code) read it to populate the model selector. Omitting
-      // it forces supportsModelSelection=false on the client.
-      expect(res.models).toBeDefined()
-      expect(Array.isArray(res.models!.availableModels)).toBe(true)
-      expect(typeof res.models!.currentModelId).toBe('string')
+      // SDK 1.x removed the unstable top-level `models` field (schema 1.14+):
+      // standard clients (Cursor/Zed/VS Code) populate the model selector from
+      // the `category: 'model'` session config option instead.
+      const modelOption = res.configOptions!.find(o => o.category === 'model')
+      expect(modelOption).toBeDefined()
+      expect(typeof modelOption!.currentValue).toBe('string')
     })
 
     test('each call returns a unique sessionId', async () => {
@@ -638,33 +648,28 @@ describe('AcpAgent', () => {
     test('throws for unknown session', async () => {
       const agent = new AcpAgent(makeConn())
       await expect(
-        agent.unstable_closeSession({ sessionId: 'ghost' } as any),
+        agent.closeSession({ sessionId: 'ghost' } as any),
       ).rejects.toThrow('Session not found')
     })
 
     test('removes session after close', async () => {
       const agent = new AcpAgent(makeConn())
       const { sessionId } = await agent.newSession({ cwd: '/tmp' } as any)
-      await agent.unstable_closeSession({ sessionId } as any)
+      await agent.closeSession({ sessionId } as any)
       expect(agent.sessions.has(sessionId)).toBe(false)
     })
   })
 
-  describe('deleteSession (session/delete via extMethod)', () => {
-    test('extMethod routes session/delete to unstable_deleteSession', async () => {
+  describe('deleteSession (session/delete)', () => {
+    test('session/delete is standard-routed — extMethod no longer handles it', async () => {
+      // SDK 1.x routes session/delete to Agent.deleteSession directly;
+      // extMethod only sees untyped methods and rejects the rest.
       const agent = new AcpAgent(makeConn())
-      const result = await agent.extMethod('session/delete', {
-        sessionId: 'nonexistent-sid-for-delete-test',
-      })
-      // Idempotent: returns empty object even when session doesn't exist
-      expect(result).toEqual({})
-    })
-
-    test('rejects session/delete without sessionId', async () => {
-      const agent = new AcpAgent(makeConn())
-      await expect(agent.extMethod('session/delete', {})).rejects.toThrow(
-        'non-empty sessionId',
-      )
+      await expect(
+        agent.extMethod('session/delete', {
+          sessionId: 'nonexistent-sid-for-delete-test',
+        }),
+      ).rejects.toThrow()
     })
 
     test('rejects unknown methods with methodNotFound-style error', async () => {
@@ -674,49 +679,60 @@ describe('AcpAgent', () => {
       ).rejects.toThrow()
     })
 
-    test('unstable_deleteSession is idempotent for missing session', async () => {
+    test('deleteSession is idempotent for missing session', async () => {
       const agent = new AcpAgent(makeConn())
       // No file exists for this ID; both calls must succeed (per spec §Semantics)
-      const r1 = await agent.unstable_deleteSession({
+      const r1 = await agent.deleteSession({
         sessionId: 'definitely-missing-id-1',
       })
-      const r2 = await agent.unstable_deleteSession({
+      const r2 = await agent.deleteSession({
         sessionId: 'definitely-missing-id-2',
       })
       expect(r1).toEqual({})
       expect(r2).toEqual({})
     })
 
-    test('unstable_deleteSession tears down active in-memory session', async () => {
+    test('deleteSession tears down active in-memory session', async () => {
       const agent = new AcpAgent(makeConn())
       const { sessionId } = await agent.newSession({ cwd: '/tmp' } as any)
       expect(agent.sessions.has(sessionId)).toBe(true)
       // deleteSession should remove the in-memory entry even though there's
       // no on-disk file (newSession doesn't persist immediately in tests).
-      await agent.unstable_deleteSession({ sessionId })
+      await agent.deleteSession({ sessionId })
       expect(agent.sessions.has(sessionId)).toBe(false)
     })
   })
 
-  describe('setSessionModel', () => {
+  describe('setSessionConfigOption (model selection)', () => {
+    // SDK 1.x removed `unstable_setSessionModel` along with the unstable
+    // model-selector types: model switching goes through the standard
+    // `session/set_config_option` with the `model` config id.
     test('updates model on queryEngine', async () => {
       const agent = new AcpAgent(makeConn())
+      mockGetModelOptions.mockReturnValueOnce([
+        { value: 'glm-5.1', label: 'GLM' },
+      ])
       const { sessionId } = await agent.newSession({ cwd: '/tmp' } as any)
       mockSetModel.mockClear()
-      await agent.unstable_setSessionModel({
+      await agent.setSessionConfigOption({
         sessionId,
-        modelId: 'glm-5.1',
+        configId: 'model',
+        value: 'glm-5.1',
       } as any)
       expect(mockSetModel).toHaveBeenCalledWith('glm-5.1')
     })
 
     test('passes alias modelId to queryEngine as-is for later resolution', async () => {
       const agent = new AcpAgent(makeConn())
+      mockGetModelOptions.mockReturnValueOnce([
+        { value: 'sonnet[1m]', label: 'Sonnet 1M' },
+      ])
       const { sessionId } = await agent.newSession({ cwd: '/tmp' } as any)
       mockSetModel.mockClear()
-      await agent.unstable_setSessionModel({
+      await agent.setSessionConfigOption({
         sessionId,
-        modelId: 'sonnet[1m]',
+        configId: 'model',
+        value: 'sonnet[1m]',
       } as any)
       expect(mockSetModel).toHaveBeenCalledWith('sonnet[1m]')
     })
@@ -782,8 +798,9 @@ describe('AcpAgent', () => {
 
   describe('prompt userMessageId echo (message-id RFD)', () => {
     test('echoes client-supplied messageId as userMessageId', async () => {
-      // Per rfds/message-id.mdx: when the client provides a `messageId` on
-      // PromptRequest, the Agent echoes it back as `userMessageId`.
+      // SDK 1.x removed the unstable top-level `messageId` on PromptRequest
+      // (inbound params are zod-stripped), so clients carry it via `_meta`.
+      // When present, the Agent echoes it back as `userMessageId`.
       const agent = new AcpAgent(makeConn())
       const { sessionId } = await agent.newSession({ cwd: '/tmp' } as any)
       ;(forwardSessionUpdates as ReturnType<typeof mock>).mockResolvedValueOnce(
@@ -801,14 +818,14 @@ describe('AcpAgent', () => {
       const res = await agent.prompt({
         sessionId,
         prompt: [{ type: 'text', text: 'hello' }],
-        messageId: clientMessageId,
+        _meta: { messageId: clientMessageId },
       } as any)
       expect((res as any).userMessageId).toBe(clientMessageId)
     })
 
     test('omits userMessageId when client does not supply messageId', async () => {
-      // Per rfds/message-id.mdx: agent MAY self-generate; we take the
-      // conservative approach of staying silent when the client didn't ask.
+      // Agent MAY self-generate; we take the conservative approach of
+      // staying silent when the client didn't ask.
       const agent = new AcpAgent(makeConn())
       const { sessionId } = await agent.newSession({ cwd: '/tmp' } as any)
       ;(forwardSessionUpdates as ReturnType<typeof mock>).mockResolvedValueOnce(
@@ -864,15 +881,16 @@ describe('AcpAgent', () => {
     test('creates new session with the requested sessionId when not in memory', async () => {
       const agent = new AcpAgent(makeConn())
       const requestedId = 'e73e9b66-9637-4477-b512-af45357b1dcb'
-      const res = await agent.unstable_resumeSession({
+      const res = await agent.resumeSession({
         sessionId: requestedId,
         cwd: '/tmp',
         mcpServers: [],
       } as any)
       expect(agent.sessions.has(requestedId)).toBe(true)
       expect(res.modes).toBeDefined()
-      // resume also returns models so clients can render the selector after reconnect.
-      expect(res.models).toBeDefined()
+      // resume returns configOptions so clients can render the model selector
+      // (the `category: 'model'` option) after reconnect.
+      expect(res.configOptions).toBeDefined()
     })
 
     test('reuses existing session when sessionId matches and fingerprint unchanged', async () => {
@@ -880,7 +898,7 @@ describe('AcpAgent', () => {
       const res1 = await agent.newSession({ cwd: '/tmp' } as any)
       const sid = res1.sessionId
       const originalSession = agent.sessions.get(sid)
-      const res2 = await agent.unstable_resumeSession({
+      const res2 = await agent.resumeSession({
         sessionId: sid,
         cwd: '/tmp',
         mcpServers: [],
@@ -891,7 +909,7 @@ describe('AcpAgent', () => {
     test('can prompt after resumeSession with previously unknown sessionId', async () => {
       const agent = new AcpAgent(makeConn())
       const sid = 'restored-session-id-1234'
-      await agent.unstable_resumeSession({
+      await agent.resumeSession({
         sessionId: sid,
         cwd: '/tmp',
         mcpServers: [],
@@ -1395,7 +1413,7 @@ describe('AcpAgent', () => {
     test('resumeSession calls switchSession with the requested sessionId', async () => {
       const agent = new AcpAgent(makeConn())
       const requestedId = 'resume-test-session-id'
-      await agent.unstable_resumeSession({
+      await agent.resumeSession({
         sessionId: requestedId,
         cwd: '/tmp',
         mcpServers: [],
@@ -1428,7 +1446,7 @@ describe('AcpAgent', () => {
       mockSwitchSession.mockClear()
 
       // Resume the same session — should still align global state
-      await agent.unstable_resumeSession({
+      await agent.resumeSession({
         sessionId,
         cwd: '/tmp',
         mcpServers: [],

@@ -41,8 +41,11 @@ export interface PromptCapabilities {
   image?: boolean
 }
 
-// SessionModelState from ACP protocol
-// Reference: Zed's AgentModelSelector reads from state.available_models
+// Model-selector state forwarded to proxy clients. SDK 1.x removed the
+// unstable `SessionModelState` from the new/load/resume responses — the
+// proxy derives this shape from the agent's `category: 'model'` session
+// config option. Reference: Zed's AgentModelSelector reads
+// state.available_models.
 export interface SessionModelState {
   availableModels: Array<{
     modelId: string

@@ -51,7 +51,7 @@ export async function runAcpAgent(): Promise<void> {
     // Clean up all active sessions
     for (const [sessionId] of agent.sessions) {
       try {
-        await agent.unstable_closeSession({ sessionId })
+        await agent.closeSession({ sessionId })
       } catch {
         // Best-effort cleanup
       }

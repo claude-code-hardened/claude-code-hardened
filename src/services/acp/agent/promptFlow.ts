@@ -43,11 +43,15 @@ async function prompt(
     throw new Error(`Session ${params.sessionId} not found`)
   }
 
-  // Per message-id.mdx RFD: if the client supplied a `messageId` on the
-  // PromptRequest, echo it back as `userMessageId` to confirm receipt.
-  // We do not self-generate when omitted — the spec makes that optional and
-  // staying quiet avoids surfacing IDs the client didn't ask to track.
-  const userMessageId = params.messageId ?? undefined
+  // Message-id echo: SDK 1.x removed the unstable top-level `messageId` on
+  // PromptRequest (schema 1.14+; inbound params are zod-stripped), so clients
+  // carry it via the `_meta` extensibility namespace. If present, echo it
+  // back as `userMessageId` to confirm receipt. We do not self-generate when
+  // omitted — staying quiet avoids surfacing IDs the client didn't ask to
+  // track.
+  const metaMessageId = params._meta?.messageId
+  const userMessageId =
+    typeof metaMessageId === 'string' ? metaMessageId : undefined
 
   // Extract text/image content from the prompt
   const promptInput = promptToQueryInput(params.prompt)

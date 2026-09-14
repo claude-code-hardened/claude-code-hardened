@@ -175,7 +175,7 @@ export async function handleJsonRpcCloseSession(
   if (!state?.connection) {
     throw new Error('Not connected to agent')
   }
-  const result = await state.connection.unstable_closeSession(
+  const result = await state.connection.closeSession(
     params as { sessionId: string },
   )
   send(ws, 'session_closed', result ?? {})

@@ -8,7 +8,6 @@ import type {
   NewSessionRequest,
   NewSessionResponse,
   SessionModeState,
-  SessionModelState,
 } from '@agentclientprotocol/sdk'
 import type { Message } from '../../../types/message.js'
 import { QueryEngine } from '../../../QueryEngine.js'
@@ -37,7 +36,7 @@ import { getMainLoopModel } from '../../../utils/model/model.js'
 import { getModelOptions } from '../../../utils/model/modelOptions.js'
 import { getSettings_DEPRECATED } from '../../../utils/settings/settings.js'
 import { AcpAgent } from './AcpAgent.js'
-import type { AcpSession } from './sessionTypes.js'
+import type { AcpSession, SessionModelState } from './sessionTypes.js'
 import {
   resolveSessionPermissionMode,
   isAcpBypassPermissionModeAvailable,
@@ -282,16 +281,15 @@ async function createSession(
 
     this.sessions.set(sessionId, session)
 
-    // Return models even though SDK 0.19.2 marks it UNSTABLE. The schema does allow the field
-    // (NewSessionResponse.models?: SessionModelState | null), and standard clients (Cursor/Zed/
-    // VS Code ACP) rely on it to populate the model selector — omitting it forces
-    // supportsModelSelection=false on the client and the user can never switch models.
-    // The UNSTABLE marker only means "this field may change in a future schema version", not
-    // "agents MUST NOT return it". The previous "v1 compliance" omission was overzealous.
+    // SDK 1.x removed the unstable top-level `models` field from
+    // NewSessionResponse (schema 1.14+ "remove unstable model selectors"):
+    // the model selector now rides on the `category: 'model'` entry of
+    // configOptions, which standard clients (Cursor/Zed/VS Code) read to
+    // populate it. `models` is still tracked on the session for
+    // setSessionConfigOption(configId: 'model') bookkeeping.
     return {
       sessionId,
       modes,
-      models,
       configOptions,
     }
   } finally {

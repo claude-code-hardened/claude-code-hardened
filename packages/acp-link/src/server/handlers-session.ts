@@ -18,7 +18,51 @@ import {
   JSONRPC_INVALID_REQUEST,
   JSONRPC_METHOD_NOT_FOUND,
   type ContentBlock,
+  type SessionModelState,
 } from './types.js'
+
+/**
+ * Derive the proxy's model-selector state from the agent's session config
+ * options. SDK 1.x removed the unstable top-level `models` field from the
+ * new/load/resume responses (schema 1.14+): the model list now rides on the
+ * `category: 'model'` config option. The payload forwarded to proxy clients
+ * keeps the legacy `models: { currentModelId, availableModels }` shape.
+ */
+function modelStateFromConfigOptions(
+  configOptions: acp.SessionConfigOption[] | null | undefined,
+): SessionModelState | null {
+  if (!configOptions) return null
+  const option = configOptions.find(
+    o => o.category === 'model' || o.id === 'model',
+  )
+  if (!option || option.type !== 'select') return null
+  if (typeof option.currentValue !== 'string') return null
+  const availableModels: SessionModelState['availableModels'] = []
+  for (const entry of option.options) {
+    if ('value' in entry) {
+      // SessionConfigSelectOption
+      availableModels.push({
+        modelId: entry.value,
+        name: entry.name,
+        ...(entry.description != null
+          ? { description: entry.description }
+          : {}),
+      })
+    } else {
+      // SessionConfigSelectGroup — flatten its inner options.
+      for (const inner of entry.options) {
+        availableModels.push({
+          modelId: inner.value,
+          name: inner.name,
+          ...(inner.description != null
+            ? { description: inner.description }
+            : {}),
+        })
+      }
+    }
+  }
+  return { currentModelId: option.currentValue, availableModels }
+}
 
 export async function handleNewSession(
   ws: WSContext,
@@ -72,12 +116,12 @@ export async function handleNewSession(
     })
 
     state.sessionId = result.sessionId
-    state.modelState = result.models ?? null
+    state.modelState = modelStateFromConfigOptions(result.configOptions)
     logSession.info(
       {
         sessionId: result.sessionId,
         cwd: sessionCwd,
-        hasModels: !!result.models,
+        hasModels: !!state.modelState,
       },
       'created',
     )
@@ -228,7 +272,7 @@ export async function handleLoadSession(
     })
 
     state.sessionId = sessionId
-    state.modelState = result.models ?? null
+    state.modelState = modelStateFromConfigOptions(result.configOptions)
     logSession.info({ sessionId, cwd: sessionCwd }, 'loaded')
 
     send(ws, 'session_loaded', {
@@ -289,13 +333,13 @@ export async function handleResumeSession(
   try {
     const sessionCwd = params.cwd || AGENT_CWD
     const sessionId = params.sessionId
-    const result = await state.connection.unstable_resumeSession({
+    const result = await state.connection.resumeSession({
       sessionId,
       cwd: sessionCwd,
     })
 
     state.sessionId = sessionId
-    state.modelState = result.models ?? null
+    state.modelState = modelStateFromConfigOptions(result.configOptions)
     logSession.info({ sessionId, cwd: sessionCwd }, 'resumed')
 
     send(ws, 'session_resumed', {
@@ -415,9 +459,13 @@ export async function handleSetSessionModel(
       { sessionId: state.sessionId, modelId: params.modelId },
       'setting model',
     )
-    await state.connection.unstable_setSessionModel({
+    // SDK 1.x removed `unstable_setSessionModel` along with the unstable
+    // model-selector types (schema 1.14+): model switching goes through the
+    // standard `session/set_config_option` method with the `model` config id.
+    await state.connection.setSessionConfigOption({
       sessionId: state.sessionId,
-      modelId: params.modelId,
+      configId: 'model',
+      value: params.modelId,
     })
     state.modelState = { ...state.modelState, currentModelId: params.modelId }
     send(ws, 'model_changed', { modelId: params.modelId })

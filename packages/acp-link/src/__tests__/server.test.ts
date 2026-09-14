@@ -453,9 +453,9 @@ describe('JSON-RPC 2.0 routing (audit §8.1-8.5)', () => {
 
   test('session/close is forwarded to the agent connection (§8.4)', async () => {
     const sent: unknown[] = []
-    const unstable_closeSession = mock(async () => ({}))
+    const closeSession = mock(async () => ({}))
     const { ws, unregister } = setupJsonRpcClient(sent, {
-      connection: { unstable_closeSession },
+      connection: { closeSession },
       sessionId: 'sess-1',
     })
     try {
@@ -465,7 +465,7 @@ describe('JSON-RPC 2.0 routing (audit §8.1-8.5)', () => {
         method: 'session/close',
         params: { sessionId: 'sess-1' },
       })
-      expect(unstable_closeSession).toHaveBeenCalled()
+      expect(closeSession).toHaveBeenCalled()
     } finally {
       unregister()
       delete process.env.ACP_LINK_TEST_INTERNALS
