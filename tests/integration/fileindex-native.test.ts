@@ -44,7 +44,7 @@ describe('file-index native (rg listing + Rust index search)', () => {
     expect(hookSource).not.toContain('FFI_SCAN_EXCLUDES')
     const rgPos = hookSource.indexOf('await ripGrep(')
     expect(rgPos).toBeGreaterThan(-1)
-    expect(hookSource).toContain("'node_modules'")
+    expect(hookSource).toContain("'!node_modules/'")
     expect(hookSource).toContain("'!.bun/'")
     // FEATURE_FILE_INDEX_NATIVE=0 必须恢复纯 TS/rg 路径（kill switch，
     // 门住 native 索引构造）。
