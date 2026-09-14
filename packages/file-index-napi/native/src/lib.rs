@@ -620,6 +620,16 @@ fn scan_project_files_impl(
     }
   }
 
+  // deadline 桥接：超时分支只 clear children 终止子树展开，循环结束后
+  // 以总耗时复查判定——超 deadline 则 Err（impl 层转 -1），让 JS 降级
+  // ripgrep。截止前已收集的部分结果不外泄：截断列表被 JS 当成功消费
+  // 会静默缺文件（空列表同样 truthy 跳过降级）。
+  if deadline_ms > 0 && scan_start.elapsed().as_millis() as u64 > deadline_ms {
+    return Err(format!(
+      "scan_project_files: deadline {deadline_ms}ms exceeded"
+    ));
+  }
+
   Ok(files)
 }
 
