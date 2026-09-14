@@ -1,4 +1,5 @@
 import { resolve } from 'path'
+import { profileCheckpoint } from '../utils/startupProfiler.js'
 import {
   type HeadlessBridgeOpts,
   BridgeHeadlessPermanentError,
@@ -24,6 +25,7 @@ const EXIT_CODE_TRANSIENT = 1
  * — it runs the headless bridge loop that accepts remote sessions.
  */
 export async function runDaemonWorker(kind?: string): Promise<void> {
+  profileCheckpoint('daemon_worker_entry')
   if (!kind) {
     console.error('Error: --daemon-worker requires a worker kind')
     process.exitCode = EXIT_CODE_PERMANENT
@@ -96,6 +98,7 @@ async function runRemoteControlWorker(): Promise<void> {
   }
 
   try {
+    profileCheckpoint('daemon_worker_bridge_start')
     await runBridgeHeadless(opts, controller.signal)
   } catch (err) {
     if (err instanceof BridgeHeadlessPermanentError) {

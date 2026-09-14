@@ -54,6 +54,7 @@ import {
   canonicalizePath,
 } from '../../../utils/sessionStoragePortable.js'
 import { getOriginalCwd } from '../../../bootstrap/state.js'
+import { profileCheckpoint } from '../../../utils/startupProfiler.js'
 import type { AcpSession } from './sessionTypes.js'
 
 // ── Agent class ───────────────────────────────────────────────────
@@ -78,6 +79,7 @@ export class AcpAgent implements Agent {
   // ── initialize ────────────────────────────────────────────────
 
   async initialize(params: InitializeRequest): Promise<InitializeResponse> {
+    profileCheckpoint('acp_initialize_received')
     this.clientCapabilities = params.clientCapabilities
 
     return {

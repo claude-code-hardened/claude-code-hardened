@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'fs'
 import { join, basename } from 'path'
+import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { parseFrontmatter } from '../utils/frontmatterParser.js'
 import type { FrontmatterData } from '../utils/frontmatterParser.js'
 import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
@@ -41,6 +42,7 @@ function getTemplatesDirs(): string[] {
  * List all available templates.
  */
 export function listTemplates(): TemplateInfo[] {
+  profileCheckpoint('templates_list_start')
   const templates: TemplateInfo[] = []
   const seenNames = new Set<string>()
 
@@ -74,6 +76,7 @@ export function listTemplates(): TemplateInfo[] {
     }
   }
 
+  profileCheckpoint('templates_list_end')
   return templates
 }
 

@@ -1,5 +1,6 @@
 import { type ChildProcess } from 'child_process'
 import { resolve } from 'path'
+import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { buildCliLaunch, spawnCli } from '../utils/cliLaunch.js'
 import {
   writeDaemonState,
@@ -50,6 +51,7 @@ interface WorkerState {
  *   kill    — kill a session
  */
 export async function daemonMain(args: string[]): Promise<void> {
+  profileCheckpoint('daemon_entry')
   const subcommand = args[0] || 'status'
 
   switch (subcommand) {
@@ -255,6 +257,7 @@ async function runSupervisor(args: string[]): Promise<void> {
   })
 
   const controller = new AbortController()
+  profileCheckpoint('daemon_supervisor_started')
 
   // Graceful shutdown
   const shutdown = () => {
@@ -359,6 +362,7 @@ function spawnWorker(
   })
 
   worker.process = child
+  profileCheckpoint('daemon_worker_spawn')
 
   // Pipe worker stdout/stderr to supervisor with prefix
   child.stdout?.on('data', (data: Buffer) => {

@@ -1,6 +1,7 @@
 import { AgentSideConnection, ndJsonStream } from '@agentclientprotocol/sdk'
 import type { Stream } from '@agentclientprotocol/sdk'
 import { Readable, Writable } from 'node:stream'
+import { profileCheckpoint } from '../../utils/startupProfiler.js'
 import { AcpAgent } from './agent.js'
 import { enableConfigs } from '../../utils/config.js'
 import { applySafeConfigEnvironmentVariables } from '../../utils/managedEnv.js'
@@ -25,6 +26,7 @@ export function createAcpStream(
  * Entry point for the ACP (Agent Client Protocol) agent mode.
  */
 export async function runAcpAgent(): Promise<void> {
+  profileCheckpoint('acp_entry')
   enableConfigs()
 
   // Apply environment variables from settings.json (ANTHROPIC_BASE_URL,
@@ -32,6 +34,7 @@ export async function runAcpAgent(): Promise<void> {
   // authenticate. Without this, Zed-launched processes won't have these
   // env vars in process.env.
   applySafeConfigEnvironmentVariables()
+  profileCheckpoint('acp_env_applied')
 
   const stream = createAcpStream(process.stdin, process.stdout)
 
@@ -40,6 +43,7 @@ export async function runAcpAgent(): Promise<void> {
     agent = new AcpAgent(conn)
     return agent
   }, stream)
+  profileCheckpoint('acp_connection_ready')
 
   // stdout is used for ACP messages — redirect console to stderr
   console.log = console.error

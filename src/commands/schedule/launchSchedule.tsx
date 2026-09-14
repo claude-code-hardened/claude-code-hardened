@@ -4,6 +4,7 @@ import {
   logEvent,
 } from '../../services/analytics/index.js';
 import { parseCronExpression } from '../../utils/cron.js';
+import { profileCheckpoint } from '../../utils/startupProfiler.js';
 import type { LocalJSXCommandCall } from '../../types/command.js';
 import { createTrigger, deleteTrigger, getTrigger, listTriggers, runTrigger, updateTrigger } from './triggersApi.js';
 import { ScheduleView } from './ScheduleView.js';
@@ -11,6 +12,7 @@ import { parseScheduleArgs } from './parseArgs.js';
 import type { UpdateTriggerBody } from './triggersApi.js';
 
 export const callSchedule: LocalJSXCommandCall = async (onDone, _context, args) => {
+  profileCheckpoint('launch_schedule_start');
   logEvent('tengu_schedule_started', {
     args: (args ?? '') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   });

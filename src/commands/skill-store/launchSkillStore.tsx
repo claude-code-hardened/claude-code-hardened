@@ -7,6 +7,7 @@ import {
 } from '../../services/analytics/index.js';
 import type { LocalJSXCommandCall } from '../../types/command.js';
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js';
+import { profileCheckpoint } from '../../utils/startupProfiler.js';
 import { createSkill, deleteSkill, getSkill, getSkillVersion, getSkillVersions, listSkills } from './skillsApi.js';
 import { SkillStoreView } from './SkillStoreView.js';
 import { parseSkillStoreArgs } from './parseArgs.js';
@@ -15,6 +16,7 @@ const USAGE =
   'Usage: /skill-store list | get ID | versions ID | version ID VER | create NAME MARKDOWN | delete ID | install ID[@VERSION]';
 
 export const callSkillStore: LocalJSXCommandCall = async (onDone, _context, args) => {
+  profileCheckpoint('launch_skill_store_start');
   logEvent('tengu_skill_store_started', {
     args: (args ?? '') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   });
