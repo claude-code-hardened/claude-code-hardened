@@ -67,8 +67,7 @@ const runsFlag = process.argv.indexOf('--runs')
 // 校验为正整数：负数/0/小数/NaN 一律回退 3（空 samples 会让 median=NaN，
 // NaN > 阈值恒为 false，曾造成非法输入假 PASS）
 const parsedRuns = runsFlag > -1 ? Number(process.argv[runsFlag + 1]) : 3
-const runs =
-  Number.isInteger(parsedRuns) && parsedRuns > 0 ? parsedRuns : 3
+const runs = Number.isInteger(parsedRuns) && parsedRuns > 0 ? parsedRuns : 3
 
 if (!binaryArg || !existsSync(binaryArg)) {
   console.error('用法: bun scripts/bench-startup.ts <binary路径> [--runs 3]')
@@ -81,7 +80,9 @@ const binary = binaryArg
 // x64 host 普遍慢于本基线所在的 aarch64——阈值按架构归一。
 const REGRESSION_MS = process.arch === 'arm64' ? 500 : 800
 
-console.log(`target: ${basename(binary)} (arch=${process.arch}, runs=${runs} + 1 warmup)`)
+console.log(
+  `target: ${basename(binary)} (arch=${process.arch}, runs=${runs} + 1 warmup)`,
+)
 let version, check
 try {
   version = await probe(binary, ['--version'], runs)
