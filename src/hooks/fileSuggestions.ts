@@ -512,7 +512,16 @@ async function getProjectFiles(
   // FEATURE_FILE_INDEX_NATIVE=0 must restore the fully-TS/rg path.
   if (feature('FILE_INDEX_NATIVE')) {
     const ffiScanStart = Date.now()
-    const ffiFiles = await scanProjectFilesFfi(getCwd(), FFI_SCAN_EXCLUDES)
+    // 超时预算：bun:ffi async 在线程池执行、不阻塞事件循环，race 超时后
+    // 后台扫描继续（结果被丢弃），UI 立即落到 rg 路径——对齐旧实现的
+    // 10s Promise.race 降级（jwalk 0.8 无符号链接环检测，防御性预算）。
+    const ffiFiles = await Promise.race([
+      scanProjectFilesFfi(getCwd(), FFI_SCAN_EXCLUDES),
+      new Promise<null>(resolve => {
+        const timer = setTimeout(() => resolve(null), 10_000)
+        timer.unref?.()
+      }),
+    ])
     if (ffiFiles) {
       const relativePaths = ffiFiles.map(f => path.relative(getCwd(), f))
       const duration = Date.now() - ffiScanStart
