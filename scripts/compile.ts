@@ -111,6 +111,13 @@ function createEmbeddedNativesPlugin(embeddedNatives: Record<string, string>) {
   }
 }
 
+// JSC bytecode 预编译默认启用。
+// Bun 1.4.0 起 --compile + --bytecode --format=esm 支持顶层 await /
+// import.meta / 动态 import（#26402）；--bytecode 会把默认 format 从
+// esm 改成 cjs（见 bun build --help），故显式传 format: 'esm'。
+// 代价：产物体积 +53%（111→171MB）；收益：--version 1.16s→0.20s
+// （本机 aarch64 三次取中位 A/B 实测，2026-09-14）。
+
 for (const target of targets) {
   const triple = targetToTriple(target)
 
@@ -129,9 +136,9 @@ for (const target of targets) {
   // ── Bun.build --compile with embedded natives plugin ──
   // minify：compile 此前未开压缩，产物是未压缩源码，体积直接决定 JSC 的
   // 全量解析字节量（单文件 compile 无 splitting，--version 纯解析实测
-  // 5.6s@225MB；minify 后体积约减半）。bytecode 预编译可进一步跳过解析，
-  // 但 JSC bytecode 不支持 ESM 顶层 await（cli.tsx:382 await main()），
-  // 且动态 import 兼容性未验证——留待入口重构后再启用。
+  // 5.6s@225MB；minify 后体积约减半）。bytecode 预编译默认启用，把解析
+  // 工作移到构建期：Bun 1.4 的 bytecode + format: 'esm' 组合支持 cli.tsx
+  // 的顶层 await 与 cliHighlight.ts 的动态 import。
   const result = await Bun.build({
     entrypoints: ['src/entrypoints/cli.tsx'],
     target: 'bun',
@@ -142,6 +149,8 @@ for (const target of targets) {
     features,
     plugins: [createEmbeddedNativesPlugin(embeddedNatives)],
     minify: true,
+    format: 'esm',
+    bytecode: true,
     compile: {
       // 单数 target 是唯一生效的 API：复数 targets 会被静默忽略，
       // 产物退化为 host 架构（CI x86 上曾把 arm64 名字编成 x86_64 ELF）。
