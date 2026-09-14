@@ -2329,6 +2329,35 @@ async function run(): Promise<CommanderCommand> {
 
       // NOTE: We do NOT call prefetchAllMcpResources here - that's deferred until after trust dialog
 
+      // Kick commands+agents loading as early as possible. Previously the kick
+      // waited for `await import('./setup.js')`; the loaders' work is async
+      // fs I/O (skill dirs, plugin marketplaces, agent files), so starting it
+      // here lets it progress during the awaits below (permission init, input
+      // prompt, setup() body) instead of piling up after them.
+      // Equivalence: identical memoized calls with the identical preSetupCwd —
+      // nothing between the old and new kick points mutates the cwd (only
+      // setup() chdirs, and --worktree still gates the kick to null) or any
+      // state the loaders read (settings/config are final after init()).
+      // initBuiltinPlugins/initBundledSkills stay strictly before the kick:
+      // they are in-memory array pushes that getBuiltinPlugins()/
+      // getBundledSkills() read when the loaders resolve — previously they ran
+      // after the stdin read, racing the assemblePluginLoadResult continuation
+      // that reads getBuiltinPlugins(); here the registration deterministically
+      // precedes every consumer (the MCP-config kick above ran its synchronous
+      // prefix before this point, unchanged).
+      const preSetupCwd = getCwd();
+      if (process.env.CLAUDE_CODE_ENTRYPOINT !== 'local-agent') {
+        initBuiltinPlugins();
+        initBundledSkills();
+      }
+      const commandsPromise = worktreeEnabled ? null : getCommands(preSetupCwd);
+      const agentDefsPromise = worktreeEnabled ? null : getAgentDefinitionsWithOverrides(preSetupCwd);
+      profileCheckpoint('action_commands_kicked');
+      // Suppress transient unhandledRejection if these reject during the
+      // preamble + setupPromise window before Promise.all joins them below.
+      commandsPromise?.catch(() => {});
+      agentDefsPromise?.catch(() => {});
+
       if (inputFormat && inputFormat !== 'text' && inputFormat !== 'stream-json') {
         console.error(t('Error: Invalid input format "{{format}}".', { format: inputFormat }));
         process.exit(1);
@@ -2429,20 +2458,12 @@ async function run(): Promise<CommanderCommand> {
       const messagingSocketPath = feature('UDS_INBOX')
         ? (options as { messagingSocketPath?: string }).messagingSocketPath
         : undefined;
-      // Parallelize setup() with commands+agents loading. setup()'s ~28ms is
-      // mostly startUdsMessaging (socket bind, ~20ms) — not disk-bound, so it
-      // doesn't contend with getCommands' file reads. Gated on !worktreeEnabled
-      // since --worktree makes setup() process.chdir() (setup.ts:203), and
-      // commands/agents need the post-chdir cwd.
-      const preSetupCwd = getCwd();
-      // Register bundled skills/plugins before kicking getCommands() — they're
-      // pure in-memory array pushes (<1ms, zero I/O) that getBundledSkills()
-      // reads synchronously. Previously ran inside setup() after ~20ms of
-      // await points, so the parallel getCommands() memoized an empty list.
-      if (process.env.CLAUDE_CODE_ENTRYPOINT !== 'local-agent') {
-        initBuiltinPlugins();
-        initBundledSkills();
-      }
+      // setup() runs in parallel with the commands+agents loading kicked above
+      // (right after the MCP-config kick). setup()'s ~28ms is mostly
+      // startUdsMessaging (socket bind, ~20ms) — not disk-bound, so it doesn't
+      // contend with getCommands' file reads. The commands kick is gated on
+      // !worktreeEnabled since --worktree makes setup() process.chdir()
+      // (setup.ts:203), and commands/agents need the post-chdir cwd.
       const setupPromise = setup(
         preSetupCwd,
         permissionMode,
@@ -2454,13 +2475,6 @@ async function run(): Promise<CommanderCommand> {
         worktreePRNumber,
         messagingSocketPath,
       );
-      const commandsPromise = worktreeEnabled ? null : getCommands(preSetupCwd);
-      const agentDefsPromise = worktreeEnabled ? null : getAgentDefinitionsWithOverrides(preSetupCwd);
-      profileCheckpoint('action_commands_kicked');
-      // Suppress transient unhandledRejection if these reject during the
-      // ~28ms setupPromise await before Promise.all joins them below.
-      commandsPromise?.catch(() => {});
-      agentDefsPromise?.catch(() => {});
       await setupPromise;
       logForDebugging(`[STARTUP] setup() completed in ${Date.now() - setupStart}ms`);
       profileCheckpoint('action_after_setup');
