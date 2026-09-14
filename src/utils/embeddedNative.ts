@@ -42,9 +42,14 @@ export function isCompiledBinary(): boolean {
 type NativeModuleLike = Record<string, unknown>
 
 /**
- * 从内存 Buffer 直接加载原生模块（无临时文件）
- * 使用 Node.js 内部 API process.dlopen(module, buffer)
- * 当第二个参数是 Buffer 时，从内存加载而非磁盘
+ * 从内存加载原生模块（零落盘）。
+ *
+ * Bun 1.4.2 的 process.dlopen 实测（proot/Android，file-index 等 4 模块）：
+ *   - Buffer 形式 → ERR_DLOPEN_FAILED "cannot open shared object file"
+ *   - /proc/self/fd/<n> 路径 → "file too short"
+ *   - /dev/fd/<n> 路径 → ✅ 正常加载
+ * 故 Linux 上走 memfd_create（FFI）→ 写入 → /dev/fd/<n> dlopen——全程
+ * 匿名内存，不落盘。其他平台保留 Buffer 形式（未验证，失败走下游降级）。
  */
 function loadNativeFromMemory(
   moduleName: string,
@@ -54,6 +59,34 @@ function loadNativeFromMemory(
 
   // 创建一个虚拟模块对象供 dlopen 初始化
   const mod = { exports: {} as NativeModuleLike }
+
+  if (process.platform === 'linux') {
+    try {
+      const { dlopen: ffiDlopen } =
+        require('bun:ffi') as typeof import('bun:ffi')
+      const libc = ffiDlopen('libc.so.6', {
+        memfd_create: { args: ['cstring', 'u32'], returns: 'i32' },
+        close: { args: ['i32'], returns: 'i32' },
+      })
+      // MFD_CLOEXEC：fd 随 exec 关闭，防泄漏
+      const fd = libc.symbols.memfd_create(`ccb-native-${moduleName}`, 1)
+      if (fd > 2) {
+        const { ftruncateSync, writeSync, closeSync } =
+          require('node:fs') as typeof import('node:fs')
+        ftruncateSync(fd, buffer.length) // memfd 初始 size=0，dlopen 前需定长
+        writeSync(fd, buffer)
+        try {
+          // @ts-expect-error — /dev/fd 路径 dlopen；fd 关闭前映射已建立
+          process.dlopen(mod, `/dev/fd/${fd}`, 0x0001) // RTLD_LAZY
+          return mod.exports
+        } finally {
+          libc.symbols.close(fd)
+        }
+      }
+    } catch {
+      // memfd 不可用（老内核/非 glibc）→ 落到 Buffer 形式尝试
+    }
+  }
 
   try {
     // @ts-expect-error — process.dlopen 是内部 API；Buffer 重载在类型定义中缺失
