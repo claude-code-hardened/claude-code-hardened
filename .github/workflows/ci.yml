@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, "feat/*", "perf/*"]
   workflow_dispatch:
+    inputs:
+      bytecode:
+        description: 'Compile binaries with JSC bytecode precompilation (CCB_COMPILE_BYTECODE=1)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -145,9 +150,12 @@ jobs:
   # scripts/build-all.mjs 与本地全流程是同一个入口（本地不带 --skip-native
   # 时自己跑 cargo 编译多平台）。CI 端 native 来自上面矩阵的 artifact——
   # 每次构建都现场编译 Rust，保证产物永远对应当前源码；vendor/ 不再回写仓库。
+  # bytecode=true 的 workflow_dispatch 会以 CCB_COMPILE_BYTECODE=1 打包，
+  # 产物上传为独立 artifact（claude-code-dist-bytecode / claude-code-npm-bytecode），
+  # 不覆盖默认产物。push / 默认 dispatch 行为与现状完全一致。
   package:
     needs: [quality, native]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.bytecode == true)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2, 2026-04-25
@@ -182,6 +190,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: One-shot build (bundle + npm tarball)
+        env:
+          CCB_COMPILE_BYTECODE: ${{ inputs.bytecode == true && '1' || '0' }}
         run: node scripts/build-all.mjs --skip-native
 
       # 产物架构断言：ELF 查 e_machine（offset 0x12），Mach-O 查 magic，PE 查 machine 字段。
@@ -237,12 +247,12 @@ jobs:
       - name: Upload dist
         uses: actions/upload-artifact@v7
         with:
-          name: claude-code-dist
+          name: ${{ inputs.bytecode == true && 'claude-code-dist-bytecode' || 'claude-code-dist' }}
           path: dist/
 
       - name: Upload npm tarball
         uses: actions/upload-artifact@v7
         with:
-          name: claude-code-npm
+          name: ${{ inputs.bytecode == true && 'claude-code-npm-bytecode' || 'claude-code-npm' }}
           path: "*.tgz"
           if-no-files-found: error

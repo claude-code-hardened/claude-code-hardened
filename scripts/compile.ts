@@ -17,6 +17,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getMacroDefines, DEFAULT_BUILD_FEATURES } from './defines.ts'
+import { resolveBytecodeEnabled } from './compileFlags.ts'
 
 const ALL_TARGETS = [
   'bun-linux-x64',
@@ -111,6 +112,16 @@ function createEmbeddedNativesPlugin(embeddedNatives: Record<string, string>) {
   }
 }
 
+// A/B 开关：CCB_COMPILE_BYTECODE=1 时启用 JSC bytecode 预编译。
+// Bun 1.4.0 起 --compile + --bytecode --format=esm 支持顶层 await /
+// import.meta / 动态 import（#26402）；--bytecode 会把默认 format 从
+// esm 改成 cjs（见 bun build --help），故显式传 format: 'esm'。
+// 默认关闭：不带这两个键，构建路径与历史版本逐字节等价。
+const bytecodeEnabled = resolveBytecodeEnabled()
+if (bytecodeEnabled) {
+  console.log('[compile] bytecode: on (esm)')
+}
+
 for (const target of targets) {
   const triple = targetToTriple(target)
 
@@ -129,9 +140,12 @@ for (const target of targets) {
   // ── Bun.build --compile with embedded natives plugin ──
   // minify：compile 此前未开压缩，产物是未压缩源码，体积直接决定 JSC 的
   // 全量解析字节量（单文件 compile 无 splitting，--version 纯解析实测
-  // 5.6s@225MB；minify 后体积约减半）。bytecode 预编译可进一步跳过解析，
-  // 但 JSC bytecode 不支持 ESM 顶层 await（cli.tsx:382 await main()），
-  // 且动态 import 兼容性未验证——留待入口重构后再启用。
+  // 5.6s@225MB；minify 后体积约减半）。bytecode 预编译（CCB_COMPILE_BYTECODE=1）
+  // 进一步把解析工作移到构建期：Bun 1.4 的 bytecode + format: 'esm' 组合
+  // 支持 cli.tsx 的顶层 await 与 cliHighlight.ts 的动态 import。
+  const bytecodeOptions = bytecodeEnabled
+    ? ({ format: 'esm', bytecode: true } as const)
+    : {}
   const result = await Bun.build({
     entrypoints: ['src/entrypoints/cli.tsx'],
     target: 'bun',
@@ -142,6 +156,7 @@ for (const target of targets) {
     features,
     plugins: [createEmbeddedNativesPlugin(embeddedNatives)],
     minify: true,
+    ...bytecodeOptions,
     compile: {
       // 单数 target 是唯一生效的 API：复数 targets 会被静默忽略，
       // 产物退化为 host 架构（CI x86 上曾把 arm64 名字编成 x86_64 ELF）。
