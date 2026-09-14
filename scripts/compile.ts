@@ -117,6 +117,9 @@ function createEmbeddedNativesPlugin(embeddedNatives: Record<string, string>) {
 // esm 改成 cjs（见 bun build --help），故显式传 format: 'esm'。
 // 代价：产物体积 +53%（111→171MB）；收益：--version 1.16s→0.20s
 // （本机 aarch64 三次取中位 A/B 实测，2026-09-14）。
+// 已知上游风险：oven-sh/bun#27955——bytecode+esm 在特定命名导入模式下
+// 可能产生悬空模块引用的坏产物；bundle 变更后必须过 --check-commands
+// 运行时冒烟（CI package job 常驻），仅静态构建成功不可信。
 
 for (const target of targets) {
   const triple = targetToTriple(target)

@@ -5,7 +5,7 @@
 单文件 compile 产物默认启用 JSC bytecode 预编译（`format: 'esm'` + `bytecode: true`，Bun 1.4.0 起支持 ESM 顶层 await / 动态 import，#26402）：
 
 - **A/B 实测**（本机 aarch64，bun 1.4.2，三次取中位）：`--version` 1160ms→**199ms**（5.8x）、`--check-commands` 1486ms→1280ms；代价体积 111.6MB→171.3MB（+53%）。93 个命令 shim 全载确认 bundle 完整。
-- **决策**：经用户拍板直接设为默认行为，**不设 env 开关**（初版 CCB_COMPILE_BYTECODE 开关已整体移除）；Bun 版本策略本身为 latest（另见 2026-09-14 快照十七），bytecode 语义随 Bun 升级的兼容性由每次构建内嵌同版本 runtime 自洽保证。
+- **决策**：经用户拍板直接设为默认行为，**不设 env 开关**（初版 CCB_COMPILE_BYTECODE 开关已整体移除）；Bun 版本策略本身为 latest（2026-09-14 同日拍板），bytecode 语义随 Bun 升级的兼容性由每次构建内嵌同版本 runtime 自洽保证。**已知上游风险**：oven-sh/bun#27955——bytecode+esm 在特定命名导入模式下可能产生悬空模块引用的坏产物，bundle 变更后必须过 `--check-commands` 运行时冒烟（CI package job 常驻）。
 - **性能靶点三件套**：`scripts/bench-startup.ts`（本机产物基准，两靶点计时中位，--version >500ms 判回归）＋ CI package job `Startup perf probes` 步（打包期观测）＋ `tests/integration/compile-bytecode.test.ts` 守卫测试（防配置被移除，含 SIGILL 单数 compile 循环防回归）。
 - **配套**：fork 新增模块（daemon/bridge/acp/templates/workflow/launch 族/weixin）补 `profileCheckpoint` 打点 14 文件（见 tests/integration/startup-profiler-fork-modules.test.ts）。
 
