@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const repoRoot = resolve(import.meta.dir, '..', '..')
@@ -78,10 +78,13 @@ describe('dependency security overrides', () => {
   })
 
   test('remote control markdown renderer resolves streamdown and its code highlighter plugin', async () => {
-    const rcsRequire = createRequire(
-      join(repoRoot, 'packages/remote-control-server/package.json'),
-    )
-    const streamdownPath = rcsRequire.resolve('streamdown')
+    const rcsDir = join(repoRoot, 'packages/remote-control-server')
+    // Bun.resolveSync is used instead of createRequire(<package.json>).resolve:
+    // bun 1.4.2's isolated linker (default for workspaces) resolves workspace
+    // deps through node_modules symlinks into the node_modules/.bun store,
+    // and createRequire() on a package.json path fails to traverse that
+    // layout, while Bun's own resolver handles both hoisted and isolated.
+    const streamdownPath = Bun.resolveSync('streamdown', rcsDir)
     const streamdown = (await import(pathToFileURL(streamdownPath).href)) as {
       Streamdown?: unknown
     }
@@ -90,11 +93,11 @@ describe('dependency security overrides', () => {
     // RCS web UI wires into <Streamdown plugins={{ code }}>. The old
     // streamdown 1.x chain (streamdown -> mermaid -> uuid) no longer exists:
     // neither mermaid nor uuid is part of the dependency tree anymore.
-    const codePluginPath = rcsRequire.resolve('@streamdown/code')
+    const codePluginPath = Bun.resolveSync('@streamdown/code', rcsDir)
     const codePlugin = (await import(pathToFileURL(codePluginPath).href)) as {
       code?: unknown
     }
-    const shikiPath = createRequire(codePluginPath).resolve('shiki')
+    const shikiPath = Bun.resolveSync('shiki', dirname(codePluginPath))
     const shiki = (await import(pathToFileURL(shikiPath).href)) as {
       createHighlighter?: unknown
       bundledLanguages?: unknown
