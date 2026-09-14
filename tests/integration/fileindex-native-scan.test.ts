@@ -40,11 +40,13 @@ describe('file-index native scan via pure FFI', () => {
 
   test('non-git fallback prefers the ffi scan before ripgrep', () => {
     // rg 子进程路径（56-64s @ 14.4 万文件 proot）降级路径必须原样保留，
-    // ffi 扫描只能插在它之前。
-    const ffiPos = hookSource.indexOf('await scanProjectFilesFfi(')
+    // ffi 扫描只能插在它之前（FFI 调用包在 10s 超时 race 里，无 await 前缀）。
+    const ffiPos = hookSource.indexOf('scanProjectFilesFfi(')
     const rgPos = hookSource.indexOf('await ripGrep(')
     expect(ffiPos).toBeGreaterThan(-1)
     expect(rgPos).toBeGreaterThan(ffiPos)
+    // 超时预算必须存在（jwalk 无环检测的防御性降级）。
+    expect(hookSource).toContain('Promise.race')
     // 排除目录名与 rg 的 --glob 白名单语义对齐（含 .claude 转录目录）。
     expect(hookSource).toContain("'node_modules'")
     expect(hookSource).toContain("'.claude'")
