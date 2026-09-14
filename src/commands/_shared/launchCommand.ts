@@ -24,6 +24,12 @@ import type {
   LocalJSXCommandOnDone,
 } from '../../types/command.js'
 import type { ToolUseContext } from '../../Tool.js'
+import { profileCheckpoint } from '../../utils/startupProfiler.js'
+
+/** Sanitize a command name into a checkpoint segment (`<module>_<stage>` style). */
+function checkpointSegment(commandName: string): string {
+  return commandName.replace(/[^a-zA-Z0-9]+/g, '_')
+}
 
 /** Shape returned by parseArgs when args are invalid. */
 export interface InvalidParsed {
@@ -87,6 +93,7 @@ export function launchCommand<TParsed, TViewProps>(
     context: ToolUseContext,
     args: string,
   ): Promise<React.ReactNode> => {
+    profileCheckpoint(`launch_${checkpointSegment(opts.commandName)}_start`)
     // ── Parse args ────────────────────────────────────────────────────────────
     const parsed = opts.parseArgs(args ?? '')
 
@@ -98,6 +105,9 @@ export function launchCommand<TParsed, TViewProps>(
     // ── Dispatch ──────────────────────────────────────────────────────────────
     try {
       const viewProps = await opts.dispatch(parsed as TParsed, onDone, context)
+      profileCheckpoint(
+        `launch_${checkpointSegment(opts.commandName)}_dispatched`,
+      )
       if (viewProps === null) return null
       return React.createElement(
         opts.View as React.ComponentType<object>,

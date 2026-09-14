@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { profileCheckpoint } from '../../utils/startupProfiler.js'
 import { listTemplates, loadTemplate } from '../../jobs/templates.js'
 import {
   createJob,
@@ -12,6 +13,7 @@ import {
  * Called from cli.tsx fast-path.
  */
 export async function templatesMain(args: string[]): Promise<void> {
+  profileCheckpoint('templates_entry')
   const subcommand = args[0]
 
   switch (subcommand) {
@@ -121,6 +123,7 @@ function handleNew(args: string[]): void {
     inputText,
     args.slice(1),
   )
+  profileCheckpoint('templates_job_created')
 
   console.log(`Job created: ${jobId}`)
   console.log(`  Template: ${templateName}`)

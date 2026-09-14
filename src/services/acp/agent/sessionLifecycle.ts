@@ -18,6 +18,7 @@ import { deserializeMessages } from '../../../utils/conversationRecovery.js'
 import { getLastSessionLog } from '../../../utils/sessionStorage.js'
 import type { PermissionMode } from '../../../types/permissions.js'
 import { setOriginalCwd, switchSession } from '../../../bootstrap/state.js'
+import { profileCheckpoint } from '../../../utils/startupProfiler.js'
 import type { SessionId } from '../../../types/ids.js'
 import { replayHistoryMessages } from '../bridge.js'
 import { computeSessionFingerprint } from '../utils.js'
@@ -47,6 +48,7 @@ async function getOrCreateSession(
     replay?: boolean
   },
 ): Promise<NewSessionResponse> {
+  profileCheckpoint('acp_session_create_start')
   const shouldReplay = params.replay !== false
   const existingSession = this.sessions.get(params.sessionId)
   if (existingSession) {
@@ -114,6 +116,7 @@ async function getOrCreateSession(
     },
     { sessionId: params.sessionId, initialMessages },
   )
+  profileCheckpoint('acp_session_created')
 
   // Replay history to client if loaded. session/resume skips this block.
   if (shouldReplay && initialMessages && initialMessages.length > 0) {
