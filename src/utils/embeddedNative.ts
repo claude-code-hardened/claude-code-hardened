@@ -95,7 +95,9 @@ export function loadNativeModule<T>(
       try {
         const fromMemory = accept(loadNativeFromMemory(moduleName, base64))
         if (fromMemory) {
-          logForDebugging(`[native] ${moduleName}: loaded from embedded (dlopen ok)`)
+          logForDebugging(
+            `[native] ${moduleName}: loaded from embedded (dlopen ok)`,
+          )
           return fromMemory
         }
         logForDebugging(
