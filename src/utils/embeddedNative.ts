@@ -16,13 +16,17 @@
  */
 
 import { createRequire } from 'node:module'
-import { existsSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { EMBEDDED_NATIVES } from './embeddedNatives.gen'
 import { logForDebugging } from './debug.js'
 
 const nodeRequire = createRequire(import.meta.url)
+
+// tmpfile fallback 的进程私有目录（首次使用时创建，进程生命周期内复用）
+let tmpNativeDir: string | null = null
 
 // 已加载模块缓存
 const loadedCache = new Map<string, unknown>()
@@ -105,9 +109,31 @@ export function loadNativeModule<T>(
         )
       } catch (e) {
         logForDebugging(
-          `[native] ${moduleName}: embedded dlopen FAILED → vendor fallback: ${String(e).slice(0, 200)}`,
+          `[native] ${moduleName}: embedded dlopen FAILED → tmpfile fallback: ${String(e).slice(0, 200)}`,
         )
-        console.error(`[embedded-native] 内存加载失败 ${moduleName}:`, e)
+        // 内存 dlopen 在部分 Bun 版本/平台上失败（ERR_DLOPEN_FAILED）。
+        // 单文件 binary 里没有真实 vendor/ 目录可回退——把内嵌 payload
+        // 解码到进程私有临时目录再 require 文件路径（Node 生态标准做法）。
+        try {
+          if (!tmpNativeDir) {
+            tmpNativeDir = mkdtempSync(join(tmpdir(), 'ccb-native-'))
+          }
+          const tmpPath = join(tmpNativeDir, `${moduleName}.node`)
+          if (!existsSync(tmpPath)) {
+            writeFileSync(tmpPath, Buffer.from(base64, 'base64'))
+          }
+          const fromTmp = accept(nodeRequire(tmpPath) as NativeModuleLike)
+          if (fromTmp) {
+            logForDebugging(
+              `[native] ${moduleName}: loaded from tmpfile (${tmpNativeDir})`,
+            )
+            return fromTmp as T
+          }
+        } catch (tmpErr) {
+          logForDebugging(
+            `[native] ${moduleName}: tmpfile load FAILED: ${String(tmpErr).slice(0, 200)}`,
+          )
+        }
         // 继续尝试 vendor 回退
       }
     } else {
