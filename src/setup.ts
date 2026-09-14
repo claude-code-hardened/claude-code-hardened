@@ -66,6 +66,9 @@ export async function setup(
   messagingSocketPath?: string,
 ): Promise<void> {
   logForDiagnosticsNoPII('info', 'setup_started')
+  // Marks the end of the `await import('./setup.js')` module-graph evaluation
+  // in main.tsx — everything after this point is setup() body, not import cost.
+  profileCheckpoint('setup_module_eval_done')
 
   // Check for Node.js version < 18
   const nodeVersion = process.version.match(/^v(\d+)\./)?.[1]
@@ -118,6 +121,7 @@ export async function setup(
     )
     captureTeammateModeSnapshot()
   }
+  profileCheckpoint('setup_after_teammate_snapshot')
 
   // Terminal backup restoration — interactive only. Print mode doesn't
   // interact with terminal settings; the next interactive session will
@@ -162,6 +166,7 @@ export async function setup(
       logError(error)
     }
   }
+  profileCheckpoint('setup_after_terminal_backups')
 
   // IMPORTANT: setCwd() must be called before any other code that depends on the cwd
   setCwd(cwd)
@@ -176,6 +181,7 @@ export async function setup(
 
   // Initialize FileChanged hook watcher — sync, reads hook config snapshot
   initializeFileChangedWatcher(cwd)
+  profileCheckpoint('setup_after_hooks_capture')
 
   // Handle worktree creation if requested
   // IMPORTANT: this must be called befiore getCommands(), otherwise /eject won't be available.
