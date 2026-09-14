@@ -281,7 +281,9 @@ const realFsAdapter = {
   ) => {
     const encoding =
       typeof options === 'string' ? options : (options?.encoding ?? undefined)
-    return nodeFs.readFile(p, encoding)
+    return encoding === undefined
+      ? nodeFs.readFile(p)
+      : nodeFs.readFile(p, encoding)
   },
   writeFile: (p: string, data: string | Uint8Array) =>
     nodeFs.writeFile(p, data),
