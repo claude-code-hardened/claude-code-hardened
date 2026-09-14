@@ -502,6 +502,13 @@ async function getProjectFiles(
     '!.jj/',
     '--glob',
     '!.sl/',
+    // 非 git 目录下没有 .gitignore 生效，依赖目录（node_modules 的符号链接
+    // store + 几十万文件）会把 --files 扫描拖到分钟级（实测 /root 143970 文件
+    // 61.7s，proot 慢 I/O 放大）——@-mention 不会引用依赖内部文件，排除。
+    '--glob',
+    '!node_modules/',
+    '--glob',
+    '!.bun/',
   ]
   if (!respectGitignore) {
     rgArgs.push('--no-ignore-vcs')
