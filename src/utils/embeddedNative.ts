@@ -64,7 +64,7 @@ function loadNativeFromMemory(
         memfd_create: { args: ['cstring', 'u32'], returns: 'i32' },
         close: { args: ['i32'], returns: 'i32' },
       })
-      // MFD_CLOEXEC：fd 随 exec 关闭，防泄漏
+      // MFD_CLOEXEC：fd 随 exec 关闭，防 exec 泄漏
       const fd = libc.symbols.memfd_create(
         `ccb-native-${moduleName}`,
         1,
@@ -74,12 +74,15 @@ function loadNativeFromMemory(
           require('node:fs') as typeof import('node:fs')
         ftruncateSync(fd, buffer.length) // memfd 初始 size=0，dlopen 前需定长
         writeSync(fd, buffer)
-        try {
-          process.dlopen(mod, `/dev/fd/${fd}`, 0x0001) // RTLD_LAZY；fd 关闭前映射已建立
-          return mod.exports
-        } finally {
-          libc.symbols.close(fd)
-        }
+        // ⚠️ 不 close(fd)：Bun 1.4.2 的 process.dlopen 以路径字符串为缓存
+        // 键（`/dev/fd/${fd}`）。close 后 fd 数字被下一个 memfd 复用，第
+        // 三个及以后模块的 dlopen 命中首个模块的缓存 exports（2026-09-15
+        // 实测：同进程顺序加载 file-index/color-diff/transcript-parser，
+        // 后两者拿到 file-index 的导出面——color-diff 宽 validate 误过、
+        // transcript-parser 暴露 invalid）。fd 按模块常驻（进程级 ≤4 个）
+        // 使路径字符串唯一，缓存永不互撞。
+        process.dlopen(mod, `/dev/fd/${fd}`, 0x0001) // RTLD_LAZY
+        return mod.exports
       }
     } catch {
       // memfd 不可用（老内核/非 glibc）→ 落到 Buffer 形式尝试
