@@ -14,9 +14,10 @@ describe('file-index native scan via pure FFI', () => {
     expect(libSource).toContain('pub extern "C" fn ccb_scan_files_into')
     // panic 跨 extern "C" 边界会 abort 进程，必须 catch_unwind 隔离。
     expect(libSource).toContain('catch_unwind')
-    // 与 rg --files --follow --hidden 对齐：跟随符号链接 + 包含隐藏文件
-    // （jwalk 默认跳过隐藏条目，必须显式关闭）。
-    expect(libSource).toContain('.follow_links(true)')
+    // 与 rg --files --hidden 对齐：包含隐藏文件（jwalk 默认跳过隐藏条目，
+    // 必须显式关闭）。不跟随符号链接——jwalk 0.8 无环检测，/root 实测
+    // follow 遇符号链接环爆炸（137MB/404s），符号链接路径不进建议列表。
+    expect(libSource).toContain('.follow_links(false)')
     expect(libSource).toContain('.skip_hidden(false)')
     // 旧 napi AsyncTask 通道已移除——导出通道只剩 extern "C"。
     expect(libSource).not.toContain('AsyncTask')
