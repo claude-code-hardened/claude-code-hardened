@@ -1,69 +1,32 @@
-import { describe, expect, test } from 'bun:test'
-import { resolveBytecodeEnabled } from '../../scripts/compileFlags.ts'
+import { readFileSync } from 'node:fs'
 
-// Pure-function tests for the compile-time bytecode A/B switch.
-// No module mocks: resolveBytecodeEnabled reads only the env object
-// passed as an argument (defaulting to process.env).
+describe('compile bytecode configuration guard', () => {
+  const compileSource = readFileSync('scripts/compile.ts', 'utf8')
 
-describe('resolveBytecodeEnabled', () => {
-  test('is disabled by default when the variable is absent', () => {
-    expect(resolveBytecodeEnabled({})).toBe(false)
+  test('single-file compile enables JSC bytecode precompilation by default', () => {
+    // bytecode + format: 'esm' 是 Bun 1.4+ 的组合（支持顶层 await 与动态
+    // import）。2026-09-14 A/B 实测 --version 1.16s→0.20s 后定为默认行为；
+    // 若移除则产物退回纯解析路径，此守卫防止无意识回归。
+    expect(compileSource).toContain('bytecode: true')
+    expect(compileSource).toContain("format: 'esm'")
   })
 
-  test('is disabled when the variable is undefined', () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: undefined })).toBe(
-      false,
+  test('bytecode is applied per-target inside the singular compile loop', () => {
+    // SIGILL 教训：复数 targets 被 Bun 静默忽略、产物退化为 host 架构。
+    // bytecode 键必须在 Bun.build 顶层（compile 段保持单数 target）。
+    const buildCall = compileSource.slice(
+      compileSource.indexOf('await Bun.build'),
+      compileSource.indexOf('compile: {'),
     )
+    expect(buildCall).toContain('bytecode: true')
+    expect(buildCall).toContain("format: 'esm'")
+    expect(compileSource).not.toContain('targets:')
   })
 
-  test("is enabled by '1'", () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: '1' })).toBe(true)
-  })
-
-  test("is enabled by 'true'", () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: 'true' })).toBe(true)
-  })
-
-  test("is enabled by uppercase 'TRUE'", () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: 'TRUE' })).toBe(true)
-  })
-
-  test("is enabled by mixed-case 'True'", () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: 'True' })).toBe(true)
-  })
-
-  test("is disabled by '0'", () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: '0' })).toBe(false)
-  })
-
-  test("is disabled by 'false'", () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: 'false' })).toBe(
-      false,
-    )
-  })
-
-  test("is disabled by uppercase 'FALSE'", () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: 'FALSE' })).toBe(
-      false,
-    )
-  })
-
-  test('is disabled by empty string', () => {
-    expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: '' })).toBe(false)
-  })
-
-  test('is disabled by garbage strings', () => {
-    for (const garbage of ['yes', '2', 'on', ' true', 'true ', '1.0']) {
-      expect(resolveBytecodeEnabled({ CCB_COMPILE_BYTECODE: garbage })).toBe(
-        false,
-      )
-    }
-  })
-
-  test('reads process.env without mutating it', () => {
-    // CI/local default: the variable is not set.
-    expect(process.env.CCB_COMPILE_BYTECODE).toBeUndefined()
-    expect(resolveBytecodeEnabled()).toBe(false)
-    expect(process.env.CCB_COMPILE_BYTECODE).toBeUndefined()
+  test('compileFlags env switch module was removed', () => {
+    // 开关已被"默认启用"决策取代；若有人重新引入 CCB_COMPILE_BYTECODE
+    // 分支逻辑，应同时更新本守卫与 docs，而不是悄悄复活双路径。
+    expect(compileSource).not.toContain('CCB_COMPILE_BYTECODE')
+    expect(compileSource).not.toContain('compileFlags')
   })
 })
