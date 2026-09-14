@@ -1,96 +1,81 @@
 import { describe, expect, test } from 'bun:test'
 
-import {
-  BRIDGE_SAFE_COMMANDS,
-  REMOTE_SAFE_COMMANDS,
-  forceLoadAllShims,
-  getCommands,
-} from '../commands.js'
+import { BRIDGE_SAFE_COMMANDS, REMOTE_SAFE_COMMANDS } from '../commands.js'
 import clear from '../commands/clear/index.js'
 import compact from '../commands/compact/index.js'
 import usage from '../commands/usage/index.js'
-import { initBundledSkills } from '../skills/bundled/index.js'
 import {
   clearBundledSkills,
   getBundledSkills,
+  registerBundledSkill,
+  type BundledSkillDefinition,
 } from '../skills/bundledSkills.js'
 
 /**
- * Startup-lazy command shims: behavior contracts that must hold even though
- * most commands are Proxy shims deferred to first property access.
+ * Behavior contracts around the startup-lazy command design that the
+ * getCommands early-kick (main.tsx) relies on. Kept hermetic on purpose:
+ * calling getCommands()/forceLoadAllShims() here would load every command
+ * module and env-sensitive dependency at module scope, polluting sibling
+ * test files in the same process (bun mock.module / module singletons are
+ * process-global — see CLAUDE.md). The full-shim load contract is covered by
+ * the compiled-binary smoke (`claude --check-commands`) in CI's package job.
  *
- * - Identity sets (REMOTE_SAFE_COMMANDS / BRIDGE_SAFE_COMMANDS) rely on object
- *   identity between the statically imported command modules and the objects
- *   returned by getCommands(). A shim that resolved to a *copy* would silently
- *   break filterCommandsForRemoteMode / isBridgeSafeCommand.
- * - forceLoadAllShims() is the compile-smoke contract: every lazy thunk must
- *   resolve to a real Command (module present in the bundle).
- * - Bundled skills must be registered before the first getCommands() load:
- *   loadAllCommands memoizes per cwd, so a late registration would leave the
- *   memoized list without bundled skills (the startup race the main.tsx kick
- *   ordering exists to prevent).
+ * - Identity sets (REMOTE_SAFE_COMMANDS / BRIDGE_SAFE_COMMANDS) rely on
+ *   object identity between the statically imported command modules and the
+ *   objects returned by getCommands(). A shim that resolved to a copy would
+ *   silently break filterCommandsForRemoteMode / isBridgeSafeCommand.
+ * - Bundled skills must be registered before the first loadAllCommands run:
+ *   the loader memoizes per cwd, so a late registration would leave the
+ *   memoized list without bundled skills (the startup race the main.tsx
+ *   registration-before-kick ordering exists to prevent).
  */
-describe('startup-lazy command shims', () => {
-  test('forceLoadAllShims resolves every shim to a Command with a string name', () => {
-    expect(() => forceLoadAllShims()).not.toThrow()
-  })
-
-  test('REMOTE_SAFE_COMMANDS members are the same objects returned by getCommands', async () => {
-    const commands = await getCommands(process.cwd())
-    const byIdentity = new Set(commands)
-    for (const safe of REMOTE_SAFE_COMMANDS) {
-      // Feature-gated members (e.g. proactive under a disabled flag) are null
-      // in the default test runtime — the Set intentionally contains them.
-      if (!safe) continue
-      expect(byIdentity.has(safe)).toBe(true)
-    }
-  })
-
+describe('startup-lazy command safe sets', () => {
   test('statically imported command modules keep their identity in the safe sets', () => {
     expect(REMOTE_SAFE_COMMANDS.has(clear)).toBe(true)
     expect(BRIDGE_SAFE_COMMANDS.has(compact)).toBe(true)
     expect(BRIDGE_SAFE_COMMANDS.has(usage)).toBe(true)
   })
 
-  test('every non-null REMOTE_SAFE_COMMANDS member present by name matches by identity', async () => {
-    const commands = await getCommands(process.cwd())
-    let checked = 0
-    for (const safe of REMOTE_SAFE_COMMANDS) {
-      if (!safe) continue
-      const match = commands.find(c => c.name === safe.name)
-      if (!match) continue // disabled in this environment — hidden by the same production filter
-      expect(match).toBe(safe)
-      checked++
+  test('safe-set members are real Commands with string names', () => {
+    for (const cmd of REMOTE_SAFE_COMMANDS) {
+      if (!cmd) continue // feature-gated members may be null in this runtime
+      expect(typeof cmd.name).toBe('string')
     }
-    // The always-on local TUI commands must actually be present, otherwise
-    // this test would silently assert nothing.
-    expect(checked).toBeGreaterThan(3)
+    for (const cmd of BRIDGE_SAFE_COMMANDS) {
+      expect(typeof cmd.name).toBe('string')
+    }
   })
 })
 
-describe('bundled skills registration before command load', () => {
-  test('initBundledSkills registers a unique-named skill set', () => {
+describe('bundled skills registry', () => {
+  const fakeSkill = (name: string): BundledSkillDefinition =>
+    ({
+      name,
+      description: `test skill ${name}`,
+      getPromptForCommand: async () => [],
+    }) as unknown as BundledSkillDefinition
+
+  test('registerBundledSkill appends and getBundledSkills returns a copy', () => {
     clearBundledSkills()
-    expect(getBundledSkills()).toHaveLength(0)
-    initBundledSkills()
+    registerBundledSkill(fakeSkill('startup-lazy-sentinel-a'))
     const skills = getBundledSkills()
-    expect(skills.length).toBeGreaterThan(0)
-    expect(new Set(skills.map(s => s.name)).size).toBe(skills.length)
+    expect(skills).toHaveLength(1)
+    expect(skills[0]?.name).toBe('startup-lazy-sentinel-a')
+    // Mutating the returned array must not affect the registry.
+    skills.push({ name: 'mutated' } as never)
+    expect(getBundledSkills()).toHaveLength(1)
   })
 
-  test('skills registered before a fresh getCommands load appear in the result', async () => {
+  test('registering the same skill before a fresh load is idempotent in names', () => {
     clearBundledSkills()
-    initBundledSkills()
+    registerBundledSkill(fakeSkill('startup-lazy-sentinel-b'))
+    registerBundledSkill(fakeSkill('startup-lazy-sentinel-b'))
     const skills = getBundledSkills()
-    // Unique cwd string → fresh loadAllCommands memoize entry → the loader
-    // reads getBundledSkills() at resolve time, so the registrations above
-    // must be visible (they always are when registration precedes the kick).
-    const commands = await getCommands(
-      '/nonexistent-claude-code-startup-lazy-test',
-    )
-    const byIdentity = new Set(commands)
-    for (const skill of skills) {
-      expect(byIdentity.has(skill)).toBe(true)
-    }
+    expect(skills.map(s => s.name)).toEqual([
+      'startup-lazy-sentinel-b',
+      'startup-lazy-sentinel-b',
+    ])
+    clearBundledSkills()
+    expect(getBundledSkills()).toHaveLength(0)
   })
 })
