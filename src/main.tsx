@@ -2259,6 +2259,7 @@ async function run(): Promise<CommanderCommand> {
       });
       let toolPermissionContext = initResult.toolPermissionContext;
       const { warnings, dangerousPermissions, overlyBroadBashPermissions } = initResult;
+      profileCheckpoint('action_after_permission_init');
 
       // Handle overly broad shell allow rules for ant users (Bash(*), PowerShell(*))
       if (process.env.USER_TYPE === 'ant' && overlyBroadBashPermissions.length > 0) {
@@ -2455,6 +2456,7 @@ async function run(): Promise<CommanderCommand> {
       );
       const commandsPromise = worktreeEnabled ? null : getCommands(preSetupCwd);
       const agentDefsPromise = worktreeEnabled ? null : getAgentDefinitionsWithOverrides(preSetupCwd);
+      profileCheckpoint('action_commands_kicked');
       // Suppress transient unhandledRejection if these reject during the
       // ~28ms setupPromise await before Promise.all joins them below.
       commandsPromise?.catch(() => {});

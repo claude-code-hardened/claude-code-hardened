@@ -150,9 +150,11 @@ export const init = memoize(async (): Promise<void> => {
     if (isEligibleForRemoteManagedSettings()) {
       initializeRemoteManagedSettingsLoadingPromise()
     }
+    profileCheckpoint('init_remote_eligibility_checked')
     if (isPolicyLimitsEligible()) {
       initializePolicyLimitsLoadingPromise()
     }
+    profileCheckpoint('init_policy_eligibility_checked')
     profileCheckpoint('init_after_remote_settings_check')
 
     // Record the first start time
