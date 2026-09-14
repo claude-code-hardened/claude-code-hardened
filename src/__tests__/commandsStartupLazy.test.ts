@@ -10,7 +10,10 @@ import clear from '../commands/clear/index.js'
 import compact from '../commands/compact/index.js'
 import usage from '../commands/usage/index.js'
 import { initBundledSkills } from '../skills/bundled/index.js'
-import { clearBundledSkills, getBundledSkills } from '../skills/bundledSkills.js'
+import {
+  clearBundledSkills,
+  getBundledSkills,
+} from '../skills/bundledSkills.js'
 
 /**
  * Startup-lazy command shims: behavior contracts that must hold even though
