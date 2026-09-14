@@ -108,6 +108,13 @@ if (!SKIP_NATIVE) {
   console.log('step 1 (rust native): skipped')
 }
 
+// ── Step 1.5: bundle（cli.js + chunks + cli-node.js/cli-bun.js + vendor）──
+// npm 包的 bin 指向 dist/cli-node.js（shebang node → import './cli.js'），
+// 缺这一步时 tarball 里只有 ccb-* 单文件 binary，npm i -g 后入口不存在。
+// compile（Step 2）与 bundle 互不依赖，但 bundle 必须先于 Step 4 pack。
+console.log('\n=== Step 1.5: Bundle (splitting + dual entry points) ===')
+run('bun', ['run', 'build'])
+
 // ── Step 2: 为每个 target 编译单文件二进制（内嵌对应平台的 .node）──
 console.log('\n=== Step 2: Compile single-file binaries ===')
 for (const platform of platforms) {
