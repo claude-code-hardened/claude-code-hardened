@@ -1,8 +1,10 @@
 import type {
   SessionModeState,
-  SessionModelState,
   SessionConfigOption,
 } from '@agentclientprotocol/sdk'
+// SDK 1.x removed `SessionModelState`; the local type in sessionTypes.ts
+// preserves the model-selection concept that feeds the 'model' config option.
+import type { SessionModelState } from './sessionTypes.js'
 
 export function buildConfigOptions(
   modes: SessionModeState,

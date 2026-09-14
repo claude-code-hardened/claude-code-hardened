@@ -39,10 +39,10 @@ import {
   type CloseSessionResponse,
   type SetSessionModeRequest,
   type SetSessionModeResponse,
-  type SetSessionModelRequest,
-  type SetSessionModelResponse,
   type SetSessionConfigOptionRequest,
   type SetSessionConfigOptionResponse,
+  type DeleteSessionRequest,
+  type DeleteSessionResponse,
   type ClientCapabilities,
 } from '@agentclientprotocol/sdk'
 import { unlink } from 'node:fs/promises'
@@ -109,9 +109,10 @@ export class AcpAgent implements Agent {
         _meta: {
           claudeCode: {
             promptQueueing: true,
-            // session/fork is UNSTABLE — not part of stable v1 SessionCapabilities.
-            // Advertise via _meta namespace per extensibility.mdx "Advertising
-            // Custom Capabilities" instead of the standard sessionCapabilities map.
+            // Legacy advertisement of session/fork for clients built against
+            // pre-1.x SDKs, where fork was not part of SessionCapabilities.
+            // SDK 1.x types it (still UNSTABLE) — also advertised at the
+            // standard sessionCapabilities.fork path below.
             forkSession: true,
           },
         },
@@ -130,11 +131,12 @@ export class AcpAgent implements Agent {
           list: {},
           resume: {},
           close: {},
-          // UNSTABLE per session-delete.mdx: capability-gated session/delete.
-          // SDK 0.19.0's SessionCapabilities type predates this field — clients
-          // implementing the RFD read `sessionCapabilities.delete`, so we
-          // advertise it at the standard path via type augmentation.
-          ...({ delete: {} } as { delete: Record<string, never> }),
+          // SDK 1.x: `delete` is a standard SessionCapabilities field
+          // (stabilized in 0.25.0) and `fork` is typed (still UNSTABLE).
+          // _meta.claudeCode.forkSession above is kept for clients built
+          // against pre-1.x SDKs that only read the vendor namespace.
+          delete: {},
+          fork: {},
         },
       },
     }
@@ -159,7 +161,9 @@ export class AcpAgent implements Agent {
 
   // ── resumeSession ──────────────────────────────────────────────
 
-  async unstable_resumeSession(
+  // Stabilized in SDK 0.20.0 (was `unstable_resumeSession` in 0.19.x);
+  // SDK 1.x routes `session/resume` to `Agent.resumeSession` directly.
+  async resumeSession(
     params: ResumeSessionRequest,
   ): Promise<ResumeSessionResponse> {
     // Per session-setup.mdx "Resuming a Session": the Agent MUST NOT replay the
@@ -255,7 +259,9 @@ export class AcpAgent implements Agent {
 
   // ── closeSession ───────────────────────────────────────────────
 
-  async unstable_closeSession(
+  // Stabilized in SDK 0.20.0 (was `unstable_closeSession` in 0.19.x);
+  // SDK 1.x routes `session/close` to `Agent.closeSession` directly.
+  async closeSession(
     params: CloseSessionRequest,
   ): Promise<CloseSessionResponse> {
     const session = this.sessions.get(params.sessionId)
@@ -266,11 +272,14 @@ export class AcpAgent implements Agent {
     return {}
   }
 
-  // ── deleteSession (UNSTABLE, routed via extMethod) ──────────────
+  // ── deleteSession ──────────────────────────────────────────────
 
-  async unstable_deleteSession(params: {
-    sessionId: string
-  }): Promise<Record<string, never>> {
+  // Stabilized in SDK 0.25.0 (was `unstable_deleteSession`, routed via
+  // extMethod in 0.19.x); SDK 1.x routes `session/delete` to
+  // `Agent.deleteSession` directly, so this must keep the stable name.
+  async deleteSession(
+    params: DeleteSessionRequest,
+  ): Promise<DeleteSessionResponse> {
     // Per session-delete.mdx §Semantics: idempotent — deleting a session
     // that doesn't exist (or was already deleted) MUST succeed silently.
     const resolved = await resolveSessionFilePath(params.sessionId)
@@ -295,17 +304,11 @@ export class AcpAgent implements Agent {
 
   async extMethod(
     method: string,
-    params: Record<string, unknown>,
+    _params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    // SDK 0.19.0 routes unknown methods here (acp.js:139 default branch).
-    // We surface UNSTABLE capabilities that the SDK hasn't typed yet.
-    if (method === 'session/delete') {
-      const sessionId = params.sessionId
-      if (typeof sessionId !== 'string' || sessionId.length === 0) {
-        throw new Error('session/delete requires a non-empty sessionId')
-      }
-      return this.unstable_deleteSession({ sessionId })
-    }
+    // SDK 1.x routes standard methods (including the formerly UNSTABLE
+    // `session/delete`) to their typed Agent members; extMethod only
+    // receives methods the SDK hasn't typed yet.
     // Unknown method — surface as JSON-RPC methodNotFound so clients see a
     // standard error code (-32601) rather than a generic internal error.
     throw RequestError.methodNotFound(method)
@@ -356,22 +359,6 @@ export class AcpAgent implements Agent {
       },
     })
     await this.updateConfigOption(params.sessionId, 'mode', params.modeId)
-    return {}
-  }
-
-  // ── setSessionModel ─────────────────────────────────────────────
-
-  async unstable_setSessionModel(
-    params: SetSessionModelRequest,
-  ): Promise<SetSessionModelResponse> {
-    const session = this.sessions.get(params.sessionId)
-    if (!session) {
-      throw new Error('Session not found')
-    }
-    // Store the raw value — QueryEngine.submitMessage() calls
-    // parseUserSpecifiedModel() to resolve aliases (e.g. "sonnet" → "glm-5.1-turbo")
-    session.queryEngine.setModel(params.modelId)
-    await this.updateConfigOption(params.sessionId, 'model', params.modelId)
     return {}
   }
 
