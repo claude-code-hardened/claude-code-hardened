@@ -53,15 +53,16 @@ type NativeIndexHandle = {
 }
 
 /**
- * napi 导出面（Rust lib.rs 实测）：`isNativeFileIndex()` 自由函数 +
- * `NativeFileIndex` 类（#[napi(factory)] create_native_file_index → JS 侧
- * 用 `new NativeFileIndex()` 构造，不存在顶层 createNativeFileIndex 自由
- * 函数——此前 validate 检查它导致 embedded 加载永远 "invalid module"）。
- * 类方法经 napi 驼峰化：loadFromFileList / appendPaths / search /
- * pathCount / free。
+ * napi 导出面（对本 commit 的 CI 产物运行时实测）：`isNativeFileIndex()`
+ * 自由函数 + `NativeFileIndex` 类。`#[napi(factory)]` 在 impl 块内经
+ * napi-derive 3 生成的是**静态方法** `NativeFileIndex.createNativeFileIndex()`
+ * 而非构造器——`new NativeFileIndex()` 抛 "Class contains no `constructor`"。
+ * 此前 validate 检查不存在的顶层 createNativeFileIndex 自由函数，导致
+ * embedded 加载永远 "invalid module"。类方法经 napi 驼峰化：
+ * loadFromFileList / appendPaths / search / pathCount / free。
  */
 type NativeFileIndexModule = {
-  NativeFileIndex: new () => NativeIndexHandle
+  NativeFileIndex: { createNativeFileIndex(): NativeIndexHandle }
   isNativeFileIndex(): boolean
 }
 
@@ -171,7 +172,7 @@ export class NativeFileIndex implements FileIndexLike {
       return null
     }
     try {
-      return new mod.NativeFileIndex()
+      return mod.NativeFileIndex.createNativeFileIndex()
     } catch {
       return null
     }

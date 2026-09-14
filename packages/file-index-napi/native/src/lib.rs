@@ -273,9 +273,10 @@ pub fn is_native_file_index() -> bool {
 }
 
 /// Opaque fuzzy-search index over a list of file paths. Create with
-/// `new NativeFileIndex()` (JS side of `#[napi(factory)]
-/// create_native_file_index`), fill with `loadFromFileList` / `appendPaths`,
-/// query with `search`. Mirrors the TS `FileIndex` API.
+/// `NativeFileIndex.createNativeFileIndex()` (JS side of `#[napi(factory)]
+/// create_native_file_index`, a static factory — not a constructor), fill
+/// with `loadFromFileList` / `appendPaths`, query with `search`. Mirrors
+/// the TS `FileIndex` API.
 #[napi]
 pub struct NativeFileIndex {
   data: Option<IndexData>,
