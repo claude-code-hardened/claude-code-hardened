@@ -1,5 +1,6 @@
 import { isInputModeCharacter } from 'src/components/PromptInput/inputModes.js'
 import { useNotifications } from 'src/context/notifications.js'
+import { useRef } from 'react'
 import stripAnsi from 'strip-ansi'
 import { markBackslashReturnUsed } from '../commands/terminalSetup/terminalSetup.js'
 import { addToHistory } from '../history.js'
@@ -106,6 +107,32 @@ export function useTextInput({
   const setOffset = onOffsetChange
   const cursor = Cursor.fromText(originalValue, columns, offset)
   const { addNotification, removeNotification } = useNotifications()
+
+  // ⚡ 受控回写竞态修复：onChange/setOffset 是异步 React setState。连按
+  // backspace 时，前一次删除的提交尚未渲染，下一次 onInput 从 props 读到
+  // 旧 value/offset，Cursor.fromText 重建会把已生效的删除回滚（两次按键
+  // 只删一个字——用户看到"最后一个字删不动"，且该字仍在发送内容里；
+  // keys.log 06:42:06 实录 out 5→4 后 18ms in 回到 5）。
+  // cursorRef 保存最新已处理状态供 onInput 续接；仅当外部主动变更
+  // （清空 / history 填充 / 程序改 value，与上次回写值不符）时失效重建。
+  const cursorRef = useRef<Cursor | null>(null)
+  const lastWrittenRef = useRef<{ value: string; offset: number } | null>(null)
+  function onInputCursor(): Cursor {
+    const written = lastWrittenRef.current
+    if (
+      cursorRef.current !== null &&
+      written !== null &&
+      (originalValue !== written.value || offset !== written.offset)
+    ) {
+      cursorRef.current = null
+      lastWrittenRef.current = null
+    }
+    return cursorRef.current ?? Cursor.fromText(originalValue, columns, offset)
+  }
+  function commitCursor(next: Cursor): void {
+    cursorRef.current = next
+    lastWrittenRef.current = { value: next.text, offset: next.offset }
+  }
 
   const handleCtrlC = useDoublePress(
     show => {
@@ -454,6 +481,10 @@ export function useTextInput({
   function onInput(input: string, key: Key): void {
     // Note: Image paste shortcut (chat:imagePaste) is handled via useKeybindings in PromptInput
 
+    // 续接最新已处理状态（竞态修复见 cursorRef 注释）；in 日志仍记录
+    // props 到达值，便于对照诊断。
+    const cursor = onInputCursor()
+
     // Apply filter if provided
     const filteredInput = inputFilter ? inputFilter(input, key) : input
     logForDebugging(
@@ -484,6 +515,7 @@ export function useTextInput({
           onChange(currentCursor.text)
         }
         setOffset(currentCursor.offset)
+        commitCursor(currentCursor)
       }
       resetKillAccumulation()
       resetYankState()
@@ -510,6 +542,7 @@ export function useTextInput({
           onChange(nextCursor.text)
         }
         setOffset(nextCursor.offset)
+        commitCursor(nextCursor)
       }
       // SSH-coalesced Enter: on slow links, "o" + Enter can arrive as one
       // chunk "o\r". parseKeypress only matches s === '\r', so it hit the
