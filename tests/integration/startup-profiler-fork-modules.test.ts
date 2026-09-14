@@ -158,8 +158,9 @@ describe('startup profiler: fork-module checkpoints', () => {
           `${relFile}: unknown module prefix '${prefix}'`,
         ).toContain(prefix)
       }
-      // Names must be unique per file (no accidental duplicate literals).
-      expect(new Set(names).size, `${relFile} unique names`).toBe(names.length)
+      // NOTE: duplicate checkpoint names within a file are allowed — e.g.
+      // bridge_register_start/_registered fire in both the interactive and
+      // the headless registration paths of bridgeMain.ts.
 
       // Every documented checkpoint must be registered in its file.
       for (const name of expectedNames) {
@@ -177,10 +178,10 @@ describe('startup profiler: fork-module checkpoints', () => {
       'utf-8',
     )
     expect(source).toMatch(
-      /profileCheckpoint\(`launch_\$\{checkpointSegment\(opts\.commandName\)\}_start`\)/,
+      /profileCheckpoint\(\s*`launch_\$\{checkpointSegment\(opts\.commandName\)\}_start`\s*\)/,
     )
     expect(source).toMatch(
-      /profileCheckpoint\(`launch_\$\{checkpointSegment\(opts\.commandName\)\}_dispatched`\)/,
+      /profileCheckpoint\(\s*`launch_\$\{checkpointSegment\(opts\.commandName\)\}_dispatched`\s*\)/,
     )
     // Dash-containing command names (vault, memory-stores, ...) must be
     // sanitized to underscores so checkpoint names stay <module>_<stage>.
