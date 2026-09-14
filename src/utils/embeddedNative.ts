@@ -16,17 +16,13 @@
  */
 
 import { createRequire } from 'node:module'
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join, resolve, sep } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { EMBEDDED_NATIVES } from './embeddedNatives.gen'
 import { logForDebugging } from './debug.js'
 
 const nodeRequire = createRequire(import.meta.url)
-
-// tmpfile fallback 的进程私有目录（首次使用时创建，进程生命周期内复用）
-let tmpNativeDir: string | null = null
 
 // 已加载模块缓存
 const loadedCache = new Map<string, unknown>()
@@ -143,33 +139,12 @@ export function loadNativeModule<T>(
           `[native] ${moduleName}: embedded load returned invalid module → vendor fallback`,
         )
       } catch (e) {
+        // 零落盘架构裁定（用户 2026-09-15）：内存加载失败不落盘兜底，
+        // 直接 vendor/TS 降级。Linux 上 memfd+/dev/fd 已实证可用，
+        // 此分支只剩老内核 MFD 不可用等罕见场景。
         logForDebugging(
-          `[native] ${moduleName}: embedded dlopen FAILED → tmpfile fallback: ${String(e).slice(0, 200)}`,
+          `[native] ${moduleName}: embedded dlopen FAILED → vendor fallback: ${String(e).slice(0, 200)}`,
         )
-        // 内存 dlopen 在部分 Bun 版本/平台上失败（ERR_DLOPEN_FAILED）。
-        // 单文件 binary 里没有真实 vendor/ 目录可回退——把内嵌 payload
-        // 解码到进程私有临时目录再 require 文件路径（Node 生态标准做法）。
-        try {
-          if (!tmpNativeDir) {
-            tmpNativeDir = mkdtempSync(join(tmpdir(), 'ccb-native-'))
-          }
-          const tmpPath = join(tmpNativeDir, `${moduleName}.node`)
-          if (!existsSync(tmpPath)) {
-            writeFileSync(tmpPath, Buffer.from(base64, 'base64'))
-          }
-          const fromTmp = accept(nodeRequire(tmpPath) as NativeModuleLike)
-          if (fromTmp) {
-            logForDebugging(
-              `[native] ${moduleName}: loaded from tmpfile (${tmpNativeDir})`,
-            )
-            return fromTmp as T
-          }
-        } catch (tmpErr) {
-          logForDebugging(
-            `[native] ${moduleName}: tmpfile load FAILED: ${String(tmpErr).slice(0, 200)}`,
-          )
-        }
-        // 继续尝试 vendor 回退
       }
     } else {
       logForDebugging(`[native] ${moduleName}: no embedded payload in binary`)
