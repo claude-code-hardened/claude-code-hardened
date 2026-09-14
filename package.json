@@ -108,7 +108,7 @@
     "@langfuse/tracing": "^5.1.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/api-logs": "^0.215.0",
+    "@opentelemetry/api-logs": "^0.222.0",
     "@opentelemetry/core": "^2.7.0",
     "@opentelemetry/exporter-logs-otlp-grpc": "^0.215.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.215.0",
@@ -134,13 +134,11 @@
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^26.0.0",
     "@types/picomatch": "^4.0.3",
-    "@types/plist": "^3.0.5",
     "@types/proper-lockfile": "^4.1.4",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
     "@types/react-reconciler": "^0.33.0",
     "@types/semver": "^7.7.1",
-    "@types/sharp": "^0.32.0",
     "@types/shell-quote": "^1.7.5",
     "@types/stack-utils": "^2.0.3",
     "@types/turndown": "^5.0.6",
@@ -214,13 +212,13 @@
     "wrap-ansi": "^10.0.0",
     "xss": "^1.0.15",
     "yaml": "^2.8.3",
-    "zod": "^4.6.4"
+    "zod": "^4.6.5"
   },
   "optionalDependencies": {
     "doubaoime-asr": "^0.1.0"
   },
   "overrides": {
-    "@inquirer/prompts": "8.4.2",
+    "@inquirer/prompts": "8.7.2",
     "@xmldom/xmldom": "0.9.12",
     "follow-redirects": "1.16.0",
     "fuse.js": "7.3.0",
@@ -228,7 +226,7 @@
     "postcss": "8.5.28",
     "react": "19.2.5",
     "shell-quote": "1.8.3",
-    "uuid": "14.0.0"
+    "uuid": "14.0.2"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,jsx}": [
