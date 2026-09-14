@@ -69,15 +69,17 @@ function loadNativeFromMemory(
         close: { args: ['i32'], returns: 'i32' },
       })
       // MFD_CLOEXEC：fd 随 exec 关闭，防泄漏
-      const fd = libc.symbols.memfd_create(`ccb-native-${moduleName}`, 1)
+      const fd = libc.symbols.memfd_create(
+        `ccb-native-${moduleName}`,
+        1,
+      ) as number
       if (fd > 2) {
-        const { ftruncateSync, writeSync, closeSync } =
+        const { ftruncateSync, writeSync } =
           require('node:fs') as typeof import('node:fs')
         ftruncateSync(fd, buffer.length) // memfd 初始 size=0，dlopen 前需定长
         writeSync(fd, buffer)
         try {
-          // @ts-expect-error — /dev/fd 路径 dlopen；fd 关闭前映射已建立
-          process.dlopen(mod, `/dev/fd/${fd}`, 0x0001) // RTLD_LAZY
+          process.dlopen(mod, `/dev/fd/${fd}`, 0x0001) // RTLD_LAZY；fd 关闭前映射已建立
           return mod.exports
         } finally {
           libc.symbols.close(fd)
