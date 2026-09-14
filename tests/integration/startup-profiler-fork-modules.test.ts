@@ -178,10 +178,10 @@ describe('startup profiler: fork-module checkpoints', () => {
       'utf-8',
     )
     expect(source).toMatch(
-      /profileCheckpoint\(\s*`launch_\$\{checkpointSegment\(opts\.commandName\)\}_start`\s*\)/,
+      /profileCheckpoint\(\s*`launch_\$\{checkpointSegment\(opts\.commandName\)\}_start`\s*,?\s*\)/,
     )
     expect(source).toMatch(
-      /profileCheckpoint\(\s*`launch_\$\{checkpointSegment\(opts\.commandName\)\}_dispatched`\s*\)/,
+      /profileCheckpoint\(\s*`launch_\$\{checkpointSegment\(opts\.commandName\)\}_dispatched`\s*,?\s*\)/,
     )
     // Dash-containing command names (vault, memory-stores, ...) must be
     // sanitized to underscores so checkpoint names stay <module>_<stage>.
