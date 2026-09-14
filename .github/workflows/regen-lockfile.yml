@@ -12,7 +12,7 @@ jobs:
   regen:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2, 2026-04-25
         with:
           ref: ${{ inputs.ref }}
 
@@ -28,7 +28,7 @@ jobs:
         run: echo "ARTIFACT_NAME=bun-lockfile-$(echo '${{ inputs.ref }}' | tr '/' '-')" >> "$GITHUB_ENV"
 
       - name: Upload lockfile artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: bun.lock
