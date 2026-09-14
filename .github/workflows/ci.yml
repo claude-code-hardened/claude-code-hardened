@@ -74,7 +74,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -135,7 +135,7 @@ jobs:
           }
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: native-${{ matrix.target }}
           path: stage/
@@ -150,12 +150,12 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Download all platform artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -235,13 +235,13 @@ jobs:
           echo "  ✓ --check-commands: all command shims loaded"
 
       - name: Upload dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: claude-code-dist
           path: dist/
 
       - name: Upload npm tarball
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: claude-code-npm
           path: "*.tgz"
