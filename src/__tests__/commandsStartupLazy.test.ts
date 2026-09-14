@@ -66,7 +66,7 @@ describe('bundled skills registry', () => {
     expect(getBundledSkills()).toHaveLength(1)
   })
 
-  test('registering the same skill before a fresh load is idempotent in names', () => {
+  test('registering the same name twice appends twice (no dedupe)', () => {
     clearBundledSkills()
     registerBundledSkill(fakeSkill('startup-lazy-sentinel-b'))
     registerBundledSkill(fakeSkill('startup-lazy-sentinel-b'))
