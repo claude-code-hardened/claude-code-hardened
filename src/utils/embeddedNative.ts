@@ -16,12 +16,17 @@
  */
 
 import { createRequire } from 'node:module'
-import { existsSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { EMBEDDED_NATIVES } from './embeddedNatives.gen'
+import { logForDebugging } from './debug.js'
 
 const nodeRequire = createRequire(import.meta.url)
+
+// tmpfile fallback 的进程私有目录（首次使用时创建，进程生命周期内复用）
+let tmpNativeDir: string | null = null
 
 // 已加载模块缓存
 const loadedCache = new Map<string, unknown>()
@@ -37,9 +42,14 @@ export function isCompiledBinary(): boolean {
 type NativeModuleLike = Record<string, unknown>
 
 /**
- * 从内存 Buffer 直接加载原生模块（无临时文件）
- * 使用 Node.js 内部 API process.dlopen(module, buffer)
- * 当第二个参数是 Buffer 时，从内存加载而非磁盘
+ * 从内存加载原生模块（零落盘）。
+ *
+ * Bun 1.4.2 的 process.dlopen 实测（proot/Android，file-index 等 4 模块）：
+ *   - Buffer 形式 → ERR_DLOPEN_FAILED "cannot open shared object file"
+ *   - /proc/self/fd/<n> 路径 → "file too short"
+ *   - /dev/fd/<n> 路径 → ✅ 正常加载
+ * 故 Linux 上走 memfd_create（FFI）→ 写入 → /dev/fd/<n> dlopen——全程
+ * 匿名内存，不落盘。其他平台保留 Buffer 形式（未验证，失败走下游降级）。
  */
 function loadNativeFromMemory(
   moduleName: string,
@@ -49,6 +59,36 @@ function loadNativeFromMemory(
 
   // 创建一个虚拟模块对象供 dlopen 初始化
   const mod = { exports: {} as NativeModuleLike }
+
+  if (process.platform === 'linux') {
+    try {
+      const { dlopen: ffiDlopen } =
+        require('bun:ffi') as typeof import('bun:ffi')
+      const libc = ffiDlopen('libc.so.6', {
+        memfd_create: { args: ['cstring', 'u32'], returns: 'i32' },
+        close: { args: ['i32'], returns: 'i32' },
+      })
+      // MFD_CLOEXEC：fd 随 exec 关闭，防泄漏
+      const fd = libc.symbols.memfd_create(
+        `ccb-native-${moduleName}`,
+        1,
+      ) as number
+      if (fd > 2) {
+        const { ftruncateSync, writeSync } =
+          require('node:fs') as typeof import('node:fs')
+        ftruncateSync(fd, buffer.length) // memfd 初始 size=0，dlopen 前需定长
+        writeSync(fd, buffer)
+        try {
+          process.dlopen(mod, `/dev/fd/${fd}`, 0x0001) // RTLD_LAZY；fd 关闭前映射已建立
+          return mod.exports
+        } finally {
+          libc.symbols.close(fd)
+        }
+      }
+    } catch {
+      // memfd 不可用（老内核/非 glibc）→ 落到 Buffer 形式尝试
+    }
+  }
 
   try {
     // @ts-expect-error — process.dlopen 是内部 API；Buffer 重载在类型定义中缺失
@@ -93,11 +133,46 @@ export function loadNativeModule<T>(
     if (base64) {
       try {
         const fromMemory = accept(loadNativeFromMemory(moduleName, base64))
-        if (fromMemory) return fromMemory
+        if (fromMemory) {
+          logForDebugging(
+            `[native] ${moduleName}: loaded from embedded (dlopen ok)`,
+          )
+          return fromMemory
+        }
+        logForDebugging(
+          `[native] ${moduleName}: embedded load returned invalid module → vendor fallback`,
+        )
       } catch (e) {
-        console.error(`[embedded-native] 内存加载失败 ${moduleName}:`, e)
+        logForDebugging(
+          `[native] ${moduleName}: embedded dlopen FAILED → tmpfile fallback: ${String(e).slice(0, 200)}`,
+        )
+        // 内存 dlopen 在部分 Bun 版本/平台上失败（ERR_DLOPEN_FAILED）。
+        // 单文件 binary 里没有真实 vendor/ 目录可回退——把内嵌 payload
+        // 解码到进程私有临时目录再 require 文件路径（Node 生态标准做法）。
+        try {
+          if (!tmpNativeDir) {
+            tmpNativeDir = mkdtempSync(join(tmpdir(), 'ccb-native-'))
+          }
+          const tmpPath = join(tmpNativeDir, `${moduleName}.node`)
+          if (!existsSync(tmpPath)) {
+            writeFileSync(tmpPath, Buffer.from(base64, 'base64'))
+          }
+          const fromTmp = accept(nodeRequire(tmpPath) as NativeModuleLike)
+          if (fromTmp) {
+            logForDebugging(
+              `[native] ${moduleName}: loaded from tmpfile (${tmpNativeDir})`,
+            )
+            return fromTmp as T
+          }
+        } catch (tmpErr) {
+          logForDebugging(
+            `[native] ${moduleName}: tmpfile load FAILED: ${String(tmpErr).slice(0, 200)}`,
+          )
+        }
         // 继续尝试 vendor 回退
       }
+    } else {
+      logForDebugging(`[native] ${moduleName}: no embedded payload in binary`)
     }
   }
 
