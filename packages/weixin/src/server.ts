@@ -5,6 +5,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
+import { profileCheckpoint } from '../../../src/utils/startupProfiler.js'
 import {
   CDN_BASE_URL,
   DEFAULT_BASE_URL,
@@ -238,10 +239,12 @@ export async function runWeixinMcpServer(
   version: string,
   deps: WeixinServerDeps,
 ): Promise<void> {
+  profileCheckpoint('weixin_entry')
   deps.enableConfigs()
   deps.initializeAnalyticsSink()
 
   const account = loadAccount()
+  profileCheckpoint('weixin_account_loaded')
   if (!account) {
     process.stderr.write(
       '[weixin] No account configured. Run `ccb weixin login` to connect your WeChat account.\n',
@@ -286,6 +289,7 @@ export async function runWeixinMcpServer(
   })
 
   await server.connect(transport)
+  profileCheckpoint('weixin_server_connected')
 
   const baseUrl = account.baseUrl || DEFAULT_BASE_URL
   const controller = new AbortController()
@@ -319,6 +323,7 @@ export async function runWeixinMcpServer(
   }, 5000)
 
   deps.logForDebugging('[Weixin MCP] Starting poll loop')
+  profileCheckpoint('weixin_poll_started')
   await startPollLoop({
     baseUrl,
     cdnBaseUrl: CDN_BASE_URL,

@@ -434,6 +434,7 @@ const debugToolCall = lazyCommand(() =>
   require('./commands/debug-tool-call/index.js'),
 )
 import { getSettingSourceName } from './utils/settings/constants.js'
+import { profileCheckpoint } from './utils/startupProfiler.js'
 import {
   type Command,
   getCommandName,
@@ -720,6 +721,7 @@ const loadAllCommands = memoize(async (cwd: string): Promise<Command[]> => {
     getPluginCommands(),
     getWorkflowCommands ? getWorkflowCommands(cwd) : Promise.resolve([]),
   ])
+  profileCheckpoint('commands_sources_loaded')
 
   return [
     ...bundledSkills,
@@ -747,6 +749,7 @@ export async function getCommands(cwd: string): Promise<Command[]> {
   const baseCommands = allCommands.filter(
     _ => meetsAvailabilityRequirement(_) && isCommandEnabled(_),
   )
+  profileCheckpoint('commands_filter_done')
 
   if (dynamicSkills.length === 0) {
     return baseCommands

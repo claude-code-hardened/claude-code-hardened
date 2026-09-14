@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getProjectRoot } from '../bootstrap/state.js'
 import { logForDebugging } from '../utils/debug.js'
+import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { buildHostBundle, makeHostHandle } from './hostHandle.js'
 import { installWorkflowNotifications } from './notifications.js'
 import {
@@ -97,6 +98,7 @@ let cached: WorkflowService | null = null
 /** Process singleton. Tool and panel share the same ports/registry/store. */
 export function getWorkflowService(): WorkflowService {
   if (cached) return cached
+  profileCheckpoint('workflow_service_init_start')
   const bus = createProgressBus()
   const store = createProgressStoreFromBus(bus)
   const ports = createWorkflowPorts({ bus, store })
@@ -107,6 +109,7 @@ export function getWorkflowService(): WorkflowService {
   // Install the state-change notification bridge (commit 0768d4dc promised "auto-notify on completion" but the old implementation left it unfulfilled)
   installWorkflowNotifications(service)
   cached = service
+  profileCheckpoint('workflow_service_init_end')
   return cached
 }
 
@@ -186,6 +189,7 @@ export function makeService(
     ports,
 
     async launch(input, toolUseContext, canUseTool) {
+      profileCheckpoint('workflow_launch_start')
       const { script, workflowFile, workflowName } = await resolveSource(input)
       try {
         parseScript(script)
@@ -294,11 +298,13 @@ export function makeService(
         // Cap hydration at LOAD_PERSISTED_LIMIT newest runs so the panel tab row doesn't drown
         // under accumulated history. Older state.json files stay on disk (within KEEP_MAX_RUNS,
         // maintained by cleanupOldRuns) and remain resumable via getRunAsync.
+        profileCheckpoint('workflow_persisted_runs_start')
         const runs = await listPersistedRuns(
           runsDirProvider(),
           LOAD_PERSISTED_LIMIT,
         )
         for (const run of runs) store.hydrate(run)
+        profileCheckpoint('workflow_persisted_runs_loaded')
       } catch (e) {
         // Scan failure does not block the panel: log + reset flag to allow next retry
         logForDebugging(

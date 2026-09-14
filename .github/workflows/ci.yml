@@ -145,6 +145,7 @@ jobs:
   # scripts/build-all.mjs 与本地全流程是同一个入口（本地不带 --skip-native
   # 时自己跑 cargo 编译多平台）。CI 端 native 来自上面矩阵的 artifact——
   # 每次构建都现场编译 Rust，保证产物永远对应当前源码；vendor/ 不再回写仓库。
+  # compile.ts 默认启用 JSC bytecode 预编译（--version 1.16s→0.20s，代价体积 +53%）。
   package:
     needs: [quality, native]
     if: github.event_name == 'push'
@@ -233,6 +234,22 @@ jobs:
           echo "  --version → $out"
           dist/ccb-linux-x64 --check-commands
           echo "  ✓ --check-commands: all command shims loaded"
+
+      # 启动性能靶点（阈值级回归由 bench-startup.ts 本机判定；此处为打包期
+      # 可见性观测——CI 机器波动大不设毫秒阈值，但 probe 本身崩溃仍会使
+      # job 失败）：bytecode 预编译后 --version 应在 ~1s 内（A/B 实测
+      # 中位 0.20s vs 非 bytecode 1.16s）。回归时对比历史 run 日志可见。
+      - name: Startup perf probes (linux-x64)
+        run: |
+          set -euo pipefail
+          for probe in --version --check-commands; do
+            for i in 1 2 3; do
+              s=$(date +%s%N)
+              dist/ccb-linux-x64 $probe > /dev/null 2>&1
+              e=$(date +%s%N)
+              echo "  probe[$probe] run$i: $(( (e-s)/1000000 ))ms"
+            done
+          done
 
       - name: Upload dist
         uses: actions/upload-artifact@v7

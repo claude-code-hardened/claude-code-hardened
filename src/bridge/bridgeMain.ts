@@ -20,6 +20,7 @@ import { errorMessage } from '../utils/errors.js'
 import { truncateToWidth } from '../utils/format.js'
 import { logError } from '../utils/log.js'
 import { sleep } from '../utils/sleep.js'
+import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { createAgentWorktree, removeAgentWorktree } from '../utils/worktree.js'
 import {
   BridgeFatalError,
@@ -149,6 +150,7 @@ export async function runBridgeLoop(
   initialSessionId?: string,
   getAccessToken?: () => string | undefined | Promise<string | undefined>,
 ): Promise<void> {
+  profileCheckpoint('bridge_loop_start')
   // Local abort controller so that onSessionDone can stop the poll loop.
   // Linked to the incoming signal so external aborts also work.
   const controller = new AbortController()
@@ -1999,6 +2001,7 @@ async function fetchSessionTitle(
 }
 
 export async function bridgeMain(args: string[]): Promise<void> {
+  profileCheckpoint('bridge_entry')
   const parsed = parseArgs(args)
 
   if (parsed.help) {
@@ -2065,6 +2068,7 @@ export async function bridgeMain(args: string[]): Promise<void> {
   // setup() init flow, so we call initSinks() directly to attach sinks here.
   const { initSinks } = await import('../utils/sinks.js')
   initSinks()
+  profileCheckpoint('bridge_after_config_init')
 
   // Gate-aware validation: --spawn / --capacity / --create-session-in-dir require
   // the multi-session gate. parseArgs has already validated flag combinations;
@@ -2451,9 +2455,11 @@ export async function bridgeMain(args: string[]): Promise<void> {
   let environmentId: string
   let environmentSecret: string
   try {
+    profileCheckpoint('bridge_register_start')
     const reg = await api.registerBridgeEnvironment(config)
     environmentId = reg.environment_id
     environmentSecret = reg.environment_secret
+    profileCheckpoint('bridge_registered')
   } catch (err) {
     logEvent('tengu_bridge_registration_failed', {
       status: err instanceof BridgeFatalError ? err.status : undefined,
@@ -2902,9 +2908,11 @@ export async function runBridgeHeadless(
   let environmentId: string
   let environmentSecret: string
   try {
+    profileCheckpoint('bridge_register_start')
     const reg = await api.registerBridgeEnvironment(config)
     environmentId = reg.environment_id
     environmentSecret = reg.environment_secret
+    profileCheckpoint('bridge_registered')
   } catch (err) {
     // Transient — let supervisor backoff-retry.
     throw new Error(`Bridge registration failed: ${errorMessage(err)}`)
