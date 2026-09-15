@@ -396,6 +396,15 @@ export const SettingsSchema = lazySchema(() =>
             'model ID (e.g. a Bedrock inference profile ARN). Typically set in managed settings by ' +
             'enterprise administrators.',
         ),
+      contextWindowOverrides: z
+        .record(z.string(), z.number().int().positive())
+        .optional()
+        .describe(
+          'Per-model context window overrides (model ID -> context window in tokens). ' +
+            'Takes precedence over all built-in context window detection. ' +
+            'Useful for third-party/proxy models whose true context differs from built-in tables ' +
+            '(e.g. grok-4.5 = 500000, gpt-5.6-sol = 600000).',
+        ),
       // Whether to automatically approve all MCP servers in the project
       enableAllProjectMcpServers: z
         .boolean()

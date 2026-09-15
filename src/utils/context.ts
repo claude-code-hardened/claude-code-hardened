@@ -9,6 +9,7 @@ import {
   getChatGPTModelContextWindow,
 } from './model/chatgptModels.js'
 import { getModelCapability } from './model/modelCapabilities.js'
+import { getInitialSettings } from './settings/settings.js'
 
 // Model context window size (200k tokens for all models right now)
 export const MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
@@ -61,6 +62,24 @@ export function getContextWindowForModel(
   model: string,
   betas?: string[],
 ): number {
+  // User-configured per-model override (via /login) takes highest precedence —
+  // it expresses explicit user intent about a model's true context window,
+  // which built-in detection cannot know for third-party/proxy models.
+  try {
+    const overrides = getInitialSettings().contextWindowOverrides
+    if (overrides) {
+      const direct = overrides[model]
+      if (direct && direct > 0) return direct
+      const canonical = getCanonicalName(model)
+      if (canonical !== model) {
+        const viaCanonical = overrides[canonical]
+        if (viaCanonical && viaCanonical > 0) return viaCanonical
+      }
+    }
+  } catch {
+    // settings not ready during early bootstrap — fall through to detection
+  }
+
   // Allow override via environment variable (ant-only)
   // This takes precedence over all other context window resolution, including 1M detection,
   // so users can cap the effective context window for local decisions (auto-compact, etc.)
