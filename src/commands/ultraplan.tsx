@@ -495,10 +495,9 @@ const call: LocalJSXCommandCall = async (onDone, context, args) => {
 export default {
   type: 'local-jsx',
   name: 'ultraplan',
-  description: t(
-    '~10–30 min · Claude Code on the web drafts an advanced plan you can edit and approve. See {{url}}',
-    { url: CCR_TERMS_URL },
-  ),
+  description: t('~10–30 min · Claude Code on the web drafts an advanced plan you can edit and approve. See {{url}}', {
+    url: CCR_TERMS_URL,
+  }),
   argumentHint: '<prompt>',
   // isEnabled: () => process.env.USER_TYPE === 'ant',
   isEnabled: () => isUltraplanEnabled(),
