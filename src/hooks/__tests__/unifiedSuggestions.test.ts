@@ -5,9 +5,12 @@
  * #833 normalizes key weights before exponentiating, which inflates scores
  * (~3.2x mean on the unified config per scripts/fuse-differential.ts) and
  * changes how Fuse-scored MCP/agent suggestions interleave with nucleo
- * file scores. These snapshots pin the post-upgrade top-3 ordering so any
- * future scoring change is caught. Threshold stays at 0.6 (bitap gate
- * semantics unchanged in 7.5 — candidate sets match the 7.3 baseline).
+ * file scores. These snapshots pin the post-upgrade ordering so any future
+ * scoring change is caught. Threshold stays at 0.6 (bitap gate semantics
+ * unchanged in 7.5 — candidate sets match the 7.3 baseline).
+ *
+ * Note: agent suggestions pass a substring pre-filter (`includes`) before
+ * Fuse, so only pre-filter survivors are Fuse-scored and ordered.
  *
  * Expected orderings were derived from the differential harness
  * (scripts/fuse-differential.ts) running the exact repo Fuse config.
@@ -41,20 +44,30 @@ describe('generateUnifiedSuggestions (fuse.js 7.5 ordering snapshots)', () => {
     makeAgent('sdd-verifier', 'Verify implementation against the spec'),
   ]
 
-  test('ranks the best fuzzy agent match first (top-3 snapshot)', async () => {
-    // 'sdd-v' prefix-matches the agentType of sdd-verifier only; the other
-    // two match fuzzily. Under the 7.5 score scale the exact prefix match
-    // (score ~0.047) clearly separates from the fuzzy pair (~0.491).
+  test('narrows to the substring pre-filter match before Fuse scores', async () => {
+    // generateAgentSuggestions pre-filters agents with a plain
+    // `agentType/displayText.includes(query)` gate, so 'sdd-v' only ever
+    // reaches Fuse for sdd-verifier — the fuzzy sibling agents are excluded
+    // upstream of Fuse regardless of their Fuse scores.
     const results = await generateUnifiedSuggestions('sdd-v', {}, agents)
-    expect(results.length).toBeGreaterThanOrEqual(3)
-    expect(results.slice(0, 3).map(r => r.displayText)).toEqual([
-      'sdd-verifier (agent)',
+    expect(results.map(r => r.displayText)).toEqual(['sdd-verifier (agent)'])
+  })
+
+  test('orders pre-filter survivors by Fuse score (7.5 scale snapshot)', async () => {
+    // 'age' passes the pre-filter for all three (it sits in the common
+    // '(agent)' suffix), so the ordering is decided purely by Fuse scores:
+    // displayText position + description matches under the 7.5 weight
+    // normalization. Expected order (planner 0.712 < verifier 0.738 <
+    // implementer 0.778) derived from scripts/fuse-differential.ts.
+    const results = await generateUnifiedSuggestions('age', {}, agents)
+    expect(results.map(r => r.displayText)).toEqual([
       'sdd-planner (agent)',
+      'sdd-verifier (agent)',
       'sdd-implementer (agent)',
     ])
   })
 
-  test('keeps tied candidates in stable index order (limit tie behavior)', async () => {
+  test('keeps tied candidates in stable index order', async () => {
     // 'sdd' prefix-matches all three agentTypes with identical scores;
     // 7.5's stable tie ordering must preserve the input order.
     const results = await generateUnifiedSuggestions('sdd', {}, agents)
