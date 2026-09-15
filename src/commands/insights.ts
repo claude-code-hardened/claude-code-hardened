@@ -2494,6 +2494,8 @@ function generateHtmlReport(
       <div class="stat"><div class="stat-value">${data.total_files_modified}</div><div class="stat-label">${t('Files')}</div></div>
       <div class="stat"><div class="stat-value">${data.days_active}</div><div class="stat-label">${t('Days')}</div></div>
       <div class="stat"><div class="stat-value">${data.messages_per_day}</div><div class="stat-label">${t('Msgs/Day')}</div></div>
+      <div class="stat"><div class="stat-value">${data.total_input_tokens.toLocaleString()}</div><div class="stat-label">${t('Input Tokens')}</div></div>
+      <div class="stat"><div class="stat-value">${data.total_output_tokens.toLocaleString()}</div><div class="stat-label">${t('Output Tokens')}</div></div>
     </div>
 
     ${projectAreasHtml}
