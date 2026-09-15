@@ -2364,5 +2364,5 @@
   "Haiku Ctx": "Haiku 컨텍스트",
   "Sonnet Ctx": "Sonnet 컨텍스트",
   "Opus Ctx": "Opus 컨텍스트",
-  "Context window must be a positive integer (tokens).": "컨텍스트 윈도우는 양의 정수(토큰 수)여야 합니다."
+  "Context window must be a positive integer or shorthand like 512k or 1.5m.": "컨텍스트 윈도우는 양의 정수 또는 512k, 1.5m 같은 축약 형식이어야 합니다."
 }

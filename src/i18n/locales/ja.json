@@ -2364,5 +2364,5 @@
   "Haiku Ctx": "Haiku コンテキスト",
   "Sonnet Ctx": "Sonnet コンテキスト",
   "Opus Ctx": "Opus コンテキスト",
-  "Context window must be a positive integer (tokens).": "コンテキストウィンドウは正の整数（トークン数）で指定してください。"
+  "Context window must be a positive integer or shorthand like 512k or 1.5m.": "コンテキストウィンドウは正の整数か、512k・1.5m のような簡略表記で指定してください。"
 }

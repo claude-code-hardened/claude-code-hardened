@@ -127,10 +127,31 @@ function ctxOverrideFor(modelId: string | undefined): string {
   return override === undefined ? '' : String(override);
 }
 
+// Parse a context window value: plain tokens ("500000") or human shorthand
+// ("512k", "512.1k", "1.5m" — one decimal place max; square brackets
+// tolerated, mirroring the [1m] model-suffix style). Integer math only so
+// one-decimal shorthand has no float drift. Returns token count, or
+// undefined for invalid input.
+function parseCtxTokens(raw: string): number | undefined {
+  const value = raw.trim().replace(/^\[/, '').replace(/\]$/, '');
+  if (/^\d+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+  }
+  const m = value.match(/^(\d+)(?:\.(\d))?[km]$/i);
+  if (!m) return undefined;
+  const unit = m[0].toLowerCase().endsWith('m') ? 1_000_000 : 1_000;
+  const intPart = Number.parseInt(m[1]!, 10);
+  const decimal = m[2] ? Number.parseInt(m[2], 10) : 0;
+  const tokens = intPart * unit + decimal * (unit / 10);
+  return Number.isSafeInteger(tokens) && tokens > 0 ? tokens : undefined;
+}
+
 // Merge the three Ctx form fields into the settings overrides map, keyed by
-// each tier's model ID as actually sent to the provider. Valid number → set;
-// cleared field → drop the override for that tier; anything else → error
-// message string (caller shows it and aborts the save).
+// each tier's model ID as actually sent to the provider. Valid number (or
+// shorthand like 512k) → set; cleared field → drop the override for that
+// tier; anything else → error message string (caller shows it and aborts
+// the save).
 function applyCtxOverrides(
   overrides: Record<string, number>,
   entries: Array<[modelId: string | undefined, raw: string]>,
@@ -142,11 +163,11 @@ function applyCtxOverrides(
       if (modelId) delete next[modelId];
       continue;
     }
-    if (!/^\d+$/.test(value)) {
-      return 'Context window must be a positive integer (tokens).';
+    const parsed = parseCtxTokens(value);
+    if (parsed === undefined) {
+      return 'Context window must be a positive integer or shorthand like 512k or 1.5m.';
     }
-    const parsed = Number.parseInt(value, 10);
-    if (!Number.isSafeInteger(parsed) || parsed <= 0 || !modelId) continue;
+    if (!modelId) continue;
     next[modelId] = parsed;
   }
   return next;
@@ -817,7 +838,7 @@ function OAuthStatusMessage({
         if (typeof overrides === 'string') {
           setOAuthStatus({
             state: 'error',
-            message: t('Context window must be a positive integer (tokens).'),
+            message: t('Context window must be a positive integer or shorthand like 512k or 1.5m.'),
             toRetry: retryState,
           });
           return;
@@ -1077,7 +1098,7 @@ function OAuthStatusMessage({
         if (typeof overrides === 'string') {
           setOAuthStatus({
             state: 'error',
-            message: t('Context window must be a positive integer (tokens).'),
+            message: t('Context window must be a positive integer or shorthand like 512k or 1.5m.'),
             toRetry: retryState,
           });
           return;
@@ -1432,7 +1453,7 @@ function OAuthStatusMessage({
         if (typeof overrides === 'string') {
           setOAuthStatus({
             state: 'error',
-            message: t('Context window must be a positive integer (tokens).'),
+            message: t('Context window must be a positive integer or shorthand like 512k or 1.5m.'),
             toRetry: {
               state: 'gemini_api',
               baseUrl,

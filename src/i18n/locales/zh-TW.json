@@ -2596,5 +2596,5 @@
   "Haiku Ctx": "Haiku 上下文",
   "Sonnet Ctx": "Sonnet 上下文",
   "Opus Ctx": "Opus 上下文",
-  "Context window must be a positive integer (tokens).": "上下文視窗必須是正整數（token 數）。"
+  "Context window must be a positive integer or shorthand like 512k or 1.5m.": "上下文視窗必須是正整數，或簡寫格式（如 512k、1.5m）。"
 }
