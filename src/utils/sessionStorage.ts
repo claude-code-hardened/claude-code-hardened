@@ -4610,7 +4610,7 @@ function transformMessagesForExternalTranscript(
   messages: Transcript,
   replIds: Set<string>,
 ): Transcript {
-  // tsgo 7 fails to synthesize the union element type across the 8 return
+  // tsgo 7 fails to synthesize the union element type across the return
   // branches here (TS2345); the explicit type parameter pins it.
   return messages.flatMap<Transcript[number]>(m => {
     if (m.type === 'assistant' && Array.isArray(m.message.content)) {
