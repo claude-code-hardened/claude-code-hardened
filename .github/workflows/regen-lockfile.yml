@@ -11,12 +11,16 @@ on:
 jobs:
   regen:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2, 2026-04-25
         with:
           ref: ${{ inputs.ref }}
 
-      - name: Install Bun 1.4.2 (pinned)
+      # Bun 追 latest（性能）——lockfile 由当前 Bun 重算，格式兼容由 CI frozen-lockfile 把关
+      - name: Install Bun (latest)
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -25,7 +29,9 @@ jobs:
         run: bun install
 
       - name: Sanitize artifact name
-        run: echo "ARTIFACT_NAME=bun-lockfile-$(echo '${{ inputs.ref }}' | tr '/' '-')" >> "$GITHUB_ENV"
+        env:
+          REF: ${{ inputs.ref }}
+        run: printf 'ARTIFACT_NAME=bun-lockfile-%s\n' "$(printf '%s' "$REF" | tr '/' '-' | tr -cd '[:alnum:]_.-')" >> "$GITHUB_ENV"
 
       - name: Upload lockfile artifact
         uses: actions/upload-artifact@v7
