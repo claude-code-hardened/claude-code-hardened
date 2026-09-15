@@ -14,12 +14,16 @@ const SEPARATORS = /[:_-]/g
 
 // Minimum |scoreDiff| for the Fuse score (not usage) to decide ordering
 // between same-match-type commands. Recalibrated for fuse.js 7.5.0, which
-// normalizes key weights before exponentiating (#833): scores moved from a
-// ~1e-9 scale to ~0.04-0.9 (differential harness measured 3.9x mean
-// inflation, 3.0x adjacent-gap inflation). The old 0.1 was calibrated when
-// scores were so small the score stage never fired; 0.27 is the sweep
-// argmin reproducing the 7.3 baseline ordering under the new scale
-// (scripts/fuse-differential.ts — robust across usage assignments).
+// normalizes key weights before exponentiating (#833): the score scale
+// moves up (differential harness measured 3.9x mean inflation on this
+// config, 3.0x adjacent-gap inflation; gap |Δ| p50 0.032 → 0.149). The old
+// 0.1 was calibrated when scores were so small the score stage never fired;
+// 0.27 is the argmin of the |Δ| sweep over the 326 score-stage pairs at
+// 7.5@0.3 (p50=0.149; neighbors 0.26/0.28 both flip 3 pairs vs 2). The 2
+// residual ordering flips vs 7.3 are a deliberate improvement — the 7.5
+// signal is objectively better — so do NOT retune this to reproduce the
+// 7.3 ordering (scripts/fuse-differential.ts — robust across usage
+// assignments).
 const FUZZY_SCORE_FLIP_EPSILON = 0.27
 
 type CommandSearchItem = {

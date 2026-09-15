@@ -82,7 +82,7 @@ function GracePeriodContentBody(): React.ReactNode {
         <Link url={'https://anthropic.com/legal/terms'}></Link>
         {t(') and Privacy Policy (')}
         <Link url={'https://anthropic.com/legal/privacy'}></Link>
-        {t(')')}
+        {t(').')}
       </Text>
     </>
   );
@@ -123,7 +123,7 @@ function PostGracePeriodContentBody(): React.ReactNode {
         <Link url={'https://anthropic.com/legal/terms'}></Link>
         {t(') and Privacy Policy (')}
         <Link url={'https://anthropic.com/legal/privacy'}></Link>
-        {t(')')}
+        {t(').')}
       </Text>
     </>
   );

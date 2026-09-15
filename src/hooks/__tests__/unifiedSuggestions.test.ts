@@ -15,16 +15,28 @@
  * Expected orderings were derived from the differential harness
  * (scripts/fuse-differential.ts) running the exact repo Fuse config.
  */
-import { describe, expect, mock, test } from 'bun:test'
+import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { logMock } from '../../../tests/mocks/log'
 
 // unifiedSuggestions imports logError (log.ts → bootstrap/state side effects)
 mock.module('src/utils/log.ts', logMock)
 // File suggestions hit the filesystem (nucleo index); the Fuse-under-test
-// only scores the non-file (MCP/agent) sources. Returning [] keeps the
-// snapshot deterministic in any working directory.
+// only scores the non-file (MCP/agent) sources. Default impl returns [] to
+// keep the snapshots deterministic in any working directory; the mixed
+// interleaving suite below swaps in scenario files via `fileImpl`.
+let fileImpl: (
+  query: string,
+  showOnEmpty?: boolean,
+) => Promise<
+  Array<{
+    displayText: string
+    description?: string
+    metadata?: { score?: number }
+  }>
+> = async () => []
 mock.module('src/hooks/fileSuggestions.js', () => ({
-  generateFileSuggestions: async () => [],
+  generateFileSuggestions: (query: string, showOnEmpty?: boolean) =>
+    fileImpl(query, showOnEmpty),
 }))
 
 const { generateUnifiedSuggestions } = await import('../unifiedSuggestions.js')
@@ -94,5 +106,88 @@ describe('generateUnifiedSuggestions (fuse.js 7.5 ordering snapshots)', () => {
     // agents only match weakly through their descriptions.
     expect(results[0]!.displayText).toBe('context7:docs/fuse.js')
     expect(results[0]!.id).toBe('mcp-resource-context7__docs/fuse.js')
+  })
+})
+
+describe('generateUnifiedSuggestions (mixed file+agent interleaving)', () => {
+  // Unlike the snapshots above, the file side here is NOT mocked empty:
+  // real pipelines interleave nucleo-scored file suggestions with
+  // Fuse-scored agent suggestions by raw score (lower = better), where
+  // files without a nucleo score default to 0.5. The orderings below were
+  // captured from the real pipeline against fuse.js 7.5.0 and pin the
+  // 7.5-scale interleaving. Agent Fuse scores for 'age' land ~0.22
+  // (planner 0.2223 < implementer/verifier 0.2239, tie → stable input
+  // order), so agents beat default-score files but lose to a strong
+  // nucleo match and win against a weak one.
+  const agents = [
+    makeAgent('sdd-agent-planner', 'Create spec-driven agent plans'),
+    makeAgent('sdd-agent-implementer', 'Implement spec-driven agent plans'),
+    makeAgent('sdd-agent-verifier', 'Verify implementation agent plans'),
+  ]
+
+  function file(displayText: string, score?: number) {
+    return score !== undefined
+      ? { id: `file-${displayText}`, displayText, metadata: { score } }
+      : { id: `file-${displayText}`, displayText }
+  }
+
+  afterEach(() => {
+    fileImpl = async () => []
+  })
+
+  test('agents outrank files falling back to the default 0.5 score', async () => {
+    // Both files miss the nucleo score → default 0.5 > agent ~0.22; the
+    // two tied files keep their input order (stable sort).
+    fileImpl = async () => [
+      file('src/agents/manager.ts'),
+      file('docs/agent-guide.md'),
+    ]
+    const results = await generateUnifiedSuggestions('age', {}, agents)
+    expect(results.map(r => r.displayText)).toEqual([
+      'sdd-agent-planner (agent)',
+      'sdd-agent-implementer (agent)',
+      'sdd-agent-verifier (agent)',
+      'src/agents/manager.ts',
+      'docs/agent-guide.md',
+    ])
+  })
+
+  test('agents also outrank a poor nucleo file score of 0.9', async () => {
+    fileImpl = async () => [file('src/agents/manager.ts', 0.9)]
+    const results = await generateUnifiedSuggestions('age', {}, agents)
+    expect(results.map(r => r.displayText)).toEqual([
+      'sdd-agent-planner (agent)',
+      'sdd-agent-implementer (agent)',
+      'sdd-agent-verifier (agent)',
+      'src/agents/manager.ts',
+    ])
+  })
+
+  test('a strong nucleo file score of 0.15 outranks all agents', async () => {
+    fileImpl = async () => [file('src/agents/manager.ts', 0.15)]
+    const results = await generateUnifiedSuggestions('age', {}, agents)
+    expect(results.map(r => r.displayText)).toEqual([
+      'src/agents/manager.ts',
+      'sdd-agent-planner (agent)',
+      'sdd-agent-implementer (agent)',
+      'sdd-agent-verifier (agent)',
+    ])
+  })
+
+  test('mixed good/default/poor files interleave around the agent block', async () => {
+    fileImpl = async () => [
+      file('src/agents/manager.ts', 0.15),
+      file('docs/agent-guide.md'),
+      file('src/hooks/useAgentMode.ts', 0.9),
+    ]
+    const results = await generateUnifiedSuggestions('age', {}, agents)
+    expect(results.map(r => r.displayText)).toEqual([
+      'src/agents/manager.ts',
+      'sdd-agent-planner (agent)',
+      'sdd-agent-implementer (agent)',
+      'sdd-agent-verifier (agent)',
+      'docs/agent-guide.md',
+      'src/hooks/useAgentMode.ts',
+    ])
   })
 })

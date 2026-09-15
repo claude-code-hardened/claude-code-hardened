@@ -8,8 +8,13 @@
  * 被非线性推向 1，需要按对拍数据重校准。
  *
  * 运行：bun run scripts/fuse-differential.ts
- * 两版库从 npmmirror tarball 解压到 /tmp/fuse73 /tmp/fuse75
- * （可用 FUSE73_DIR / FUSE75_DIR 覆盖）。
+ *
+ * setup：两版库从 npmmirror tarball 解压（可用 FUSE73_DIR / FUSE75_DIR 覆盖
+ * 路径，脚本找 <dir>/package/dist/fuse.mjs）：
+ *   mkdir -p /tmp/fuse73 /tmp/fuse75
+ *   curl -sL https://registry.npmmirror.com/fuse.js/-/fuse.js-7.3.0.tgz | tar xz -C /tmp/fuse73
+ *   curl -sL https://registry.npmmirror.com/fuse.js/-/fuse.js-7.5.0.tgz | tar xz -C /tmp/fuse75
+ *   bun run scripts/fuse-differential.ts
  *
  * 每个消费点输出：
  *  ① top-1 一致性（7.5@旧阈值 vs 7.3 基线）
@@ -19,8 +24,22 @@
  *  ⑤ epsilon 扫描（仅 commands 配置）：custom-sort 决策最接近 7.3 的值
  */
 
+import { existsSync } from 'node:fs'
+
 const FUSE73_DIR = process.env.FUSE73_DIR ?? '/tmp/fuse73'
 const FUSE75_DIR = process.env.FUSE75_DIR ?? '/tmp/fuse75'
+
+// 缺库即早失败并打印 setup 提示（避免 import 报错让人摸不着头脑）
+for (const [tag, dir] of [
+  ['7.3.0', FUSE73_DIR],
+  ['7.5.0', FUSE75_DIR],
+] as const) {
+  if (!existsSync(`${dir}/package/dist/fuse.mjs`)) {
+    console.error(`✗ fuse.js ${tag} 未找到: ${dir}/package/dist/fuse.mjs`)
+    console.error('  按本文件头 setup 注释解压两版 tarball 后重跑')
+    process.exit(1)
+  }
+}
 
 type AnyFuse = new (
   items: unknown[],
