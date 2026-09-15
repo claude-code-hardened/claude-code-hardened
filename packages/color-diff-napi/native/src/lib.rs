@@ -16,7 +16,6 @@ use std::sync::OnceLock;
 
 use std::collections::HashMap;
 
-use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use syntect::parsing::{ParseState, ScopeStack, SyntaxSet};
 use unicode_width::UnicodeWidthChar;
@@ -601,14 +600,12 @@ fn scope_stack_color(stack: &ScopeStack, theme: &Theme) -> Color {
 
 struct Highlighter {
   parse_state: ParseState,
-  syntax: &'static syntect::parsing::SyntaxReference,
 }
 
 impl Highlighter {
   fn new(syntax: &'static syntect::parsing::SyntaxReference) -> Self {
     Highlighter {
       parse_state: ParseState::new(syntax),
-      syntax,
     }
   }
 
@@ -647,7 +644,7 @@ impl Highlighter {
         }
         cursor = pos;
       }
-      stack.apply(&op);
+      let _ = stack.apply(&op);
     }
     if line.len() > cursor
       && line.is_char_boundary(cursor)
@@ -699,7 +696,7 @@ impl Highlighter {
         }
         cursor = pos;
       }
-      stack.apply(&op);
+      let _ = stack.apply(&op);
     }
     if line.len() > cursor
       && line.is_char_boundary(cursor)
