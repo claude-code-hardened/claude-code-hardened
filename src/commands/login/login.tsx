@@ -157,20 +157,30 @@ export function Login(props: {
     [props.onDone, mainLoopModel],
   );
 
-  // Enter at the context-window prompt: a positive integer persists the
-  // override for the current model (merged with existing overrides); empty or
-  // invalid input skips. Login completes either way.
+  // Enter at the context-window prompt. Accepted formats:
+  //   "500000"                → override for the current main-loop model
+  //   "grok-4.5:500000"       → override for an arbitrary model ID (the ID as
+  //                             actually sent to the provider, e.g. after
+  //                             OPENAI_DEFAULT_*_MODEL mapping)
+  // Empty or invalid input skips. Login completes either way.
   const handleContextSubmit = React.useCallback(
     (value: string) => {
       const trimmed = value.trim();
-      if (/^\d+$/.test(trimmed)) {
-        const parsed = Number.parseInt(trimmed, 10);
-        if (Number.isSafeInteger(parsed) && parsed > 0) {
-          const existing = getInitialSettings().contextWindowOverrides ?? {};
-          updateSettingsForSource('userSettings', {
-            contextWindowOverrides: { ...existing, [mainLoopModel]: parsed },
-          });
-        }
+      const paired = trimmed.match(/^(\S+?)[:=\s]+(\d+)$/);
+      let overrideKey: string | undefined;
+      let parsed: number | undefined;
+      if (paired) {
+        overrideKey = paired[1];
+        parsed = Number.parseInt(paired[2], 10);
+      } else if (/^\d+$/.test(trimmed)) {
+        overrideKey = mainLoopModel;
+        parsed = Number.parseInt(trimmed, 10);
+      }
+      if (overrideKey && parsed !== undefined && Number.isSafeInteger(parsed) && parsed > 0) {
+        const existing = getInitialSettings().contextWindowOverrides ?? {};
+        updateSettingsForSource('userSettings', {
+          contextWindowOverrides: { ...existing, [overrideKey]: parsed },
+        });
       }
       finishLogin(true);
     },
@@ -212,7 +222,10 @@ export function Login(props: {
               context differs from the built-in detection (affects auto-compact thresholds and context % display).
             </Text>
             <Box marginTop={1}>
-              <Text>Context window tokens for {mainLoopModel} (empty = skip):</Text>
+              <Text>
+                Context window tokens (empty = skip). Plain number → {mainLoopModel}; or "model:tokens" for any other
+                model ID (e.g. grok-4.5:500000):
+              </Text>
             </Box>
             <TextInput
               value={contextInput}
