@@ -910,12 +910,15 @@ function OAuthStatusMessage({
                 onChangeCursorOffset={setInputCursorOffset}
                 columns={columns}
                 mask={opts?.mask ? '*' : undefined}
+                placeholder={opts?.placeholder}
                 focus={true}
               />
             ) : val ? (
               <Text color="success">
                 {opts?.mask ? val.slice(0, 8) + '\u00b7'.repeat(Math.max(0, val.length - 8)) : val}
               </Text>
+            ) : opts?.placeholder ? (
+              <Text dimColor>{opts.placeholder}</Text>
             ) : null}
           </Box>
         );
@@ -928,11 +931,11 @@ function OAuthStatusMessage({
             {renderRow('base_url', t('Base URL '))}
             {renderRow('api_key', t('API Key  '), { mask: true })}
             {renderRow('haiku_model', t('Haiku    '))}
-            {renderRow('haiku_ctx', t('Haiku Ctx'))}
+            {renderRow('haiku_ctx', t('Haiku Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
             {renderRow('sonnet_model', t('Sonnet   '))}
-            {renderRow('sonnet_ctx', t('Sonnet Ctx'))}
+            {renderRow('sonnet_ctx', t('Sonnet Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
             {renderRow('opus_model', t('Opus     '))}
-            {renderRow('opus_ctx', t('Opus Ctx'))}
+            {renderRow('opus_ctx', t('Opus Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
           </Box>
           <Text dimColor>
             {t('↑↓/Tab to switch · Enter on last field to save · Esc to go back · Ctx = context window tokens')}
@@ -1161,7 +1164,7 @@ function OAuthStatusMessage({
 
       const openaiColumns = useTerminalSize().columns - 20;
 
-      const renderOpenAIRow = (field: OpenAIField, label: string, opts?: { mask?: boolean }) => {
+      const renderOpenAIRow = (field: OpenAIField, label: string, opts?: { mask?: boolean; placeholder?: string }) => {
         const active = activeField === field;
         const val = openaiDisplayValues[field];
         return (
@@ -1179,12 +1182,15 @@ function OAuthStatusMessage({
                 onChangeCursorOffset={setOpenaiInputCursorOffset}
                 columns={openaiColumns}
                 mask={opts?.mask ? '*' : undefined}
+                placeholder={opts?.placeholder}
                 focus={true}
               />
             ) : val ? (
               <Text color="success">
                 {opts?.mask ? val.slice(0, 8) + '\u00b7'.repeat(Math.max(0, val.length - 8)) : val}
               </Text>
+            ) : opts?.placeholder ? (
+              <Text dimColor>{opts.placeholder}</Text>
             ) : null}
           </Box>
         );
@@ -1200,11 +1206,11 @@ function OAuthStatusMessage({
             {renderOpenAIRow('base_url', t('Base URL '))}
             {renderOpenAIRow('api_key', t('API Key  '), { mask: true })}
             {renderOpenAIRow('haiku_model', t('Haiku    '))}
-            {renderOpenAIRow('haiku_ctx', t('Haiku Ctx'))}
+            {renderOpenAIRow('haiku_ctx', t('Haiku Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
             {renderOpenAIRow('sonnet_model', t('Sonnet   '))}
-            {renderOpenAIRow('sonnet_ctx', t('Sonnet Ctx'))}
+            {renderOpenAIRow('sonnet_ctx', t('Sonnet Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
             {renderOpenAIRow('opus_model', t('Opus     '))}
-            {renderOpenAIRow('opus_ctx', t('Opus Ctx'))}
+            {renderOpenAIRow('opus_ctx', t('Opus Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
           </Box>
           <Text dimColor>
             {t('↑↓/Tab to switch · Enter on last field to save · Esc to go back · Ctx = context window tokens')}
@@ -1525,7 +1531,7 @@ function OAuthStatusMessage({
 
       const geminiColumns = useTerminalSize().columns - 20;
 
-      const renderGeminiRow = (field: GeminiField, label: string, opts?: { mask?: boolean }) => {
+      const renderGeminiRow = (field: GeminiField, label: string, opts?: { mask?: boolean; placeholder?: string }) => {
         const active = activeField === field;
         const val = geminiDisplayValues[field];
         return (
@@ -1543,12 +1549,15 @@ function OAuthStatusMessage({
                 onChangeCursorOffset={setGeminiInputCursorOffset}
                 columns={geminiColumns}
                 mask={opts?.mask ? '*' : undefined}
+                placeholder={opts?.placeholder}
                 focus={true}
               />
             ) : val ? (
               <Text color="success">
                 {opts?.mask ? val.slice(0, 8) + '\u00b7'.repeat(Math.max(0, val.length - 8)) : val}
               </Text>
+            ) : opts?.placeholder ? (
+              <Text dimColor>{opts.placeholder}</Text>
             ) : null}
           </Box>
         );
@@ -1566,11 +1575,11 @@ function OAuthStatusMessage({
             {renderGeminiRow('base_url', t('Base URL '))}
             {renderGeminiRow('api_key', t('API Key  '), { mask: true })}
             {renderGeminiRow('haiku_model', t('Haiku    '))}
-            {renderGeminiRow('haiku_ctx', t('Haiku Ctx'))}
+            {renderGeminiRow('haiku_ctx', t('Haiku Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
             {renderGeminiRow('sonnet_model', t('Sonnet   '))}
-            {renderGeminiRow('sonnet_ctx', t('Sonnet Ctx'))}
+            {renderGeminiRow('sonnet_ctx', t('Sonnet Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
             {renderGeminiRow('opus_model', t('Opus     '))}
-            {renderGeminiRow('opus_ctx', t('Opus Ctx'))}
+            {renderGeminiRow('opus_ctx', t('Opus Ctx'), { placeholder: 'auto ([1m] = 1M)' })}
           </Box>
           <Text dimColor>
             {t('↑↓/Tab to switch · Enter on last field to save · Esc to go back · Ctx = context window tokens')}
