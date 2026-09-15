@@ -2358,5 +2358,6 @@
   "Select display language": "表示言語を選択",
   "UI language set to {{name}}": "表示言語を {{name}} に設定しました",
   "UI language already set to {{name}}": "表示言語はすでに {{name}} です",
-  "Language selection dismissed": "言語選択をキャンセルしました"
+  "Language selection dismissed": "言語選択をキャンセルしました",
+  ")": "）"
 }

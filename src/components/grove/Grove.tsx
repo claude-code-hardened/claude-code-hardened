@@ -81,7 +81,8 @@ function GracePeriodContentBody(): React.ReactNode {
         {t(') or read the updated Consumer Terms (')}
         <Link url={'https://anthropic.com/legal/terms'}></Link>
         {t(') and Privacy Policy (')}
-        <Link url={'https://anthropic.com/legal/privacy'}></Link>)
+        <Link url={'https://anthropic.com/legal/privacy'}></Link>
+        {t(')')}
       </Text>
     </>
   );
@@ -121,7 +122,8 @@ function PostGracePeriodContentBody(): React.ReactNode {
         {t(') or read the updated Consumer Terms (')}
         <Link url={'https://anthropic.com/legal/terms'}></Link>
         {t(') and Privacy Policy (')}
-        <Link url={'https://anthropic.com/legal/privacy'}></Link>)
+        <Link url={'https://anthropic.com/legal/privacy'}></Link>
+        {t(')')}
       </Text>
     </>
   );

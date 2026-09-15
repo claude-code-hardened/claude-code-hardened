@@ -294,7 +294,7 @@ console.log(
 
 const tsSync = new TsFileIndex()
 tsSync.loadFromFileList(realPaths)
-const nativeSync = napi.createNativeFileIndex()
+const nativeSync = napi.NativeFileIndex.createNativeFileIndex()
 nativeSync.loadFromFileList(realPaths)
 
 const uniqueCount = new Set(realPaths.filter(p => p.length > 0)).size
@@ -315,7 +315,7 @@ const tsAsync = new TsFileIndex()
   const { done } = tsAsync.loadFromFileListAsync(realPaths)
   await done
 }
-const nativeChunked = napi.createNativeFileIndex()
+const nativeChunked = napi.NativeFileIndex.createNativeFileIndex()
 for (let i = 0; i < realPaths.length; i += 997) {
   nativeChunked.appendPaths(realPaths.slice(i, i + 997))
 }
@@ -336,7 +336,7 @@ tsBig.loadFromFileList(bigPaths)
 const tsBuildMs = performance.now() - t0
 
 t0 = performance.now()
-const nativeBig = napi.createNativeFileIndex()
+const nativeBig = napi.NativeFileIndex.createNativeFileIndex()
 nativeBig.loadFromFileList(bigPaths)
 const nativeBuildMs = performance.now() - t0
 

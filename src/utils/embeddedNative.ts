@@ -57,6 +57,10 @@ function loadNativeFromMemory(
   const mod = { exports: {} as NativeModuleLike }
 
   if (process.platform === 'linux') {
+    // fd 提到 try 外：ftruncate/write/dlopen 抛异常时 catch 需关闭已创建
+    // 的 memfd（成功路径直接 return，不会进 catch，不受"不 close"约束）。
+    let memfdFd: number | null = null
+    let closeMemfd: (() => void) | null = null
     try {
       const { dlopen: ffiDlopen } =
         require('bun:ffi') as typeof import('bun:ffi')
@@ -70,6 +74,10 @@ function loadNativeFromMemory(
         1,
       ) as number
       if (fd > 2) {
+        memfdFd = fd
+        closeMemfd = () => {
+          libc.symbols.close(fd)
+        }
         const { ftruncateSync, writeSync } =
           require('node:fs') as typeof import('node:fs')
         ftruncateSync(fd, buffer.length) // memfd 初始 size=0，dlopen 前需定长
@@ -86,6 +94,13 @@ function loadNativeFromMemory(
       }
     } catch {
       // memfd 不可用（老内核/非 glibc）→ 落到 Buffer 形式尝试
+      if (memfdFd !== null && closeMemfd) {
+        try {
+          closeMemfd()
+        } catch {
+          // close 失败不阻塞 Buffer 降级
+        }
+      }
     }
   }
 
