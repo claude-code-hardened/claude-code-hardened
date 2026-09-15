@@ -7,10 +7,7 @@ import { ConfigurableShortcutHint } from '../../components/ConfigurableShortcutH
 import { ConsoleOAuthFlow } from '../../components/ConsoleOAuthFlow.js';
 import { Box, Dialog, useInput } from '@anthropic/ink';
 import { useMainLoopModel } from '../../hooks/useMainLoopModel.js';
-import { useTerminalSize } from '../../hooks/useTerminalSize.js';
-import TextInput from '../../components/TextInput.js';
 import { Text } from '@anthropic/ink';
-import { getInitialSettings, updateSettingsForSource } from '../../utils/settings/settings.js';
 import { refreshGrowthBookAfterAuthChange } from '../../services/analytics/growthbook.js';
 import { refreshPolicyLimits } from '../../services/policyLimits/index.js';
 import { refreshRemoteManagedSettings } from '../../services/remoteManagedSettings/index.js';
@@ -80,13 +77,6 @@ export function Login(props: {
 }): React.ReactNode {
   const mainLoopModel = useMainLoopModel();
   const [showWorkspaceKeyInput, setShowWorkspaceKeyInput] = React.useState(false);
-  // Set once ConsoleOAuthFlow reports success; /login then offers an optional
-  // per-model context window override before completing.
-  const [pendingSuccess, setPendingSuccess] = React.useState(false);
-  const [showContextPrompt, setShowContextPrompt] = React.useState(false);
-  const [contextInput, setContextInput] = React.useState('');
-  const [contextCursorOffset, setContextCursorOffset] = React.useState(0);
-  const terminalSize = useTerminalSize();
   // 'idle' | 'confirm-remove' | 'removing' | { error: string }
   const [removeState, setRemoveState] = React.useState<
     { phase: 'idle' } | { phase: 'confirm-remove' } | { phase: 'removing' } | { phase: 'error'; message: string }
@@ -138,7 +128,7 @@ export function Login(props: {
         setRemoveState({ phase: 'confirm-remove' });
       }
     },
-    { isActive: !showWorkspaceKeyInput && !showContextPrompt },
+    { isActive: !showWorkspaceKeyInput },
   );
 
   const handleWorkspaceKeySaved = React.useCallback(() => {
@@ -157,48 +147,10 @@ export function Login(props: {
     [props.onDone, mainLoopModel],
   );
 
-  // Enter at the context-window prompt. Accepted formats:
-  //   "500000"                → override for the current main-loop model
-  //   "grok-4.5:500000"       → override for an arbitrary model ID (the ID as
-  //                             actually sent to the provider, e.g. after
-  //                             OPENAI_DEFAULT_*_MODEL mapping)
-  // Empty or invalid input skips. Login completes either way.
-  const handleContextSubmit = React.useCallback(
-    (value: string) => {
-      const trimmed = value.trim();
-      const paired = trimmed.match(/^(\S+?)[:=\s]+(\d+)$/);
-      let overrideKey: string | undefined;
-      let parsed: number | undefined;
-      if (paired) {
-        overrideKey = paired[1];
-        parsed = Number.parseInt(paired[2], 10);
-      } else if (/^\d+$/.test(trimmed)) {
-        overrideKey = mainLoopModel;
-        parsed = Number.parseInt(trimmed, 10);
-      }
-      if (overrideKey && parsed !== undefined && Number.isSafeInteger(parsed) && parsed > 0) {
-        const existing = getInitialSettings().contextWindowOverrides ?? {};
-        updateSettingsForSource('userSettings', {
-          contextWindowOverrides: { ...existing, [overrideKey]: parsed },
-        });
-      }
-      finishLogin(true);
-    },
-    [finishLogin, mainLoopModel],
-  );
-
   return (
     <Dialog
       title="Login"
-      onCancel={() => {
-        if (showContextPrompt) {
-          // Login already succeeded — Esc at the optional prompt just skips
-          // the override and completes /login.
-          finishLogin(pendingSuccess);
-          return;
-        }
-        props.onDone(false, mainLoopModel);
-      }}
+      onCancel={() => props.onDone(false, mainLoopModel)}
       color="permission"
       inputGuide={exitState =>
         exitState.pending ? (
@@ -215,32 +167,7 @@ export function Login(props: {
           </Box>
         )}
 
-        {showContextPrompt ? (
-          <Box flexDirection="column" marginBottom={1}>
-            <Text dimColor>
-              Optionally customize the context window for this model. Useful when a third-party/proxy model&apos;s true
-              context differs from the built-in detection (affects auto-compact thresholds and context % display).
-            </Text>
-            <Box marginTop={1}>
-              <Text>
-                Context window tokens (empty = skip). Plain number → {mainLoopModel}; or "model:tokens" for any other
-                model ID (e.g. grok-4.5:500000):
-              </Text>
-            </Box>
-            <TextInput
-              value={contextInput}
-              onChange={setContextInput}
-              onSubmit={handleContextSubmit}
-              onExit={() => handleContextSubmit(contextInput)}
-              focus={true}
-              placeholder="e.g. 500000"
-              columns={terminalSize.columns}
-              cursorOffset={contextCursorOffset}
-              onChangeCursorOffset={setContextCursorOffset}
-              showCursor={true}
-            />
-          </Box>
-        ) : showWorkspaceKeyInput ? (
+        {showWorkspaceKeyInput ? (
           <WorkspaceKeyInputContainer onSaved={handleWorkspaceKeySaved} onCancel={handleWorkspaceKeyCancel} />
         ) : removeState.phase === 'confirm-remove' || removeState.phase === 'removing' ? (
           <Box flexDirection="column" marginBottom={1}>
@@ -265,11 +192,10 @@ export function Login(props: {
             </Box>
             <ConsoleOAuthFlow
               onDone={() => {
-                // Login succeeded — offer the optional per-model context
-                // window override before completing /login (skippable via
-                // empty input).
-                setPendingSuccess(true);
-                setShowContextPrompt(true);
+                // Login succeeded. Per-model context window overrides are
+                // configured inside the third-party platform forms (Ctx
+                // fields) — nothing else to ask here.
+                finishLogin(true);
               }}
               startingMessage={props.startingMessage}
             />

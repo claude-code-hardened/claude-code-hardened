@@ -1623,7 +1623,6 @@
   "Failed to save settings. Please try again.": "設定を保存できませんでした。再試行してください。",
   "Anthropic Compatible Setup": "Anthropic 互換設定",
   "API Key  ": "API キー  ",
-  "↑↓/Tab to switch · Enter on last field to save · Esc to go back": "↑↓/Tab で切り替え · 最後の項目で Enter で保存 · Esc で戻る",
   "OpenAI Compatible API Setup": "OpenAI 互換 API 設定",
   "Configure an OpenAI Chat Completions compatible endpoint (e.g. Ollama, DeepSeek, vLLM).": "OpenAI Chat Completions 互換エンドポイントを設定（例：Ollama、DeepSeek、vLLM）。",
   "ChatGPT Account Setup": "ChatGPT アカウント設定",
@@ -2360,5 +2359,10 @@
   "Select display language": "表示言語を選択",
   "UI language set to {{name}}": "表示言語を {{name}} に設定しました",
   "UI language already set to {{name}}": "表示言語はすでに {{name}} です",
-  "Language selection dismissed": "言語選択をキャンセルしました"
+  "Language selection dismissed": "言語選択をキャンセルしました",
+  "↑↓/Tab to switch · Enter on last field to save · Esc to go back · Ctx = context window tokens": "↑↓/Tab で切り替え · 最後の項目で Enter で保存 · Esc で戻る · Ctx = コンテキストウィンドウのトークン数",
+  "Haiku Ctx": "Haiku コンテキスト",
+  "Sonnet Ctx": "Sonnet コンテキスト",
+  "Opus Ctx": "Opus コンテキスト",
+  "Context window must be a positive integer (tokens).": "コンテキストウィンドウは正の整数（トークン数）で指定してください。"
 }

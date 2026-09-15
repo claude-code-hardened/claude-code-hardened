@@ -1679,7 +1679,6 @@
   "Failed to save settings. Please try again.": "無法儲存設定。請重試。",
   "Anthropic Compatible Setup": "Anthropic 相容設定",
   "API Key  ": "API 金鑰  ",
-  "↑↓/Tab to switch · Enter on last field to save · Esc to go back": "↑↓/Tab 切換 · 在最後一項按 Enter 儲存 · Esc 返回",
   "OpenAI Compatible API Setup": "OpenAI 相容 API 設定",
   "Configure an OpenAI Chat Completions compatible endpoint (e.g. Ollama, DeepSeek, vLLM).": "配置 OpenAI Chat Completions 相容端點（如 Ollama、DeepSeek、vLLM）。",
   "ChatGPT Account Setup": "ChatGPT 帳戶設定",
@@ -2592,5 +2591,10 @@
   "Show skill learning status for current project": "顯示目前專案的技能學習狀態",
   "Show stored secret keys": "顯示已儲存的金鑰",
   "Show whether automatic skill matching is active": "顯示自動技能匹配是否啟用中",
-  "Skip this picker in the future (revert via /config)": "日後跳過此選擇器（可透過 /config 恢復）"
+  "Skip this picker in the future (revert via /config)": "日後跳過此選擇器（可透過 /config 恢復）",
+  "↑↓/Tab to switch · Enter on last field to save · Esc to go back · Ctx = context window tokens": "↑↓/Tab 切換 · 在最後一項按 Enter 儲存 · Esc 返回 · Ctx = 上下文視窗 token 數",
+  "Haiku Ctx": "Haiku 上下文",
+  "Sonnet Ctx": "Sonnet 上下文",
+  "Opus Ctx": "Opus 上下文",
+  "Context window must be a positive integer (tokens).": "上下文視窗必須是正整數（token 數）。"
 }

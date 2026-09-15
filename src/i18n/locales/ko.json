@@ -1623,7 +1623,6 @@
   "Failed to save settings. Please try again.": "설정을 저장하지 못했습니다. 다시 시도하세요.",
   "Anthropic Compatible Setup": "Anthropic 호환 설정",
   "API Key  ": "API 키  ",
-  "↑↓/Tab to switch · Enter on last field to save · Esc to go back": "↑↓/Tab 전환 · 마지막 필드에서 Enter로 저장 · Esc 뒤로",
   "OpenAI Compatible API Setup": "OpenAI 호환 API 설정",
   "Configure an OpenAI Chat Completions compatible endpoint (e.g. Ollama, DeepSeek, vLLM).": "OpenAI Chat Completions 호환 엔드포인트를 구성합니다(예: Ollama, DeepSeek, vLLM).",
   "ChatGPT Account Setup": "ChatGPT 계정 설정",
@@ -2360,5 +2359,10 @@
   "Select display language": "표시 언어 선택",
   "UI language set to {{name}}": "표시 언어가 {{name}}(으)로 설정되었습니다",
   "UI language already set to {{name}}": "표시 언어가 이미 {{name}}입니다",
-  "Language selection dismissed": "언어 선택이 취소되었습니다"
+  "Language selection dismissed": "언어 선택이 취소되었습니다",
+  "↑↓/Tab to switch · Enter on last field to save · Esc to go back · Ctx = context window tokens": "↑↓/Tab 전환 · 마지막 필드에서 Enter로 저장 · Esc 뒤로 · Ctx = 컨텍스트 윈도우 토큰 수",
+  "Haiku Ctx": "Haiku 컨텍스트",
+  "Sonnet Ctx": "Sonnet 컨텍스트",
+  "Opus Ctx": "Opus 컨텍스트",
+  "Context window must be a positive integer (tokens).": "컨텍스트 윈도우는 양의 정수(토큰 수)여야 합니다."
 }
