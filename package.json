@@ -220,6 +220,7 @@
   },
   "overrides": {
     "@inquirer/prompts": "8.7.2",
+    "@types/node": "26.5.1",
     "@xmldom/xmldom": "0.9.12",
     "follow-redirects": "1.16.0",
     "fuse.js": "7.3.0",
