@@ -496,7 +496,8 @@ export default {
   type: 'local-jsx',
   name: 'ultraplan',
   description: t(
-    `~10–30 min · Claude Code on the web drafts an advanced plan you can edit and approve. See ${CCR_TERMS_URL}`,
+    '~10–30 min · Claude Code on the web drafts an advanced plan you can edit and approve. See {{url}}',
+    { url: CCR_TERMS_URL },
   ),
   argumentHint: '<prompt>',
   // isEnabled: () => process.env.USER_TYPE === 'ant',
