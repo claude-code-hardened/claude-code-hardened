@@ -77,6 +77,9 @@ const CHILD_PREFIX_WIDTH = 4; // '  ▸ '
 const DEEP_SEARCH_MAX_MESSAGES = 2000;
 const DEEP_SEARCH_CROP_SIZE = 1000;
 const DEEP_SEARCH_MAX_TEXT_LENGTH = 50000; // Cap searchable text per session
+// Kept at 0.3 for fuse.js 7.5.0 (scripts/fuse-differential.ts): single key
+// with default weight 1 is a normalization no-op (#833), so scores and
+// candidate sets are identical to 7.3 (measured 1.0x inflation).
 const FUSE_THRESHOLD = 0.3;
 const DATE_TIE_THRESHOLD_MS = 60 * 1000; // 1 minute - use relevance as tie-breaker within this window
 const SNIPPET_CONTEXT_CHARS = 50; // Characters to show before/after match

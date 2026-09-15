@@ -12,6 +12,16 @@ import { getSkillUsageScore } from './skillUsageTracking.js'
 // Treat these characters as word separators for command search
 const SEPARATORS = /[:_-]/g
 
+// Minimum |scoreDiff| for the Fuse score (not usage) to decide ordering
+// between same-match-type commands. Recalibrated for fuse.js 7.5.0, which
+// normalizes key weights before exponentiating (#833): scores moved from a
+// ~1e-9 scale to ~0.04-0.9 (differential harness measured 3.9x mean
+// inflation, 3.0x adjacent-gap inflation). The old 0.1 was calibrated when
+// scores were so small the score stage never fired; 0.27 is the sweep
+// argmin reproducing the 7.3 baseline ordering under the new scale
+// (scripts/fuse-differential.ts — robust across usage assignments).
+const FUZZY_SCORE_FLIP_EPSILON = 0.27
+
 type CommandSearchItem = {
   descriptionKey: string[]
   partKey: string[] | undefined
@@ -53,6 +63,10 @@ function getCommandFuse(commands: Command[]): Fuse<CommandSearchItem> {
 
   const fuse = new Fuse(commandData, {
     includeScore: true,
+    // Calibrated for fuse.js 7.5.0 via scripts/fuse-differential.ts: the
+    // threshold only gates Fuse's per-key bitap stage, whose semantics did
+    // not change in 7.5 — candidate sets are identical to 7.3 at 0.3
+    // (Jaccard 1.000), while raising it floods in 7.3-rejected matches.
     threshold: 0.3, // relatively strict matching
     location: 0, // prefer matches at the beginning of strings
     distance: 100, // increased to allow matching in descriptions
@@ -475,7 +489,7 @@ export function generateCommandSuggestions(
 
     // For similar match types, use Fuse score with usage as tiebreaker
     const scoreDiff = (a.r.score ?? 0) - (b.r.score ?? 0)
-    if (Math.abs(scoreDiff) > 0.1) {
+    if (Math.abs(scoreDiff) > FUZZY_SCORE_FLIP_EPSILON) {
       return scoreDiff
     }
     // For similar Fuse scores, prefer more frequently used skills

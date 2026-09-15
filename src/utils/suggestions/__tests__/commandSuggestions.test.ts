@@ -128,6 +128,39 @@ describe('generateCommandSuggestions', () => {
     expect(names.some(n => n.includes('compact'))).toBe(true)
   })
 
+  test('orders prefix matches shortest-first (top-1 baseline)', () => {
+    // fuse.js 7.5 (weight normalization #833) inflates scores ~3.9x but the
+    // custom comparator resolves prefix matches before the score stage, so
+    // the ordering must be unchanged by the upgrade.
+    const results = generateCommandSuggestions('/com', commands)
+    expect(results[0]?.displayText).toBe('/commit')
+  })
+
+  // ★ fuse.js 7.5 ordering snapshot: '/spec' matches only through the
+  // low-weight descriptionKey, so the raw Fuse score decides. Expected
+  // top-1 (sdd-verify) was computed from the differential harness
+  // (scripts/fuse-differential.ts) running this exact Fuse config.
+  test('pins fuzzy-only ordering for non-prefix query (7.5 score scale)', () => {
+    const sddCommands: Command[] = [
+      makePromptCommand('sdd-global-read', {
+        description: 'Read global spec-driven development docs',
+      }),
+      makePromptCommand('sdd-plan', {
+        description: 'Create a spec-driven development plan',
+      }),
+      makePromptCommand('sdd-review', {
+        description: 'Run a spec-driven code review',
+      }),
+      makePromptCommand('sdd-verify', {
+        description: 'Verify implementation against the spec',
+      }),
+    ]
+    const results = generateCommandSuggestions('/spec', sddCommands)
+    expect(results.length).toBeGreaterThan(0)
+    expect(results[0]?.displayText).toBe('/sdd-verify')
+    expect(results.map(r => r.displayText)).toContain('/sdd-global-read')
+  })
+
   test('returns empty when command has arguments', () => {
     expect(generateCommandSuggestions('/commit msg', commands)).toHaveLength(0)
   })

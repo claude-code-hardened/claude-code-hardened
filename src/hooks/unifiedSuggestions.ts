@@ -173,6 +173,11 @@ export async function generateUnifiedSuggestions(
   if (nonFileSources.length > 0) {
     const fuse = new Fuse(nonFileSources, {
       includeScore: true,
+      // Kept at 0.6 for fuse.js 7.5.0 (scripts/fuse-differential.ts): the
+      // threshold gates the per-key bitap stage only, unchanged in 7.5 —
+      // candidate sets match the 7.3 baseline exactly (Jaccard 1.000).
+      // Scores themselves inflate ~3.2x (weight normalization, #833),
+      // which changes how these interleave with nucleo file scores.
       threshold: 0.6, // Allow more matches through, we'll sort by score
       keys: [
         { name: 'displayText', weight: 2 },
