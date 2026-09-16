@@ -62,7 +62,6 @@ import { count } from '../../utils/array.js'
 import { createAttachmentMessage } from '../../utils/attachments.js'
 import { logForDebugging } from '../../utils/debug.js'
 import {
-  AbortError,
   errorMessage,
   getErrnoCode,
   isAbortError,
