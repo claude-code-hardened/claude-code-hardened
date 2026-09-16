@@ -37,6 +37,7 @@ import { getAdvisorUsage } from './utils/advisor.js'
 import {
   getCurrentProjectConfig,
   saveCurrentProjectConfig,
+  type ProjectConfig,
 } from './utils/config.js'
 import {
   getContextWindowForModel,
@@ -60,7 +61,7 @@ export {
   getTotalCacheReadInputTokens,
   getTotalCacheCreationInputTokens,
   getTotalWebSearchRequests,
-  formatCost,
+  type formatCost,
   hasUnknownModelCost,
   resetStateForTests,
   resetCostState,
@@ -90,24 +91,26 @@ export function getStoredSessionCosts(
 ): StoredCostState | undefined {
   const projectConfig = getCurrentProjectConfig()
 
-  // Only return costs if this is the same session that was last saved
-  if (projectConfig.lastSessionId !== sessionId) {
-    return undefined
+  // Per-session multi-slot store first — in-process /resume switching needs
+  // to restore each session's own totals, which the single legacy last*
+  // slot cannot provide (it only ever holds the most recently saved one).
+  const slot = projectConfig.sessionCostsBySessionId?.[sessionId]
+  if (slot) {
+    return {
+      totalCostUSD: slot.totalCostUSD,
+      totalAPIDuration: slot.totalAPIDuration,
+      totalAPIDurationWithoutRetries: slot.totalAPIDurationWithoutRetries,
+      totalToolDuration: slot.totalToolDuration,
+      totalLinesAdded: slot.totalLinesAdded,
+      totalLinesRemoved: slot.totalLinesRemoved,
+      lastDuration: slot.lastDuration,
+      modelUsage: buildRestoredModelUsage(slot.modelUsage),
+    }
   }
 
-  // Build model usage with context windows
-  let modelUsage: { [modelName: string]: ModelUsage } | undefined
-  if (projectConfig.lastModelUsage) {
-    modelUsage = Object.fromEntries(
-      Object.entries(projectConfig.lastModelUsage).map(([model, usage]) => [
-        model,
-        {
-          ...usage,
-          contextWindow: getContextWindowForModel(model, getSdkBetas()),
-          maxOutputTokens: getModelMaxOutputTokens(model).default,
-        },
-      ]),
-    )
+  // Legacy single-slot fallback: only matches the last saved session
+  if (projectConfig.lastSessionId !== sessionId) {
+    return undefined
   }
 
   return {
@@ -119,8 +122,26 @@ export function getStoredSessionCosts(
     totalLinesAdded: projectConfig.lastLinesAdded ?? 0,
     totalLinesRemoved: projectConfig.lastLinesRemoved ?? 0,
     lastDuration: projectConfig.lastDuration,
-    modelUsage,
+    modelUsage: buildRestoredModelUsage(projectConfig.lastModelUsage),
   }
+}
+
+function buildRestoredModelUsage(
+  raw: ProjectConfig['lastModelUsage'],
+): { [modelName: string]: ModelUsage } | undefined {
+  if (!raw) {
+    return undefined
+  }
+  return Object.fromEntries(
+    Object.entries(raw).map(([model, usage]) => [
+      model,
+      {
+        ...usage,
+        contextWindow: getContextWindowForModel(model, getSdkBetas()),
+        maxOutputTokens: getModelMaxOutputTokens(model).default,
+      },
+    ]),
+  )
 }
 
 /**
@@ -142,10 +163,46 @@ export function restoreCostStateForSession(sessionId: string): boolean {
  * Call this before switching sessions to avoid losing accumulated costs.
  */
 export function saveCurrentSessionCosts(fpsMetrics?: FpsMetrics): void {
-  saveCurrentProjectConfig(current => ({
-    ...current,
-    lastCost: getTotalCostUSD(),
-    lastAPIDuration: getTotalAPIDuration(),
+  const modelUsageSnapshot = Object.fromEntries(
+    Object.entries(getModelUsage()).map(([model, usage]) => [
+      model,
+      {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cacheReadInputTokens: usage.cacheReadInputTokens,
+        cacheCreationInputTokens: usage.cacheCreationInputTokens,
+        webSearchRequests: usage.webSearchRequests,
+        costUSD: usage.costUSD,
+      },
+    ]),
+  )
+  saveCurrentProjectConfig(current => {
+    // Per-session slot (LRU-trimmed, keep the 8 most recently saved) so
+    // in-process /resume switching restores each session's own totals
+    // instead of losing them to the single legacy last* slot.
+    const sessionId = getSessionId()
+    const bySession = {
+      ...(current.sessionCostsBySessionId ?? {}),
+      [sessionId]: {
+        savedAt: Date.now(),
+        totalCostUSD: getTotalCostUSD(),
+        totalAPIDuration: getTotalAPIDuration(),
+        totalAPIDurationWithoutRetries: getTotalAPIDurationWithoutRetries(),
+        totalToolDuration: getTotalToolDuration(),
+        totalLinesAdded: getTotalLinesAdded(),
+        totalLinesRemoved: getTotalLinesRemoved(),
+        lastDuration: getTotalDuration(),
+        modelUsage: modelUsageSnapshot,
+      },
+    }
+    const trimmed = Object.entries(bySession)
+      .sort((a, b) => b[1].savedAt - a[1].savedAt)
+      .slice(0, 8)
+    return {
+      ...current,
+      sessionCostsBySessionId: Object.fromEntries(trimmed),
+      lastCost: getTotalCostUSD(),
+      lastAPIDuration: getTotalAPIDuration(),
     lastAPIDurationWithoutRetries: getTotalAPIDurationWithoutRetries(),
     lastToolDuration: getTotalToolDuration(),
     lastDuration: getTotalDuration(),
@@ -158,20 +215,8 @@ export function saveCurrentSessionCosts(fpsMetrics?: FpsMetrics): void {
     lastTotalWebSearchRequests: getTotalWebSearchRequests(),
     lastFpsAverage: fpsMetrics?.averageFps,
     lastFpsLow1Pct: fpsMetrics?.low1PctFps,
-    lastModelUsage: Object.fromEntries(
-      Object.entries(getModelUsage()).map(([model, usage]) => [
-        model,
-        {
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          cacheReadInputTokens: usage.cacheReadInputTokens,
-          cacheCreationInputTokens: usage.cacheCreationInputTokens,
-          webSearchRequests: usage.webSearchRequests,
-          costUSD: usage.costUSD,
-        },
-      ]),
-    ),
-    lastSessionId: getSessionId(),
+    lastModelUsage: modelUsageSnapshot,
+    lastSessionId: sessionId,
   }))
 }
 

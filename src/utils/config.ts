@@ -104,6 +104,33 @@ export type ProjectConfig = {
     }
   >
   lastSessionMetrics?: Record<string, number>
+  // Per-session cost snapshots for /resume switching. Each resumed session
+  // keeps its own slot (LRU-trimmed) so switching back and forth restores
+  // the right totals instead of clobbering the single legacy last* slot.
+  sessionCostsBySessionId?: Record<
+    string,
+    {
+      savedAt: number
+      totalCostUSD: number
+      totalAPIDuration: number
+      totalAPIDurationWithoutRetries: number
+      totalToolDuration: number
+      totalLinesAdded: number
+      totalLinesRemoved: number
+      lastDuration?: number
+      modelUsage: Record<
+        string,
+        {
+          inputTokens: number
+          outputTokens: number
+          cacheReadInputTokens: number
+          cacheCreationInputTokens: number
+          webSearchRequests: number
+          costUSD: number
+        }
+      >
+    }
+  >
   exampleFiles?: string[]
   exampleFilesGeneratedAt?: number
 
