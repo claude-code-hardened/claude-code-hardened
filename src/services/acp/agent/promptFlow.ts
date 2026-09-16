@@ -21,7 +21,7 @@ import {
 import { forwardSessionUpdates } from '../bridge.js'
 import type { ToolUseCache } from '../bridge.js'
 import { promptToQueryInput } from '../promptConversion.js'
-import { isErrorLike, isAbortError } from '../../utils/errors.js'
+import { isErrorLike, isAbortError } from '../../../utils/errors.js'
 import { sanitizeTitle } from '../utils.js'
 import { AcpAgent } from './AcpAgent.js'
 import type { AcpSession } from './sessionTypes.js'

@@ -3304,7 +3304,7 @@ async function callMCPTool({
     if (isErrorLike(e) && !isAbortError(e)) {
       logMCPDebug(
         name,
-        `Tool '${tool}' failed after ${Math.floor(elapsed / 1000)}s: ${e.message}`,
+        `Tool '${tool}' failed after ${Math.floor(elapsed / 1000)}s: ${(e as Error).message}`,
       )
     }
 
