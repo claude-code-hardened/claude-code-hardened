@@ -22,7 +22,10 @@ import {
 import { isEnvTruthy } from '../envUtils.js'
 import { getModelStrings, resolveOverriddenModel } from './modelStrings.js'
 import { formatModelPricing, getOpus46CostTier } from '../modelCost.js'
-import { getSettings_DEPRECATED } from '../settings/settings.js'
+import {
+  getSettings_DEPRECATED,
+  getInitialSettings,
+} from '../settings/settings.js'
 import type { PermissionMode } from '../permissions/PermissionMode.js'
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from './providers.js'
 import { LIGHTNING_BOLT } from '../../constants/figures.js'
@@ -493,6 +496,50 @@ function maskModelCodename(baseName: string): string {
   return [masked, ...rest].join('-')
 }
 
+// Format a token count for display: 1000000 → "1m", 512000 → "512k",
+// 512100 → "512.1k" (one decimal place max, matching the Ctx input
+// shorthand in the /login platform forms).
+export function formatCtxTokens(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    const m = tokens / 1_000_000
+    return `${Number.isInteger(m) ? m : m.toFixed(1)}m`
+  }
+  if (tokens >= 1_000) {
+    const k = tokens / 1_000
+    return `${Number.isInteger(k) ? k : k.toFixed(1)}k`
+  }
+  return String(tokens)
+}
+
+// Effective context window tokens for [1m]-suffixed models, for display:
+// settings override if present, else the [1m] default of 1M.
+export function getEffectiveContextTokens(model: string): number {
+  try {
+    const override = getInitialSettings().contextWindowOverrides?.[model]
+    if (override && override > 0) return override
+  } catch {
+    // settings not ready during early bootstrap — fall through
+  }
+  return 1_000_000
+}
+
+// Display-layer counterpart of getContextWindowForModel's precedence for
+// [1m]-suffixed models: a user-configured contextWindowOverrides entry wins
+// over the [1m] default of 1M. Returns the rendered suffix ("[512k]") or
+// null when the display should stay "[1m]".
+export function getEffectiveContextSuffix(model: string): string | null {
+  if (!/\[1m\]$/i.test(model)) return null
+  const rendered = formatCtxTokens(getEffectiveContextTokens(model))
+  return rendered === '1m' ? null : `[${rendered}]`
+}
+
+// Model ID for UI display: replaces the "[1m]" suffix with the effective
+// context size when a user override changes it (e.g. gpt-5.6[1m] → gpt-5.6[512k]).
+export function renderModelIdForDisplay(model: ModelName): string {
+  const suffix = getEffectiveContextSuffix(model)
+  return suffix ? model.replace(/\[1m\]$/i, suffix) : model
+}
+
 export function renderModelName(model: ModelName): string {
   const publicName = getPublicModelDisplayName(model)
   if (publicName) {
@@ -512,7 +559,7 @@ export function renderModelName(model: ModelName): string {
     }
     return resolved
   }
-  return model
+  return renderModelIdForDisplay(model)
 }
 
 /**

@@ -29,6 +29,9 @@ import {
   isOpus1mMergeEnabled,
   getOpusPricingSuffix,
   renderDefaultModelSetting,
+  renderModelIdForDisplay,
+  formatCtxTokens,
+  getEffectiveContextTokens,
   type ModelSetting,
 } from './model.js'
 import { has1mContext } from '../context.js'
@@ -107,9 +110,10 @@ function getCustomSonnetOption(): ModelOption | undefined {
           : process.env.ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION
     return {
       value: 'sonnet',
-      label: nameEnv ?? customSonnetModel,
+      label: nameEnv ?? renderModelIdForDisplay(customSonnetModel),
       description:
-        descEnv ?? `Custom Sonnet model${is1m ? ' (1M context)' : ''}`,
+        descEnv ??
+        `Custom Sonnet model${is1m ? ` (${formatCtxTokens(getEffectiveContextTokens(customSonnetModel))} context)` : ''}`,
       descriptionForModel: `${descEnv ?? `Custom Sonnet model${is1m ? ' with 1M context' : ''}`} (${customSonnetModel})`,
     }
   }
@@ -156,8 +160,10 @@ function getCustomOpusOption(): ModelOption | undefined {
           : process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION
     return {
       value: 'opus',
-      label: nameEnv ?? customOpusModel,
-      description: descEnv ?? `Custom Opus model${is1m ? ' (1M context)' : ''}`,
+      label: nameEnv ?? renderModelIdForDisplay(customOpusModel),
+      description:
+        descEnv ??
+        `Custom Opus model${is1m ? ` (${formatCtxTokens(getEffectiveContextTokens(customOpusModel))} context)` : ''}`,
       descriptionForModel: `${descEnv ?? `Custom Opus model${is1m ? ' with 1M context' : ''}`} (${customOpusModel})`,
     }
   }
@@ -231,6 +237,7 @@ function getCustomHaikuOption(): ModelOption | undefined {
         : process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL
   // When a 3P user has a custom haiku model string, show it directly
   if (is3P && customHaikuModel) {
+    const is1m = has1mContext(customHaikuModel)
     // Use appropriate NAME/DESCRIPTION env vars based on provider
     const nameEnv =
       provider === 'openai'
@@ -246,8 +253,10 @@ function getCustomHaikuOption(): ModelOption | undefined {
           : process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION
     return {
       value: 'haiku',
-      label: nameEnv ?? customHaikuModel,
-      description: descEnv ?? 'Custom Haiku model',
+      label: nameEnv ?? renderModelIdForDisplay(customHaikuModel),
+      description:
+        descEnv ??
+        `Custom Haiku model${is1m ? ` (${formatCtxTokens(getEffectiveContextTokens(customHaikuModel))} context)` : ''}`,
       descriptionForModel: `${descEnv ?? 'Custom Haiku model'} (${customHaikuModel})`,
     }
   }
