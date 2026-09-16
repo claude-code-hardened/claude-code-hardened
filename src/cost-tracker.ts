@@ -46,7 +46,7 @@ import {
 import { isFastModeEnabled } from './utils/fastMode.js'
 import { formatDuration, formatNumber } from './utils/format.js'
 import type { FpsMetrics } from './utils/fpsTracker.js'
-import type { TranscriptMessage } from './types/logs.js'
+import type { SerializedMessage } from './types/logs.js'
 import { getCanonicalName } from './utils/model/model.js'
 import { calculateUSDCost } from './utils/modelCost.js'
 export {
@@ -154,13 +154,13 @@ function buildRestoredModelUsage(
  * real request that really happened.
  */
 export function buildCostStateFromTranscript(
-  messages: readonly TranscriptMessage[],
+  messages: readonly SerializedMessage[],
 ): StoredCostState {
   const modelUsage: { [modelName: string]: ModelUsage } = {}
   let totalCostUSD = 0
   for (const msg of messages) {
     if (msg.type !== 'assistant' || !msg.message) continue
-    const model = msg.message.model ?? ''
+    const model = String(msg.message.model ?? '')
     const usage = (
       msg.message as {
         usage?: {
@@ -186,7 +186,10 @@ export function buildCostStateFromTranscript(
     slot.outputTokens += usage.output_tokens ?? 0
     slot.cacheReadInputTokens += usage.cache_read_input_tokens ?? 0
     slot.cacheCreationInputTokens += usage.cache_creation_input_tokens ?? 0
-    totalCostUSD += calculateUSDCost(model, usage)
+    totalCostUSD += calculateUSDCost(
+      model,
+      usage as unknown as Parameters<typeof calculateUSDCost>[1],
+    )
   }
   return {
     totalCostUSD,
