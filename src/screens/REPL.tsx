@@ -2221,7 +2221,13 @@ export function REPL({
 
         // Clear any active loading state (no queryId since we're not in a query)
         resetLoadingState();
-        setAbortController(null);
+        // Abort (not just drop) any in-flight request: otherwise its usage
+        // keeps landing in the global modelUsage after the reset/restore
+        // below and gets booked into the WRONG session's totals.
+        setAbortController(prev => {
+          prev?.abort();
+          return null;
+        });
 
         setConversationId(sessionId);
 
