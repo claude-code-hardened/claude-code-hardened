@@ -149,7 +149,13 @@ import { buildEffectiveSystemPrompt } from '../utils/systemPrompt.js';
 import { getSystemContext, getUserContext } from '../context.js';
 import { getMemoryFiles } from '../utils/claudemd.js';
 import { startBackgroundHousekeeping } from '../utils/backgroundHousekeeping.js';
-import { getTotalCost, saveCurrentSessionCosts, resetCostState, getStoredSessionCosts } from '../cost-tracker.js';
+import {
+  getTotalCost,
+  saveCurrentSessionCosts,
+  resetCostState,
+  getStoredSessionCosts,
+  buildCostStateFromTranscript,
+} from '../cost-tracker.js';
 import { useCostSummary } from '../costHook.js';
 import { useFpsMetrics } from '../context/fpsMetrics.js';
 import { useAfterFirstRender } from '../hooks/useAfterFirstRender.js';
@@ -2310,9 +2316,15 @@ export function REPL({
           saveMode(isCoordinatorMode() ? 'coordinator' : 'normal');
         }
 
-        // Restore target session's costs from the data we read earlier
+        // Restore target session's costs from the data we read earlier.
+        // No snapshot (first-ever resume of this session in this project)?
+        // Rebuild the historical totals from the transcript usage so the
+        // status-line token pill shows the session's real totals instead
+        // of starting from zero.
         if (targetSessionCosts) {
           setCostStateForRestore(targetSessionCosts);
+        } else {
+          setCostStateForRestore(buildCostStateFromTranscript(log.messages));
         }
 
         // Reconstruct replacement state for the resumed session. Runs after

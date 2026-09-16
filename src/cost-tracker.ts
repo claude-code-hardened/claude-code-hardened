@@ -46,6 +46,7 @@ import {
 import { isFastModeEnabled } from './utils/fastMode.js'
 import { formatDuration, formatNumber } from './utils/format.js'
 import type { FpsMetrics } from './utils/fpsTracker.js'
+import type { TranscriptMessage } from './types/logs.js'
 import { getCanonicalName } from './utils/model/model.js'
 import { calculateUSDCost } from './utils/modelCost.js'
 export {
@@ -142,6 +143,61 @@ function buildRestoredModelUsage(
       },
     ]),
   )
+}
+
+/**
+ * Rebuilds a session's historical cost totals from its transcript messages.
+ * Used when /resume loads a session that has no stored snapshot yet — the
+ * status-line token pill and cost display would otherwise start from zero
+ * and the historical usage would be invisible. Counts every assistant
+ * request in the transcript, including abandoned branches: each one was a
+ * real request that really happened.
+ */
+export function buildCostStateFromTranscript(
+  messages: readonly TranscriptMessage[],
+): StoredCostState {
+  const modelUsage: { [modelName: string]: ModelUsage } = {}
+  let totalCostUSD = 0
+  for (const msg of messages) {
+    if (msg.type !== 'assistant' || !msg.message) continue
+    const model = msg.message.model ?? ''
+    const usage = (
+      msg.message as {
+        usage?: {
+          input_tokens?: number
+          output_tokens?: number
+          cache_read_input_tokens?: number
+          cache_creation_input_tokens?: number
+        }
+      }
+    ).usage
+    if (!model || !usage) continue
+    const slot = (modelUsage[model] ??= {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      webSearchRequests: 0,
+      costUSD: 0,
+      contextWindow: getContextWindowForModel(model, getSdkBetas()),
+      maxOutputTokens: getModelMaxOutputTokens(model).default,
+    })
+    slot.inputTokens += usage.input_tokens ?? 0
+    slot.outputTokens += usage.output_tokens ?? 0
+    slot.cacheReadInputTokens += usage.cache_read_input_tokens ?? 0
+    slot.cacheCreationInputTokens += usage.cache_creation_input_tokens ?? 0
+    totalCostUSD += calculateUSDCost(model, usage)
+  }
+  return {
+    totalCostUSD,
+    totalAPIDuration: 0,
+    totalAPIDurationWithoutRetries: 0,
+    totalToolDuration: 0,
+    totalLinesAdded: 0,
+    totalLinesRemoved: 0,
+    lastDuration: undefined,
+    modelUsage,
+  }
 }
 
 /**
