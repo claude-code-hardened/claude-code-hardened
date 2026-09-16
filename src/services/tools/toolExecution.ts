@@ -1778,7 +1778,7 @@ async function checkPermissionsAndCallTool(
     const content = formatError(error)
 
     // Determine if this was a user interrupt
-    const isInterrupt = error instanceof AbortError
+    const isInterrupt = isAbortError(error)
 
     // Run PostToolUseFailure hooks
     const hookMessages: MessageUpdateLazy<
