@@ -82,6 +82,8 @@ import { logForDebugging } from '../../utils/debug.js'
 import { isEnvDefinedFalsy, isEnvTruthy } from '../../utils/envUtils.js'
 import {
   errorMessage,
+  isErrorLike,
+  isAbortError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from '../../utils/errors.js'
 import { getMCPUserAgent } from '../../utils/http.js'
@@ -3299,7 +3301,7 @@ async function callMCPTool({
 
     const elapsed = Date.now() - toolStartTime
 
-    if (e instanceof Error && e.name !== 'AbortError') {
+    if (isErrorLike(e) && !isAbortError(e)) {
       logMCPDebug(
         name,
         `Tool '${tool}' failed after ${Math.floor(elapsed / 1000)}s: ${e.message}`,
@@ -3347,7 +3349,7 @@ async function callMCPTool({
     }
 
     // When the users hits esc, avoid logspew
-    if (!(e instanceof Error) || e.name !== 'AbortError') {
+    if (!isAbortError(e)) {
       throw e
     }
     return { content: undefined }

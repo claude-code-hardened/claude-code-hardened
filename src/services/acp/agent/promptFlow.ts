@@ -21,6 +21,7 @@ import {
 import { forwardSessionUpdates } from '../bridge.js'
 import type { ToolUseCache } from '../bridge.js'
 import { promptToQueryInput } from '../promptConversion.js'
+import { isErrorLike, isAbortError } from '../../utils/errors.js'
 import { sanitizeTitle } from '../utils.js'
 import { AcpAgent } from './AcpAgent.js'
 import type { AcpSession } from './sessionTypes.js'
@@ -162,9 +163,9 @@ async function prompt(
     // between interrupt() firing and cancel() setting the flag. Per
     // prompt-turn.mdx the Agent MUST return `cancelled` for aborts.
     const isAbort =
-      err instanceof Error &&
-      (err.name === 'AbortError' ||
-        /abort|cancelled|interrupt/i.test(err.message))
+      isAbortError(err) ||
+      (isErrorLike(err) &&
+        /abort|cancelled|interrupt/i.test((err as Error).message))
     if (session.cancelled || isAbort) {
       return { stopReason: 'cancelled' }
     }

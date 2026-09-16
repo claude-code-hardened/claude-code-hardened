@@ -18,7 +18,7 @@ import { createChildAbortController } from '../../utils/abortController.js'
 import { count } from '../../utils/array.js'
 import { getGlobalConfig } from '../../utils/config.js'
 import { logForDebugging } from '../../utils/debug.js'
-import { errorMessage } from '../../utils/errors.js'
+import { errorMessage, isAbortError } from '../../utils/errors.js'
 import {
   type FileStateCache,
   mergeFileStateCaches,
@@ -395,7 +395,7 @@ async function generatePipelinedSuggestion(
       },
     }))
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') return
+    if (isAbortError(error)) return
     logForDebugging(
       `[Speculation] Pipelined suggestion failed: ${errorMessage(error)}`,
     )
@@ -683,7 +683,7 @@ export async function startSpeculation(
   } catch (error) {
     abortController.abort()
 
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (isAbortError(error)) {
       safeRemoveOverlay(overlayPath)
       resetSpeculationState(setAppState)
       return

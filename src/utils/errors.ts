@@ -17,6 +17,19 @@ export class AbortError extends Error {
 }
 
 /**
+ * True iff `e` is an Error or a cross-realm error-like object. Cross-realm
+ * DOMExceptions (undici aborts, workers, jest vm) fail `instanceof Error`
+ * but carry the '[object Error]' / '[object DOMException]' toString tag —
+ * mirroring the SDK 0.125 castToError fix.
+ */
+export function isErrorLike(e: unknown): boolean {
+  if (e instanceof Error) return true
+  if (typeof e !== 'object' || e === null) return false
+  const tag = Object.prototype.toString.call(e)
+  return tag === '[object Error]' || tag === '[object DOMException]'
+}
+
+/**
  * True iff `e` is any of the abort-shaped errors the codebase encounters:
  * our AbortError class, a DOMException from AbortController.abort()
  * (.name === 'AbortError'), or the SDK's APIUserAbortError. The SDK class
@@ -28,7 +41,7 @@ export function isAbortError(e: unknown): boolean {
   return (
     e instanceof AbortError ||
     e instanceof APIUserAbortError ||
-    (e instanceof Error && e.name === 'AbortError')
+    (isErrorLike(e) && (e as { name?: string }).name === 'AbortError')
   )
 }
 

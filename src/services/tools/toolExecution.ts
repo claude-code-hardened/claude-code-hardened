@@ -65,6 +65,7 @@ import {
   AbortError,
   errorMessage,
   getErrnoCode,
+  isAbortError,
   ShellError,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from '../../utils/errors.js'
@@ -1714,7 +1715,7 @@ async function checkPermissionsAndCallTool(
       })
     }
 
-    if (!(error instanceof AbortError)) {
+    if (!isAbortError(error)) {
       const errorMsg = errorMessage(error)
       logForDebugging(
         `${tool.name} tool error (${durationMs}ms): ${errorMsg.slice(0, 200)}`,

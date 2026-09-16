@@ -358,7 +358,7 @@ import { isBackgroundTask } from '../tasks/types.js'
 import { stopTask } from '../tasks/stopTask.js'
 import { drainSdkEvents } from '../utils/sdkEventQueue.js'
 import { initializeGrowthBook } from '../services/analytics/growthbook.js'
-import { errorMessage, toError } from '../utils/errors.js'
+import { errorMessage, isAbortError, toError } from '../utils/errors.js'
 import { sleep } from '../utils/sleep.js'
 import { isExtractModeActive } from '../memdir/paths.js'
 
@@ -2436,11 +2436,7 @@ function runHeadlessStreaming(
                     output.enqueue(suggestionMsg)
                   }
                 } catch (error) {
-                  if (
-                    error instanceof Error &&
-                    (error.name === 'AbortError' ||
-                      error.name === 'APIUserAbortError')
-                  ) {
+                  if (isAbortError(error)) {
                     logSuggestionSuppressed(
                       'aborted',
                       undefined,

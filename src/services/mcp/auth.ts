@@ -34,7 +34,7 @@ import xss from 'xss'
 import { MCP_CLIENT_METADATA_URL } from '../../constants/oauth.js'
 import { openBrowser } from '../../utils/browser.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
-import { errorMessage, getErrnoCode } from '../../utils/errors.js'
+import { errorMessage, getErrnoCode, isErrorLike } from '../../utils/errors.js'
 import * as lockfile from '../../utils/lockfile.js'
 import { logMCPDebug } from '../../utils/log.js'
 import { getPlatform } from '../../utils/platform.js'
@@ -2326,8 +2326,10 @@ export class ClaudeAuthProvider implements OAuthClientProvider {
 
         // Retry on timeouts or transient server errors
         const isTimeoutError =
-          error instanceof Error &&
-          /timeout|timed out|etimedout|econnreset/i.test(error.message)
+          isErrorLike(error) &&
+          /timeout|timed out|etimedout|econnreset/i.test(
+            (error as Error).message,
+          )
         const isTransientServerError =
           error instanceof ServerError ||
           error instanceof TemporarilyUnavailableError ||
