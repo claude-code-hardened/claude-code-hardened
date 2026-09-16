@@ -2882,7 +2882,7 @@ export async function generateUsageReport(options?: {
     const batch = toExtract.slice(i, i + CONCURRENCY)
     const results = await Promise.all(
       batch.map(async ({ sessionInfo, sessionId }) => {
-        let newFacets: SessionFacets | undefined
+        let newFacets: SessionFacets | null | undefined
         try {
           const branches = await loadAllLogsFromSessionFile(
             sessionInfo.path,
