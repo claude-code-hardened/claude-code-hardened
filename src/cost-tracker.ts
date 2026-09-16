@@ -61,7 +61,7 @@ export {
   getTotalCacheReadInputTokens,
   getTotalCacheCreationInputTokens,
   getTotalWebSearchRequests,
-  type formatCost,
+  formatCost,
   hasUnknownModelCost,
   resetStateForTests,
   resetCostState,
@@ -163,6 +163,7 @@ export function restoreCostStateForSession(sessionId: string): boolean {
  * Call this before switching sessions to avoid losing accumulated costs.
  */
 export function saveCurrentSessionCosts(fpsMetrics?: FpsMetrics): void {
+  const sessionId = getSessionId()
   const modelUsageSnapshot = Object.fromEntries(
     Object.entries(getModelUsage()).map(([model, usage]) => [
       model,
@@ -176,33 +177,26 @@ export function saveCurrentSessionCosts(fpsMetrics?: FpsMetrics): void {
       },
     ]),
   )
-  saveCurrentProjectConfig(current => {
-    // Per-session slot (LRU-trimmed, keep the 8 most recently saved) so
-    // in-process /resume switching restores each session's own totals
-    // instead of losing them to the single legacy last* slot.
-    const sessionId = getSessionId()
-    const bySession = {
-      ...(current.sessionCostsBySessionId ?? {}),
-      [sessionId]: {
-        savedAt: Date.now(),
-        totalCostUSD: getTotalCostUSD(),
-        totalAPIDuration: getTotalAPIDuration(),
-        totalAPIDurationWithoutRetries: getTotalAPIDurationWithoutRetries(),
-        totalToolDuration: getTotalToolDuration(),
-        totalLinesAdded: getTotalLinesAdded(),
-        totalLinesRemoved: getTotalLinesRemoved(),
-        lastDuration: getTotalDuration(),
-        modelUsage: modelUsageSnapshot,
-      },
-    }
-    const trimmed = Object.entries(bySession)
-      .sort((a, b) => b[1].savedAt - a[1].savedAt)
-      .slice(0, 8)
-    return {
-      ...current,
-      sessionCostsBySessionId: Object.fromEntries(trimmed),
-      lastCost: getTotalCostUSD(),
-      lastAPIDuration: getTotalAPIDuration(),
+  const perSessionSlot = {
+    savedAt: Date.now(),
+    totalCostUSD: getTotalCostUSD(),
+    totalAPIDuration: getTotalAPIDuration(),
+    totalAPIDurationWithoutRetries: getTotalAPIDurationWithoutRetries(),
+    totalToolDuration: getTotalToolDuration(),
+    totalLinesAdded: getTotalLinesAdded(),
+    totalLinesRemoved: getTotalLinesRemoved(),
+    lastDuration: getTotalDuration(),
+    modelUsage: modelUsageSnapshot,
+  }
+  saveCurrentProjectConfig(current => ({
+    ...current,
+    sessionCostsBySessionId: buildTrimmedSessionCosts(
+      current,
+      sessionId,
+      perSessionSlot,
+    ),
+    lastCost: getTotalCostUSD(),
+    lastAPIDuration: getTotalAPIDuration(),
     lastAPIDurationWithoutRetries: getTotalAPIDurationWithoutRetries(),
     lastToolDuration: getTotalToolDuration(),
     lastDuration: getTotalDuration(),
@@ -218,6 +212,23 @@ export function saveCurrentSessionCosts(fpsMetrics?: FpsMetrics): void {
     lastModelUsage: modelUsageSnapshot,
     lastSessionId: sessionId,
   }))
+}
+
+// Merge this session's cost snapshot into the per-session store, LRU-trimmed
+// to the 8 most recently saved slots.
+function buildTrimmedSessionCosts(
+  current: ProjectConfig,
+  sessionId: string,
+  slot: NonNullable<ProjectConfig['sessionCostsBySessionId']>[string],
+): NonNullable<ProjectConfig['sessionCostsBySessionId']> {
+  const bySession = {
+    ...(current.sessionCostsBySessionId ?? {}),
+    [sessionId]: slot,
+  }
+  const trimmed = Object.entries(bySession)
+    .sort((a, b) => b[1].savedAt - a[1].savedAt)
+    .slice(0, 8)
+  return Object.fromEntries(trimmed)
 }
 
 function formatCost(cost: number, maxDecimalPlaces: number = 4): string {
