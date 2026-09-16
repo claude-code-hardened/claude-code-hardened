@@ -2766,9 +2766,6 @@ export async function generateUsageReport(options?: {
     }
   }
 
-  // Load full message data only for uncached sessions and compute SessionMeta
-  const logsForFacets = new Map<string, LogOption>()
-
   // Filter out /insights meta-sessions (facet extraction API calls get logged as sessions)
   const isMetaSession = (log: LogOption): boolean => {
     for (const msg of log.messages.slice(0, 5)) {
@@ -2787,37 +2784,39 @@ export async function generateUsageReport(options?: {
     return false
   }
 
-  // Load uncached sessions in batches to yield to event loop between batches
-  const LOAD_BATCH_SIZE = 10
-  for (let i = 0; i < uncachedSessions.length; i += LOAD_BATCH_SIZE) {
-    const batch = uncachedSessions.slice(i, i + LOAD_BATCH_SIZE)
-    const batchResults = await Promise.all(
-      batch.map(async sessionInfo => {
-        try {
-          return await loadAllLogsFromSessionFile(
-            sessionInfo.path,
-            undefined,
-            options?.mtimeLimitMs,
-          )
-        } catch {
-          return []
-        }
-      }),
-    )
-    // Collect metas synchronously, then save them in parallel (independent writes)
-    const metasToSave: SessionMeta[] = []
-    for (const logs of batchResults) {
-      for (const log of logs) {
-        if (isMetaSession(log) || !hasValidDates(log)) continue
-        const meta = logToSessionMeta(log)
-        allMetas.push(meta)
-        metasToSave.push(meta)
-        // Keep the log around for potential facet extraction
-        logsForFacets.set(meta.session_id, log)
-      }
-    }
-    await Promise.all(metasToSave.map(meta => saveSessionMeta(meta)))
+  // Load full message data only for uncached sessions and compute SessionMeta.
+  // Sessions are processed strictly one at a time and the parsed LogOption is
+  // released as soon as its SessionMeta is computed — each retained LogOption
+  // pins an entire conversation chain, so holding a Promise.all batch open
+  // scales peak memory with the session count on first run / cache miss.
+  // Sessions that later need facet extraction are re-loaded from disk there,
+  // bounded by MAX_FACET_EXTRACTIONS (cached facets skip the reload entirely).
+  const pathsBySession = new Map<string, LiteSessionInfo>()
+  for (const sessionInfo of uncachedSessions) {
+    pathsBySession.set(sessionInfo.sessionId, sessionInfo)
   }
+
+  const metasToSave: SessionMeta[] = []
+  for (const sessionInfo of uncachedSessions) {
+    let logs: LogOption[]
+    try {
+      logs = await loadAllLogsFromSessionFile(
+        sessionInfo.path,
+        undefined,
+        options?.mtimeLimitMs,
+      )
+    } catch {
+      continue
+    }
+    for (const log of logs) {
+      if (isMetaSession(log) || !hasValidDates(log)) continue
+      const meta = logToSessionMeta(log)
+      allMetas.push(meta)
+      metasToSave.push(meta)
+    }
+  }
+  // SessionMetas are independent writes — persist them in parallel
+  await Promise.all(metasToSave.map(meta => saveSessionMeta(meta)))
 
   // Deduplicate session branches (keep the one with most user messages per session_id)
   // This prevents inflated totals when a session has multiple conversation branches
@@ -2833,14 +2832,8 @@ export async function generateUsageReport(options?: {
       bestBySession.set(meta.session_id, meta)
     }
   }
-  // Replace allMetas with deduplicated list and remove unused logs from logsForFacets
-  const keptSessionIds = new Set(bestBySession.keys())
+  // Replace allMetas with the deduplicated list
   allMetas = [...bestBySession.values()]
-  for (const sessionId of logsForFacets.keys()) {
-    if (!keptSessionIds.has(sessionId)) {
-      logsForFacets.delete(sessionId)
-    }
-  }
 
   // Sort all metas by start_time descending (most recent first)
   allMetas.sort((a, b) => b.start_time.localeCompare(a.start_time))
@@ -2859,7 +2852,8 @@ export async function generateUsageReport(options?: {
 
   // Phase 3: Facet extraction — only for sessions without cached facets
   const facets = new Map<string, SessionFacets>()
-  const toExtract: Array<{ log: LogOption; sessionId: string }> = []
+  const toExtract: Array<{ sessionInfo: LiteSessionInfo; sessionId: string }> =
+    []
   const MAX_FACET_EXTRACTIONS = 50
 
   // Load cached facets for all substantive sessions in parallel
@@ -2873,22 +2867,13 @@ export async function generateUsageReport(options?: {
     if (cached) {
       facets.set(sessionId, cached)
     } else {
-      const log = logsForFacets.get(sessionId)
-      if (log && toExtract.length < MAX_FACET_EXTRACTIONS) {
-        toExtract.push({ log, sessionId })
+      // Defer the reload: only here do we know which sessions need it, and
+      // the count is capped by MAX_FACET_EXTRACTIONS. Picking the best
+      // branch mirrors the dedup comparison above.
+      const sessionInfo = pathsBySession.get(sessionId)
+      if (sessionInfo && toExtract.length < MAX_FACET_EXTRACTIONS) {
+        toExtract.push({ sessionInfo, sessionId })
       }
-    }
-  }
-
-  // Drop full message data for sessions that won't get facet extraction —
-  // only the ≤MAX_FACET_EXTRACTIONS logs above are read past this point.
-  // Each retained LogOption pins an entire conversation chain, so releasing
-  // the rest here (before the long-running API extraction phase) keeps peak
-  // memory bounded instead of scaling with every loaded session.
-  const extractSessionIds = new Set(toExtract.map(e => e.sessionId))
-  for (const sessionId of logsForFacets.keys()) {
-    if (!extractSessionIds.has(sessionId)) {
-      logsForFacets.delete(sessionId)
     }
   }
 
@@ -2897,8 +2882,35 @@ export async function generateUsageReport(options?: {
   for (let i = 0; i < toExtract.length; i += CONCURRENCY) {
     const batch = toExtract.slice(i, i + CONCURRENCY)
     const results = await Promise.all(
-      batch.map(async ({ log, sessionId }) => {
-        const newFacets = await extractFacetsFromAPI(log, sessionId)
+      batch.map(async ({ sessionInfo, sessionId }) => {
+        let newFacets: SessionFacets | undefined
+        try {
+          const branches = await loadAllLogsFromSessionFile(
+            sessionInfo.path,
+            undefined,
+            options?.mtimeLimitMs,
+          )
+          let best: { log: LogOption; meta: SessionMeta } | undefined
+          for (const log of branches) {
+            if (isMetaSession(log) || !hasValidDates(log)) continue
+            const meta = logToSessionMeta(log)
+            if (meta.session_id !== sessionId) continue
+            if (
+              !best ||
+              meta.user_message_count > best.meta.user_message_count ||
+              (meta.user_message_count === best.meta.user_message_count &&
+                meta.duration_minutes > best.meta.duration_minutes)
+            ) {
+              best = { log, meta }
+            }
+          }
+          if (best) {
+            newFacets = await extractFacetsFromAPI(best.log, sessionId)
+          }
+        } catch {
+          // Load or extraction failure — leave the facet unset, same as the
+          // old Map-based path returning nothing for this session.
+        }
         return { sessionId, newFacets }
       }),
     )
