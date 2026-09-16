@@ -2745,7 +2745,6 @@ export async function generateUsageReport(options?: {
   // Phase 2: Load SessionMeta — use cache where available, parse only uncached
   // Read cached metas in parallel batches to avoid blocking the event loop
   const META_BATCH_SIZE = 50
-  const MAX_SESSIONS_TO_LOAD = 200
   let allMetas: SessionMeta[] = []
   const uncachedSessions: LiteSessionInfo[] = []
 
@@ -2760,7 +2759,7 @@ export async function generateUsageReport(options?: {
     for (const { sessionInfo, cached } of results) {
       if (cached) {
         allMetas.push(cached)
-      } else if (uncachedSessions.length < MAX_SESSIONS_TO_LOAD) {
+      } else {
         uncachedSessions.push(sessionInfo)
       }
     }
