@@ -2364,5 +2364,10 @@
   "Haiku Ctx": "Haiku コンテキスト",
   "Sonnet Ctx": "Sonnet コンテキスト",
   "Opus Ctx": "Opus コンテキスト",
-  "Context window must be a positive integer or shorthand like 512k or 1.5m.": "コンテキストウィンドウは正の整数か、512k・1.5m のような簡略表記で指定してください。"
+  "Context window must be a positive integer or shorthand like 512k or 1.5m.": "コンテキストウィンドウは正の整数か、512k・1.5m のような簡略表記で指定してください。",
+  "+ cache read {{n}}": "+キャッシュ読み {n}",
+  "no cache reported · includes context resends": "キャッシュ未報告 · コンテキスト再送を含む",
+  "⚠ {{n}} insight section(s) failed to generate": "⚠ {n} 個のインサイトセクションの生成に失敗",
+  "Model {{model}} was unreachable or returned unparsable output. Re-run /insights to retry.": "モデル {{model}} に到達できないか、解析できない出力が返されました。/insights を再実行してリトライしてください。",
+  "no cache": "キャッシュなし"
 }

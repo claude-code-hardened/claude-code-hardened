@@ -2596,5 +2596,10 @@
   "Haiku Ctx": "Haiku 上下文",
   "Sonnet Ctx": "Sonnet 上下文",
   "Opus Ctx": "Opus 上下文",
-  "Context window must be a positive integer or shorthand like 512k or 1.5m.": "上下文窗口必须是正整数，或简写格式（如 512k、1.5m）。"
+  "Context window must be a positive integer or shorthand like 512k or 1.5m.": "上下文窗口必须是正整数，或简写格式（如 512k、1.5m）。",
+  "+ cache read {{n}}": "+缓存读 {n}",
+  "no cache reported · includes context resends": "未上报缓存 · 含全量上下文重发",
+  "⚠ {{n}} insight section(s) failed to generate": "⚠ {n} 个洞察区块生成失败",
+  "Model {{model}} was unreachable or returned unparsable output. Re-run /insights to retry.": "模型 {{model}} 不可达或返回了无法解析的输出。重跑 /insights 可重试。",
+  "no cache": "无缓存"
 }

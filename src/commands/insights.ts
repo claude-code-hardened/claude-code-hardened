@@ -239,6 +239,8 @@ type SessionMeta = {
   git_pushes: number
   input_tokens: number
   output_tokens: number
+  cache_read_tokens?: number
+  cache_creation_tokens?: number
   first_prompt: string
   summary?: string
   // New stats
@@ -282,6 +284,8 @@ type AggregatedData = {
   total_duration_hours: number
   total_input_tokens: number
   total_output_tokens: number
+  total_cache_read_tokens: number
+  total_cache_creation_tokens: number
   tool_counts: Record<string, number>
   languages: Record<string, number>
   git_commits: number
@@ -472,6 +476,8 @@ function extractToolStats(log: LogOption): {
   gitPushes: number
   inputTokens: number
   outputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
   // New stats
   userInterruptions: number
   userResponseTimes: number[]
@@ -494,6 +500,8 @@ function extractToolStats(log: LogOption): {
   let gitPushes = 0
   let inputTokens = 0
   let outputTokens = 0
+  let cacheReadTokens = 0
+  let cacheCreationTokens = 0
 
   // New stats
   let userInterruptions = 0
@@ -525,12 +533,19 @@ function extractToolStats(log: LogOption): {
 
       const usage = (
         msg.message as {
-          usage?: { input_tokens?: number; output_tokens?: number }
+          usage?: {
+            input_tokens?: number
+            output_tokens?: number
+            cache_read_input_tokens?: number
+            cache_creation_input_tokens?: number
+          }
         }
       ).usage
       if (usage) {
         inputTokens += usage.input_tokens || 0
         outputTokens += usage.output_tokens || 0
+        cacheReadTokens += usage.cache_read_input_tokens || 0
+        cacheCreationTokens += usage.cache_creation_input_tokens || 0
       }
 
       const content = msg.message.content
@@ -710,6 +725,8 @@ function extractToolStats(log: LogOption): {
     gitPushes,
     inputTokens,
     outputTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
     // New stats
     userInterruptions,
     userResponseTimes,
@@ -781,6 +798,8 @@ function logToSessionMeta(log: LogOption): SessionMeta {
     git_pushes: stats.gitPushes,
     input_tokens: stats.inputTokens,
     output_tokens: stats.outputTokens,
+    cache_read_tokens: stats.cacheReadTokens,
+    cache_creation_tokens: stats.cacheCreationTokens,
     first_prompt: log.firstPrompt || '',
     summary: log.summary,
     // New stats
@@ -1131,6 +1150,8 @@ function aggregateData(
     total_duration_hours: 0,
     total_input_tokens: 0,
     total_output_tokens: 0,
+    total_cache_read_tokens: 0,
+    total_cache_creation_tokens: 0,
     tool_counts: {},
     languages: {},
     git_commits: 0,
@@ -1180,6 +1201,9 @@ function aggregateData(
     result.total_duration_hours += session.duration_minutes / 60
     result.total_input_tokens += session.input_tokens
     result.total_output_tokens += session.output_tokens
+    // Old cached metas predate the cache fields — treat as 0.
+    result.total_cache_read_tokens += session.cache_read_tokens ?? 0
+    result.total_cache_creation_tokens += session.cache_creation_tokens ?? 0
     result.git_commits += session.git_commits
     result.git_pushes += session.git_pushes
 
@@ -1929,6 +1953,13 @@ function generateHtmlReport(
   data: AggregatedData,
   insights: InsightResults,
 ): string {
+  // Surfaces silent AI-section failures instead of letting whole blocks
+  // vanish from the report without a trace.
+  const insightRecord = insights as Record<string, unknown>
+  const failedSectionNames = INSIGHT_SECTIONS.filter(
+    section => !insightRecord[section.name],
+  ).map(section => section.name)
+
   const markdownToHtml = (md: string): string => {
     if (!md) return ''
     return md
@@ -2494,7 +2525,17 @@ function generateHtmlReport(
       <div class="stat"><div class="stat-value">${data.total_files_modified}</div><div class="stat-label">${t('Files')}</div></div>
       <div class="stat"><div class="stat-value">${data.days_active}</div><div class="stat-label">${t('Days')}</div></div>
       <div class="stat"><div class="stat-value">${data.messages_per_day}</div><div class="stat-label">${t('Msgs/Day')}</div></div>
-      <div class="stat"><div class="stat-value">${data.total_input_tokens.toLocaleString()}</div><div class="stat-label">${t('Input Tokens')}</div></div>
+      <div class="stat">
+        <div class="stat-value">${data.total_input_tokens.toLocaleString()}</div>
+        <div class="stat-label">${t('Input Tokens')}</div>
+        ${
+          data.total_input_tokens > 0
+            ? data.total_cache_read_tokens > 0
+              ? `<div style="font-size: 10px; color: #94a3b8;">${t('+ cache read {{n}}', { n: data.total_cache_read_tokens.toLocaleString() })}</div>`
+              : `<div style="font-size: 10px; color: #94a3b8;">${t('no cache reported · includes context resends')}</div>`
+            : ''
+        }
+      </div>
       <div class="stat"><div class="stat-value">${data.total_output_tokens.toLocaleString()}</div><div class="stat-label">${t('Output Tokens')}</div></div>
     </div>
 
@@ -2621,6 +2662,18 @@ function generateHtmlReport(
     ${funEndingHtml}
 
     ${teamFeedbackHtml}
+
+    ${
+      failedSectionNames.length > 0
+        ? `<div class="chart-card" style="border: 1px solid #f59e0b; background: #fffbeb;">
+      <div class="chart-title">${t('⚠ {{n}} insight section(s) failed to generate', { n: failedSectionNames.length })}</div>
+      <p style="font-size: 13px; color: #475569;">
+        ${t('Model {{model}} was unreachable or returned unparsable output. Re-run /insights to retry.', { model: getInsightsModel() })}
+        <br>${failedSectionNames.map(escapeHtml).join(' · ')}
+      </p>
+    </div>`
+        : ''
+    }
   </div>
   <script>${js}</script>
 </body>

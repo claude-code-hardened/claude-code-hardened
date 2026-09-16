@@ -37,7 +37,7 @@ import { usePrStatus } from '../../hooks/usePrStatus.js';
 import { Byline, KeyboardShortcutHint } from '@anthropic/ink';
 import { useTerminalSize } from '../../hooks/useTerminalSize.js';
 import { useTasksV2 } from '../../hooks/useTasksV2.js';
-import { formatDuration, formatFileSize } from '../../utils/format.js';
+import { formatDuration, formatFileSize, formatTokens } from '../../utils/format.js';
 import { VoiceWarmupHint } from './VoiceIndicator.js';
 import { useVoiceEnabled } from '../../hooks/useVoiceEnabled.js';
 import { useVoiceState } from '../../context/voice.js';
@@ -71,6 +71,35 @@ function useRssDisplay(): RssState | null {
     }
     update();
     const timer = setInterval(update, RSS_UPDATE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return state;
+}
+
+const SESSION_TOKEN_UPDATE_INTERVAL_MS = 5_000;
+
+type SessionTokenState = { total: number; rate: number | null };
+
+function useSessionTokenDisplay(): SessionTokenState | null {
+  const [state, setState] = useState<SessionTokenState | null>(null);
+  useEffect(() => {
+    function update(): void {
+      const bs = require('../../bootstrap/state.js') as typeof import('../../bootstrap/state.js');
+      const input = bs.getTotalInputTokens();
+      const cacheRead = bs.getTotalCacheReadInputTokens();
+      const cacheCreation = bs.getTotalCacheCreationInputTokens();
+      const total = input + cacheRead + cacheCreation;
+      if (total === 0) {
+        setState(prev => (prev === null ? prev : null));
+        return;
+      }
+      // Third-party gateways often omit the cache fields entirely — show
+      // "no cache" instead of a misleading 0% hit rate.
+      const rate = cacheRead > 0 ? Math.round((100 * cacheRead) / total) : null;
+      setState(prev => (prev && prev.total === total && prev.rate === rate ? prev : { total, rate }));
+    }
+    update();
+    const timer = setInterval(update, SESSION_TOKEN_UPDATE_INTERVAL_MS);
     return () => clearInterval(timer);
   }, []);
   return state;
@@ -339,6 +368,7 @@ function ModeIndicator({
   }, [voiceEnabled, voiceHintUnderCap]);
   const isKillAgentsConfirmShowing = useAppState(s => s.notifications.current?.key === 'kill-agents-confirm');
   const rssState = useRssDisplay();
+  const sessionTokens = useSessionTokenDisplay();
 
   // Derive team info from teamContext (no filesystem I/O needed)
   // Match the same logic as TeamStatus to avoid trailing separator
@@ -442,6 +472,15 @@ function ModeIndicator({
     ...(feature('GOAL') &&
     (require('../../services/goal/goalState.js') as typeof import('../../services/goal/goalState')).getGoal()
       ? [<GoalElapsedIndicator key="goal-elapsed" />]
+      : []),
+    // Session token total + cache hit rate — rightmost pill
+    ...(sessionTokens
+      ? [
+          <Text dimColor key="session-tokens">
+            {formatTokens(sessionTokens.total)}
+            {sessionTokens.rate !== null ? ` · cache ${sessionTokens.rate}%` : ` · ${t('no cache')}`}
+          </Text>,
+        ]
       : []),
   ];
 
