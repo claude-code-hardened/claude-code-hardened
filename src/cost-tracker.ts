@@ -145,6 +145,15 @@ function buildRestoredModelUsage(
   )
 }
 
+function modelUsageSummary(modelUsage: { [modelName: string]: ModelUsage }): string {
+  return Object.entries(modelUsage)
+    .map(
+      ([m, u]) =>
+        `${m.split('/').pop()} in=${u.inputTokens} cr=${u.cacheReadInputTokens} cw=${u.cacheCreationInputTokens}`,
+    )
+    .join(' | ')
+}
+
 /**
  * Rebuilds a session's historical cost totals from its transcript messages.
  * Used when /resume loads a session that has no stored snapshot yet — the
@@ -156,6 +165,7 @@ function buildRestoredModelUsage(
 export function buildCostStateFromTranscript(
   messages: readonly SerializedMessage[],
 ): StoredCostState {
+  const rebuildStart = Date.now()
   const modelUsage: { [modelName: string]: ModelUsage } = {}
   let totalCostUSD = 0
   for (const msg of messages) {
@@ -191,6 +201,9 @@ export function buildCostStateFromTranscript(
       usage as unknown as Parameters<typeof calculateUSDCost>[1],
     )
   }
+  logForDebugging(
+    `[resume] cost rebuild: ${messages.length} msgs → in=${modelUsageSummary(modelUsage)} cost=$${totalCostUSD.toFixed(4)} in ${Date.now() - rebuildStart}ms`,
+  )
   return {
     totalCostUSD,
     totalAPIDuration: 0,

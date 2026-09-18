@@ -1497,6 +1497,12 @@ export function REPL({
 
   const [messages, rawSetMessages] = useState<MessageType[]>(initialMessages ?? []);
   const messagesRef = useRef(messages);
+
+  // Memory forensics sampler (DEBUG=1 only): RSS/heap/message-count timeline
+  // for attributing long-session memory jumps.
+  useEffect(() => {
+    startDebugMemorySampler(() => messagesRef.current?.length ?? 0);
+  }, []);
   // Stores the willowMode variant that was shown (or false if no hint shown).
   // Captured at hint_shown time so hint_converted telemetry reports the same
   // variant — the GrowthBook value shouldn't change mid-session, but reading
@@ -2135,6 +2141,7 @@ export function REPL({
   const resume = useCallback(
     async (sessionId: UUID, log: LogOption, entrypoint: ResumeEntrypoint) => {
       const resumeStart = performance.now();
+      logForDebugging(`[resume] start session=${sessionId} msgs=${log.messages.length} entrypoint=${entrypoint}`);
       try {
         // Deserialize messages to properly clean up the conversation
         // This filters unresolved tool uses and adds a synthetic assistant message if needed
