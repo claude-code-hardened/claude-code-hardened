@@ -145,7 +145,9 @@ function buildRestoredModelUsage(
   )
 }
 
-function modelUsageSummary(modelUsage: { [modelName: string]: ModelUsage }): string {
+function modelUsageSummary(modelUsage: {
+  [modelName: string]: ModelUsage
+}): string {
   return Object.entries(modelUsage)
     .map(
       ([m, u]) =>
