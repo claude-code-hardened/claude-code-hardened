@@ -195,9 +195,9 @@ describe('transcript window differential (nativeWindow vs full parse)', () => {
           metaLines: native.metaLines,
         },
       })
-      const ids = [...win.messages.keys()].sort()
+      const ids: string[] = [...win.messages.keys()].map(String).sort()
       if (first === null) first = ids
-      expect(ids).toEqual(first as string[])
+      expect(ids).toEqual(first)
     }
   })
 })
