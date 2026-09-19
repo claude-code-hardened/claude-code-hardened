@@ -9,7 +9,12 @@ const sessionTranscriptModule = feature('KAIROS')
 
 import { APIUserAbortError } from '@anthropic-ai/sdk'
 import { markPostCompaction } from 'src/bootstrap/state.js'
-import { getInvokedSkillsForAgent } from '../../bootstrap/state.js'
+import {
+  getInvokedSkillsForAgent,
+  getSessionId,
+} from '../../bootstrap/state.js'
+import { getLastSessionLog, RESUME_WINDOW } from '../../utils/sessionStorage.js'
+import { deserializeMessages } from '../../utils/conversationRecovery.js'
 import type { QuerySource } from '../../constants/querySource.js'
 import type { CanUseToolFn } from '../../hooks/useCanUseTool.js'
 import type { Tool, ToolUseContext } from '../../Tool.js'
@@ -428,6 +433,33 @@ export async function compactConversation(
     if (messages.length === 0) {
       throw new Error(ERROR_MESSAGE_NOT_ENOUGH_MESSAGES)
     }
+
+    // Resume windowing: the in-memory chain is capped at RESUME_WINDOW, but
+    // the summary must cover the WHOLE conversation. When the chain looks
+    // windowed (at the cap on the main thread), reload the full chain from
+    // the transcript first — one extra parse, negligible next to the
+    // summarization call itself. Failure falls back to the windowed set
+    // (same as pre-windowing behavior for the visible part).
+    let messagesForSummary = messages
+    if (messages.length >= RESUME_WINDOW && !context.agentId) {
+      try {
+        const sid = getSessionId()
+        if (sid) {
+          const fullLog = await getLastSessionLog(sid as UUID)
+          if (fullLog?.messages && fullLog.messages.length > messages.length) {
+            messagesForSummary = deserializeMessages(
+              fullLog.messages,
+            ) as Message[]
+            logForDebugging(
+              `[compact] windowed chain upgraded: ${messages.length} → ${messagesForSummary.length} msgs`,
+            )
+          }
+        }
+      } catch {
+        // Transcript unavailable — compact the windowed set instead.
+      }
+    }
+    messages = messagesForSummary
 
     const preCompactTokenCount = tokenCountWithEstimation(messages)
 
