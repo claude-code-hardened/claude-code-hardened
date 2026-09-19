@@ -183,8 +183,10 @@ describe('transcript window differential (nativeWindow vs full parse)', () => {
       expect(winLeaf!.uuid).toBe(mostRecentLeaf!.uuid)
 
       // Every tail message parses to the same content in both paths.
+      // tail may exceed the chain length — both paths clamp to the chain.
+      const expectedTail = Math.min(tail, chain.length)
       const winChain = buildConversationChain(win.messages, winLeaf!)
-      expect(winChain.length).toBe(tail)
+      expect(winChain.length).toBe(expectedTail)
       for (const m of winChain) {
         const expected = tailRows.get(m.uuid)
         expect(expected).toBeDefined()
