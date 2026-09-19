@@ -22,10 +22,24 @@ type TranscriptWindow = {
   parentOfFirst: string
 }
 
+type TranscriptWindowLoad = {
+  tailLines: string[]
+  metaLines: string[]
+  totalChainCount: number
+  beforeWindowCount: number
+  windowStartUuid: string
+  parentOfFirst: string
+  fileBytes: number
+}
+
 type TranscriptParserNapi = {
   scanChain(buf: Buffer): ChainScan
   scanChainRanges?(buf: Buffer): ChainScanRanges
   scanTranscriptWindow?(buf: Buffer, tailCount: number): TranscriptWindow
+  loadTranscriptWindowFromFile?(
+    path: string,
+    tailCount: number,
+  ): TranscriptWindowLoad
   hasNativeTranscriptParser(): boolean
 }
 
@@ -127,6 +141,31 @@ export function nativeScanTranscriptWindow(
   if (typeof mod.scanTranscriptWindow === 'function') {
     try {
       return mod.scanTranscriptWindow(buf, tailCount)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/**
+ * Full-pipeline window load, Rust side owns the file I/O: read → line
+ * classification → active-chain walk → tail window. Only the window's
+ * message lines and the small metadata lines cross the ABI — the JS heap
+ * never materializes the full buffer or message graph.
+ *
+ * Fallback: native module missing / predates this export / call fails →
+ * null (callers use the JS full-parse path). Never throws.
+ */
+export function nativeLoadTranscriptWindowFromFile(
+  path: string,
+  tailCount: number,
+): TranscriptWindowLoad | null {
+  const mod = loadModule()
+  if (mod === null) return null
+  if (typeof mod.loadTranscriptWindowFromFile === 'function') {
+    try {
+      return mod.loadTranscriptWindowFromFile(path, tailCount)
     } catch {
       return null
     }

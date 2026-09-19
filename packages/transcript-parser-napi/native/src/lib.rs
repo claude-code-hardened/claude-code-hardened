@@ -328,7 +328,15 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
     slot = uuid_to_slot.get(&parent).copied();
   }
 
+  // Materialize the chain in file order — the window API derives its
+  // on-chain set from this regardless of keep_all (sidechain/fork lines
+  // stay out of the window even when the gate keeps the whole buffer).
+  let mut chain_slots: Vec<usize> = chain_slots.into_iter().collect();
+  chain_slots.sort_unstable();
+
   // 50% stitch gate (see JS comment): only stitch when dropping ≥ half.
+  // keep_all only means "parse everything" — the CHAIN is still the
+  // parentUuid walk above.
   if len - chain_bytes < (len >> 1) {
     return Ok(CoreScan {
       msg_idx,
@@ -337,7 +345,7 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
       kept: Vec::new(),
       chain_bytes,
       keep_all: true,
-      chain_slots: (0..n_msgs).collect(),
+      chain_slots,
     });
   }
 
@@ -362,9 +370,6 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
     kept.push(meta_ranges[m + 1]);
     m += 2;
   }
-
-  let mut chain_slots: Vec<usize> = chain_slots.into_iter().collect();
-  chain_slots.sort_unstable();
 
   Ok(CoreScan {
     msg_idx,
@@ -405,20 +410,38 @@ fn uuid_bytes_to_string(b: &[u8]) -> String {
 
 #[napi(catch_unwind)]
 pub fn scan_transcript_window(buf: Buffer, tail_count: u32) -> Result<TranscriptWindow> {
-  let core = scan_core(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))?;
-  let data = &buf[..];
+  let core =
+    scan_window_core(&buf[..], tail_count as usize).map_err(|e| Error::new(Status::GenericFailure, e))?;
+  Ok(TranscriptWindow {
+    tail_ranges: Uint32Array::with_data_copied(&core.tail_ranges),
+    total_chain_count: core.total_chain_count as u32,
+    before_window_count: core.before_window_count as u32,
+    window_start_uuid: core.window_start_uuid,
+    parent_of_first: core.parent_of_first,
+  })
+}
+
+/// Napi-free window result so tests can run without a Node host providing
+/// the napi symbols (cargo test links a bare binary).
+pub struct WindowCore {
+  pub tail_ranges: Vec<u32>,
+  pub total_chain_count: usize,
+  pub before_window_count: usize,
+  pub window_start_uuid: String,
+  pub parent_of_first: String,
+}
+
+fn scan_window_core(data: &[u8], tail_count: usize) -> std::result::Result<WindowCore, String> {
+  let core = scan_core(data)?;
   let len = data.len();
 
-  // On-chain slots in file order: chain_slots when stitching, everything
-  // when keep_all (the gate decided the full buffer is the active chain).
-  let on_chain: Vec<usize> = if core.keep_all {
-    (0..core.msg_idx.len() / 3).collect()
-  } else {
-    core.chain_slots.clone()
-  };
+  // The window is the ACTIVE parentUuid chain — always the walk result,
+  // never "everything" (sidechain/fork lines stay out even when the
+  // stitch gate keeps the whole buffer for parsing).
+  let on_chain: Vec<usize> = core.chain_slots.clone();
 
-  let total = on_chain.len() as u32;
-  let tail_len = (tail_count as usize).min(on_chain.len());
+  let total = on_chain.len();
+  let tail_len = tail_count.min(on_chain.len());
   let window = &on_chain[on_chain.len() - tail_len..];
 
   let mut tail_ranges: Vec<u32> = Vec::with_capacity(tail_len * 2);
@@ -449,11 +472,295 @@ pub fn scan_transcript_window(buf: Buffer, tail_count: u32) -> Result<Transcript
     (start_uuid, parent)
   };
 
-  Ok(TranscriptWindow {
-    tail_ranges: Uint32Array::with_data_copied(&tail_ranges),
+  Ok(WindowCore {
+    tail_ranges,
     total_chain_count: total,
-    before_window_count: total - tail_len as u32,
+    before_window_count: total - tail_len,
     window_start_uuid: start_uuid,
     parent_of_first,
   })
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  pub(crate) fn _marker() {}
+
+  pub(crate) fn build_transcript(count: usize) -> Vec<u8> {
+    // Synthetic transcript: meta line, then `count` chain messages each
+    // with a usage block, plus one sidechain decoy at the end.
+    let mut out = Vec::new();
+    out.extend_from_slice(b"{\"type\":\"summary\",\"summary\":\"t\"}\n");
+    let mut uuid: u64 = 0x1111;
+    let mut parent = String::from("null");
+    for i in 0..count {
+      uuid = uuid.wrapping_add(0x9e3779b97f4a7c15);
+      let id = format!("{:032x}", uuid);
+      out.extend_from_slice(
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"assistant\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:{:02}:{:02}.000Z\",\"message\":{{\"usage\":{{\"input_tokens\":{},\"output_tokens\":2}}}}}}\n",
+          parent, id, i % 60, i % 60, i + 1
+        )
+        .as_bytes(),
+      );
+      parent = format!("\"{}\"", id);
+    }
+    // Sidechain decoy after the chain — must never join the chain.
+    out.extend_from_slice(
+      b"{\"parentUuid\":null,\"type\":\"assistant\",\"isSidechain\":true,\"uuid\":\"ffffffff-ffff-ffff-ffff-ffffffffffff\",\"timestamp\":\"2026-01-01T23:59:59.000Z\",\"message\":{\"usage\":{\"input_tokens\":999}}}\n",
+    );
+    out
+  }
+
+  fn uuid_at(buf: &[u8], start: usize, end: usize) -> String {
+    let line = &buf[start..end];
+    let key = b"\"uuid\":\"";
+    let pos = line
+      .windows(key.len())
+      .position(|w| w == key)
+      .expect("uuid key");
+    String::from_utf8_lossy(&line[pos + key.len()..pos + key.len() + UUID_LEN]).into_owned()
+  }
+
+  #[test]
+  fn window_is_idempotent_across_repeated_calls() {
+    let buf = build_transcript(300);
+    let first = scan_window_core(&buf[..], 50).expect("scan");
+    assert_eq!(first.total_chain_count, 300, "sidechain decoy must not join the chain");
+    for round in 0..100 {
+      let again = scan_window_core(&buf[..], 50).expect("scan");
+      assert_eq!(again.total_chain_count, first.total_chain_count, "round {}", round);
+      assert_eq!(again.tail_ranges, first.tail_ranges, "round {}", round);
+      assert_eq!(again.window_start_uuid, first.window_start_uuid, "round {}", round);
+    }
+  }
+
+  #[test]
+  fn alternating_buffers_do_not_cross_contaminate() {
+    // Simulates repeated /resume across different session files in one
+    // process — each scan must reflect its own buffer only.
+    let small = build_transcript(10);
+    let big = build_transcript(2000);
+    for round in 0..50 {
+      let a = scan_window_core(&small[..], 5).expect("scan");
+      assert_eq!(a.total_chain_count, 10, "round {}", round);
+      let b = scan_window_core(&big[..], 5).expect("scan");
+      assert_eq!(b.total_chain_count, 2000, "round {}", round);
+      assert_eq!(b.tail_ranges.len(), 10, "round {}", round); // 5 pairs
+    }
+  }
+
+  #[test]
+  fn window_tail_is_chain_tail_in_file_order() {
+    let buf = build_transcript(120);
+    let w = scan_window_core(&buf[..], 7).expect("scan");
+    assert_eq!(w.tail_ranges.len(), 14);
+    // First tail range = message #113 (0-based) of 120 → uuid matches slot.
+    let start = w.tail_ranges[0] as usize;
+    let end = w.tail_ranges[1] as usize;
+    assert_eq!(uuid_at(&buf, start, end), w.window_start_uuid);
+    // The window's first message still has its parent anchor (chain intact).
+    assert!(!w.parent_of_first.is_empty());
+    assert_eq!(w.before_window_count, 113);
+  }
+
+  #[test]
+  fn boundaries_empty_single_and_oversized_tail() {
+    let empty: Vec<u8> = Vec::new();
+    let w0 = scan_window_core(&empty[..], 10).expect("scan");
+    assert_eq!(w0.total_chain_count, 0);
+    assert!(w0.tail_ranges.is_empty());
+    assert!(w0.window_start_uuid.is_empty());
+
+    let one = build_transcript(1);
+    let w1 = scan_window_core(&one[..], 10).expect("scan");
+    assert_eq!(w1.total_chain_count, 1);
+    assert_eq!(w1.before_window_count, 0);
+    assert!(w1.parent_of_first.is_empty()); // root has no parent
+
+    let many = build_transcript(30);
+    let w2 = scan_window_core(&many[..], 100).expect("scan");
+    assert_eq!(w2.total_chain_count, 30);
+    assert_eq!(w2.tail_ranges.len(), 60); // clamped to the whole chain
+    assert_eq!(w2.before_window_count, 0);
+  }
+}
+
+/// Full-pipeline window load, Rust side owns the file I/O: read → line
+/// classification (message vs metadata) → active-chain walk → tail window.
+/// Only the window's message lines and the (small) metadata lines cross the
+/// ABI — the JS heap never materializes the full buffer or the full message
+/// graph. This is the line-by-line port of the TS loadTranscriptFile front
+/// half (read/classify/chain); the 15-way metadata type dispatch stays in
+/// TypeScript (these lines are handed back verbatim for its existing
+/// collector to parse, so the type logic cannot drift).
+#[napi(object)]
+pub struct TranscriptWindowLoad {
+  /// The tail window's active-chain message lines, file order, as raw JSONL
+  /// strings (each ends with "\n" except possibly the last).
+  pub tail_lines: Vec<String>,
+  /// All metadata lines from the file (summary/custom-title/tag/...), file
+  /// order — small; TS parses these with its existing type dispatch.
+  pub meta_lines: Vec<String>,
+  /// Total messages on the active chain.
+  pub total_chain_count: u32,
+  /// Chain messages before the returned window.
+  pub before_window_count: u32,
+  /// uuid of the window's first message ("" when no messages).
+  pub window_start_uuid: String,
+  /// parentUuid of the window's first message ("" at the root).
+  pub parent_of_first: String,
+  /// File size in bytes (for the JS side's cache/telemetry decisions).
+  pub file_bytes: f64,
+}
+
+#[napi(catch_unwind)]
+pub fn load_transcript_window_from_file(
+  path: String,
+  tail_count: u32,
+) -> Result<TranscriptWindowLoad> {
+  let core = load_window_core(&path, tail_count as usize)
+    .map_err(|e| Error::new(Status::GenericFailure, e))?;
+  Ok(TranscriptWindowLoad {
+    tail_lines: core.tail_lines,
+    meta_lines: core.meta_lines,
+    total_chain_count: core.total_chain_count as u32,
+    before_window_count: core.before_window_count as u32,
+    window_start_uuid: core.window_start_uuid,
+    parent_of_first: core.parent_of_first,
+    file_bytes: core.file_bytes as f64,
+  })
+}
+
+/// Napi-free file-level result (tests link without a Node host, so they
+/// call this instead of the napi wrapper).
+pub struct WindowFileLoad {
+  pub tail_lines: Vec<String>,
+  pub meta_lines: Vec<String>,
+  pub total_chain_count: usize,
+  pub before_window_count: usize,
+  pub window_start_uuid: String,
+  pub parent_of_first: String,
+  pub file_bytes: usize,
+}
+
+fn load_window_core(
+  path: &str,
+  tail_count: usize,
+) -> std::result::Result<WindowFileLoad, String> {
+  use std::fs;
+
+  let data = fs::read(path).map_err(|e| format!("transcript read failed: {}", e))?;
+  let core = scan_core(&data)?;
+
+  // The window is the ACTIVE parentUuid chain — the walk result, always
+  // (sidechain/fork lines stay out even when the stitch gate would keep
+  // the whole buffer for parsing).
+  let on_chain: &[usize] = &core.chain_slots;
+
+  let total = on_chain.len();
+  let tail_len = tail_count.min(total);
+  let window = &on_chain[total - tail_len..];
+
+  let slice_line = |start: usize, end: usize| -> String {
+    let end = end.min(data.len());
+    String::from_utf8_lossy(&data[start.min(end)..end]).into_owned()
+  };
+
+  let mut tail_lines: Vec<String> = Vec::with_capacity(tail_len);
+  for &slot in window {
+    tail_lines.push(slice_line(
+      core.msg_idx[slot * 3] as usize,
+      core.msg_idx[slot * 3 + 1] as usize,
+    ));
+  }
+
+  // Metadata lines: all of them, file order. Windows/preserved-segment
+  // edge cases are handled by the TS caller, which can fall back to the
+  // full-parse path when its invariants don't hold.
+  let mut meta_lines: Vec<String> = Vec::with_capacity(core.meta_ranges.len() / 2);
+  let mut m = 0usize;
+  while m + 1 < core.meta_ranges.len() {
+    meta_lines.push(slice_line(
+      core.meta_ranges[m] as usize,
+      core.meta_ranges[m + 1] as usize,
+    ));
+    m += 2;
+  }
+
+  let empty = String::new();
+  let (start_uuid, parent_of_first) = if window.is_empty() {
+    (empty.clone(), empty)
+  } else {
+    let first_slot = window[0];
+    let start_uuid = core.slot_uuids
+      .get(first_slot)
+      .and_then(|u| u.as_ref())
+      .map(|u| uuid_bytes_to_string(u))
+      .unwrap_or_else(|| empty.clone());
+    let parent_start = core.msg_idx[first_slot * 3 + 2];
+    let parent = if parent_start == u32::MAX
+      || parent_start as usize + UUID_LEN > data.len()
+    {
+      empty
+    } else {
+      uuid_bytes_to_string(&data[parent_start as usize..parent_start as usize + UUID_LEN])
+    };
+    (start_uuid, parent)
+  };
+
+  Ok(WindowFileLoad {
+    tail_lines,
+    meta_lines,
+    total_chain_count: total,
+    before_window_count: total - tail_len,
+    window_start_uuid: start_uuid,
+    parent_of_first,
+    file_bytes: data.len(),
+  })
+}
+
+#[cfg(test)]
+mod file_tests {
+  use super::tests::build_transcript;
+  use super::*;
+
+  #[test]
+  fn file_level_load_is_repeatable_and_correct_across_sessions() {
+    let dir = std::env::temp_dir().join(format!(
+      "twn-test-{}",
+      std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let path_a = dir.join("a.jsonl");
+    let path_b = dir.join("b.jsonl");
+    // Two different "sessions": a=120 messages, b=5. Repeated alternating
+    // loads must reflect each file's own chain — the repeated-load guard
+    // for multi-session /resume switching.
+    std::fs::write(&path_a, build_transcript(120)).expect("write a");
+    std::fs::write(&path_b, build_transcript(5)).expect("write b");
+
+    for round in 0..30 {
+      let a = load_window_core(path_a.to_str().expect("utf8"), 50).expect("load a");
+      assert_eq!(a.total_chain_count, 120, "round {}", round);
+      assert_eq!(a.before_window_count, 70, "round {}", round);
+      assert_eq!(a.tail_lines.len(), 50, "round {}", round);
+      assert!(a.tail_lines[0].contains("\"parentUuid\""));
+      assert!(!a.meta_lines.is_empty(), "summary meta line present");
+
+      let b = load_window_core(path_b.to_str().expect("utf8"), 50).expect("load b");
+      assert_eq!(b.total_chain_count, 5, "round {}", round);
+      assert_eq!(b.tail_lines.len(), 5, "round {}", round);
+      // Oversized tail clamps: before_window 0.
+      assert_eq!(b.before_window_count, 0, "round {}", round);
+    }
+
+    std::fs::remove_dir_all(&dir).ok();
+  }
+
+  #[test]
+  fn file_level_missing_path_is_clean_error() {
+    let result = load_window_core("/nonexistent/tw.jsonl", 10);
+    assert!(result.is_err(), "missing file must error, not panic");
+  }
 }
