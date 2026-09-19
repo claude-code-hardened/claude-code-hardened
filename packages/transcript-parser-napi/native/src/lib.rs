@@ -309,6 +309,28 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
   // other messages' parents point at them.)
   const PROGRESS_MARKER: &[u8] = b"\"type\":\"progress\"";
   let progress_finder = memchr::memmem::Finder::new(PROGRESS_MARKER);
+
+  // True when the line has a top-level (JSON depth-1) "type":"progress"
+  // field. Byte-level search alone would misfire on message content that
+  // merely CONTAINS the literal (e.g. a tool result quoting progress JSON),
+  // kicking a real message off the chain and breaking it there.
+  let is_progress_line = |start: usize, end: usize| -> bool {
+    let end = end.min(len);
+    let mut positions: Vec<usize> = Vec::new();
+    let mut from = start;
+    while let Some(idx) = progress_finder.find(&buf[from..end]) {
+      positions.push(idx + from);
+      from = idx + from + PROGRESS_MARKER.len();
+      if from >= end {
+        break;
+      }
+    }
+    if positions.is_empty() {
+      return false;
+    }
+    pick_depth_one_candidate(buf, start, &positions) == positions[0]
+      && positions.len() == 1
+  };
   let mut seen: std::collections::HashSet<usize> = std::collections::HashSet::new();
   let mut chain_slots: std::collections::HashSet<usize> =
     std::collections::HashSet::new();
@@ -320,9 +342,7 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
     }
     let start = msg_idx[s * 3] as usize;
     let end = msg_idx[s * 3 + 1] as usize;
-    let is_progress = progress_finder
-      .find(&buf[start..end.min(len)])
-      .is_some();
+    let is_progress = is_progress_line(start, end);
     if !is_progress {
       chain_slots.insert(s);
       chain_bytes += end - start;
@@ -888,11 +908,6 @@ mod differential_tests {
   }
 
   fn assert_lines_match_reference(data: &[u8], tail: usize) {
-    let w = load_window_core(
-      "unused", // not used when calling scan_window_core directly
-      tail,
-    );
-    let _ = w; // placeholder — real assertion path below uses the buffer API
     let win = scan_window_core(data, tail).expect("scan");
     let (ref_lines, ref_total) = reference_chain_tail(data, tail);
     assert_eq!(
@@ -979,6 +994,36 @@ mod progress_tests {
     // contiguous and reaches back across it.
     assert_eq!(w.tail_lines.len(), 9);
     std::fs::remove_dir_all(&dir).ok();
+  }
+  #[test]
+  fn progress_marker_inside_message_content_is_not_mistaken() {
+    // A real message whose content QUOTES progress JSON ("type":"progress"
+    // inside a nested string/object) must stay on the chain — only a
+    // top-level type field makes a line transparent.
+    let mut out = Vec::new();
+    let mut uuid: u64 = 0x4444;
+    let mut parent = String::from("null");
+    for i in 0..5 {
+      uuid = uuid.wrapping_add(0x9e3779b97f4a7c15);
+      let id = format!("{:032x}", uuid);
+      let line = if i == 2 {
+        // content embeds the progress marker literally
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"assistant\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"saw {{\\\"type\\\":\\\"progress\\\"}} in output\"}}]}}}}\n",
+          parent, id
+        )
+      } else {
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"assistant\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"message\":{{\"usage\":{{\"input_tokens\":{}}}}}}}\n",
+          parent, id, i
+        )
+      };
+      out.extend_from_slice(line.as_bytes());
+      parent = format!("\"{}\"", id);
+    }
+    let w = scan_window_core(&out, 100).expect("scan");
+    // The quoted-progress message must remain a chain member: 5 messages.
+    assert_eq!(w.total_chain_count, 5, "embedded marker must not kick a real message off the chain");
   }
 }
 
