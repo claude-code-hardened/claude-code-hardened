@@ -197,7 +197,7 @@ describe('transcript window differential (nativeWindow vs full parse)', () => {
       })
       const ids = [...win.messages.keys()].sort()
       if (first === null) first = ids
-      expect(ids).toEqual(first)
+      expect(ids).toEqual(first as string[])
     }
   })
 })
