@@ -3879,8 +3879,27 @@ export async function loadTranscriptFile(
         [...metaLines, ...tailLines].join('\n') + '\n',
       )
       const entries = parseJSONL<Entry>(windowBuf)
+      // Legacy progress bridge — same as the full-parse collector below.
+      // The Rust chain walk treats progress lines as transparent and does
+      // NOT return them, but the returned lines' parentUuid bytes still
+      // point at the (now absent) progress rows; without bridging the
+      // windowed chain would break at the first progress ancestor.
+      const progressBridge = new Map<UUID, UUID | null>()
       for (const entry of entries) {
+        if (isLegacyProgressEntry(entry)) {
+          const parent = entry.parentUuid
+          progressBridge.set(
+            entry.uuid,
+            parent && progressBridge.has(parent)
+              ? (progressBridge.get(parent) ?? null)
+              : parent,
+          )
+          continue
+        }
         if (isTranscriptMessage(entry)) {
+          if (entry.parentUuid && progressBridge.has(entry.parentUuid)) {
+            entry.parentUuid = progressBridge.get(entry.parentUuid) ?? null
+          }
           messages.set(entry.uuid, entry)
         } else if (entry.type === 'summary' && entry.leafUuid) {
           summaries.set(entry.leafUuid, entry.summary)
