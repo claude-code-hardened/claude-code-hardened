@@ -56,19 +56,37 @@ function buildFixture(): string[] {
       lines.push(msgLine(parent, uuid, i))
     }
     if (i === 10) {
+      // Sidechain/fork rows hang off message #10 with timestamps in the
+      // SAME second (+ms offsets) — real transcripts write branches right
+      // after their mount point, so they sort BEFORE the chain tail.
+      const ts = (ms: number) =>
+        `2026-01-01T00:00:${String(i).padStart(2, '0')}.${String(ms).padStart(3, '0')}Z`
       lines.push(
-        msgLine(parent, `side-${i}-0`, 900 + i).replace(
-          '"type":"assistant"',
-          '"type":"assistant","isSidechain":true',
-        ),
+        JSON.stringify({
+          parentUuid: parent,
+          type: 'assistant',
+          isSidechain: true,
+          uuid: `side-${i}-0`,
+          timestamp: ts(100),
+        }),
       )
       lines.push(
-        msgLine(`side-${i}-0`, `side-${i}-1`, 990 + i).replace(
-          '"type":"assistant"',
-          '"type":"assistant","isSidechain":true',
-        ),
+        JSON.stringify({
+          parentUuid: `side-${i}-0`,
+          type: 'assistant',
+          isSidechain: true,
+          uuid: `side-${i}-1`,
+          timestamp: ts(200),
+        }),
       )
-      lines.push(msgLine(parent, `fork-${i}`, 800 + i))
+      lines.push(
+        JSON.stringify({
+          parentUuid: parent,
+          type: 'assistant',
+          uuid: `fork-${i}`,
+          timestamp: ts(300),
+        }),
+      )
       lines.push(
         JSON.stringify({
           type: 'custom-title',
