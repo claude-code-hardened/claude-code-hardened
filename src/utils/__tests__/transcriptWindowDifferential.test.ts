@@ -85,20 +85,25 @@ function simulatedNative(
   lines: string[],
   chainUuids: Set<string>,
 ): { tailLines: string[]; metaLines: string[] } {
+  // Mirrors load_transcript_window_from_file's contract: message lines
+  // (parentUuid-prefixed, which the Rust scanner puts in msg_idx) are
+  // EITHER on the chain (tail_lines) or DROPPED — off-chain message rows
+  // (dead forks, sidechains, legacy progress) cross no ABI. Only
+  // metadata-classified lines ride along as meta_lines.
   const tailLines: string[] = []
   const metaLines: string[] = []
   for (const line of lines) {
-    let uuid: string | undefined
     try {
       const v = JSON.parse(line) as { uuid?: string; type?: string }
-      uuid = v.uuid
-      if (uuid && v.type === 'progress') continue // Rust excludes progress
+      if (v.uuid && chainUuids.has(v.uuid)) {
+        tailLines.push(line)
+      } else if (v.uuid) {
+        // message-classified line that is not on the chain → dropped
+        continue
+      } else {
+        metaLines.push(line)
+      }
     } catch {
-      // keep unparseable lines in meta — the Rust side passes them through
-    }
-    if (uuid && chainUuids.has(uuid)) {
-      tailLines.push(line)
-    } else {
       metaLines.push(line)
     }
   }
