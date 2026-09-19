@@ -420,6 +420,39 @@ export function mergeHookInstructions(
  * Creates a compact version of a conversation by summarizing older messages
  * and preserving recent conversation history.
  */
+/**
+ * Resume windowing: the in-memory chain is capped at RESUME_WINDOW, but the
+ * summary must cover the WHOLE conversation. When the chain looks windowed
+ * (at the cap, on the main thread), reload the full chain from the
+ * transcript first — one extra parse, negligible next to the summarization
+ * call itself. Failure falls back to the windowed set (same as
+ * pre-windowing behavior for the visible part). Exported for tests.
+ */
+export async function resolveCompactMessages(
+  messages: Message[],
+  agentId: string | undefined,
+): Promise<Message[]> {
+  if (messages.length < RESUME_WINDOW || agentId) {
+    return messages
+  }
+  try {
+    const sid = getSessionId()
+    if (!sid) return messages
+    const fullLog = await getLastSessionLog(sid as UUID)
+    if (!fullLog?.messages || fullLog.messages.length <= messages.length) {
+      return messages
+    }
+    const upgraded = deserializeMessages(fullLog.messages) as Message[]
+    logForDebugging(
+      `[compact] windowed chain upgraded: ${messages.length} → ${upgraded.length} msgs`,
+    )
+    return upgraded
+  } catch {
+    // Transcript unavailable — compact the windowed set instead.
+    return messages
+  }
+}
+
 export async function compactConversation(
   messages: Message[],
   context: ToolUseContext,
@@ -434,32 +467,7 @@ export async function compactConversation(
       throw new Error(ERROR_MESSAGE_NOT_ENOUGH_MESSAGES)
     }
 
-    // Resume windowing: the in-memory chain is capped at RESUME_WINDOW, but
-    // the summary must cover the WHOLE conversation. When the chain looks
-    // windowed (at the cap on the main thread), reload the full chain from
-    // the transcript first — one extra parse, negligible next to the
-    // summarization call itself. Failure falls back to the windowed set
-    // (same as pre-windowing behavior for the visible part).
-    let messagesForSummary = messages
-    if (messages.length >= RESUME_WINDOW && !context.agentId) {
-      try {
-        const sid = getSessionId()
-        if (sid) {
-          const fullLog = await getLastSessionLog(sid as UUID)
-          if (fullLog?.messages && fullLog.messages.length > messages.length) {
-            messagesForSummary = deserializeMessages(
-              fullLog.messages,
-            ) as Message[]
-            logForDebugging(
-              `[compact] windowed chain upgraded: ${messages.length} → ${messagesForSummary.length} msgs`,
-            )
-          }
-        }
-      } catch {
-        // Transcript unavailable — compact the windowed set instead.
-      }
-    }
-    messages = messagesForSummary
+    messages = await resolveCompactMessages(messages, context.agentId)
 
     const preCompactTokenCount = tokenCountWithEstimation(messages)
 
