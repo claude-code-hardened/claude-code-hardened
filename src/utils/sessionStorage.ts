@@ -3910,6 +3910,21 @@ export async function loadTranscriptFile(
           fileHistorySnapshots.set(entry.messageId, entry)
         } else if (entry.type === 'attribution-snapshot') {
           attributionSnapshots.set(entry.messageId, entry)
+        } else if (entry.type === 'content-replacement') {
+          // Same agentId/sessionId split as the full-parse collector below.
+          if (entry.agentId) {
+            const existing = agentContentReplacements.get(entry.agentId) ?? []
+            agentContentReplacements.set(entry.agentId, existing)
+            existing.push(...entry.replacements)
+          } else {
+            const existing = contentReplacements.get(entry.sessionId) ?? []
+            contentReplacements.set(entry.sessionId, existing)
+            existing.push(...entry.replacements)
+          }
+        } else if (entry.type === 'marble-origami-commit') {
+          contextCollapseCommits.push(entry)
+        } else if (entry.type === 'marble-origami-snapshot') {
+          contextCollapseSnapshot = entry
         }
       }
       applyPreservedSegmentRelinks(messages)

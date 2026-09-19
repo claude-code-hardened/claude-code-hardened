@@ -301,6 +301,14 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
   }
 
   // Walk parentUuid to root. Dangling parent = normal chain termination.
+  // Legacy progress lines ({"type":"progress"} — PR #24099 removed their
+  // production, old transcripts still have them) are transparent: JS's
+  // progressBridge rewrites children to skip them, so the Rust walk does
+  // the same — the slot is not added to the chain, the walk continues
+  // through its parent. (Progress slots keep their uuid → slot mapping:
+  // other messages' parents point at them.)
+  const PROGRESS_MARKER: &[u8] = b"\"type\":\"progress\"";
+  let progress_finder = memchr::memmem::Finder::new(PROGRESS_MARKER);
   let mut seen: std::collections::HashSet<usize> = std::collections::HashSet::new();
   let mut chain_slots: std::collections::HashSet<usize> =
     std::collections::HashSet::new();
@@ -312,8 +320,13 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
     }
     let start = msg_idx[s * 3] as usize;
     let end = msg_idx[s * 3 + 1] as usize;
-    chain_slots.insert(s);
-    chain_bytes += end - start;
+    let is_progress = progress_finder
+      .find(&buf[start..end.min(len)])
+      .is_some();
+    if !is_progress {
+      chain_slots.insert(s);
+      chain_bytes += end - start;
+    }
     let parent_start = msg_idx[s * 3 + 2];
     if parent_start == u32::MAX {
       break;
@@ -717,6 +730,56 @@ fn load_window_core(
     parent_of_first,
     file_bytes: data.len(),
   })
+}
+
+#[cfg(test)]
+mod progress_tests {
+  use super::*;
+
+  #[test]
+  fn legacy_progress_lines_are_transparent_in_the_chain() {
+    // Old transcripts contain {"type":"progress"} lines in the parentUuid
+    // chain (PR #24099 removed their production). JS's progressBridge
+    // rewrites children to skip them — the Rust walk must do the same or
+    // the windowed resume would materialize progress rows and break the
+    // chain at them.
+    let mut out = Vec::new();
+    let mut uuid: u64 = 0x2222;
+    let mut parent = String::from("null");
+    for i in 0..10 {
+      uuid = uuid.wrapping_add(0x9e3779b97f4a7c15);
+      let id = format!("{:032x}", uuid);
+      let line = if i == 5 {
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"progress\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\"}}\n",
+          parent, id
+        )
+      } else {
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"assistant\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"message\":{{\"usage\":{{\"input_tokens\":1}}}}}}\n",
+          parent, id
+        )
+      };
+      out.extend_from_slice(line.as_bytes());
+      parent = format!("\"{}\"", id);
+    }
+    let dir = std::env::temp_dir().join(format!("twn-prog-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let path = dir.join("progress.jsonl");
+    std::fs::write(&path, &out).expect("write");
+
+    let w = load_window_core(path.to_str().expect("utf8"), 100).expect("load");
+    // The progress line must NOT be part of the chain (9 real messages).
+    assert_eq!(w.total_chain_count, 9, "progress line excluded from chain");
+    assert!(
+      !w.tail_lines.iter().any(|l| l.contains("\"type\":\"progress\"")),
+      "progress line must not appear in window lines"
+    );
+    // Chain stays connected through the progress node: the window is
+    // contiguous and reaches back across it.
+    assert_eq!(w.tail_lines.len(), 9);
+    std::fs::remove_dir_all(&dir).ok();
+  }
 }
 
 #[cfg(test)]
