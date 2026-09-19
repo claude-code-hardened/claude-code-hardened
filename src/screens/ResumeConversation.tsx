@@ -114,6 +114,7 @@ export function ResumeConversation({
   const [showAllProjects, setShowAllProjects] = React.useState(false);
   const [resumeData, setResumeData] = React.useState<{
     messages: Message[];
+    windowedBeyond?: number;
     fileHistorySnapshots?: FileHistorySnapshot[];
     contentReplacements?: ContentReplacementRecord[];
     agentName?: string;
@@ -323,6 +324,7 @@ export function ResumeConversation({
       setLogs([]);
       setResumeData({
         messages: result.messages,
+        windowedBeyond: result.windowedBeyond,
         fileHistorySnapshots: result.fileHistorySnapshots,
         contentReplacements: result.contentReplacements,
         agentName: result.agentName,
@@ -350,6 +352,7 @@ export function ResumeConversation({
         commands={commands}
         initialTools={initialTools}
         initialMessages={resumeData.messages}
+        initialWindowedBeyond={resumeData.windowedBeyond}
         initialFileHistorySnapshots={resumeData.fileHistorySnapshots}
         initialContentReplacements={resumeData.contentReplacements}
         initialAgentName={resumeData.agentName}

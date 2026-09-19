@@ -62,6 +62,14 @@ struct CoreScan {
   kept: Vec<u32>,
   chain_bytes: usize,
   keep_all: bool,
+  /// Slots on the active parentUuid chain, in file order (slot number order).
+  /// Empty when keep_all is true — callers then treat every message as
+  /// on-chain (the stitch gate decided the whole buffer is the chain).
+  /// Also filled when no leaf exists (empty chain).
+  chain_slots: Vec<usize>,
+  /// Per-slot uuid bytes (36 ASCII chars each), indexed by slot number.
+  /// Lets the window API report anchor uuids without re-scanning lines.
+  slot_uuids: Vec<Option<[u8; UUID_LEN]>>,
 }
 
 fn find_sub(
@@ -171,6 +179,7 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
 
   // Stride-3 flat message index, mirrors JS msgIdx.
   let mut msg_idx: Vec<u32> = Vec::with_capacity(1024);
+  let mut slot_uuids: Vec<Option<[u8; UUID_LEN]>> = Vec::with_capacity(1024);
   let mut meta_ranges: Vec<u32> = Vec::with_capacity(256);
   // uuid (36 ASCII bytes) → slot number (msg_idx offset / 3)
   let mut uuid_to_slot: std::collections::HashMap<[u8; UUID_LEN], usize> =
@@ -241,14 +250,17 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
         // end offset and reads a short string that no parent lookup can hit
         // (parents always appear before children in append-only files), so
         // skipping the insert matches JS instead of panicking on the slice.
+        let mut slot_uuid: Option<[u8; UUID_LEN]> = None;
         if uuid_start + UUID_LEN <= len {
           let mut uuid = [0u8; UUID_LEN];
           uuid.copy_from_slice(&buf[uuid_start..uuid_start + UUID_LEN]);
           uuid_to_slot.insert(uuid, msg_idx.len() / 3);
+          slot_uuid = Some(uuid);
         }
         msg_idx.push(pos as u32);
         msg_idx.push(line_end as u32);
         msg_idx.push(parent_start as u32);
+        slot_uuids.push(slot_uuid);
       } else {
         meta_ranges.push(pos as u32);
         meta_ranges.push(line_end as u32);
@@ -279,10 +291,12 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
   if leaf_slot < 0 {
     return Ok(CoreScan {
       msg_idx,
+      slot_uuids,
       meta_ranges,
       kept: Vec::new(),
       chain_bytes: 0,
       keep_all: true,
+      chain_slots: Vec::new(),
     });
   }
 
@@ -318,10 +332,12 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
   if len - chain_bytes < (len >> 1) {
     return Ok(CoreScan {
       msg_idx,
+      slot_uuids,
       meta_ranges,
       kept: Vec::new(),
       chain_bytes,
       keep_all: true,
+      chain_slots: (0..n_msgs).collect(),
     });
   }
 
@@ -347,11 +363,97 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
     m += 2;
   }
 
+  let mut chain_slots: Vec<usize> = chain_slots.into_iter().collect();
+  chain_slots.sort_unstable();
+
   Ok(CoreScan {
     msg_idx,
+    slot_uuids,
     meta_ranges,
     kept,
     chain_bytes,
     keep_all: false,
+    chain_slots,
+  })
+}
+
+/// Window over the active chain: byte ranges of the last `tail_count` chain
+/// messages plus the anchors needed to load earlier ones on demand. The
+/// JSON semantics stay on the JS side — this returns ranges, not parsed
+/// messages, so resuming a huge session only materializes the visible tail
+/// instead of the whole message graph.
+#[napi(object)]
+pub struct TranscriptWindow {
+  /// Flat [start, end, ...] pairs — byte ranges of the tail window's chain
+  /// message lines, in file order. Parse each with buf.subarray(start, end).
+  pub tail_ranges: Uint32Array,
+  /// Total messages on the active chain (keep_all: every message line).
+  pub total_chain_count: u32,
+  /// Number of chain messages NOT in the returned window.
+  pub before_window_count: u32,
+  /// uuid of the window's first message (readable by the model), empty when
+  /// the transcript has no messages or the line was truncated at EOF.
+  pub window_start_uuid: String,
+  /// parentUuid of the window's first message — the anchor for a follow-up
+  /// "load N more before this" pass. Empty when the window reaches the root.
+  pub parent_of_first: String,
+}
+
+fn uuid_bytes_to_string(b: &[u8]) -> String {
+  String::from_utf8_lossy(b).into_owned()
+}
+
+#[napi(catch_unwind)]
+pub fn scan_transcript_window(buf: Buffer, tail_count: u32) -> Result<TranscriptWindow> {
+  let core = scan_core(&buf[..]).map_err(|e| Error::new(Status::GenericFailure, e))?;
+  let data = &buf[..];
+  let len = data.len();
+
+  // On-chain slots in file order: chain_slots when stitching, everything
+  // when keep_all (the gate decided the full buffer is the active chain).
+  let on_chain: Vec<usize> = if core.keep_all {
+    (0..core.msg_idx.len() / 3).collect()
+  } else {
+    core.chain_slots.clone()
+  };
+
+  let total = on_chain.len() as u32;
+  let tail_len = (tail_count as usize).min(on_chain.len());
+  let window = &on_chain[on_chain.len() - tail_len..];
+
+  let mut tail_ranges: Vec<u32> = Vec::with_capacity(tail_len * 2);
+  for &slot in window {
+    tail_ranges.push(core.msg_idx[slot * 3]);
+    tail_ranges.push(core.msg_idx[slot * 3 + 1]);
+  }
+
+  let empty = String::new();
+  let (start_uuid, parent_of_first) = if window.is_empty() {
+    (empty.clone(), empty)
+  } else {
+    let first_slot = window[0];
+    let start_uuid = core.slot_uuids
+      .get(first_slot)
+      .and_then(|u| u.as_ref())
+      .map(|u| uuid_bytes_to_string(u))
+      .unwrap_or_else(|| empty.clone());
+    // parentStart: byte offset of the parent uuid char, or u32::MAX for null.
+    let parent_start = core.msg_idx[first_slot * 3 + 2];
+    let parent = if parent_start == u32::MAX
+      || parent_start as usize + UUID_LEN > len
+    {
+      empty
+    } else {
+      uuid_bytes_to_string(&data[parent_start as usize..parent_start as usize + UUID_LEN])
+    };
+    (start_uuid, parent)
+  };
+
+  Ok(TranscriptWindow {
+    tail_ranges: Uint32Array::with_data_copied(&tail_ranges),
+    total_chain_count: total,
+    before_window_count: total - tail_len as u32,
+    window_start_uuid: start_uuid,
+    parent_of_first,
   })
 }

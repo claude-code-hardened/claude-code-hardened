@@ -488,6 +488,9 @@ export async function loadConversationForResume(
 ): Promise<{
   messages: Message[]
   turnInterruptionState: TurnInterruptionState
+  // > 0 = resume kept only the last RESUME_WINDOW messages; transcript mode
+  // should load the full chain on demand.
+  windowedBeyond?: number
   fileHistorySnapshots?: FileHistorySnapshot[]
   attributionSnapshots?: AttributionSnapshotMessage[]
   contentReplacements?: ContentReplacementRecord[]
@@ -601,6 +604,7 @@ export async function loadConversationForResume(
     return {
       messages,
       turnInterruptionState: deserialized.turnInterruptionState,
+      windowedBeyond: log?.windowedBeyond,
       fileHistorySnapshots: log?.fileHistorySnapshots,
       attributionSnapshots: log?.attributionSnapshots,
       contentReplacements: log?.contentReplacements,

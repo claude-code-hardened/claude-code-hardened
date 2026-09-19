@@ -3031,7 +3031,17 @@ export function isLiteLog(log: LogOption): boolean {
  * Returns a new LogOption with populated messages array.
  * If the log is already full or loading fails, returns the original log.
  */
-export async function loadFullLog(log: LogOption): Promise<LogOption> {
+/**
+ * Max messages kept in memory when resuming a session. Aligned with the
+ * display layer's DEFERRED_CAP (REPL.tsx) — the transcript fallback loads
+ * the full chain on demand when the user actually scrolls back.
+ */
+export const RESUME_WINDOW = 500
+
+export async function loadFullLog(
+  log: LogOption,
+  opts?: { window?: boolean },
+): Promise<LogOption> {
   // If already full, return as-is
   if (!isLiteLog(log)) {
     return log
@@ -3042,6 +3052,15 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
   if (!sessionFile) {
     return log
   }
+
+  // Resume windowing: cap the in-memory chain at RESUME_WINDOW messages.
+  // The display layer only renders the most recent ~500 anyway, so a huge
+  // chain's older tail just pins heap (measured: a 6MB/2391-message session
+  // grew heap 114→570MB as the window slid). Transcript mode loads the full
+  // chain on demand via loadFullLogForTranscript. window:false opts out —
+  // used by that transcript fallback and by consumers that truly need the
+  // whole chain.
+  const windowed = opts?.window !== false
 
   try {
     const {
@@ -3088,7 +3107,15 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
     }
 
     // Build the conversation chain from this leaf
-    const transcript = buildConversationChain(messages, mostRecentLeaf)
+    const fullChain = buildConversationChain(messages, mostRecentLeaf)
+    const transcript =
+      windowed && fullChain.length > RESUME_WINDOW
+        ? fullChain.slice(-RESUME_WINDOW)
+        : fullChain
+    const windowedBeyond =
+      windowed && fullChain.length > RESUME_WINDOW
+        ? fullChain.length - RESUME_WINDOW
+        : 0
     // Leaf's sessionId — forked sessions copy chain[0] from the source, but
     // metadata entries (custom-title etc.) are keyed by the current session.
     const sessionId = mostRecentLeaf.sessionId as UUID | undefined
@@ -3119,6 +3146,7 @@ export async function loadFullLog(log: LogOption): Promise<LogOption> {
       gitBranch: mostRecentLeaf?.gitBranch ?? log.gitBranch,
       isSidechain: transcript[0]?.isSidechain ?? log.isSidechain,
       teamName: transcript[0]?.teamName ?? log.teamName,
+      windowedBeyond,
       leafUuid: mostRecentLeaf?.uuid ?? log.leafUuid,
       fileHistorySnapshots: buildFileHistorySnapshotChain(
         fileHistorySnapshots,

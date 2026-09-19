@@ -14,9 +14,18 @@ type ChainScanRanges = {
   keepAll: boolean
 }
 
+type TranscriptWindow = {
+  tailRanges: Uint32Array
+  totalChainCount: number
+  beforeWindowCount: number
+  windowStartUuid: string
+  parentOfFirst: string
+}
+
 type TranscriptParserNapi = {
   scanChain(buf: Buffer): ChainScan
   scanChainRanges?(buf: Buffer): ChainScanRanges
+  scanTranscriptWindow?(buf: Buffer, tailCount: number): TranscriptWindow
   hasNativeTranscriptParser(): boolean
 }
 
@@ -98,4 +107,29 @@ export function nativeScanChainRanges(buf: Buffer): ChainScanRanges | null {
     chainBytes: legacy.chainBytes,
     keepAll: legacy.keepAll,
   }
+}
+
+/**
+ * Window over the active chain: byte ranges of the last `tailCount` chain
+ * messages plus anchors (windowStartUuid/parentOfFirst) for loading earlier
+ * messages on demand. Lets a session resume materialize only the visible
+ * tail instead of the whole message graph.
+ *
+ * Fallback chain: native module missing / predates scanTranscriptWindow /
+ * call fails → null (callers use the full-parse path). Never throws.
+ */
+export function nativeScanTranscriptWindow(
+  buf: Buffer,
+  tailCount: number,
+): TranscriptWindow | null {
+  const mod = loadModule()
+  if (mod === null) return null
+  if (typeof mod.scanTranscriptWindow === 'function') {
+    try {
+      return mod.scanTranscriptWindow(buf, tailCount)
+    } catch {
+      return null
+    }
+  }
+  return null
 }

@@ -341,7 +341,7 @@ import {
   fileHistoryHasAnyChanges,
 } from '../utils/fileHistory.js';
 import { type AttributionState, incrementPromptCount } from '../utils/commitAttribution.js';
-import { recordAttributionSnapshot } from '../utils/sessionStorage.js';
+import { recordAttributionSnapshot, getLastSessionLog, RESUME_WINDOW } from '../utils/sessionStorage.js';
 import {
   computeStandaloneAgentContext,
   restoreAgentFromSession,
@@ -780,6 +780,8 @@ export type Props = {
   initialTools: Tool[];
   // Initial messages to populate the REPL with
   initialMessages?: MessageType[];
+  /** Resume windowing: > 0 means initialMessages is the last RESUME_WINDOW of a longer chain; transcript mode loads the full chain on demand. */
+  initialWindowedBeyond?: number;
   // Deferred hook messages promise — REPL renders immediately and injects
   // hook messages when they resolve. Awaited before the first API call.
   pendingHookMessages?: Promise<HookResultMessage[]>;
@@ -842,6 +844,7 @@ export function REPL({
   debug,
   initialTools,
   initialMessages,
+  initialWindowedBeyond,
   pendingHookMessages,
   initialFileHistorySnapshots,
   initialContentReplacements,
@@ -2143,6 +2146,9 @@ export function REPL({
     async (sessionId: UUID, log: LogOption, entrypoint: ResumeEntrypoint) => {
       const resumeStart = performance.now();
       logForDebugging(`[resume] start session=${sessionId} msgs=${log.messages.length} entrypoint=${entrypoint}`);
+      // New session — reset the full-chain-upgrade flag to this log's state.
+      windowedBeyondRef.current = log.windowedBeyond ?? 0;
+      windowedSessionRef.current = null;
       try {
         // Deserialize messages to properly clean up the conversation
         // This filters unresolved tool uses and adds a synthetic assistant message if needed
@@ -5338,13 +5344,43 @@ export function REPL({
     return total === 1 ? `running ${hookType} hook` : `running stop hooks… ${completedCount}/${total}`;
   }, [messages, isLoading]);
 
-  // Callback to capture frozen state when entering transcript mode
+  // Resume windowing: the initial chain was capped at RESUME_WINDOW. The
+  // first transcript-mode entry upgrades to the full chain once (one extra
+  // parse, same as pre-windowing behavior) — after that the full chain
+  // stays in memory and the flag is cleared.
+  const windowedBeyondRef = useRef(initialWindowedBeyond ?? 0);
+  const windowedSessionRef = useRef<string | null>(null);
   const handleEnterTranscript = useCallback(() => {
     setFrozenTranscriptState({
       messagesLength: messages.length,
       streamingToolUsesLength: streamingToolUses.length,
     });
-  }, [messages.length, streamingToolUses.length]);
+    const mayBeWindowed =
+      (windowedBeyondRef.current > 0 || initialMessages.length >= RESUME_WINDOW) && !windowedSessionRef.current;
+    if (mayBeWindowed) {
+      windowedSessionRef.current = getSessionId();
+      void (async () => {
+        try {
+          const log = await getLastSessionLog(getSessionId() as UUID);
+          if (!log || !log.messages?.length) return;
+          const deserialized = deserializeMessages(log.messages);
+          setMessages(deserialized);
+          windowedBeyondRef.current = 0;
+          setFrozenTranscriptState({
+            messagesLength: deserialized.length,
+            streamingToolUsesLength: 0,
+          });
+          logForDebugging(`[transcript] full-chain upgrade: +${deserialized.length - messages.length} msgs`);
+        } catch (err) {
+          logForDebugging(
+            `[transcript] full-chain upgrade failed: ${err instanceof Error ? err.message : String(err)}`,
+            { level: 'warn' },
+          );
+          windowedSessionRef.current = null;
+        }
+      })();
+    }
+  }, [messages.length, streamingToolUses.length, initialMessages.length]);
 
   // Callback to clear frozen state when exiting transcript mode
   const handleExitTranscript = useCallback(() => {

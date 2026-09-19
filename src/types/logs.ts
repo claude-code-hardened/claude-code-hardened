@@ -29,6 +29,10 @@ export type LogOption = {
   isSidechain: boolean
   isLite?: boolean // True for lite logs (messages not loaded)
   sessionId?: string // Session ID for lite logs
+  // Resume windowing: number of older chain messages NOT kept in memory
+  // (kept count = RESUME_WINDOW). Transcript mode loads the full chain on
+  // demand when this is > 0.
+  windowedBeyond?: number
   teamName?: string // Team name if this is a spawned agent session
   agentName?: string // Agent's custom name (from /rename or swarm)
   agentColor?: string // Agent's color (from /rename or swarm)
