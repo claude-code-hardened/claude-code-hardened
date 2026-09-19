@@ -68,6 +68,7 @@ function buildFixture(): string[] {
           isSidechain: true,
           uuid: `side-${i}-0`,
           timestamp: ts(100),
+          message: { usage: { input_tokens: 900, output_tokens: 1 } },
         }),
       )
       lines.push(
@@ -77,6 +78,7 @@ function buildFixture(): string[] {
           isSidechain: true,
           uuid: `side-${i}-1`,
           timestamp: ts(200),
+          message: { usage: { input_tokens: 901, output_tokens: 1 } },
         }),
       )
       lines.push(
@@ -85,6 +87,7 @@ function buildFixture(): string[] {
           type: 'assistant',
           uuid: `fork-${i}`,
           timestamp: ts(300),
+          message: { usage: { input_tokens: 902, output_tokens: 1 } },
         }),
       )
       lines.push(
