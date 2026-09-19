@@ -70,6 +70,9 @@ struct CoreScan {
   /// Per-slot uuid bytes (36 ASCII chars each), indexed by slot number.
   /// Lets the window API report anchor uuids without re-scanning lines.
   slot_uuids: Vec<Option<[u8; UUID_LEN]>>,
+  /// Flat [start,end,...] of progress lines ON the active chain (excluded
+  /// from chain_slots; handed back so JS can build its progressBridge).
+  chain_progress_ranges: Vec<u32>,
 }
 
 fn find_sub(
@@ -297,6 +300,7 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
       chain_bytes: 0,
       keep_all: true,
       chain_slots: Vec::new(),
+      chain_progress_ranges: Vec::new(),
     });
   }
 
@@ -309,6 +313,11 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
   // other messages' parents point at them.)
   const PROGRESS_MARKER: &[u8] = b"\"type\":\"progress\"";
   let progress_finder = memchr::memmem::Finder::new(PROGRESS_MARKER);
+  // Chain-walk progress rows collected as [start,end] pairs — the window
+  // API hands them back separately so JS's progressBridge can build its
+  // uuid→parent mapping (the bridge NEEDS the progress rows; without them
+  // children pointing at dropped progress rows break the windowed chain).
+  let mut chain_progress_ranges: Vec<u32> = Vec::new();
 
   // True when the line has a top-level (JSON depth-1) "type":"progress"
   // field. Byte-level search alone would misfire on message content that
@@ -343,7 +352,10 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
     let start = msg_idx[s * 3] as usize;
     let end = msg_idx[s * 3 + 1] as usize;
     let is_progress = is_progress_line(start, end);
-    if !is_progress {
+    if is_progress {
+      chain_progress_ranges.push(start as u32);
+      chain_progress_ranges.push(end as u32);
+    } else {
       chain_slots.insert(s);
       chain_bytes += end - start;
     }
@@ -379,6 +391,7 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
       chain_bytes,
       keep_all: true,
       chain_slots,
+      chain_progress_ranges,
     });
   }
 
@@ -412,6 +425,7 @@ fn scan_core(buf: &[u8]) -> std::result::Result<CoreScan, String> {
     chain_bytes,
     keep_all: false,
     chain_slots,
+    chain_progress_ranges,
   })
 }
 
@@ -634,6 +648,9 @@ pub struct TranscriptWindowLoad {
   /// All metadata lines from the file (summary/custom-title/tag/...), file
   /// order — small; TS parses these with its existing type dispatch.
   pub meta_lines: Vec<String>,
+  /// Progress lines ON the active chain (excluded from tail_lines) — feed
+  /// these to the collector so its progressBridge can rewrite children.
+  pub progress_lines: Vec<String>,
   /// Total messages on the active chain.
   pub total_chain_count: u32,
   /// Chain messages before the returned window.
@@ -656,6 +673,7 @@ pub fn load_transcript_window_from_file(
   Ok(TranscriptWindowLoad {
     tail_lines: core.tail_lines,
     meta_lines: core.meta_lines,
+    progress_lines: core.progress_lines,
     total_chain_count: core.total_chain_count as u32,
     before_window_count: core.before_window_count as u32,
     window_start_uuid: core.window_start_uuid,
@@ -669,6 +687,9 @@ pub fn load_transcript_window_from_file(
 pub struct WindowFileLoad {
   pub tail_lines: Vec<String>,
   pub meta_lines: Vec<String>,
+  /// Progress lines on the active chain — JS's progressBridge needs them
+  /// (children's parentUuid still points at these dropped rows).
+  pub progress_lines: Vec<String>,
   pub total_chain_count: usize,
   pub before_window_count: usize,
   pub window_start_uuid: String,
@@ -720,6 +741,13 @@ fn load_window_core(
     m += 2;
   }
 
+  // Progress rows on the chain: the bridge source for the JS collector.
+  let progress_lines: Vec<String> = core
+    .chain_progress_ranges
+    .chunks(2)
+    .map(|r| slice_line(r[0] as usize, r[1] as usize))
+    .collect();
+
   let empty = String::new();
   let (start_uuid, parent_of_first) = if window.is_empty() {
     (empty.clone(), empty)
@@ -744,6 +772,7 @@ fn load_window_core(
   Ok(WindowFileLoad {
     tail_lines,
     meta_lines,
+    progress_lines,
     total_chain_count: total,
     before_window_count: total - tail_len,
     window_start_uuid: start_uuid,

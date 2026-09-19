@@ -108,7 +108,7 @@ function buildFixture(): string[] {
 function simulatedNative(
   lines: string[],
   chainUuids: Set<string>,
-): { tailLines: string[]; metaLines: string[] } {
+): { tailLines: string[]; metaLines: string[]; progressLines: string[] } {
   // Mirrors load_transcript_window_from_file's contract: message lines
   // (parentUuid-prefixed, which the Rust scanner puts in msg_idx) are
   // EITHER on the chain (tail_lines) or DROPPED — off-chain message rows
@@ -116,14 +116,16 @@ function simulatedNative(
   // metadata-classified lines ride along as meta_lines.
   const tailLines: string[] = []
   const metaLines: string[] = []
+  const progressLines: string[] = []
   for (const line of lines) {
     try {
       const v = JSON.parse(line) as { uuid?: string; type?: string }
       if (v.uuid && chainUuids.has(v.uuid)) {
         tailLines.push(line)
+      } else if (v.type === 'progress') {
+        // chain progress rows ride back separately (the bridge source)
+        progressLines.push(line)
       } else if (v.uuid) {
-        // message-classified line that is not on the chain → dropped
-        continue
       } else {
         metaLines.push(line)
       }
@@ -131,7 +133,7 @@ function simulatedNative(
       metaLines.push(line)
     }
   }
-  return { tailLines, metaLines }
+  return { tailLines, metaLines, progressLines }
 }
 
 beforeEach(() => {
@@ -168,6 +170,7 @@ describe('transcript window differential (nativeWindow vs full parse)', () => {
         nativeWindow: {
           tailLines: native.tailLines,
           metaLines: native.metaLines,
+          progressLines: native.progressLines,
         },
       })
 

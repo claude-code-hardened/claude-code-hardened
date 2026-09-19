@@ -3195,6 +3195,7 @@ export async function loadFullLog(
           nativeWindow: {
             tailLines: native.tailLines,
             metaLines: native.metaLines,
+            progressLines: native.progressLines,
           },
         })
         if (messages.size > 0) {
@@ -3819,7 +3820,12 @@ export async function loadTranscriptFile(
     keepAllLeaves?: boolean
     /** Pre-computed window from the Rust pipeline (nativeLoadTranscriptWindowFromFile):
      *  skip file I/O + classification and parse exactly these lines. */
-    nativeWindow?: { tailLines: string[]; metaLines: string[] }
+    nativeWindow?: {
+      tailLines: string[]
+      metaLines: string[]
+      /** Progress lines ON the chain — the progressBridge source. */
+      progressLines?: string[]
+    }
   },
 ): Promise<{
   messages: Map<UUID, TranscriptMessage>
@@ -3874,9 +3880,10 @@ export async function loadTranscriptFile(
     // metadata, small) through the same collection loop below — no full-file
     // read, no dead-branch parsing, no stitch gate.
     if (opts?.nativeWindow) {
-      const { tailLines, metaLines } = opts.nativeWindow
+      const { tailLines, metaLines, progressLines } = opts.nativeWindow
       const windowBuf = Buffer.from(
-        [...metaLines, ...tailLines].join('\n') + '\n',
+        [...metaLines, ...(progressLines ?? []), ...tailLines].join('\n') +
+          '\n',
       )
       const entries = parseJSONL<Entry>(windowBuf)
       // Legacy progress bridge — same as the full-parse collector below.

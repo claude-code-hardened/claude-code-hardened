@@ -25,6 +25,7 @@ type TranscriptWindow = {
 type TranscriptWindowLoad = {
   tailLines: string[]
   metaLines: string[]
+  progressLines: string[]
   totalChainCount: number
   beforeWindowCount: number
   windowStartUuid: string
