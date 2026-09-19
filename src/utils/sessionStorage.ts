@@ -32,6 +32,10 @@ import {
 } from '../bootstrap/state.js'
 import { builtInCommandNames } from '../commands.js'
 import { COMMAND_NAME_TAG, TICK_TAG } from '../constants/xml.js'
+import {
+  isNativeTranscriptParserAvailable,
+  nativeLoadTranscriptWindowFromFile,
+} from 'transcript-parser-napi'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
 import * as sessionIngress from '../services/api/sessionIngress.js'
 import { REPL_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/REPLTool/constants.js'
@@ -3062,6 +3066,115 @@ export async function loadFullLog(
   // whole chain.
   const windowed = opts?.window !== false
 
+  // Windowed resume: try the Rust pipeline first — it reads the file in
+  // Rust, walks the active chain, and hands back only the tail window's
+  // lines. JS parses those (small) instead of the whole file; full-parse
+  // path stays as the fallback for native-unavailable or any failure.
+  if (windowed && isNativeTranscriptParserAvailable()) {
+    try {
+      const native = nativeLoadTranscriptWindowFromFile(
+        sessionFile,
+        RESUME_WINDOW,
+      )
+      if (native && native.tailLines.length > 0) {
+        const {
+          messages,
+          summaries,
+          customTitles,
+          tags,
+          agentNames,
+          agentColors,
+          agentSettings,
+          prNumbers,
+          prUrls,
+          prRepositories,
+          modes,
+          worktreeStates,
+          goals,
+          fileHistorySnapshots,
+          attributionSnapshots,
+          contentReplacements,
+          contextCollapseCommits,
+          contextCollapseSnapshot,
+          leafUuids,
+        } = await loadTranscriptFile(sessionFile, {
+          nativeWindow: {
+            tailLines: native.tailLines,
+            metaLines: native.metaLines,
+          },
+        })
+        if (messages.size > 0) {
+          const mostRecentLeaf = findLatestMessage(
+            messages.values(),
+            msg =>
+              leafUuids.has(msg.uuid) &&
+              (msg.type === 'user' || msg.type === 'assistant'),
+          )
+          if (mostRecentLeaf) {
+            const transcript = buildConversationChain(messages, mostRecentLeaf)
+            const sessionId = mostRecentLeaf.sessionId as UUID | undefined
+            return {
+              ...log,
+              messages: removeExtraFields(transcript),
+              firstPrompt: extractFirstPrompt(transcript),
+              messageCount: countVisibleMessages(transcript),
+              summary: summaries.get(mostRecentLeaf.uuid) ?? log.summary,
+              customTitle: sessionId
+                ? customTitles.get(sessionId)
+                : log.customTitle,
+              tag: sessionId ? tags.get(sessionId) : log.tag,
+              agentName: sessionId ? agentNames.get(sessionId) : log.agentName,
+              agentColor: sessionId
+                ? agentColors.get(sessionId)
+                : log.agentColor,
+              agentSetting: sessionId
+                ? agentSettings.get(sessionId)
+                : log.agentSetting,
+              mode: sessionId
+                ? (modes.get(sessionId) as LogOption['mode'])
+                : log.mode,
+              worktreeSession:
+                sessionId && worktreeStates.has(sessionId)
+                  ? worktreeStates.get(sessionId)
+                  : log.worktreeSession,
+              goal: sessionId ? goals.get(sessionId) : log.goal,
+              prNumber: sessionId ? prNumbers.get(sessionId) : log.prNumber,
+              prUrl: sessionId ? prUrls.get(sessionId) : log.prUrl,
+              prRepository: sessionId
+                ? prRepositories.get(sessionId)
+                : log.prRepository,
+              gitBranch: mostRecentLeaf?.gitBranch ?? log.gitBranch,
+              isSidechain: transcript[0]?.isSidechain ?? log.isSidechain,
+              teamName: transcript[0]?.teamName ?? log.teamName,
+              windowedBeyond: native.beforeWindowCount,
+              leafUuid: mostRecentLeaf?.uuid ?? log.leafUuid,
+              fileHistorySnapshots: buildFileHistorySnapshotChain(
+                fileHistorySnapshots,
+                transcript,
+              ),
+              attributionSnapshots: buildAttributionSnapshotChain(
+                attributionSnapshots,
+                transcript,
+              ),
+              contentReplacements: sessionId
+                ? (contentReplacements.get(sessionId) ?? [])
+                : log.contentReplacements,
+              contextCollapseCommits: sessionId
+                ? contextCollapseCommits.filter(e => e.sessionId === sessionId)
+                : undefined,
+              contextCollapseSnapshot:
+                sessionId && contextCollapseSnapshot?.sessionId === sessionId
+                  ? contextCollapseSnapshot
+                  : undefined,
+            }
+          }
+        }
+      }
+    } catch {
+      // Native window failed for any reason — fall through to full parse.
+    }
+  }
+
   try {
     const {
       messages,
@@ -3631,7 +3744,12 @@ function walkChainBeforeParse(buf: Buffer): Buffer[] | null {
  */
 export async function loadTranscriptFile(
   filePath: string,
-  opts?: { keepAllLeaves?: boolean },
+  opts?: {
+    keepAllLeaves?: boolean
+    /** Pre-computed window from the Rust pipeline (nativeLoadTranscriptWindowFromFile):
+     *  skip file I/O + classification and parse exactly these lines. */
+    nativeWindow?: { tailLines: string[]; metaLines: string[] }
+  },
 ): Promise<{
   messages: Map<UUID, TranscriptMessage>
   summaries: Map<UUID, string>
@@ -3680,6 +3798,90 @@ export async function loadTranscriptFile(
   let contextCollapseSnapshot: ContextCollapseSnapshotEntry | undefined
 
   try {
+    // Native window fast path: the Rust pipeline already did read → classify
+    // → active-chain walk → tail window. Parse exactly those lines (window +
+    // metadata, small) through the same collection loop below — no full-file
+    // read, no dead-branch parsing, no stitch gate.
+    if (opts?.nativeWindow) {
+      const { tailLines, metaLines } = opts.nativeWindow
+      const windowBuf = Buffer.from(
+        [...metaLines, ...tailLines].join('\n') + '\n',
+      )
+      const entries = parseJSONL<Entry>(windowBuf)
+      for (const entry of entries) {
+        if (isTranscriptMessage(entry)) {
+          messages.set(entry.uuid, entry)
+        } else if (entry.type === 'summary' && entry.leafUuid) {
+          summaries.set(entry.leafUuid, entry.summary)
+        } else if (entry.type === 'custom-title' && entry.sessionId) {
+          customTitles.set(entry.sessionId, entry.customTitle)
+        } else if (entry.type === 'tag' && entry.sessionId) {
+          tags.set(entry.sessionId, entry.tag)
+        } else if (entry.type === 'agent-name' && entry.sessionId) {
+          agentNames.set(entry.sessionId, entry.agentName)
+        } else if (entry.type === 'agent-color' && entry.sessionId) {
+          agentColors.set(entry.sessionId, entry.agentColor)
+        } else if (entry.type === 'agent-setting' && entry.sessionId) {
+          agentSettings.set(entry.sessionId, entry.agentSetting)
+        } else if (entry.type === 'mode' && entry.sessionId) {
+          modes.set(entry.sessionId, entry.mode)
+        } else if (entry.type === 'worktree-state' && entry.sessionId) {
+          worktreeStates.set(entry.sessionId, entry.worktreeSession)
+        } else if (entry.type === 'goal' && entry.sessionId) {
+          goals.set(entry.sessionId, entry.state)
+        } else if (entry.type === 'goal-cleared' && entry.sessionId) {
+          goals.delete(entry.sessionId)
+        } else if (entry.type === 'pr-link' && entry.sessionId) {
+          prNumbers.set(entry.sessionId, entry.prNumber)
+          prUrls.set(entry.sessionId, entry.prUrl)
+          prRepositories.set(entry.sessionId, entry.prRepository)
+        } else if (entry.type === 'file-history-snapshot') {
+          fileHistorySnapshots.set(entry.messageId, entry)
+        } else if (entry.type === 'attribution-snapshot') {
+          attributionSnapshots.set(entry.messageId, entry)
+        }
+      }
+      applyPreservedSegmentRelinks(messages)
+      applySnipRemovals(messages)
+      const winMessages = [...messages.values()]
+      const winParents = new Set(
+        winMessages.map(m => m.parentUuid).filter((u): u is UUID => u !== null),
+      )
+      const leafUuids = new Set<UUID>()
+      for (let i = winMessages.length - 1; i >= 0; i--) {
+        const msg = winMessages[i]!
+        if (
+          (msg.type === 'user' || msg.type === 'assistant') &&
+          !winParents.has(msg.uuid)
+        ) {
+          leafUuids.add(msg.uuid)
+          break // windowed chain: the newest terminal anchors the resume
+        }
+      }
+      return {
+        messages,
+        summaries,
+        customTitles,
+        tags,
+        agentNames,
+        agentColors,
+        agentSettings,
+        prNumbers,
+        prUrls,
+        prRepositories,
+        modes,
+        worktreeStates,
+        goals,
+        fileHistorySnapshots,
+        attributionSnapshots,
+        contentReplacements,
+        agentContentReplacements,
+        contextCollapseCommits,
+        contextCollapseSnapshot: undefined,
+        leafUuids,
+      }
+    }
+
     // For large transcripts, avoid materializing megabytes of stale content.
     // Single forward chunked read: attribution-snapshot lines are skipped at
     // the fd level (never buffered), compact boundaries truncate the
