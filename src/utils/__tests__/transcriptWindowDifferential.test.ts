@@ -27,7 +27,10 @@ function msgLine(parent: string | null, uuid: string, i: number): string {
     parentUuid: parent,
     type: 'assistant',
     uuid,
-    timestamp: '2026-01-01T00:00:00.000Z',
+    // Monotonic like real transcripts — findLatestMessage's tie-breaking on
+    // equal timestamps takes the FIRST traversed terminal, which would
+    // otherwise anchor the chain at a sidechain sibling instead of the tail.
+    timestamp: `2026-01-01T00:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}.000Z`,
     message: { usage: { input_tokens: i, output_tokens: 2 } },
   })
 }
@@ -46,7 +49,7 @@ function buildFixture(): string[] {
           parentUuid: parent,
           type: 'progress',
           uuid,
-          timestamp: '2026-01-01T00:00:00.000Z',
+          timestamp: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,
         }),
       )
     } else {
@@ -157,11 +160,6 @@ describe('transcript window differential (nativeWindow vs full parse)', () => {
 
       // Every tail message parses to the same content in both paths.
       const winChain = buildConversationChain(win.messages, winLeaf!)
-      if (winChain.length !== tail) {
-        console.error(
-          `[diff-debug] tail=${tail} winMap=${win.messages.size} winChain=${winChain.length} first=${winChain[0]?.uuid} last=${winChain[winChain.length - 1]?.uuid} winLeaf=${winLeaf!.uuid}`,
-        )
-      }
       expect(winChain.length).toBe(tail)
       for (const m of winChain) {
         const expected = tailRows.get(m.uuid)
