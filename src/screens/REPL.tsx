@@ -5364,13 +5364,16 @@ export function REPL({
           const log = await getLastSessionLog(getSessionId() as UUID);
           if (!log || !log.messages?.length) return;
           const deserialized = deserializeMessages(log.messages);
-          setMessages(deserialized);
-          windowedBeyondRef.current = 0;
-          setFrozenTranscriptState({
-            messagesLength: deserialized.length,
-            streamingToolUsesLength: 0,
+          // Merge, don't replace: messages sent while the upgrade was in
+          // flight must survive (they're not in the on-disk chain yet).
+          setMessages(prev => {
+            const known = new Set(deserialized.map(m => m.uuid));
+            const inflight = prev.filter(m => !known.has(m.uuid));
+            return [...deserialized, ...inflight];
           });
-          logForDebugging(`[transcript] full-chain upgrade: +${deserialized.length - messages.length} msgs`);
+          windowedBeyondRef.current = 0;
+          setFrozenTranscriptState(null);
+          logForDebugging(`[transcript] full-chain upgrade: +${deserialized.length - (messages?.length ?? 0)} msgs`);
         } catch (err) {
           logForDebugging(
             `[transcript] full-chain upgrade failed: ${err instanceof Error ? err.message : String(err)}`,

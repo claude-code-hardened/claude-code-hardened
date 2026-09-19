@@ -3036,6 +3036,100 @@ export function isLiteLog(log: LogOption): boolean {
  * If the log is already full or loading fails, returns the original log.
  */
 /**
+ * Shared return builder for loadFullLog's two paths (native window and
+ * full parse) — the field set is identical, only windowedBeyond's source
+ * differs. Keeps the two paths from drifting apart field by field.
+ */
+function buildFullLogResult(args: {
+  log: LogOption
+  transcript: TranscriptMessage[]
+  sessionId: UUID | undefined
+  mostRecentLeaf: TranscriptMessage
+  maps: {
+    summaries: Map<UUID, string>
+    customTitles: Map<UUID, string>
+    tags: Map<UUID, string>
+    agentNames: Map<UUID, string>
+    agentColors: Map<UUID, string>
+    agentSettings: Map<UUID, string>
+    prNumbers: Map<UUID, number>
+    prUrls: Map<UUID, string>
+    prRepositories: Map<UUID, string>
+    modes: Map<UUID, string>
+    worktreeStates: Map<UUID, PersistedWorktreeSession | null>
+    goals: Map<UUID, GoalState>
+    fileHistorySnapshots: Map<UUID, FileHistorySnapshotMessage>
+    attributionSnapshots: Map<UUID, AttributionSnapshotMessage>
+    contentReplacements: Map<UUID, ContentReplacementRecord[]>
+  }
+  contextCollapse: {
+    commits: ContextCollapseCommitEntry[]
+    snapshot: ContextCollapseSnapshotEntry | undefined
+  }
+  windowedBeyond: number
+}): LogOption {
+  const {
+    log,
+    transcript,
+    sessionId,
+    mostRecentLeaf,
+    maps,
+    contextCollapse,
+    windowedBeyond,
+  } = args
+  return {
+    ...log,
+    messages: removeExtraFields(transcript),
+    firstPrompt: extractFirstPrompt(transcript),
+    messageCount: countVisibleMessages(transcript),
+    summary: maps.summaries.get(mostRecentLeaf.uuid) ?? log.summary,
+    customTitle: sessionId ? maps.customTitles.get(sessionId) : log.customTitle,
+    tag: sessionId ? maps.tags.get(sessionId) : log.tag,
+    agentName: sessionId ? maps.agentNames.get(sessionId) : log.agentName,
+    agentColor: sessionId ? maps.agentColors.get(sessionId) : log.agentColor,
+    agentSetting: sessionId
+      ? maps.agentSettings.get(sessionId)
+      : log.agentSetting,
+    mode: sessionId
+      ? (maps.modes.get(sessionId) as LogOption['mode'])
+      : log.mode,
+    worktreeSession:
+      sessionId && maps.worktreeStates.has(sessionId)
+        ? maps.worktreeStates.get(sessionId)
+        : log.worktreeSession,
+    goal: sessionId ? maps.goals.get(sessionId) : log.goal,
+    prNumber: sessionId ? maps.prNumbers.get(sessionId) : log.prNumber,
+    prUrl: sessionId ? maps.prUrls.get(sessionId) : log.prUrl,
+    prRepository: sessionId
+      ? maps.prRepositories.get(sessionId)
+      : log.prRepository,
+    gitBranch: mostRecentLeaf?.gitBranch ?? log.gitBranch,
+    isSidechain: transcript[0]?.isSidechain ?? log.isSidechain,
+    teamName: transcript[0]?.teamName ?? log.teamName,
+    windowedBeyond,
+    leafUuid: mostRecentLeaf?.uuid ?? log.leafUuid,
+    fileHistorySnapshots: buildFileHistorySnapshotChain(
+      maps.fileHistorySnapshots,
+      transcript,
+    ),
+    attributionSnapshots: buildAttributionSnapshotChain(
+      maps.attributionSnapshots,
+      transcript,
+    ),
+    contentReplacements: sessionId
+      ? (maps.contentReplacements.get(sessionId) ?? [])
+      : log.contentReplacements,
+    contextCollapseCommits: sessionId
+      ? contextCollapse.commits.filter(e => e.sessionId === sessionId)
+      : undefined,
+    contextCollapseSnapshot:
+      sessionId && contextCollapse.snapshot?.sessionId === sessionId
+        ? contextCollapse.snapshot
+        : undefined,
+  }
+}
+
+/**
  * Max messages kept in memory when resuming a session. Aligned with the
  * display layer's DEFERRED_CAP (REPL.tsx) — the transcript fallback loads
  * the full chain on demand when the user actually scrolls back.
@@ -3232,57 +3326,34 @@ export async function loadFullLog(
     // Leaf's sessionId — forked sessions copy chain[0] from the source, but
     // metadata entries (custom-title etc.) are keyed by the current session.
     const sessionId = mostRecentLeaf.sessionId as UUID | undefined
-    return {
-      ...log,
-      messages: removeExtraFields(transcript),
-      firstPrompt: extractFirstPrompt(transcript),
-      messageCount: countVisibleMessages(transcript),
-      summary: mostRecentLeaf
-        ? summaries.get(mostRecentLeaf.uuid)
-        : log.summary,
-      customTitle: sessionId ? customTitles.get(sessionId) : log.customTitle,
-      tag: sessionId ? tags.get(sessionId) : log.tag,
-      agentName: sessionId ? agentNames.get(sessionId) : log.agentName,
-      agentColor: sessionId ? agentColors.get(sessionId) : log.agentColor,
-      agentSetting: sessionId ? agentSettings.get(sessionId) : log.agentSetting,
-      mode: sessionId ? (modes.get(sessionId) as LogOption['mode']) : log.mode,
-      worktreeSession:
-        sessionId && worktreeStates.has(sessionId)
-          ? worktreeStates.get(sessionId)
-          : log.worktreeSession,
-      goal: sessionId ? goals.get(sessionId) : log.goal,
-      prNumber: sessionId ? prNumbers.get(sessionId) : log.prNumber,
-      prUrl: sessionId ? prUrls.get(sessionId) : log.prUrl,
-      prRepository: sessionId
-        ? prRepositories.get(sessionId)
-        : log.prRepository,
-      gitBranch: mostRecentLeaf?.gitBranch ?? log.gitBranch,
-      isSidechain: transcript[0]?.isSidechain ?? log.isSidechain,
-      teamName: transcript[0]?.teamName ?? log.teamName,
-      windowedBeyond,
-      leafUuid: mostRecentLeaf?.uuid ?? log.leafUuid,
-      fileHistorySnapshots: buildFileHistorySnapshotChain(
+    return buildFullLogResult({
+      log,
+      transcript,
+      sessionId,
+      mostRecentLeaf,
+      maps: {
+        summaries,
+        customTitles,
+        tags,
+        agentNames,
+        agentColors,
+        agentSettings,
+        prNumbers,
+        prUrls,
+        prRepositories,
+        modes,
+        worktreeStates,
+        goals,
         fileHistorySnapshots,
-        transcript,
-      ),
-      attributionSnapshots: buildAttributionSnapshotChain(
         attributionSnapshots,
-        transcript,
-      ),
-      contentReplacements: sessionId
-        ? (contentReplacements.get(sessionId) ?? [])
-        : log.contentReplacements,
-      // Filter to the resumed session's entries. loadTranscriptFile reads
-      // the file sequentially so the array is already in commit order;
-      // filter preserves that.
-      contextCollapseCommits: sessionId
-        ? contextCollapseCommits.filter(e => e.sessionId === sessionId)
-        : undefined,
-      contextCollapseSnapshot:
-        sessionId && contextCollapseSnapshot?.sessionId === sessionId
-          ? contextCollapseSnapshot
-          : undefined,
-    }
+        contentReplacements,
+      },
+      contextCollapse: {
+        commits: contextCollapseCommits,
+        snapshot: contextCollapseSnapshot,
+      },
+      windowedBeyond,
+    })
   } catch {
     // If loading fails, return the original log
     return log

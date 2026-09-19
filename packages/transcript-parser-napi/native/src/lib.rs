@@ -484,7 +484,6 @@ fn scan_window_core(data: &[u8], tail_count: usize) -> std::result::Result<Windo
 #[cfg(test)]
 mod tests {
   use super::*;
-  pub(crate) fn _marker() {}
 
   pub(crate) fn build_transcript(count: usize) -> Vec<u8> {
     // Synthetic transcript: meta line, then `count` chain messages each
