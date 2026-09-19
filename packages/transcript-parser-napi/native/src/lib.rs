@@ -764,3 +764,83 @@ mod file_tests {
     assert!(result.is_err(), "missing file must error, not panic");
   }
 }
+
+#[cfg(test)]
+mod realfile_tests {
+  use super::*;
+
+  // #[ignore] — manual real-data probe, not part of CI. Run:
+  //   cargo test -- --ignored --nocapture
+  const REAL: &[&str] = &[
+    "/root/.claude/projects/-root/71dfc101-dac2-4492-95ae-14f594ffe021.jsonl",
+    "/root/.claude/projects/-root/af87404b-6670-43cd-b784-fc917f62d8c5.jsonl",
+    "/root/.claude/projects/-root/dfed9300-91f9-4570-b037-7ac9dcba0cbe.jsonl",
+  ];
+
+  #[test]
+  #[ignore]
+  fn real_sessions_repeated_window_loads() {
+    for path in REAL {
+      let path = *path;
+      if !std::path::Path::new(path).exists() {
+        continue;
+      }
+      // First load: cold, timed.
+      let t0 = std::time::Instant::now();
+      let first = load_window_core(path, 500).expect("load");
+      let cold = t0.elapsed();
+
+      // Correctness sanity on REAL data: every tail line is a message line
+      // (starts with the parentUuid prefix), valid UTF-8, ends with newline.
+      assert!(!first.tail_lines.is_empty());
+      for line in &first.tail_lines {
+        assert!(line.starts_with("{\"parentUuid\":"), "chain line prefix");
+        assert!(line.ends_with('\n'));
+      }
+      // window_start_uuid must appear inside the first tail line.
+      let key = format!("\"uuid\":\"{}\"", first.window_start_uuid);
+      assert!(
+        first.tail_lines[0].contains(&key),
+        "window_start_uuid must be in the first tail line"
+      );
+
+      // Total chain count sanity: leaf chain ⊆ message lines in file.
+      let msg_line_count = data_line_count(path);
+      assert!(
+        first.total_chain_count <= msg_line_count,
+        "chain ({}) must be ≤ message lines ({})",
+        first.total_chain_count,
+        msg_line_count
+      );
+
+      // Repeated loads: 20 rounds — must be identical and stable.
+      for round in 0..20 {
+        let again = load_window_core(path, 500).expect("reload");
+        assert_eq!(again.total_chain_count, first.total_chain_count, "round {}", round);
+        assert_eq!(again.tail_lines, first.tail_lines, "round {}", round);
+        assert_eq!(again.window_start_uuid, first.window_start_uuid, "round {}", round);
+        assert_eq!(again.meta_lines, first.meta_lines, "round {}", round);
+      }
+
+      // Small window on the same huge file — clamps and stays correct.
+      let small = load_window_core(path, 3).expect("small");
+      assert_eq!(small.tail_lines.len(), 3);
+      assert_eq!(small.before_window_count, first.total_chain_count - 3);
+
+      println!(
+        "{}: chain={} msgLines={} cold={}ms tailLines={} metaLines={} reload=20×ok",
+        path.rsplit('/').next().unwrap_or(path)[..8].to_string(),
+        first.total_chain_count,
+        msg_line_count,
+        cold.as_millis(),
+        first.tail_lines.len(),
+        first.meta_lines.len(),
+      );
+    }
+  }
+
+  fn data_line_count(path: &str) -> usize {
+    let data = std::fs::read(path).expect("read");
+    data.iter().filter(|&&b| b == b'\n').count()
+  }
+}
