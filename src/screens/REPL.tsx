@@ -5356,7 +5356,7 @@ export function REPL({
       streamingToolUsesLength: streamingToolUses.length,
     });
     const mayBeWindowed =
-      (windowedBeyondRef.current > 0 || initialMessages.length >= RESUME_WINDOW) && !windowedSessionRef.current;
+      (windowedBeyondRef.current > 0 || (initialMessages?.length ?? 0) >= RESUME_WINDOW) && !windowedSessionRef.current;
     if (mayBeWindowed) {
       windowedSessionRef.current = getSessionId();
       void (async () => {
@@ -5380,7 +5380,7 @@ export function REPL({
         }
       })();
     }
-  }, [messages.length, streamingToolUses.length, initialMessages.length]);
+  }, [messages.length, streamingToolUses.length, initialMessages?.length]);
 
   // Callback to clear frozen state when exiting transcript mode
   const handleExitTranscript = useCallback(() => {
