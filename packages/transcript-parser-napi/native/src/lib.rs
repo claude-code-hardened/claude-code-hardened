@@ -733,6 +733,206 @@ fn load_window_core(
 }
 
 #[cfg(test)]
+mod differential_tests {
+  use super::*;
+  use crate::tests::build_transcript;
+  use std::collections::HashMap as StdHashMap;
+
+  /// JSON-semantic reference implementation of the JS chain semantics:
+  /// serde-parse every line, keep message lines (have uuid+parentUuid),
+  /// build the active chain from the last non-sidechain message by walking
+  /// parentUuid through a uuid→line map, skip legacy progress lines
+  /// (transparent, like JS's progressBridge), and return the tail window's
+  /// uuids in file order. Independent of the byte-level SIMD path.
+  fn reference_chain_tail(
+    data: &[u8],
+    tail_count: usize,
+  ) -> (Vec<String>, usize) {
+    let text = String::from_utf8_lossy(data);
+    struct Row {
+      uuid: String,
+      parent: Option<String>,
+      is_message: bool,
+      is_sidechain: bool,
+      is_progress: bool,
+      line: String,
+    }
+    let mut rows: Vec<Row> = Vec::new();
+    let mut by_uuid: StdHashMap<String, usize> = StdHashMap::new();
+    for line in text.lines() {
+      if line.is_empty() {
+        continue;
+      }
+      let v: serde_json::Value = match serde_json::from_str(line) {
+        Ok(v) => v,
+        Err(_) => continue, // meta / unparseable — not a message row
+      };
+      let uuid = match v.get("uuid").and_then(|u| u.as_str()) {
+        Some(u) => u.to_string(),
+        None => continue,
+      };
+      let parent = v
+        .get("parentUuid")
+        .and_then(|p| p.as_str())
+        .map(|s| s.to_string());
+      let is_message = parent.is_some() || v.get("parentUuid").is_some();
+      let is_sidechain = v
+        .get("isSidechain")
+        .and_then(|b| b.as_bool())
+        .unwrap_or(false);
+      let is_progress = v.get("type").and_then(|t| t.as_str()) == Some("progress");
+      if is_message {
+        by_uuid.insert(uuid.clone(), rows.len());
+      }
+      rows.push(Row {
+        uuid,
+        parent,
+        is_message,
+        is_sidechain,
+        is_progress,
+        line: format!("{}\n", line),
+      });
+    }
+    // Leaf: last non-sidechain message row.
+    let leaf = rows
+      .iter()
+      .rposition(|r| r.is_message && !r.is_sidechain);
+    let leaf = match leaf {
+      Some(i) => i,
+      None => return (Vec::new(), 0),
+    };
+    // Walk to root through parent links (transparent through progress).
+    let mut chain_idx: Vec<usize> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut cur = Some(leaf);
+    while let Some(i) = cur {
+      if !seen.insert(i) {
+        break;
+      }
+      let row = &rows[i];
+      if row.is_message && !row.is_sidechain && !row.is_progress {
+        chain_idx.push(i);
+      }
+      cur = row.parent.as_ref().and_then(|p| by_uuid.get(p).copied());
+    }
+    chain_idx.reverse(); // file order
+    let total = chain_idx.len();
+    let start = total.saturating_sub(tail_count);
+    let lines = chain_idx[start..]
+      .iter()
+      .map(|&i| rows[i].line.clone())
+      .collect();
+    (lines, total)
+  }
+
+  fn build_messy_transcript() -> Vec<u8> {
+    // Chain messages interleaved with: metadata lines, a sidechain run, a
+    // fork branch (dead), legacy progress in-chain, and long content lines.
+    let mut out = Vec::new();
+    out.extend_from_slice(b"{\"type\":\"summary\",\"summary\":\"s1\",\"leafUuid\":\"leaf-a\"}\n");
+    let mut uuid: u64 = 0x3333;
+    let mut parent = String::from("null");
+    for i in 0..60 {
+      uuid = uuid.wrapping_add(0x9e3779b97f4a7c15);
+      let id = format!("{:032x}", uuid);
+      let line = if i == 30 {
+        // legacy progress in the middle of the chain
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"progress\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"data\":\"step\"}}\n",
+          parent, id
+        )
+      } else if i == 31 {
+        // long content line (force multi-kB row)
+        let filler = "x".repeat(4096);
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"assistant\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"{}\"}}],\"usage\":{{\"input_tokens\":{}}}}}}}\n",
+          parent, id, filler, i
+        )
+      } else {
+        format!(
+          "{{\"parentUuid\":{},\"type\":\"assistant\",\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\",\"message\":{{\"usage\":{{\"input_tokens\":{}}}}}}}\n",
+          parent, id, i
+        )
+      };
+      out.extend_from_slice(line.as_bytes());
+      if i == 10 {
+        // Sidechain run (2 lines) hanging off message #10 — not chain.
+        for k in 0..2 {
+          let sid = format!("side-{}-{}", i, k);
+          let p = if k == 0 { parent.clone() } else { format!("side-{}-0", i) };
+          out.extend_from_slice(
+            format!(
+              "{{\"parentUuid\":\"{}\",\"type\":\"assistant\",\"isSidechain\":true,\"uuid\":\"{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\"}}\n",
+              p, sid
+            )
+            .as_bytes(),
+          );
+        }
+        // Dead fork branch off message #10 — has children (the sidechain),
+        // but is itself not on the active chain.
+        out.extend_from_slice(
+          format!(
+            "{{\"parentUuid\":\"{}\",\"type\":\"assistant\",\"uuid\":\"fork-{}\",\"timestamp\":\"2026-01-01T00:00:00.000Z\"}}\n",
+            parent, i
+          )
+          .as_bytes(),
+        );
+      }
+      parent = format!("\"{}\"", id);
+      if i == 10 {
+        // metadata line between messages
+        out.extend_from_slice(b"{\"type\":\"custom-title\",\"sessionId\":\"sess-1\",\"customTitle\":\"t\"}\n");
+      }
+    }
+    out
+  }
+
+  fn assert_lines_match_reference(data: &[u8], tail: usize) {
+    let w = load_window_core(
+      "unused", // not used when calling scan_window_core directly
+      tail,
+    );
+    let _ = w; // placeholder — real assertion path below uses the buffer API
+    let win = scan_window_core(data, tail).expect("scan");
+    let (ref_lines, ref_total) = reference_chain_tail(data, tail);
+    assert_eq!(
+      win.total_chain_count as usize, ref_total,
+      "total chain count must match the JSON-semantic reference"
+    );
+    let win_lines: Vec<String> = win
+      .tail_ranges
+      .chunks(2)
+      .map(|r| {
+        String::from_utf8_lossy(&data[r[0] as usize..r[1] as usize]).into_owned()
+      })
+      .collect();
+    assert_eq!(
+      win_lines, ref_lines,
+      "tail window lines must match the JSON-semantic reference byte for byte"
+    );
+  }
+
+  #[test]
+  fn differential_window_vs_json_semantic_reference() {
+    let data = build_messy_transcript();
+    for tail in [1usize, 3, 10, 50, 59, 60, 200] {
+      assert_lines_match_reference(&data, tail);
+    }
+  }
+
+  #[test]
+  fn differential_repeated_and_alternating_vs_reference() {
+    let small = build_transcript(15);
+    let big = build_messy_transcript();
+    for round in 0..10 {
+      assert_lines_match_reference(&small, 7);
+      assert_lines_match_reference(&big, 7);
+      let _ = round;
+    }
+  }
+}
+
+#[cfg(test)]
 mod progress_tests {
   use super::*;
 
