@@ -157,6 +157,11 @@ describe('transcript window differential (nativeWindow vs full parse)', () => {
 
       // Every tail message parses to the same content in both paths.
       const winChain = buildConversationChain(win.messages, winLeaf!)
+      if (winChain.length !== tail) {
+        console.error(
+          `[diff-debug] tail=${tail} winMap=${win.messages.size} winChain=${winChain.length} first=${winChain[0]?.uuid} last=${winChain[winChain.length - 1]?.uuid} winLeaf=${winLeaf!.uuid}`,
+        )
+      }
       expect(winChain.length).toBe(tail)
       for (const m of winChain) {
         const expected = tailRows.get(m.uuid)
