@@ -2085,7 +2085,7 @@ function applySnipRemovals(messages: Map<UUID, TranscriptMessage>): void {
  * Replaces the `[...values].filter(pred).sort((a,b) => Date(b)-Date(a))[0]` pattern
  * which is O(n log n) + 2n Date allocations.
  */
-function findLatestMessage<T extends { timestamp: string }>(
+export function findLatestMessage<T extends { timestamp: string }>(
   messages: Iterable<T>,
   predicate: (m: T) => boolean,
 ): T | undefined {
