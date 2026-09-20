@@ -668,28 +668,34 @@ class Project {
       }
       const batch = queue.splice(0)
 
-      let content = ''
+      // Accumulate lines in an array and join once per chunk. String concat
+      // is O(n²) — each `+=` copies the whole prior buffer, and chunks can
+      // grow to MAX_CHUNK_BYTES. Output is byte-identical to the concat form.
+      let parts: string[] = []
+      let contentLen = 0
       const resolvers: Array<() => void> = []
 
       for (const { entry, resolve } of batch) {
         const line = jsonStringify(entry) + '\n'
 
-        if (content.length + line.length >= this.MAX_CHUNK_BYTES) {
+        if (contentLen + line.length >= this.MAX_CHUNK_BYTES) {
           // Flush chunk and resolve its entries before starting a new one
-          await this.appendToFile(filePath, content)
+          await this.appendToFile(filePath, parts.join(''))
           for (const r of resolvers) {
             r()
           }
           resolvers.length = 0
-          content = ''
+          parts = []
+          contentLen = 0
         }
 
-        content += line
+        parts.push(line)
+        contentLen += line.length
         resolvers.push(resolve)
       }
 
-      if (content.length > 0) {
-        await this.appendToFile(filePath, content)
+      if (parts.length > 0) {
+        await this.appendToFile(filePath, parts.join(''))
         for (const r of resolvers) {
           r()
         }
