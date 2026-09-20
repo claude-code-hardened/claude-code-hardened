@@ -109,35 +109,48 @@ export async function withConnectionTimeout<T>(
 // ============================================================================
 
 /**
+ * Stderr accumulator for stdio transports: read the joined output, clear it,
+ * or detach the 'data' listener.
+ */
+export type StderrCapture = {
+  getOutput: () => string
+  clearOutput: () => void
+  removeHandler: () => void
+}
+
+/**
  * Sets up stderr capture for stdio transports.
  * Returns the stderr output accumulator and cleanup function.
  */
 export function captureStderr(
   transport: StdioClientTransport,
   maxSize = 8 * 1024 * 1024,
-): {
-  getOutput: () => string
-  clearOutput: () => void
-  removeHandler: () => void
-} {
-  let stderrOutput = ''
+): StderrCapture {
+  // Accumulate chunks separately and join on read. String concatenation is
+  // O(n²) here — each `+=` copies the entire prior buffer (up to maxSize) on
+  // every 'data' event, which a chatty server can fire hundreds of times
+  // during connect. Output is identical; only the assembly cost changes.
+  let chunks: string[] = []
+  let total = 0
 
   const handler = (data: Buffer) => {
-    if (stderrOutput.length < maxSize) {
-      try {
-        stderrOutput += data.toString()
-      } catch {
-        // Ignore errors from exceeding max string length
-      }
+    if (total >= maxSize) return
+    try {
+      const str = data.toString()
+      chunks.push(str)
+      total += str.length
+    } catch {
+      // Ignore errors from exceeding max string length
     }
   }
 
   transport.stderr?.on('data', handler)
 
   return {
-    getOutput: () => stderrOutput,
+    getOutput: () => chunks.join(''),
     clearOutput: () => {
-      stderrOutput = ''
+      chunks = []
+      total = 0
     },
     removeHandler: () => {
       transport.stderr?.off('data', handler)

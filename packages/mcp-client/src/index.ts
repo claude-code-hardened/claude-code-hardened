@@ -101,6 +101,7 @@ export {
   buildConnectedServer,
 } from './connection.js'
 export type {
+  StderrCapture,
   CreateClientOptions,
   ConnectionMonitorOptions,
   CleanupOptions,
