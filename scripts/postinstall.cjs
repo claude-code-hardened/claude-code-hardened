@@ -36,8 +36,12 @@ try {
 // --- Config ---
 
 const RG_VERSION = '15.0.1'
+// 主源：microsoft/ripgrep-prebuilt（@vscode/ripgrep 生态，带补丁构建）。
 const DEFAULT_RELEASE_BASE = `https://github.com/microsoft/ripgrep-prebuilt/releases/download/v${RG_VERSION}`
 const MIRROR_RELEASE_BASE = `https://ghproxy.net/https://github.com/microsoft/ripgrep-prebuilt/releases/download/v${RG_VERSION}`
+// 兜底源：BurntSushi 官方 release（windows-gnu 等变体的补充来源）。
+const BURNTSUSHI_RG_VERSION = '15.2.0'
+const BURNTSUSHI_RELEASE_BASE = `https://github.com/BurntSushi/ripgrep/releases/download/${BURNTSUSHI_RG_VERSION}`
 const RELEASE_BASE = (
   process.env.RIPGREP_DOWNLOAD_BASE ?? DEFAULT_RELEASE_BASE
 ).replace(/\/$/, '')
@@ -338,15 +342,26 @@ async function downloadAndExtract() {
 
   const extractedBinary = process.platform === 'win32' ? 'rg.exe' : 'rg'
 
-  const mirrors = [RELEASE_BASE]
+  // 多级兜底：microsoft/ripgrep-prebuilt（@vscode 生态，带补丁构建，全
+  // node arch）→ ghproxy 镜像 → BurntSushi 官方 release（windows-gnu 等
+  // vscode 缺的变体从这里拿）。两边 target 同为 rust triple，仅版本号
+  // 格式不同（tag v15.0.1 内含 ripgrep 15.0.0），按源生成资产名。
+  const sources = [{ base: RELEASE_BASE, name: assetName }]
   if (RELEASE_BASE === DEFAULT_RELEASE_BASE.replace(/\/$/, '')) {
-    mirrors.push(MIRROR_RELEASE_BASE.replace(/\/$/, ''))
+    sources.splice(1, 0, {
+      base: MIRROR_RELEASE_BASE.replace(/\/$/, ''),
+      name: assetName,
+    })
   }
+  sources.push({
+    base: BURNTSUSHI_RELEASE_BASE,
+    name: `ripgrep-${BURNTSUSHI_RG_VERSION}-${target}.${ext}`,
+  })
 
   let buffer
   let lastError
-  for (const base of mirrors) {
-    const url = `${base}/${assetName}`
+  for (const { base, name } of sources) {
+    const url = `${base}/${name}`
     try {
       console.log(`[ripgrep] Trying ${url}`)
       buffer = await downloadUrlToBufferWithFallback(url)
