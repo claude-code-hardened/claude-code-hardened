@@ -138,7 +138,11 @@ import {
   isMcpSessionExpiredError as isMcpSessionExpiredErrorFromPackage,
   MAX_MCP_DESCRIPTION_LENGTH as PKG_MAX_MCP_DESCRIPTION_LENGTH,
 } from '@claude-code-best/mcp-client'
-import { recursivelySanitizeUnicode } from '@claude-code-best/mcp-client'
+import {
+  captureStderr,
+  recursivelySanitizeUnicode,
+  type StderrCapture,
+} from '@claude-code-best/mcp-client'
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const fetchMcpSkillsForClient = feature('MCP_SKILLS')
@@ -992,23 +996,12 @@ export const connectToServer = memoize(
       // Set up stderr logging for stdio transport before connecting in case there are any stderr
       // outputs emitted during the connection start (this can be useful for debugging failed connections).
       // Store handler reference for cleanup to prevent memory leaks
-      let stderrHandler: ((data: Buffer) => void) | undefined
-      let stderrOutput = ''
+      // captureStderr caps accumulation at 8MB/server and accumulates via
+      // array+join (the previous inline copy used a 64MB cap and O(n²)
+      // string concat). Shared with the mcp-client package.
+      let stderr: StderrCapture | undefined
       if (serverRef.type === 'stdio' || !serverRef.type) {
-        const stdioTransport = transport as StdioClientTransport
-        if (stdioTransport.stderr) {
-          stderrHandler = (data: Buffer) => {
-            // Cap stderr accumulation to prevent unbounded memory growth
-            if (stderrOutput.length < 64 * 1024 * 1024) {
-              try {
-                stderrOutput += data.toString()
-              } catch {
-                // Ignore errors from exceeding max string length
-              }
-            }
-          }
-          stdioTransport.stderr.on('data', stderrHandler)
-        }
+        stderr = captureStderr(transport as StdioClientTransport)
       }
 
       const client = new Client(
@@ -1107,9 +1100,10 @@ export const connectToServer = memoize(
 
       try {
         await Promise.race([connectPromise, timeoutPromise])
+        const stderrOutput = stderr?.getOutput()
         if (stderrOutput) {
           logMCPError(name, `Server stderr: ${stderrOutput}`)
-          stderrOutput = '' // Release accumulated string to prevent memory growth
+          stderr?.clearOutput() // Release accumulated string to prevent memory growth
         }
         const elapsed = Date.now() - connectStartTime
         logMCPDebug(
@@ -1177,6 +1171,7 @@ export const connectToServer = memoize(
           inProcessServer.close().catch(() => {})
         }
         transport.close().catch(() => {})
+        const stderrOutput = stderr?.getOutput()
         if (stderrOutput) {
           logMCPError(name, `Server stderr: ${stderrOutput}`)
         }
@@ -1447,10 +1442,7 @@ export const connectToServer = memoize(
         }
 
         // Remove stderr event listener to prevent memory leaks
-        if (stderrHandler && (serverRef.type === 'stdio' || !serverRef.type)) {
-          const stdioTransport = transport as StdioClientTransport
-          stdioTransport.stderr?.off('data', stderrHandler)
-        }
+        stderr?.removeHandler()
 
         // For stdio transports, explicitly terminate the child process with proper signals
         // NOTE: StdioClientTransport.close() only sends an abort signal, but many MCP servers
