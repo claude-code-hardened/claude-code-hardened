@@ -172,7 +172,7 @@ jobs:
           ./configure CC="${{ matrix.scc }}" LDFLAGS="${{ matrix.ldflags }}"
           make -j4 bfs
       - name: Build ugrep
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.shost == ''
         shell: bash
         run: |
           VER=$(curl -sI https://github.com/Genivia/ugrep/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
@@ -249,13 +249,52 @@ jobs:
           path: stage/
           if-no-files-found: error
 
+  # ── ugrep linux arm64：ARM runner 原生编译 ──
+  # 交叉 C++ 的 configure 基础测试（运行 arm64 产物）在 x86 runner 上跑不了，
+  # 静态/动态都挂——原生环境一次通过。产物 artifact 由 package 的 Sync 整目录拷。
+  ugrep-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2, 2026-04-25
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool libpcre2-dev
+
+      - name: Resolve upstream ugrep version (redirect, no API)
+        id: ver
+        run: |
+          VER=$(curl -sI https://github.com/Genivia/ugrep/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
+          echo "ver=${VER}" >> "$GITHUB_OUTPUT"
+          echo "ugrep version: ${VER}"
+
+      - name: Build ugrep
+        run: |
+          curl -fsSL "https://github.com/Genivia/ugrep/archive/refs/tags/${{ steps.ver.outputs.ver }}.tar.gz" | tar xz
+          cd ugrep-*/
+          autoreconf -i
+          ./configure CC=gcc CXX=g++ LDFLAGS="-static" --enable-static
+          make -j4
+
+      - name: Stage artifact
+        run: |
+          mkdir -p stage/search-tools/arm64-linux
+          cp ugrep-*/bin/ugrep stage/search-tools/arm64-linux/ugrep
+          file stage/search-tools/arm64-linux/ugrep
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-ugrep-arm64
+          path: stage/
+          if-no-files-found: error
+
   # ── 打包：native 产物只在工作区填充 vendor/（不入 git）+ 一条 CLI 出完整 claude code ──
   # scripts/build-all.mjs 与本地全流程是同一个入口（本地不带 --skip-native
   # 时自己跑 cargo 编译多平台）。CI 端 native 来自上面矩阵的 artifact——
   # 每次构建都现场编译 Rust，保证产物永远对应当前源码；vendor/ 不再回写仓库。
   # compile.ts 默认启用 JSC bytecode 预编译（--version 1.16s→0.20s，代价体积 +53%）。
   package:
-    needs: [quality, native]
+    needs: [quality, native, ugrep-arm64]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
