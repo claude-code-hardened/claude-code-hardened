@@ -88,7 +88,8 @@ function memfdSpawnPath(buffer: Buffer): EmbeddedRg | null {
 /** 一次性 spawn 试探：status===0 即可执行（--version 成本 ~30ms，仅一次）。 */
 function probeSpawnable(command: string): boolean {
   try {
-    const { spawnSync } = require('node:child_process') as typeof import('node:child_process')
+    const { spawnSync } =
+      require('node:child_process') as typeof import('node:child_process')
     return spawnSync(command, ['--version'], { stdio: 'ignore' }).status === 0
   } catch {
     return false

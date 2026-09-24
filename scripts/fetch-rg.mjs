@@ -153,7 +153,9 @@ async function ensureTarget(t) {
       console.log(`[fetch-rg] ${t.dir}: trying ${url}`)
       const buf = await fetchBuffer(url)
       if (buf.length < 500_000) {
-        console.warn(`[fetch-rg] ${t.dir}: payload too small (${buf.length}B), next source`)
+        console.warn(
+          `[fetch-rg] ${t.dir}: payload too small (${buf.length}B), next source`,
+        )
         continue
       }
       // sha256 校验（.sha256 资产格式：<hex>  <filename>）
@@ -176,7 +178,9 @@ async function ensureTarget(t) {
       extract(archivePath, t.ext, extractDir)
       const extracted = findBinary(extractDir, binary)
       if (!extracted) {
-        console.warn(`[fetch-rg] ${t.dir}: rg not found in archive, next source`)
+        console.warn(
+          `[fetch-rg] ${t.dir}: rg not found in archive, next source`,
+        )
         rmSync(work, { recursive: true, force: true })
         continue
       }
@@ -184,7 +188,9 @@ async function ensureTarget(t) {
       copyFileSync(extracted, destBin)
       chmodSync(destBin, 0o755)
       rmSync(work, { recursive: true, force: true })
-      console.log(`[fetch-rg] ${t.dir}: installed (${Math.round(buf.length / 1024)} KB)`)
+      console.log(
+        `[fetch-rg] ${t.dir}: installed (${Math.round(buf.length / 1024)} KB)`,
+      )
       return true
     } catch (e) {
       console.warn(
@@ -200,8 +206,12 @@ for (const t of TARGETS) {
   const ok = await ensureTarget(t)
   if (!ok) {
     failed++
-    console.warn(`[fetch-rg] ${t.dir}: all sources failed — product for this target ships without embedded rg`)
+    console.warn(
+      `[fetch-rg] ${t.dir}: all sources failed — product for this target ships without embedded rg`,
+    )
   }
 }
-console.log(`[fetch-rg] done: ${TARGETS.length - failed}/${TARGETS.length} targets ready`)
+console.log(
+  `[fetch-rg] done: ${TARGETS.length - failed}/${TARGETS.length} targets ready`,
+)
 process.exit(0) // 单平台失败不阻塞打包（回退链仍在）

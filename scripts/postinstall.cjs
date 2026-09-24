@@ -330,7 +330,9 @@ async function downloadAndExtract() {
       /* no stamp — unversioned */
     }
     if (stamped === RG_VERSION) {
-      console.log(`[ripgrep] v${RG_VERSION} already at ${binaryPath}, skipping.`)
+      console.log(
+        `[ripgrep] v${RG_VERSION} already at ${binaryPath}, skipping.`,
+      )
       return
     }
     console.log(
