@@ -76,6 +76,15 @@ if (feature('ABLATION_BASELINE') && process.env.CLAUDE_CODE_ABLATION_BASELINE) {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
+  // argv0 dispatch（对齐 ant-native）：compile 产物被 `exec -a rg/bfs/ugrep`
+  // 调用时，把内嵌的对应二进制 stage 到内存并透传执行。dev 模式 argv[0]
+  // 是 bun 本体，basename 不命中 → 正常 CLI 流程，零影响。
+  const argv0 = (process.argv[0] ?? '').replace(/^.*[\\/]/, '');
+  if (argv0 === 'rg' || argv0 === 'bfs' || argv0 === 'ugrep') {
+    const { dispatchEmbeddedTool } = await import('../utils/embeddedDispatch.js');
+    process.exit(await dispatchEmbeddedTool(argv0, process.argv.slice(1)));
+  }
+
   // Fast-path for --version/-v: zero module loading needed
   if (args.length === 1 && (args[0] === '--version' || args[0] === '-v' || args[0] === '-V')) {
     // MACRO.VERSION is inlined at build time

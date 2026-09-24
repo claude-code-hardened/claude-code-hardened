@@ -134,28 +134,68 @@ function readRgAsBase64(target: string): string | null {
   return null
 }
 
-// Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts and
-// src/utils/embeddedRg.gen.ts with the target platform's base64 payloads.
+// bfs/ugrep 的 vendor 位（fetch-rg.mjs 预取 / 自建 release 下载）。
+function readSearchToolsAsBase64(target: string): {
+  bfs: string | null
+  ugrep: string | null
+} {
+  const dir = targetToRgDir(target)
+  const out: { bfs: string | null; ugrep: string | null } = {
+    bfs: null,
+    ugrep: null,
+  }
+  for (const tool of ['bfs', 'ugrep'] as const) {
+    const binary = target.startsWith('bun-windows') ? `${tool}.exe` : tool
+    const candidates = [
+      join('src', 'utils', 'vendor', 'search-tools', dir, binary),
+      join('vendor', 'search-tools', dir, binary),
+    ]
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        const buffer = readFileSync(candidate)
+        console.log(
+          `  [embed] ${tool} (${dir}): ${Math.round(buffer.length / 1024)} KB`,
+        )
+        out[tool] = buffer.toString('base64')
+        break
+      }
+    }
+    if (!out[tool]) {
+      console.warn(
+        `  [embed] ${tool} not found (${candidates[0]}); binary ships without embedded ${tool}`,
+      )
+    }
+  }
+  return out
+}
+
+// Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts,
+// src/utils/embeddedRg.gen.ts and src/utils/embeddedSearch.gen.ts with the
+// target platform's base64 payloads.
 function createEmbeddedNativesPlugin(
   embeddedNatives: Record<string, string>,
   embeddedRipgrep: string | null,
+  embeddedSearchTools: { bfs: string | null; ugrep: string | null },
 ) {
   return {
     name: 'embedded-natives',
     setup(build: any) {
       build.onResolve(
-        { filter: /embedded(Natives|Rg)\.gen(\.ts)?$/ },
+        { filter: /embedded(Natives|Rg|Search)\.gen(\.ts)?$/ },
         args => ({
           path: args.path,
           namespace: 'embedded-natives',
         }),
       )
-      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => ({
-        contents: args.path.includes('embeddedRg')
-          ? `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`
-          : `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`,
-        loader: 'js',
-      }))
+      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => {
+        let contents = `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`
+        if (args.path.includes('embeddedRg')) {
+          contents = `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`
+        } else if (args.path.includes('embeddedSearch')) {
+          contents = `export const EMBEDDED_SEARCH_TOOLS = ${JSON.stringify(embeddedSearchTools)};\n`
+        }
+        return { contents, loader: 'js' }
+      })
     },
   }
 }
@@ -187,6 +227,7 @@ for (const target of targets) {
 
   // ── 收集当前 target 的 rg（可选：无文件则产物不内嵌，运行时回退）──
   const embeddedRipgrep = readRgAsBase64(target)
+  const embeddedSearchTools = readSearchToolsAsBase64(target)
 
   // ── Bun.build --compile with embedded natives plugin ──
   // minify：compile 此前未开压缩，产物是未压缩源码，体积直接决定 JSC 的
@@ -202,7 +243,13 @@ for (const target of targets) {
       'process.env.NODE_ENV': JSON.stringify('production'),
     },
     features,
-    plugins: [createEmbeddedNativesPlugin(embeddedNatives, embeddedRipgrep)],
+    plugins: [
+      createEmbeddedNativesPlugin(
+        embeddedNatives,
+        embeddedRipgrep,
+        embeddedSearchTools,
+      ),
+    ],
     minify: true,
     format: 'esm',
     bytecode: true,
