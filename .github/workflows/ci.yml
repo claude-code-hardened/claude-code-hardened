@@ -168,7 +168,8 @@ jobs:
           mkdir bfs-src
           curl -fsSL "https://github.com/tavianator/bfs/releases/download/${VER}/bfs-${VER}.tar.gz" | tar xz -C bfs-src
           cd bfs-src
-          ./configure CC="${{ matrix.scc }}" LDFLAGS="-static"
+          # ldflags 由 matrix 控制：linux -static；macOS 空（无 crt0，clang 不支持）
+          ./configure CC="${{ matrix.scc }}" LDFLAGS="${{ matrix.ldflags }}"
           make -j4 bfs
       - name: Build ugrep
         if: runner.os != 'Windows'
