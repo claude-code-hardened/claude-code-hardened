@@ -23,6 +23,22 @@ export function hasEmbeddedSearchToolPayloads(): boolean {
   )
 }
 
+/** 工具级判定：bfs 是否在本 build 里（Windows 构建为 false——上游无官方支持）。 */
+export function hasEmbeddedBfsPayload(): boolean {
+  return (
+    typeof EMBEDDED_SEARCH_TOOLS.bfs === 'string' &&
+    EMBEDDED_SEARCH_TOOLS.bfs.length > 0
+  )
+}
+
+/** 工具级判定：ugrep 是否在本 build 里。 */
+export function hasEmbeddedUgrepPayload(): boolean {
+  return (
+    typeof EMBEDDED_SEARCH_TOOLS.ugrep === 'string' &&
+    EMBEDDED_SEARCH_TOOLS.ugrep.length > 0
+  )
+}
+
 /**
  * 返回可直接 spawn 的工具命令；未嵌入或全部策略失败返回 null，调用方
  * 走 PATH 回退。结果按工具名缓存（stagedCache 在 embeddedStage 内）。
