@@ -57,20 +57,40 @@ jobs:
           # Linux x86_64（GNU，链接 glibc —— 运行时与本仓库现有 native 产物一致）
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            rgdir: x64-linux
+            scc: gcc
+            scxx: g++
+            shost: ''
           # Linux ARM64（aarch64 服务器 / ARM 容器）
           - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             cross: true
+            rgdir: arm64-linux
+            scc: aarch64-linux-gnu-gcc
+            scxx: aarch64-linux-gnu-g++
+            shost: aarch64-linux-gnu
           # macOS ARM64（Apple Silicon）
           - os: macos-14
             target: aarch64-apple-darwin
+            rgdir: arm64-darwin
+            scc: cc
+            scxx: c++
+            shost: ''
           # macOS x86_64 —— Intel macos-13 runner 容量枯竭长期排队；
           # macos-14 (arm64) 交叉编译，macOS 通用 SDK 原生支持 -arch x86_64
           - os: macos-14
             target: x86_64-apple-darwin
+            rgdir: x64-darwin
+            scc: cc -arch x86_64
+            scxx: c++ -arch x86_64
+            shost: ''
           # Windows x86_64（MSVC）
           - os: windows-2022
             target: x86_64-pc-windows-msvc
+            rgdir: x64-win32
+            scc: ''
+            scxx: ''
+            shost: ''
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -107,12 +127,65 @@ jobs:
         working-directory: packages/file-index-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
+      # ── bfs/ugrep：内嵌搜索工具（与 .node 同 artifact 流转，package 直接消费）──
+      - name: Install search toolchain (linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcre2-dev
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo apt-get install -y libpcre2-dev:arm64 zlib1g-dev:arm64 || true
+          fi
+      - name: Install search toolchain (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install autoconf automake libtool pcre2
+          echo "/opt/homebrew/opt/libtool/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Build bfs
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          # bfs tarball 是散文件根结构（无顶层目录）——解到固定目录
+          VER=$(curl -sI https://github.com/tavianator/bfs/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
+          mkdir bfs-src
+          curl -fsSL "https://github.com/tavianator/bfs/releases/download/${VER}/bfs-${VER}.tar.gz" | tar xz -C bfs-src
+          cd bfs-src
+          ./configure CC="${{ matrix.scc }}" LDFLAGS="-static"
+          make -j4 bfs
+      - name: Build ugrep
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          VER=$(curl -sI https://github.com/Genivia/ugrep/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
+          curl -fsSL "https://github.com/Genivia/ugrep/archive/refs/tags/${VER}.tar.gz" | tar xz
+          cd ugrep-*/
+          autoreconf -i
+          HOST_ARGS=""
+          if [ -n "${{ matrix.shost }}" ]; then HOST_ARGS="--host=${{ matrix.shost }}"; fi
+          LDFLAGS_ARGS="-static"
+          if [ "${{ runner.os }}" = "macOS" ]; then LDFLAGS_ARGS=""; fi
+          ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
+          make -j4
+      - name: Build ugrep (windows official zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $req = [System.Net.WebRequest]::Create("https://github.com/Genivia/ugrep/releases/latest")
+          $req.AllowAutoRedirect = $false
+          $resp = $req.GetResponse()
+          $ver = $resp.Headers["Location"] -replace '.*/tag/',''
+          Invoke-WebRequest -Uri "https://github.com/Genivia/ugrep/releases/download/$ver/ugrep-windows-x64.zip" -OutFile ugrep.zip
+          Expand-Archive -Path ugrep.zip -DestinationPath ugrep-bin
+          New-Item -ItemType Directory -Force -Path "stage/search-tools/${{ matrix.rgdir }}" | Out-Null
+          Copy-Item "ugrep-bin/ugrep.exe" "stage/search-tools/${{ matrix.rgdir }}/ugrep.exe"
+
       # 统一整理产物到 vendor 布局：vendor/<name>/<triple>/<name>.node
+      # search-tools 用 rg-dir 布局（stage/search-tools/<rgdir>/），package 侧直接整目录拷
       - name: Stage artifacts (unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}" "stage/color-diff/${{ matrix.target }}" "stage/file-index/${{ matrix.target }}"
+          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}" "stage/color-diff/${{ matrix.target }}" "stage/file-index/${{ matrix.target }}" "stage/search-tools/${{ matrix.rgdir }}"
           for name in token-counter transcript-parser color-diff file-index; do
             crate="${name//-/_}_napi"
             if [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.so" ]; then
@@ -121,6 +194,8 @@ jobs:
               cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.dylib" "stage/$name/${{ matrix.target }}/$name.node"
             fi
           done
+          cp bfs-src/bin/bfs "stage/search-tools/${{ matrix.rgdir }}/bfs"
+          cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
           find stage -type f
 
       - name: Stage artifacts (windows)
@@ -172,8 +247,14 @@ jobs:
                 cp "$dir/$name/$triple/$name.node" "vendor/$name/$triple/"
               fi
             done
+            # bfs/ugrep：stage 里已是 rg-dir 布局（search-tools/<dir>/），整目录拷
+            if [ -d "$dir/search-tools" ]; then
+              mkdir -p vendor/search-tools
+              cp -r "$dir/search-tools/." vendor/search-tools/
+            fi
           done
           find vendor/token-counter vendor/transcript-parser vendor/color-diff vendor/file-index -name '*.node' 2>/dev/null | sort
+          find vendor/search-tools -type f 2>/dev/null | sort
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2, 2026-04-25
         with:

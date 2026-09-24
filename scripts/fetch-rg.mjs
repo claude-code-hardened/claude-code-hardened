@@ -203,12 +203,15 @@ async function ensureTarget(t) {
 
 // ── bfs/ugrep：search-tools-prebuilt 自建 release（计划书 1.4） ─────────────
 // 资产是裸二进制（非压缩包）：bfs-<triple> / ugrep-<triple>，直接落 vendor。
+// CI 场景由 native artifact 直接填充 vendor（fetch 发现已存在即跳过）；
+// 本地 build-all 场景从这里拉。拉取不完整 → 进程 exit 1（嵌入是必须功能，
+// 不允许静默退化——用户要求；仅 bfs-windows 豁免：上游无官方支持）。
 const SEARCH_TOOLS_BASE = `https://github.com/xiaocongyu66/search-tools-prebuilt/releases/download`
 
 // workflow triple → rg 的 vendor 目录布局（<arch>-<platform>）
 const SEARCH_TOOL_TRIPLES = {
-  'x64-linux': 'x86_64-unknown-linux-musl',
-  'arm64-linux': 'aarch64-unknown-linux-musl',
+  'x64-linux': 'x86_64-unknown-linux-gnu',
+  'arm64-linux': 'aarch64-unknown-linux-gnu',
   'x64-darwin': 'x86_64-apple-darwin',
   'arm64-darwin': 'aarch64-apple-darwin',
 }
@@ -284,11 +287,48 @@ for (const t of TARGETS) {
       `[fetch-rg] ${t.dir}: all sources failed — product for this target ships without embedded rg`,
     )
   }
-  // bfs/ugrep 预取（可选增强，失败不阻塞）
+  // bfs/ugrep 预取（严格化：拉不完整在循环后统一 fail）
   for (const tool of ['bfs', 'ugrep']) {
     const okTool = await ensureSearchTool(t, tool, searchTag)
     if (!okTool) searchFailed++
   }
+}
+
+// ── 完整性闸门：bfs 4 平台 + ugrep 5 平台，缺一即失败 ──────────────────────
+// bfs-windows 豁免（上游无官方支持）。CI 场景 vendor 已由 native artifact
+// 填充，此处全部 existsSync 命中 → 直接通过。
+{
+  const missingBfs = [
+    'x64-linux',
+    'arm64-linux',
+    'x64-darwin',
+    'arm64-darwin',
+  ].filter(
+    d => !existsSync(join('src', 'utils', 'vendor', 'search-tools', d, 'bfs')),
+  )
+  const missingUgrep = [
+    'x64-linux',
+    'arm64-linux',
+    'x64-darwin',
+    'arm64-darwin',
+    'x64-win32',
+  ].filter(
+    d =>
+      !existsSync(join('src', 'utils', 'vendor', 'search-tools', d, 'ugrep')) &&
+      !existsSync(
+        join('src', 'utils', 'vendor', 'search-tools', d, 'ugrep.exe'),
+      ),
+  )
+  if (missingBfs.length > 0 || missingUgrep.length > 0) {
+    console.error(
+      `[fetch-search] INCOMPLETE: bfs missing [${missingBfs.join(', ')}], ugrep missing [${missingUgrep.join(', ')}]`,
+    )
+    console.error(
+      '[fetch-search] Embedded search tools are mandatory — build aborted. Trigger the search-tools-prebuilt workflow first, or sync native artifacts.',
+    )
+    process.exit(1)
+  }
+  console.log('[fetch-search] completeness gate passed (bfs x4, ugrep x5)')
 }
 console.log(
   `[fetch-rg] done: rg ${TARGETS.length - failed}/${TARGETS.length}, search-tools ${TARGETS.length * 2 - searchFailed}/${TARGETS.length * 2}`,
