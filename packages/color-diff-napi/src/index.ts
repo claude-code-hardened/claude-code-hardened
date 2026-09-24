@@ -120,8 +120,10 @@ async function loadHljs(): Promise<HLJSApi> {
       }
       const api: HLJSApi =
         'default' in core && core.default ? core.default : core
+      // hljs 11 的 exports map 是无扩展名 subpath（"./lib/languages/*" →
+      // "./lib/languages/*.js"）；带 .js 会被解析成 bash.js.js 而导入失败。
       const mods = (await Promise.all(
-        COMMON_LANGUAGES.map(l => import(`highlight.js/lib/languages/${l}.js`)),
+        COMMON_LANGUAGES.map(l => import(`highlight.js/lib/languages/${l}`)),
       )) as LanguageModule[]
       COMMON_LANGUAGES.forEach((l, i) =>
         api.registerLanguage(l, mods[i].default),
@@ -141,7 +143,7 @@ function ensureExtraLanguage(lang: string): Promise<void> | void {
   pendingExtra[lang] = true
   return loadHljs()
     .then(api =>
-      import(`highlight.js/lib/languages/${EXTRA_LANGUAGES[lang]}.js`).then(
+      import(`highlight.js/lib/languages/${EXTRA_LANGUAGES[lang]}`).then(
         (mod: LanguageModule) => api.registerLanguage(lang, mod.default),
       ),
     )
@@ -1556,9 +1558,6 @@ export function isNativeColorDiffAvailable(): boolean {
 export function getNativeModule(): NativeModule | null {
   if (cachedModule) return cachedModule
   const native = tryLoadNative()
-  // native 可用时永不加载 hljs（省实测 +22MB）。触发不等待——
-  // 未就绪则降级纯文本，与未注册语言的行为一致。
-  if (!native) void loadHljs()
   cachedModule = native ?? {
     ColorDiff: TsColorDiff,
     ColorFile: TsColorFile,
@@ -1566,6 +1565,10 @@ export function getNativeModule(): NativeModule | null {
   }
   return cachedModule
 }
+
+// 供渲染入口的 fallback 分支预热 hljs（省实测 +22MB：native 可用时永不加载）。
+// loadHljs 单飞幂等，fire-and-forget——未就绪则本次降级纯文本。
+export { loadHljs }
 
 // ---------------------------------------------------------------------------
 // Native-first public API
@@ -1586,6 +1589,7 @@ export class ColorDiff implements Renderable {
     prefixContent?: string | null,
   ) {
     const native = tryLoadNative()
+    if (!native) void loadHljs()
     const Impl = native ? native.ColorDiff : TsColorDiff
     this.inner = new Impl(hunk, firstLine, filePath, prefixContent)
   }
@@ -1600,6 +1604,7 @@ export class ColorFile implements Renderable {
 
   constructor(code: string, filePath: string) {
     const native = tryLoadNative()
+    if (!native) void loadHljs()
     const Impl = native ? native.ColorFile : TsColorFile
     this.inner = new Impl(code, filePath)
   }

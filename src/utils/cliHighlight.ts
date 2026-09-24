@@ -5,12 +5,11 @@
 /// <reference lib="dom" />
 
 import { extname } from 'path'
-// 用 core 而非全量 highlight.js：此处只需 getLanguage 做语言名查询，
-// 不高亮，不需要语言定义。全量 import 解析 192 个语言（实测 +22MB）；
-// core 无语言，体积可忽略。loadCliHighlight 本就是异步，动态 import 合适。
-// import type 仅保留 hljs 类型（dom lib reference 见文件头注释）。
+// 语言名查询不加载全量 hljs（192 语言实测 +22MB），而是复用
+// color-diff-napi 的 loadHljs()：它按需加载 core 并注册 26 种常用语言，
+// getLanguage 由此能查到别名。cli-highlight 自带的 hljs 10 是独立实例，
+// 填不进这里的注册表，故不依赖它做查询。
 import type hljs from 'highlight.js'
-let hljsCore: typeof hljs | null = null
 
 export type CliHighlight = {
   highlight: typeof import('cli-highlight').highlight
@@ -23,21 +22,14 @@ let cliHighlightPromise: Promise<CliHighlight | null> | undefined
 let loadedGetLanguage:
   | ((name: string) => { name?: string } | undefined)
   | undefined
-function unwrapCore(mod: unknown): typeof hljs {
-  return ((mod as { default?: typeof hljs }).default ?? mod) as typeof hljs
-}
 async function loadCliHighlight(): Promise<CliHighlight | null> {
   try {
     const cliHighlight = await import('cli-highlight')
-    // core 未注册语言定义，但 getLanguage 对常见扩展名仍返回名字
-    // （内置别名表），本文件只做名字查询，不需要语法解析
-    const hljsMod = (hljsCore ??= unwrapCore(
-      await import('highlight.js/lib/core'),
-    )) as {
-      getLanguage?: typeof loadedGetLanguage
-      default?: typeof hljsCore
+    const { loadHljs } = (await import('color-diff-napi')) as {
+      loadHljs: () => Promise<typeof hljs>
     }
-    loadedGetLanguage = hljsMod.getLanguage ?? hljsMod.default?.getLanguage
+    const hljsApi = await loadHljs()
+    loadedGetLanguage = hljsApi.getLanguage?.bind(hljsApi)
     return {
       highlight: cliHighlight.highlight,
       supportsLanguage: cliHighlight.supportsLanguage,
