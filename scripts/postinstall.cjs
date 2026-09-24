@@ -62,6 +62,7 @@ function getPlatformMapping() {
     if (arch === 'x64') return { target: 'x86_64-pc-windows-msvc', ext: 'zip' }
     if (arch === 'arm64')
       return { target: 'aarch64-pc-windows-msvc', ext: 'zip' }
+    if (arch === 'ia32') return { target: 'i686-pc-windows-msvc', ext: 'zip' }
     throw new Error(`Unsupported Windows arch: ${arch}`)
   }
 
@@ -312,14 +313,25 @@ async function downloadAndExtract() {
 
   const binaryPath = getBinaryPath()
   const binaryDir = path.dirname(binaryPath)
+  const stampPath = path.join(binaryDir, '.ccb-rg-version')
 
   const force = process.argv.includes('--force')
-  if (!force && existsSync(binaryPath)) {
-    const stat = statSync(binaryPath)
-    if (stat.size > 0) {
-      console.log(`[ripgrep] Binary already exists at ${binaryPath}, skipping.`)
+  // Version-aware skip：非空即跳过会让打包安装的用户永远停留在旧版
+  // （Codex P2 review）——读 .ccb-rg-version 戳，版本不符即重下。
+  if (!force && existsSync(binaryPath) && statSync(binaryPath).size > 0) {
+    let stamped = null
+    try {
+      stamped = readFileSync(stampPath, 'utf8').trim()
+    } catch {
+      /* no stamp — unversioned */
+    }
+    if (stamped === RG_VERSION) {
+      console.log(`[ripgrep] v${RG_VERSION} already at ${binaryPath}, skipping.`)
       return
     }
+    console.log(
+      `[ripgrep] Existing binary is ${stamped ?? 'unversioned'}, replacing with v${RG_VERSION}.`,
+    )
   }
 
   console.log(`[ripgrep] Downloading v${RG_VERSION} for ${target}...`)
@@ -364,8 +376,9 @@ async function downloadAndExtract() {
     if (process.platform !== 'win32') {
       chmodSync(binaryPath, 0o755)
     }
+    writeFileSync(stampPath, RG_VERSION)
 
-    console.log(`[ripgrep] Installed to ${binaryPath}`)
+    console.log(`[ripgrep] Installed v${RG_VERSION} to ${binaryPath}`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     const hint =
