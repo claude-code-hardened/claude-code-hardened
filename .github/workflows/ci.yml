@@ -186,9 +186,11 @@ jobs:
           if [ -n "${{ matrix.shost }}" ]; then LDFLAGS_ARGS=""; fi
           # 交叉 C++ 静态链接的 libstdc++ 依赖链不稳定——aarch64 交叉用动态
           # （产物给 arm64 glibc 服务器用，系统自带 libstdc++）
-          ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
-          # 只编 ugrep 主目标：indexer 规则硬编码 -static，macOS 缺 crt0 必挂（上游 autobuild 从不在 macOS 编它）
-          make -j4 ugrep
+          # --without-brotli：libbrotlidec.a 静态欠链接（需显式链 libbrotlicommon.a），连坐整个 make
+          ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static --without-brotli $HOST_ARGS
+          # v7.8.x 起上游改 SUBDIRS 布局（bin_PROGRAMS 移入 src/），顶层 make ugrep 无此目标；
+          # indexer 的 -static 硬编码上游已移除，全量 make 各平台均过
+          make -j4
       - name: Build ugrep (windows official zip)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -225,7 +227,8 @@ jobs:
             cp "$src" "stage/$name/${{ matrix.target }}/$name.node"
           done
           cp bfs-src/bin/bfs "stage/search-tools/${{ matrix.rgdir }}/bfs"
-          cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep" 2>/dev/null || cp ugrep-out/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
+          # v7.8.x SUBDIRS 布局产物在 src/，旧平铺布局在 bin/——两者都兜
+          cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep" 2>/dev/null || cp ugrep-*/src/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
           find stage -type f
 
       - name: Stage artifacts (windows)
@@ -273,13 +276,16 @@ jobs:
           curl -fsSL "https://github.com/Genivia/ugrep/archive/refs/tags/${{ steps.ver.outputs.ver }}.tar.gz" | tar xz
           cd ugrep-*/
           autoreconf -i
-          ./configure CC=gcc CXX=g++ LDFLAGS="-static" --enable-static
-          make -j4 ugrep
+          # v7.8.x 起上游改 SUBDIRS 布局（bin_PROGRAMS 移入 src/），顶层 make ugrep 无此目标
+          # --without-brotli：libbrotlidec.a 静态欠链接（需显式链 libbrotlicommon.a），连坐整个 make
+          ./configure CC=gcc CXX=g++ LDFLAGS="-static" --enable-static --without-brotli
+          make -j4
 
       - name: Stage artifact
         run: |
           mkdir -p stage/search-tools/arm64-linux
-          cp ugrep-*/bin/ugrep stage/search-tools/arm64-linux/ugrep
+          # v7.8.x SUBDIRS 布局产物在 src/，旧平铺布局在 bin/——两者都兜
+          cp ugrep-*/bin/ugrep stage/search-tools/arm64-linux/ugrep 2>/dev/null || cp ugrep-*/src/ugrep stage/search-tools/arm64-linux/ugrep
           file stage/search-tools/arm64-linux/ugrep
 
       - name: Upload artifacts
