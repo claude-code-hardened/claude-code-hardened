@@ -125,6 +125,17 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Use MSVC ARM64 linker (win arm64)
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          # cargo 默认 PATH 里的 link.exe 是 x64 版，链 arm64 目标必挂——
+          # 插入 VS 预装的 HostX64/arm64（镜像含 VC.Tools.ARM64 组件）
+          $arm64Link = Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022" -Recurse -Filter link.exe |
+            Where-Object { $_.FullName -like "*HostX64\arm64*" } | Select-Object -First 1
+          if (-not $arm64Link) { Write-Output "::error::MSVC ARM64 linker not found"; exit 1 }
+          echo "$(Split-Path $arm64Link.FullName)" >> $env:GITHUB_PATH
+
       - name: Install cross-compilation tools (aarch64 linux)
         if: matrix.cross
         run: |
@@ -210,7 +221,8 @@ jobs:
         run: |
           VER=$(curl -sI https://github.com/Genivia/ugrep/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
           curl -fsSL "https://github.com/Genivia/ugrep/archive/refs/tags/${VER}.tar.gz" | tar xz
-          if [ "${{ matrix.alpine }}" = "true" ]; then
+          if [ "${{ matrix.alpine }}" = "true" ] || [ "${{ matrix.musl }}" = "true" ]; then
+            # musl（x64 与 arm64）都走容器：musl-gcc 直接链 apt 的 glibc pcre2.a 会 ABI 混用
             docker run --rm -v "$PWD":/work -w /work/gcc-build rust:alpine sh -c '
               apk add --no-cache autoconf automake libtool pcre2-dev zlib-dev bzip2-dev xz-dev lz4-dev zstd-dev >/dev/null
               cp -r /work/ugrep-*/. .

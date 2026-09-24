@@ -5,6 +5,7 @@ import { isSearchExtraToolsEnabledOptimistic } from './utils/searchExtraTools.js
 import { isTodoV2Enabled } from './utils/tasks.js'
 import type { ToolPermissionContext } from './Tool.js'
 import { getDenyRuleForTool } from './utils/permissions/permissions.js'
+import { hasEmbeddedSearchTools } from './utils/embeddedTools.js'
 import {
   hasEmbeddedBfsPayload,
   hasEmbeddedUgrepPayload,
@@ -385,11 +386,14 @@ export function getAllBaseTools(): Tools {
     getTaskOutputTool(),
     getBashTool(),
     // bfs/ugrep embedded builds（同 ARGV0 分发）：shell 里 find/grep 被接管，
-    // 被接管的专用工具移除。工具级降级——只有 bfs 在才移除 GlobTool（find
-    // 接管文件搜索），只有 ugrep 在才移除 GrepTool；Windows（无 bfs）保留
-    // GlobTool。
-    ...(!hasEmbeddedBfsPayload() ? [getGlobTool()] : []),
-    ...(!hasEmbeddedUgrepPayload() ? [getGrepTool()] : []),
+    // 被接管的专用工具移除。工具级降级 + SDK 排除双条件——开关关（含 SDK
+    // 入口）或对应 payload 缺席（Windows 无 bfs）时保留专用工具。
+    ...(!hasEmbeddedSearchTools() || !hasEmbeddedBfsPayload()
+      ? [getGlobTool()]
+      : []),
+    ...(!hasEmbeddedSearchTools() || !hasEmbeddedUgrepPayload()
+      ? [getGrepTool()]
+      : []),
     getExitPlanModeV2Tool(),
     getFileReadTool(),
     getFileEditTool(),
