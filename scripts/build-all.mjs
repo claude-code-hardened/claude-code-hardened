@@ -18,7 +18,6 @@ const PLATFORMS_ARG = args.indexOf('--platforms')
 
 const ALL_PLATFORMS = [
   'x86_64-unknown-linux-gnu',
-  'x86_64-unknown-linux-musl',
   'aarch64-unknown-linux-gnu',
   'aarch64-apple-darwin',
   'x86_64-apple-darwin',
@@ -65,7 +64,6 @@ function run(cmd, cmdArgs, opts = {}) {
 function tripleToTarget(triple) {
   const map = {
     'x86_64-unknown-linux-gnu': 'bun-linux-x64',
-    'x86_64-unknown-linux-musl': 'bun-linux-x64-musl',
     'aarch64-unknown-linux-gnu': 'bun-linux-arm64',
     'aarch64-apple-darwin': 'bun-darwin-arm64',
     'x86_64-apple-darwin': 'bun-darwin-x64',

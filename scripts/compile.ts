@@ -21,7 +21,6 @@ import { getMacroDefines, DEFAULT_BUILD_FEATURES } from './defines.ts'
 const ALL_TARGETS = [
   'bun-linux-x64',
   'bun-linux-arm64',
-  'bun-linux-x64-musl',
   'bun-darwin-x64',
   'bun-darwin-arm64',
   'bun-windows-x64',
@@ -74,7 +73,6 @@ function targetToTriple(target: string): string {
   const map: Record<string, string> = {
     'bun-linux-x64': 'x86_64-unknown-linux-gnu',
     'bun-linux-arm64': 'aarch64-unknown-linux-gnu',
-    'bun-linux-x64-musl': 'x86_64-unknown-linux-musl',
     'bun-darwin-x64': 'x86_64-apple-darwin',
     'bun-darwin-arm64': 'aarch64-apple-darwin',
     'bun-windows-x64': 'x86_64-pc-windows-msvc',
@@ -103,7 +101,6 @@ function targetToRgDir(target: string): string {
   const map: Record<string, string> = {
     'bun-linux-x64': 'x64-linux',
     'bun-linux-arm64': 'arm64-linux',
-    'bun-linux-x64-musl': 'x64-linux-musl',
     'bun-darwin-x64': 'x64-darwin',
     'bun-darwin-arm64': 'arm64-darwin',
     'bun-windows-x64': 'x64-win32',

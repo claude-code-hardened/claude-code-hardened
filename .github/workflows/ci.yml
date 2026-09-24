@@ -91,14 +91,6 @@ jobs:
             scc: ''
             scxx: ''
             shost: ''
-          # Linux musl x86_64（静态 .node —— Alpine 等无 glibc 环境原生可用）
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-musl
-            rgdir: x64-linux-musl
-            scc: musl-gcc
-            scxx: musl-g++
-            shost: ''
-            musl: true
           # Windows ARM64（MSVC ARM64 组件，windows-2022 镜像预装）
           - os: windows-2022
             target: aarch64-pc-windows-msvc
@@ -133,13 +125,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-
-      - name: Install musl toolchain (linux x64)
-        if: matrix.musl
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> $GITHUB_ENV
 
       - name: Build (token-counter)
         working-directory: packages/token-counter-napi/native
@@ -182,39 +167,24 @@ jobs:
           VER=$(curl -sI https://github.com/tavianator/bfs/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
           mkdir bfs-src
           curl -fsSL "https://github.com/tavianator/bfs/releases/download/${VER}/bfs-${VER}.tar.gz" | tar xz -C bfs-src
-          if [ "${{ matrix.musl }}" = "true" ]; then
-            # musl x64：rust:alpine 容器内 musl 原生编译（bfs 无外部依赖，静态单文件）
-            docker run --rm -v "$PWD":/work -w /work/gcc-build rust:alpine sh -c '
-              cp -r /work/bfs-src/. . && ./configure CC=gcc LDFLAGS="-static" && make -j"$(nproc)" bfs'
-            cp gcc-build/bfs bfs-src/bin/bfs
-          else
-            cd bfs-src
-            ./configure CC="${{ matrix.scc }}" LDFLAGS="-static"
-            make -j4 bfs
-          fi
+          cd bfs-src
+          ./configure CC="${{ matrix.scc }}" LDFLAGS="-static"
+          make -j4 bfs
       - name: Build ugrep
         if: runner.os != 'Windows'
         shell: bash
         run: |
           VER=$(curl -sI https://github.com/Genivia/ugrep/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
           curl -fsSL "https://github.com/Genivia/ugrep/archive/refs/tags/${VER}.tar.gz" | tar xz
-          if [ "${{ matrix.musl }}" = "true" ]; then
-            # musl（x64 与 arm64）都走容器：musl-gcc 直接链 apt 的 glibc pcre2.a 会 ABI 混用
-            docker run --rm -v "$PWD":/work -w /work/gcc-build rust:alpine sh -c '
-              apk add --no-cache autoconf automake libtool pcre2-dev zlib-dev bzip2-dev xz-dev lz4-dev zstd-dev >/dev/null
-              cp -r /work/ugrep-*/. .
-              autoreconf -i && ./configure LDFLAGS="-static" --enable-static && make -j"$(nproc)"'
-            mkdir -p ugrep-out && cp gcc-build/bin/ugrep ugrep-out/ugrep
-          else
-            cd ugrep-*/
-            autoreconf -i
-            HOST_ARGS=""
-            if [ -n "${{ matrix.shost }}" ]; then HOST_ARGS="--host=${{ matrix.shost }}"; fi
-            LDFLAGS_ARGS="-static"
-            if [ "${{ runner.os }}" = "macOS" ]; then LDFLAGS_ARGS=""; fi
-            ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
-            make -j4
-          fi
+          cd ugrep-*/
+          autoreconf -i
+          HOST_ARGS=""
+          if [ -n "${{ matrix.shost }}" ]; then HOST_ARGS="--host=${{ matrix.shost }}"; fi
+          LDFLAGS_ARGS="-static"
+          if [ "${{ runner.os }}" = "macOS" ]; then LDFLAGS_ARGS=""; fi
+          ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
+          make -j4
+      - name: Build ugrep (windows official zip)
       - name: Build ugrep (windows official zip)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -318,7 +288,7 @@ jobs:
           # 严格化断言：4 模块 × 5 triple + bfs x4 + ugrep x5，缺一即失败
           MISSING=0
           for name in token-counter transcript-parser color-diff file-index; do
-            for triple in x86_64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
+            for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
               [ -f "vendor/$name/$triple/$name.node" ] || { echo "::error::vendor missing: $name/$triple"; MISSING=1; }
             done
           done

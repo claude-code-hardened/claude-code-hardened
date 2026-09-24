@@ -44,12 +44,6 @@ const TARGETS = [
     assetTriple: 'x86_64-unknown-linux-musl',
     ext: 'tar.gz',
   },
-  {
-    triple: 'x86_64-unknown-linux-musl',
-    dir: 'x64-linux-musl',
-    assetTriple: 'x86_64-unknown-linux-musl',
-    ext: 'tar.gz',
-  },
 
   {
     triple: 'aarch64-unknown-linux-gnu',
@@ -293,7 +287,6 @@ await ensureUgrepWin()
   const missingBfs = [
     'x64-linux',
     'arm64-linux',
-    'x64-linux-musl',
     'x64-darwin',
     'arm64-darwin',
   ].filter(
@@ -302,7 +295,6 @@ await ensureUgrepWin()
   const missingUgrep = [
     'x64-linux',
     'arm64-linux',
-    'x64-linux-musl',
     'x64-darwin',
     'arm64-darwin',
     'x64-win32',
