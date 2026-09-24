@@ -185,7 +185,6 @@ jobs:
           ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
           make -j4
       - name: Build ugrep (windows official zip)
-      - name: Build ugrep (windows official zip)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
