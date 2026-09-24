@@ -115,7 +115,7 @@ function maybeDumpHeapSnapshot(rssMb: number): void {
       dir,
       `heap-${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.round(rssMb)}MB.heapsnapshot`,
     )
-    writeFileSync(path, Bun.generateHeapSnapshot())
+    writeFileSync(path, String(Bun.generateHeapSnapshot()))
     logForDebugging(
       `[mem] RSS ${rssMb}MB over threshold — heap snapshot written: ${path}`,
     )
