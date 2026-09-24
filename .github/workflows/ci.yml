@@ -99,15 +99,6 @@ jobs:
             scxx: musl-g++
             shost: ''
             musl: true
-          # Linux musl ARM64（ARM runner + rust:alpine 容器原生编译）
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
-            rgdir: arm64-linux-musl
-            scc: gcc
-            scxx: g++
-            shost: ''
-            musl: true
-            alpine: true
           # Windows ARM64（MSVC ARM64 组件，windows-2022 镜像预装）
           - os: windows-2022
             target: aarch64-pc-windows-msvc
@@ -144,40 +135,28 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Install musl toolchain (linux x64)
-        if: matrix.musl && !matrix.alpine
+        if: matrix.musl
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
           echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> $GITHUB_ENV
 
-      - name: Build in rust:alpine container (musl arm64)
-        if: matrix.alpine
-        run: |
-          # ARM runner 上的 musl 原生编译：rust 官方 alpine 镜像（aarch64）
-          docker run --rm -v "$PWD":/work -w /work rust:alpine sh -c '
-            for name in token-counter transcript-parser color-diff file-index; do
-              if [ -f "packages/$name-napi/native/Cargo.toml" ]; then
-                (cd "packages/$name-napi/native" && cargo build --release --target aarch64-unknown-linux-musl)
-              fi
-            done'
-
       - name: Build (token-counter)
-        if: ${{ !matrix.alpine }}
         working-directory: packages/token-counter-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build (transcript-parser)
-        if: hashFiles('packages/transcript-parser-napi/native/Cargo.toml') != '' && !matrix.alpine
+        if: hashFiles('packages/transcript-parser-napi/native/Cargo.toml') != ''
         working-directory: packages/transcript-parser-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build (color-diff)
-        if: hashFiles('packages/color-diff-napi/native/Cargo.toml') != '' && !matrix.alpine
+        if: hashFiles('packages/color-diff-napi/native/Cargo.toml') != ''
         working-directory: packages/color-diff-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build (file-index)
-        if: hashFiles('packages/file-index-napi/native/Cargo.toml') != '' && !matrix.alpine
+        if: hashFiles('packages/file-index-napi/native/Cargo.toml') != ''
         working-directory: packages/file-index-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -203,12 +182,10 @@ jobs:
           VER=$(curl -sI https://github.com/tavianator/bfs/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
           mkdir bfs-src
           curl -fsSL "https://github.com/tavianator/bfs/releases/download/${VER}/bfs-${VER}.tar.gz" | tar xz -C bfs-src
-          if [ "${{ matrix.alpine }}" = "true" ]; then
-            # musl arm64：rust:alpine 容器内原生编译
+          if [ "${{ matrix.musl }}" = "true" ]; then
+            # musl x64：rust:alpine 容器内 musl 原生编译（bfs 无外部依赖，静态单文件）
             docker run --rm -v "$PWD":/work -w /work/gcc-build rust:alpine sh -c '
-              apk add --no-cache oniguruma-dev >/dev/null 2>&1 || true
-              cp -r /work/bfs-src/. .
-              ./configure CC=gcc LDFLAGS="-static" && make -j"$(nproc)" bfs'
+              cp -r /work/bfs-src/. . && ./configure CC=gcc LDFLAGS="-static" && make -j"$(nproc)" bfs'
             cp gcc-build/bfs bfs-src/bin/bfs
           else
             cd bfs-src
@@ -221,7 +198,7 @@ jobs:
         run: |
           VER=$(curl -sI https://github.com/Genivia/ugrep/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
           curl -fsSL "https://github.com/Genivia/ugrep/archive/refs/tags/${VER}.tar.gz" | tar xz
-          if [ "${{ matrix.alpine }}" = "true" ] || [ "${{ matrix.musl }}" = "true" ]; then
+          if [ "${{ matrix.musl }}" = "true" ]; then
             # musl（x64 与 arm64）都走容器：musl-gcc 直接链 apt 的 glibc pcre2.a 会 ABI 混用
             docker run --rm -v "$PWD":/work -w /work/gcc-build rust:alpine sh -c '
               apk add --no-cache autoconf automake libtool pcre2-dev zlib-dev bzip2-dev xz-dev lz4-dev zstd-dev >/dev/null

@@ -50,6 +50,7 @@ const TARGETS = [
     assetTriple: 'x86_64-unknown-linux-musl',
     ext: 'tar.gz',
   },
+
   {
     triple: 'aarch64-unknown-linux-gnu',
     dir: 'arm64-linux',
@@ -218,6 +219,61 @@ async function ensureTarget(t) {
 // 本地构建需先下载 native artifact 解到 vendor/。完整性闸门见文件尾：
 // bfs 4 平台 + ugrep 5 平台缺一即 exit 1（bfs-windows 豁免，上游无官方支持）。
 
+// ugrep Windows：官方单平台资产（ugrep-windows-x64.zip，裸 exe 落 vendor）。
+// arm64-win32 官方无资产 → 完整性闸门豁免（运行时工具级降级）。
+const UGREP_WIN_TAG = 'v7.8.5'
+
+async function ensureUgrepWin() {
+  const destDir = join('src', 'utils', 'vendor', 'search-tools', 'x64-win32')
+  const destBin = join(destDir, 'ugrep.exe')
+  if (existsSync(destBin)) {
+    console.log('[fetch-search] x64-win32/ugrep: already present, skipping')
+    return true
+  }
+  let tag = UGREP_WIN_TAG
+  try {
+    const res = await fetch(
+      'https://github.com/Genivia/ugrep/releases/latest',
+      {
+        method: 'HEAD',
+        redirect: 'follow',
+        signal: AbortSignal.timeout(30_000),
+      },
+    )
+    tag = (res.url || '').split('/tag/')[1] || tag
+  } catch {
+    /* 上游 latest 解析失败时用钉住的版本 */
+  }
+  const url = `https://github.com/Genivia/ugrep/releases/download/${tag}/ugrep-windows-x64.zip`
+  try {
+    console.log(`[fetch-search] x64-win32/ugrep: trying ${url}`)
+    const buf = await fetchBuffer(url)
+    const work = mkdtempSync(join(tmpdir(), 'ccb-ugrep-win-'))
+    const zipPath = join(work, 'ugrep.zip')
+    const extractDir = join(work, 'x')
+    mkdirSync(extractDir, { recursive: true })
+    writeFileSync(zipPath, buf)
+    extract(zipPath, 'zip', extractDir)
+    const extracted = findBinary(extractDir, 'ugrep.exe')
+    rmSync(work, { recursive: true, force: true })
+    if (!extracted) {
+      console.warn('[fetch-search] x64-win32/ugrep: not found in zip')
+      return false
+    }
+    mkdirSync(destDir, { recursive: true })
+    copyFileSync(extracted, destBin)
+    console.log(
+      `[fetch-search] x64-win32/ugrep: installed (${Math.round(buf.length / 1024)} KB)`,
+    )
+    return true
+  } catch (e) {
+    console.warn(
+      `[fetch-search] x64-win32/ugrep: failed: ${e instanceof Error ? e.message : e}`,
+    )
+    return false
+  }
+}
+
 let failed = 0
 for (const t of TARGETS) {
   const ok = await ensureTarget(t)
@@ -228,6 +284,7 @@ for (const t of TARGETS) {
     )
   }
 }
+await ensureUgrepWin()
 
 // ── 完整性闸门：bfs 4 平台 + ugrep 5 平台，缺一即失败 ──────────────────────
 // bfs-windows 豁免（上游无官方支持）。CI 场景 vendor 已由 native artifact
@@ -239,7 +296,6 @@ for (const t of TARGETS) {
     'x64-linux-musl',
     'x64-darwin',
     'arm64-darwin',
-    'arm64-linux-musl',
   ].filter(
     d => !existsSync(join('src', 'utils', 'vendor', 'search-tools', d, 'bfs')),
   )
@@ -247,7 +303,6 @@ for (const t of TARGETS) {
     'x64-linux',
     'arm64-linux',
     'x64-linux-musl',
-    'arm64-linux-musl',
     'x64-darwin',
     'arm64-darwin',
     'x64-win32',
