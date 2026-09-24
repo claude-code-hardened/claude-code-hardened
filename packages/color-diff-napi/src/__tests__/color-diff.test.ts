@@ -6,8 +6,12 @@ const {
   colorToEscape,
   detectColorMode,
   detectLanguage,
+  hljsReady,
   tokenize,
 } = __test
+
+// 语言按需注册，扩展名检测依赖 hljs 加载完成
+await hljsReady()
 
 describe('ansi256FromRgb', () => {
   test('black maps to index 16', () => {

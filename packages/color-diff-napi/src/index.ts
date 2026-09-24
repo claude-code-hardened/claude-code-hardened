@@ -24,7 +24,6 @@
  *   returns null for width < 1; callers already handle both).
  */
 
-import hljs from 'highlight.js'
 import { basename, extname, resolve } from 'path'
 import { existsSync } from 'fs'
 import { createRequire } from 'module'
@@ -38,19 +37,118 @@ import {
   type JsStructuredPatchHunk,
 } from './jsDiff'
 
-// Static import — createRequire(import.meta.url) fails in Bun --compile mode
-// because the resolved path points to the internal bunfs binary path where
-// node_modules cannot be found. A top-level import ensures the module is
-// bundled and accessible at runtime.
-type HLJSApi = typeof hljs
+// core + 常用语言同步注册，冷门语言首次遇到时异步注册。
+// 全量 import 'highlight.js' 会解析全部 192 个语言定义，实测 +22MB RSS；
+// 其中语言数据本身仅 ~0.7MB，其余是解析后的代码对象。core + 26 语言
+// 实测 +14MB；冷门语言按需补注册，覆盖与全量一致。
+// 类型从主入口取（types/index.d.ts 的 HLJSApi 含 registerLanguage/
+// getLanguage；exports['./lib/core'] 无 types 字段，裸路径会解析到
+// es/core 的 ESM 转译壳，缺这些方法的类型），运行时仍走 lib/core。
+import type { HLJSApi, LanguageFn } from 'highlight.js'
+type LanguageModule = { default: LanguageFn }
 let cachedHljs: HLJSApi | null = null
-function hljsApi(): HLJSApi {
+
+// language-registration.test.ts 断言必须可用的 26 个
+const COMMON_LANGUAGES = [
+  'bash',
+  'c',
+  'cmake',
+  'cpp',
+  'csharp',
+  'css',
+  'diff',
+  'dockerfile',
+  'go',
+  'graphql',
+  'java',
+  'javascript',
+  'json',
+  'kotlin',
+  'makefile',
+  'markdown',
+  'perl',
+  'php',
+  'python',
+  'ruby',
+  'rust',
+  'shell',
+  'sql',
+  'typescript',
+  'xml',
+  'yaml',
+]
+// 冷门语言：扩展名 → 模块名（多数同名，少数有别名）
+const EXTRA_LANGUAGES: Record<string, string> = {
+  plaintext: 'plaintext',
+  properties: 'properties',
+  ini: 'ini',
+  toml: 'toml',
+  json5: 'json5',
+  nginx: 'nginx',
+  vim: 'vim',
+  powershell: 'powershell',
+  lua: 'lua',
+  dart: 'dart',
+  scala: 'scala',
+  swift: 'swift',
+  r: 'r',
+  haskell: 'haskell',
+  elixir: 'elixir',
+  erlang: 'erlang',
+  fsharp: 'fsharp',
+  ocaml: 'ocaml',
+  svelte: 'svelte',
+  vue: 'vue',
+  wasm: 'wasm',
+  zig: 'zig',
+  nim: 'nim',
+  julia: 'julia',
+  latex: 'latex',
+  stata: 'stata',
+  twig: 'twig',
+  vala: 'vala',
+  zephir: 'zephir',
+}
+
+let hljsLoadPromise: Promise<HLJSApi> | null = null
+async function loadHljs(): Promise<HLJSApi> {
   if (cachedHljs) return cachedHljs
-  // highlight.js uses `export =` (CJS). Under bun/ESM the interop wraps it
-  // in .default; under node CJS the module IS the API. Check at runtime.
-  const mod = hljs as HLJSApi & { default?: HLJSApi }
-  cachedHljs = 'default' in mod && mod.default ? mod.default : mod
-  return cachedHljs!
+  if (!hljsLoadPromise) {
+    hljsLoadPromise = (async () => {
+      const core = (await import('highlight.js/lib/core')) as HLJSApi & {
+        default?: HLJSApi
+      }
+      const api: HLJSApi =
+        'default' in core && core.default ? core.default : core
+      const mods = (await Promise.all(
+        COMMON_LANGUAGES.map(l => import(`highlight.js/lib/languages/${l}.js`)),
+      )) as LanguageModule[]
+      COMMON_LANGUAGES.forEach((l, i) =>
+        api.registerLanguage(l, mods[i].default),
+      )
+      return api
+    })()
+  }
+  cachedHljs = await hljsLoadPromise
+  return cachedHljs
+}
+
+// 冷门语言：触发异步注册，本次仍降级纯文本，下次高亮生效。
+// 返回注册 promise（调用方 fire-and-forget），便于测试确定性等待。
+const pendingExtra: Record<string, true> = {}
+function ensureExtraLanguage(lang: string): Promise<void> | void {
+  if (!EXTRA_LANGUAGES[lang] || pendingExtra[lang]) return
+  pendingExtra[lang] = true
+  return loadHljs()
+    .then(api =>
+      import(`highlight.js/lib/languages/${EXTRA_LANGUAGES[lang]}.js`).then(
+        (mod: LanguageModule) => api.registerLanguage(lang, mod.default),
+      ),
+    )
+    .catch(() => {
+      // 失败（模块不存在等）清除标记，允许下次重试；否则永远停在 pending。
+      delete pendingExtra[lang]
+    })
 }
 
 // Use Bun.stringWidth when available, otherwise fall back to simple .length
@@ -771,10 +869,15 @@ function detectLanguage(
   // Filename-based lookup (handles Dockerfile, Makefile, CMakeLists.txt, etc.)
   const stem = base.split('.')[0] ?? ''
   const byName = FILENAME_LANGS[base] ?? FILENAME_LANGS[stem]
-  if (byName && hljsApi().getLanguage(byName)) return byName
-  if (ext) {
-    const lang = hljsApi().getLanguage(ext)
-    if (lang) return ext
+  if (cachedHljs && byName && cachedHljs.getLanguage(byName)) return byName
+  if (cachedHljs && ext) {
+    if (cachedHljs.getLanguage(ext)) return ext
+    // core 未注册的冷门扩展名：查表触发异步注册，本次返回语言名先降级渲染，
+    // cachedHljsAst 未就绪会返回 null（纯文本），下个渲染周期恢复高亮
+    if (EXTRA_LANGUAGES[ext]) {
+      ensureExtraLanguage(ext)
+      return EXTRA_LANGUAGES[ext]
+    }
   }
   // Shebang / first-line detection (strip UTF-8 BOM)
   if (firstLine) {
@@ -897,9 +1000,17 @@ function cachedHljsAst(lang: string, code: string): HljsNode | null {
   const key = lang + '\0' + code
   const hit = hlLineCache.get(key)
   if (hit !== undefined) return hit
+  // 未加载/冷门语言时触发异步注册，本次返回 null（纯文本），
+  // 下次渲染命中已注册的语言。保持同步签名——改 render 链需动 native 契约。
+  void ensureExtraLanguage(lang)
+  if (!cachedHljs) {
+    // 不写缓存：语言注册完成后同一 key 仍须可高亮，写 null 会永久污染。
+    void loadHljs()
+    return null
+  }
   let result
   try {
-    result = hljsApi().highlight(code, {
+    result = cachedHljs.highlight(code, {
       language: lang,
       ignoreIllegals: true,
     })
@@ -1444,7 +1555,11 @@ export function isNativeColorDiffAvailable(): boolean {
 
 export function getNativeModule(): NativeModule | null {
   if (cachedModule) return cachedModule
-  cachedModule = tryLoadNative() ?? {
+  const native = tryLoadNative()
+  // native 可用时永不加载 hljs（省实测 +22MB）。触发不等待——
+  // 未就绪则降级纯文本，与未注册语言的行为一致。
+  if (!native) void loadHljs()
+  cachedModule = native ?? {
     ColorDiff: TsColorDiff,
     ColorFile: TsColorFile,
     getSyntaxTheme: tsGetSyntaxTheme,
@@ -1516,4 +1631,8 @@ export const __test = {
   parseTmTheme,
   flattenHljs,
   buildTheme,
+  // 冷门语言按需注册的触发点（同步返回、异步注册），测试需 await 后再断言
+  ensureExtraLanguage,
+  // 语言按需注册，测试需 await 后再断言 getLanguage/highlight
+  hljsReady: loadHljs,
 }
