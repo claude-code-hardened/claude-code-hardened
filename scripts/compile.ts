@@ -14,7 +14,7 @@
  *   target 形如 bun-linux-x64 / bun-linux-arm64 / bun-darwin-arm64 / bun-windows-x64
  *   不传则编译全部平台。
  */
-import { readFileSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getMacroDefines, DEFAULT_BUILD_FEATURES } from './defines.ts'
 
@@ -134,7 +134,8 @@ function readRgAsBase64(target: string): string | null {
   return null
 }
 
-// bfs/ugrep 的 vendor 位（fetch-rg.mjs 预取 / 自建 release 下载）。
+// bfs/ugrep 的 vendor 位（fetch-rg.mjs 预取 / 自建 release 下载），
+// 与 rg 同款 base64 注入（计划书 1.1：readSearchToolAsBase64）。
 function readSearchToolsAsBase64(target: string): {
   bfs: string | null
   ugrep: string | null
@@ -169,33 +170,28 @@ function readSearchToolsAsBase64(target: string): {
   return out
 }
 
-// Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts,
-// src/utils/embeddedRg.gen.ts and src/utils/embeddedSearch.gen.ts with the
-// target platform's base64 payloads.
+// Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts and
+// src/utils/embeddedRg.gen.ts with the target platform's base64 payloads.
 function createEmbeddedNativesPlugin(
   embeddedNatives: Record<string, string>,
   embeddedRipgrep: string | null,
-  embeddedSearchTools: { bfs: string | null; ugrep: string | null },
 ) {
   return {
     name: 'embedded-natives',
     setup(build: any) {
       build.onResolve(
-        { filter: /embedded(Natives|Rg|Search)\.gen(\.ts)?$/ },
+        { filter: /embedded(Natives|Rg)\.gen(\.ts)?$/ },
         args => ({
           path: args.path,
           namespace: 'embedded-natives',
         }),
       )
-      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => {
-        let contents = `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`
-        if (args.path.includes('embeddedRg')) {
-          contents = `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`
-        } else if (args.path.includes('embeddedSearch')) {
-          contents = `export const EMBEDDED_SEARCH_TOOLS = ${JSON.stringify(embeddedSearchTools)};\n`
-        }
-        return { contents, loader: 'js' }
-      })
+      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => ({
+        contents: args.path.includes('embeddedRg')
+          ? `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`
+          : `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`,
+        loader: 'js',
+      }))
     },
   }
 }
