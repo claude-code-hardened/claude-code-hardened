@@ -36,8 +36,12 @@ try {
 // --- Config ---
 
 const RG_VERSION = '15.0.1'
+// 主源：microsoft/ripgrep-prebuilt（@vscode/ripgrep 生态，带补丁构建）。
 const DEFAULT_RELEASE_BASE = `https://github.com/microsoft/ripgrep-prebuilt/releases/download/v${RG_VERSION}`
 const MIRROR_RELEASE_BASE = `https://ghproxy.net/https://github.com/microsoft/ripgrep-prebuilt/releases/download/v${RG_VERSION}`
+// 兜底源：BurntSushi 官方 release（windows-gnu 等变体的补充来源）。
+const BURNTSUSHI_RG_VERSION = '15.2.0'
+const BURNTSUSHI_RELEASE_BASE = `https://github.com/BurntSushi/ripgrep/releases/download/${BURNTSUSHI_RG_VERSION}`
 const RELEASE_BASE = (
   process.env.RIPGREP_DOWNLOAD_BASE ?? DEFAULT_RELEASE_BASE
 ).replace(/\/$/, '')
@@ -62,6 +66,7 @@ function getPlatformMapping() {
     if (arch === 'x64') return { target: 'x86_64-pc-windows-msvc', ext: 'zip' }
     if (arch === 'arm64')
       return { target: 'aarch64-pc-windows-msvc', ext: 'zip' }
+    if (arch === 'ia32') return { target: 'i686-pc-windows-msvc', ext: 'zip' }
     throw new Error(`Unsupported Windows arch: ${arch}`)
   }
 
@@ -312,29 +317,53 @@ async function downloadAndExtract() {
 
   const binaryPath = getBinaryPath()
   const binaryDir = path.dirname(binaryPath)
+  const stampPath = path.join(binaryDir, '.ccb-rg-version')
 
   const force = process.argv.includes('--force')
-  if (!force && existsSync(binaryPath)) {
-    const stat = statSync(binaryPath)
-    if (stat.size > 0) {
-      console.log(`[ripgrep] Binary already exists at ${binaryPath}, skipping.`)
+  // Version-aware skip：非空即跳过会让打包安装的用户永远停留在旧版
+  // （Codex P2 review）——读 .ccb-rg-version 戳，版本不符即重下。
+  if (!force && existsSync(binaryPath) && statSync(binaryPath).size > 0) {
+    let stamped = null
+    try {
+      stamped = readFileSync(stampPath, 'utf8').trim()
+    } catch {
+      /* no stamp — unversioned */
+    }
+    if (stamped === RG_VERSION) {
+      console.log(
+        `[ripgrep] v${RG_VERSION} already at ${binaryPath}, skipping.`,
+      )
       return
     }
+    console.log(
+      `[ripgrep] Existing binary is ${stamped ?? 'unversioned'}, replacing with v${RG_VERSION}.`,
+    )
   }
 
   console.log(`[ripgrep] Downloading v${RG_VERSION} for ${target}...`)
 
   const extractedBinary = process.platform === 'win32' ? 'rg.exe' : 'rg'
 
-  const mirrors = [RELEASE_BASE]
+  // 多级兜底：microsoft/ripgrep-prebuilt（@vscode 生态，带补丁构建，全
+  // node arch）→ ghproxy 镜像 → BurntSushi 官方 release（windows-gnu 等
+  // vscode 缺的变体从这里拿）。两边 target 同为 rust triple，仅版本号
+  // 格式不同（tag v15.0.1 内含 ripgrep 15.0.0），按源生成资产名。
+  const sources = [{ base: RELEASE_BASE, name: assetName }]
   if (RELEASE_BASE === DEFAULT_RELEASE_BASE.replace(/\/$/, '')) {
-    mirrors.push(MIRROR_RELEASE_BASE.replace(/\/$/, ''))
+    sources.splice(1, 0, {
+      base: MIRROR_RELEASE_BASE.replace(/\/$/, ''),
+      name: assetName,
+    })
   }
+  sources.push({
+    base: BURNTSUSHI_RELEASE_BASE,
+    name: `ripgrep-${BURNTSUSHI_RG_VERSION}-${target}.${ext}`,
+  })
 
   let buffer
   let lastError
-  for (const base of mirrors) {
-    const url = `${base}/${assetName}`
+  for (const { base, name } of sources) {
+    const url = `${base}/${name}`
     try {
       console.log(`[ripgrep] Trying ${url}`)
       buffer = await downloadUrlToBufferWithFallback(url)
@@ -364,8 +393,9 @@ async function downloadAndExtract() {
     if (process.platform !== 'win32') {
       chmodSync(binaryPath, 0o755)
     }
+    writeFileSync(stampPath, RG_VERSION)
 
-    console.log(`[ripgrep] Installed to ${binaryPath}`)
+    console.log(`[ripgrep] Installed v${RG_VERSION} to ${binaryPath}`)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     const hint =

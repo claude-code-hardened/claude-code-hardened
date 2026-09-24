@@ -47,7 +47,11 @@ export function IdeOnboardingDialog({ onDone, installationStatus }: Props): Reac
             <Text>{t('Welcome to Claude Code for {{ideName}}', { ideName })}</Text>
           </>
         }
-        subtitle={installedVersion ? t('installed {{kind}} v{{version}}', { kind: pluginOrExtension, version: installedVersion }) : undefined}
+        subtitle={
+          installedVersion
+            ? t('installed {{kind}} v{{version}}', { kind: pluginOrExtension, version: installedVersion })
+            : undefined
+        }
         color="ide"
         onCancel={onDone}
         hideInputGuide
@@ -61,8 +65,7 @@ export function IdeOnboardingDialog({ onDone, installationStatus }: Props): Reac
           </Text>
           <Text>
             {`• ${t("Review Claude Code's changes")} `}
-            <Text color="diffAddedWord">+11</Text>{' '}
-            <Text color="diffRemovedWord">-22</Text>{' '}
+            <Text color="diffAddedWord">+11</Text> <Text color="diffRemovedWord">-22</Text>{' '}
             {t('in the comfort of your IDE')}
           </Text>
           <Text>

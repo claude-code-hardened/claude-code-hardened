@@ -93,18 +93,67 @@ function readNativeAsBase64(
   return buffer.toString('base64')
 }
 
-// Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts
-// with the target platform's real base64 native modules.
-function createEmbeddedNativesPlugin(embeddedNatives: Record<string, string>) {
+// rg 的 vendor 布局用 <arch>-<platform>（如 arm64-linux），与 .node 的
+// triple 命名不同。
+function targetToRgDir(target: string): string {
+  const map: Record<string, string> = {
+    'bun-linux-x64': 'x64-linux',
+    'bun-linux-arm64': 'arm64-linux',
+    'bun-darwin-x64': 'x64-darwin',
+    'bun-darwin-arm64': 'arm64-darwin',
+    'bun-windows-x64': 'x64-win32',
+  }
+  return map[target] ?? 'unknown'
+}
+
+/**
+ * 读取本平台 rg 二进制并转 base64。数据源是 postinstall 的下载位
+ * （bun install / CI 安装阶段已就位）。找不到返回 null——产物退化为
+ * 无内嵌 rg，运行时走 vendor/系统 rg 回退。
+ */
+function readRgAsBase64(target: string): string | null {
+  const dir = targetToRgDir(target)
+  // 由 target 推导（host platform 在交叉编译场景会选错文件）
+  const binary = target.startsWith('bun-windows') ? 'rg.exe' : 'rg'
+  const candidates = [
+    join('src', 'utils', 'vendor', 'ripgrep', dir, binary),
+    join('vendor', 'ripgrep', dir, binary),
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      const buffer = readFileSync(candidate)
+      console.log(
+        `  [embed] ripgrep (${dir}): ${Math.round(buffer.length / 1024)} KB`,
+      )
+      return buffer.toString('base64')
+    }
+  }
+  console.warn(
+    `  [embed] ripgrep not found (${candidates[0]}); binary ships without embedded rg`,
+  )
+  return null
+}
+
+// Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts and
+// src/utils/embeddedRg.gen.ts with the target platform's base64 payloads.
+function createEmbeddedNativesPlugin(
+  embeddedNatives: Record<string, string>,
+  embeddedRipgrep: string | null,
+) {
   return {
     name: 'embedded-natives',
     setup(build: any) {
-      build.onResolve({ filter: /embeddedNatives\.gen(\.ts)?$/ }, args => ({
-        path: args.path,
-        namespace: 'embedded-natives',
-      }))
-      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, () => ({
-        contents: `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`,
+      build.onResolve(
+        { filter: /embedded(Natives|Rg)\.gen(\.ts)?$/ },
+        args => ({
+          path: args.path,
+          namespace: 'embedded-natives',
+        }),
+      )
+      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => ({
+        contents: args.path.includes('embeddedRg')
+          ? `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`
+          : `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`,
         loader: 'js',
       }))
     },
@@ -136,6 +185,9 @@ for (const target of targets) {
     }
   }
 
+  // ── 收集当前 target 的 rg（可选：无文件则产物不内嵌，运行时回退）──
+  const embeddedRipgrep = readRgAsBase64(target)
+
   // ── Bun.build --compile with embedded natives plugin ──
   // minify：compile 此前未开压缩，产物是未压缩源码，体积直接决定 JSC 的
   // 全量解析字节量（单文件 compile 无 splitting，--version 纯解析实测
@@ -150,7 +202,7 @@ for (const target of targets) {
       'process.env.NODE_ENV': JSON.stringify('production'),
     },
     features,
-    plugins: [createEmbeddedNativesPlugin(embeddedNatives)],
+    plugins: [createEmbeddedNativesPlugin(embeddedNatives, embeddedRipgrep)],
     minify: true,
     format: 'esm',
     bytecode: true,
