@@ -226,8 +226,11 @@ jobs:
             cp "$src" "stage/$name/${{ matrix.target }}/$name.node"
           done
           cp bfs-src/bin/bfs "stage/search-tools/${{ matrix.rgdir }}/bfs"
-          # v7.8.x SUBDIRS 布局产物在 src/，旧平铺布局在 bin/——两者都兜
-          cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep" 2>/dev/null || cp ugrep-*/src/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
+          # ugrep 仅非交叉 job 构建（aarch64 交叉 job 由 ugrep-arm64 原生 job 替代）
+          if [ -z "${{ matrix.shost }}" ]; then
+            # v7.8.x SUBDIRS 布局产物在 src/，旧平铺布局在 bin/——两者都兜
+            cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep" 2>/dev/null || cp ugrep-*/src/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
+          fi
           find stage -type f
 
       - name: Stage artifacts (windows)
