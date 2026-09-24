@@ -344,7 +344,8 @@ export function useTextInput({
     return cursor
   }
 
-  function mapKey(key: Key): InputMapper {
+  function mapKey(key: Key, activeCursor: Cursor = cursor): InputMapper {
+    const cursor = activeCursor
     switch (true) {
       case key.escape:
         return () => {
@@ -365,7 +366,7 @@ export function useTextInput({
       case key.backspace:
         return key.meta || key.ctrl
           ? killWordBefore
-          : () => cursor.deleteTokenBefore() ?? cursor.backspace()
+          : () => activeCursor.deleteTokenBefore() ?? activeCursor.backspace()
       case key.delete:
         return key.meta ? killToLineEnd : () => cursor.del()
       case key.ctrl:
@@ -532,7 +533,7 @@ export function useTextInput({
       resetYankState()
     }
 
-    const nextCursor = mapKey(key)(filteredInput)
+    const nextCursor = mapKey(key, cursor)(filteredInput)
     if (nextCursor) {
       logForDebugging(
         `[keystroke] out key=${describeKeystroke(key, filteredInput.length)} offset=${offset}→${nextCursor.offset} len=${originalValue.length}→${nextCursor.text.length}`,
