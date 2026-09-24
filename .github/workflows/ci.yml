@@ -181,15 +181,14 @@ jobs:
           autoreconf -i
           HOST_ARGS=""
           if [ -n "${{ matrix.shost }}" ]; then HOST_ARGS="--host=${{ matrix.shost }}"; fi
-          LDFLAGS_ARGS="-static"
-          if [ "${{ runner.os }}" = "macOS" ]; then LDFLAGS_ARGS=""; fi
-          if [ -n "${{ matrix.shost }}" ]; then LDFLAGS_ARGS=""; fi
-          # 交叉 C++ 静态链接的 libstdc++ 依赖链不稳定——aarch64 交叉用动态
-          # （产物给 arm64 glibc 服务器用，系统自带 libstdc++）
-          # --without-brotli：libbrotlidec.a 静态欠链接（需显式链 libbrotlicommon.a），连坐整个 make
-          ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static --without-brotli $HOST_ARGS
-          # v7.8.x 起上游改 SUBDIRS 布局（bin_PROGRAMS 移入 src/），顶层 make ugrep 无此目标；
-          # indexer 的 -static 硬编码上游已移除，全量 make 各平台均过
+          # ⚠️ --enable-static 在 ugrep 的 configure.ac 里不是 libtool 开关：
+          # 它直接 CFLAGS/LDFLAGS += -static（构建静态二进制），macOS 缺
+          # crt0 全体目标必挂 → 只在 Linux 传（静态 bin 已验证）；macOS 全动态。
+          # --without-brotli：libbrotlidec.a 静态欠链接，连坐整个 make
+          STATIC_ARGS=""
+          if [ "${{ runner.os }}" = "Linux" ]; then STATIC_ARGS="--enable-static"; fi
+          ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" --without-brotli $STATIC_ARGS $HOST_ARGS
+          # v7.8.x 起上游改 SUBDIRS 布局（bin_PROGRAMS 移入 src/）
           make -j4
       - name: Build ugrep (windows official zip)
         if: runner.os == 'Windows'
