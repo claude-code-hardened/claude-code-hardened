@@ -125,6 +125,13 @@ function tmpfsSpawnPath(buffer: Buffer): EmbeddedRg | null {
     const bin = join(dir, name)
     fs.writeFileSync(bin, buffer)
     if (process.platform !== 'win32') fs.chmodSync(bin, 0o700)
+    // noexec 挂载探测（OCR P2）：/dev/shm 或 tmpdir 可能 noexec——
+    // mkdtemp/write/chmod 都会成功但 exec 报 EACCES。落盘后先试跑
+    // --version，失败清目录换下一个 base。
+    if (!probeSpawnable(bin)) {
+      fs.rmSync(dir, { recursive: true, force: true })
+      continue
+    }
     if (!cleanupRegistered) {
       cleanupRegistered = true
       process.on('exit', () => {
