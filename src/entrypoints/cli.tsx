@@ -82,7 +82,9 @@ async function main(): Promise<void> {
   const argv0 = (process.argv[0] ?? '').replace(/^.*[\\/]/, '');
   if (argv0 === 'rg' || argv0 === 'bfs' || argv0 === 'ugrep') {
     const { dispatchEmbeddedTool } = await import('../utils/embeddedDispatch.js');
-    process.exit(await dispatchEmbeddedTool(argv0, process.argv.slice(1)));
+    // slice(2)：argv[1] 是 bundle 内部脚本路径，不能透传给工具（与下方
+    // CLI 解析的 slice(2) 同款语义）。
+    process.exit(await dispatchEmbeddedTool(argv0, process.argv.slice(2)));
   }
 
   // Fast-path for --version/-v: zero module loading needed
