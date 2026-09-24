@@ -22,9 +22,15 @@ export function getPillLabel(tasks: BackgroundTaskState[]): string {
         const shells = n - monitors
         const parts: string[] = []
         if (shells > 0)
-          parts.push(shells === 1 ? t('1 shell') : t('{{n}} shells', { n: shells }))
+          parts.push(
+            shells === 1 ? t('1 shell') : t('{{n}} shells', { n: shells }),
+          )
         if (monitors > 0)
-          parts.push(monitors === 1 ? t('1 monitor') : t('{{n}} monitors', { n: monitors }))
+          parts.push(
+            monitors === 1
+              ? t('1 monitor')
+              : t('{{n}} monitors', { n: monitors }),
+          )
         return parts.join(', ')
       }
       case 'in_process_teammate': {
@@ -33,7 +39,9 @@ export function getPillLabel(tasks: BackgroundTaskState[]): string {
             t.type === 'in_process_teammate' ? t.identity.teamName : '',
           ),
         ).size
-        return teamCount === 1 ? t('1 team') : t('{{n}} teams', { n: teamCount })
+        return teamCount === 1
+          ? t('1 team')
+          : t('{{n}} teams', { n: teamCount })
       }
       case 'local_agent':
         return n === 1 ? t('1 local agent') : t('{{n}} local agents', { n })
@@ -56,7 +64,9 @@ export function getPillLabel(tasks: BackgroundTaskState[]): string {
           : `${DIAMOND_OPEN} ${t('{{n}} cloud sessions', { n })}`
       }
       case 'local_workflow':
-        return n === 1 ? t('1 background workflow') : t('{{n}} background workflows', { n })
+        return n === 1
+          ? t('1 background workflow')
+          : t('{{n}} background workflows', { n })
       case 'monitor_mcp':
         return n === 1 ? t('1 monitor') : t('{{n}} monitors', { n: n })
       case 'dream':

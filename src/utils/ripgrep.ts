@@ -54,7 +54,9 @@ export const getRipgrepConfig = memoize((): RipgrepConfig => {
     if (embedded) {
       return { mode: 'embedded', command: embedded.command, args: [] }
     }
-    logForDebugging('[rg] embedded payload present but staging failed → vendor fallback')
+    logForDebugging(
+      '[rg] embedded payload present but staging failed → vendor fallback',
+    )
   }
 
   const rgRoot = path.resolve(__dirname, 'vendor', 'ripgrep')

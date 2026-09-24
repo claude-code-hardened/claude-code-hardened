@@ -46,7 +46,9 @@ function prepare(): EmbeddedRg | null {
     if (process.platform === 'linux') {
       const memfd = memfdSpawnPath(buffer)
       if (memfd) return memfd
-      logForDebugging('[embedded-rg] memfd unavailable (container/proot?) → tmpfs fallback')
+      logForDebugging(
+        '[embedded-rg] memfd unavailable (container/proot?) → tmpfs fallback',
+      )
     }
     return tmpfsSpawnPath(buffer)
   } catch (e) {
@@ -62,7 +64,10 @@ function memfdSpawnPath(buffer: Buffer): EmbeddedRg | null {
   const libc = ffiDlopen('libc.so.6', {
     memfd_create: { args: ['cstring', 'u32'], returns: 'i32' },
   })
-  const fd = libc.symbols.memfd_create('ccb-ripgrep', 1 /* MFD_CLOEXEC */) as number
+  const fd = libc.symbols.memfd_create(
+    'ccb-ripgrep',
+    1 /* MFD_CLOEXEC */,
+  ) as number
   if (!(fd > 2)) return null
   writeStaged(fd, buffer)
   // 可行性前移：fd 创建成功 ≠ execve 可行。proot 会静默杀 memfd execve
@@ -94,7 +99,8 @@ function probeSpawnable(command: string): boolean {
 }
 
 function writeStaged(fd: number, buffer: Buffer): void {
-  const { ftruncateSync, writeSync } = require('node:fs') as typeof import('node:fs')
+  const { ftruncateSync, writeSync } =
+    require('node:fs') as typeof import('node:fs')
   ftruncateSync(fd, buffer.length) // memfd 初始 size=0，execve 前需定长
   writeSync(fd, buffer)
 }
@@ -110,7 +116,8 @@ function tmpfsSpawnPath(buffer: Buffer): EmbeddedRg | null {
   const { join } = require('node:path') as typeof import('node:path')
   const name = process.platform === 'win32' ? 'rg.exe' : 'rg'
   // /dev/shm 优先（tmpfs，RAM 介质）；不可用落 tmpdir（多数设备同为 tmpfs）
-  const bases = process.platform !== 'win32' ? ['/dev/shm', tmpdir()] : [tmpdir()]
+  const bases =
+    process.platform !== 'win32' ? ['/dev/shm', tmpdir()] : [tmpdir()]
   for (const base of bases) {
     let dir: string
     try {

@@ -142,10 +142,13 @@ function createEmbeddedNativesPlugin(
   return {
     name: 'embedded-natives',
     setup(build: any) {
-      build.onResolve({ filter: /embedded(Natives|Rg)\.gen(\.ts)?$/ }, args => ({
-        path: args.path,
-        namespace: 'embedded-natives',
-      }))
+      build.onResolve(
+        { filter: /embedded(Natives|Rg)\.gen(\.ts)?$/ },
+        args => ({
+          path: args.path,
+          namespace: 'embedded-natives',
+        }),
+      )
       build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => ({
         contents: args.path.includes('embeddedRg')
           ? `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`
