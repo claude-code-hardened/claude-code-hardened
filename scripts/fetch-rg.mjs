@@ -201,84 +201,12 @@ async function ensureTarget(t) {
   return false
 }
 
-// ── bfs/ugrep：search-tools-prebuilt 自建 release（计划书 1.4） ─────────────
-// 资产是裸二进制（非压缩包）：bfs-<triple> / ugrep-<triple>，直接落 vendor。
-// CI 场景由 native artifact 直接填充 vendor（fetch 发现已存在即跳过）；
-// 本地 build-all 场景从这里拉。拉取不完整 → 进程 exit 1（嵌入是必须功能，
-// 不允许静默退化——用户要求；仅 bfs-windows 豁免：上游无官方支持）。
-const SEARCH_TOOLS_BASE = `https://github.com/xiaocongyu66/search-tools-prebuilt/releases/download`
-
-// workflow triple → rg 的 vendor 目录布局（<arch>-<platform>）
-const SEARCH_TOOL_TRIPLES = {
-  'x64-linux': 'x86_64-unknown-linux-gnu',
-  'arm64-linux': 'aarch64-unknown-linux-gnu',
-  'x64-darwin': 'x86_64-apple-darwin',
-  'arm64-darwin': 'aarch64-apple-darwin',
-}
-
-async function searchToolsReleaseTag() {
-  try {
-    // latest release 的 redirect（免 API 限流）
-    const res = await fetch(
-      'https://github.com/xiaocongyu66/search-tools-prebuilt/releases/latest',
-      {
-        method: 'HEAD',
-        redirect: 'follow',
-        signal: AbortSignal.timeout(30_000),
-      },
-    )
-    const finalUrl = res.url || ''
-    return finalUrl.split('/tag/')[1] || null
-  } catch (e) {
-    console.warn(
-      `[fetch-search] release tag resolve failed: ${e instanceof Error ? e.message : e}`,
-    )
-    return null
-  }
-}
-
-async function ensureSearchTool(t, tool, tag) {
-  const dir = t.dir
-  const destDir = join('src', 'utils', 'vendor', 'search-tools', dir)
-  const destBin = join(destDir, tool)
-  if (existsSync(destBin)) {
-    console.log(`[fetch-search] ${dir}/${tool}: already present, skipping`)
-    return true
-  }
-  const triple = SEARCH_TOOL_TRIPLES[dir]
-  if (!triple) return false
-  if (!tag) {
-    console.warn('[fetch-search] no release found in search-tools-prebuilt')
-    return false
-  }
-  const url = `${SEARCH_TOOLS_BASE}/${tag}/${tool}-${triple}`
-  try {
-    console.log(`[fetch-search] ${dir}/${tool}: trying ${url}`)
-    const buf = await fetchBuffer(url)
-    if (buf.length < 20_000) {
-      console.warn(
-        `[fetch-search] ${dir}/${tool}: payload too small (${buf.length}B)`,
-      )
-      return false
-    }
-    mkdirSync(destDir, { recursive: true })
-    writeFileSync(destBin, buf)
-    chmodSync(destBin, 0o755)
-    console.log(
-      `[fetch-search] ${dir}/${tool}: installed (${Math.round(buf.length / 1024)} KB)`,
-    )
-    return true
-  } catch (e) {
-    console.warn(
-      `[fetch-search] ${dir}/${tool}: failed: ${e instanceof Error ? e.message : e}`,
-    )
-    return false
-  }
-}
+// ── bfs/ugrep：CI native matrix 现场构建（与 Rust .node 同 artifact 流） ────
+// 本脚本不做远程拉取——CI 场景由 native artifact 直接填充 vendor/search-tools/，
+// 本地构建需先下载 native artifact 解到 vendor/。完整性闸门见文件尾：
+// bfs 4 平台 + ugrep 5 平台缺一即 exit 1（bfs-windows 豁免，上游无官方支持）。
 
 let failed = 0
-let searchFailed = 0
-const searchTag = await searchToolsReleaseTag()
 for (const t of TARGETS) {
   const ok = await ensureTarget(t)
   if (!ok) {
@@ -286,11 +214,6 @@ for (const t of TARGETS) {
     console.warn(
       `[fetch-rg] ${t.dir}: all sources failed — product for this target ships without embedded rg`,
     )
-  }
-  // bfs/ugrep 预取（严格化：拉不完整在循环后统一 fail）
-  for (const tool of ['bfs', 'ugrep']) {
-    const okTool = await ensureSearchTool(t, tool, searchTag)
-    if (!okTool) searchFailed++
   }
 }
 

@@ -188,11 +188,18 @@ jobs:
           mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}" "stage/color-diff/${{ matrix.target }}" "stage/file-index/${{ matrix.target }}" "stage/search-tools/${{ matrix.rgdir }}"
           for name in token-counter transcript-parser color-diff file-index; do
             crate="${name//-/_}_napi"
-            if [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.so" ]; then
-              cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.so" "stage/$name/${{ matrix.target }}/$name.node"
-            elif [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.dylib" ]; then
-              cp "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.dylib" "stage/$name/${{ matrix.target }}/$name.node"
+            src=""
+            for ext in so dylib; do
+              if [ -f "packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.$ext" ]; then
+                src="packages/$name-napi/native/target/${{ matrix.target }}/release/lib$crate.$ext"
+                break
+              fi
+            done
+            if [ -z "$src" ]; then
+              echo "::error::native artifact missing: $name (${{ matrix.target }}) — build failed or output renamed"
+              exit 1
             fi
+            cp "$src" "stage/$name/${{ matrix.target }}/$name.node"
           done
           cp bfs-src/bin/bfs "stage/search-tools/${{ matrix.rgdir }}/bfs"
           cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
@@ -206,7 +213,11 @@ jobs:
           foreach ($name in @('token-counter', 'transcript-parser', 'color-diff', 'file-index')) {
             $crate = $name -replace '-', '_'
             $src = "packages/$name-napi/native/target/${{ matrix.target }}/release/${crate}_napi.dll"
-            if (Test-Path $src) { Copy-Item $src "stage/$name/${{ matrix.target }}/$name.node" }
+            if (-not (Test-Path $src)) {
+              Write-Output "::error::native artifact missing: $name (${{ matrix.target }}) — build failed or output renamed"
+              exit 1
+            }
+            Copy-Item $src "stage/$name/${{ matrix.target }}/$name.node"
           }
 
       - name: Upload artifacts
@@ -255,6 +266,20 @@ jobs:
           done
           find vendor/token-counter vendor/transcript-parser vendor/color-diff vendor/file-index -name '*.node' 2>/dev/null | sort
           find vendor/search-tools -type f 2>/dev/null | sort
+          # 严格化断言：4 模块 × 5 triple + bfs x4 + ugrep x5，缺一即失败
+          MISSING=0
+          for name in token-counter transcript-parser color-diff file-index; do
+            for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc; do
+              [ -f "vendor/$name/$triple/$name.node" ] || { echo "::error::vendor missing: $name/$triple"; MISSING=1; }
+            done
+          done
+          for d in x64-linux arm64-linux x64-darwin arm64-darwin; do
+            [ -f "vendor/search-tools/$d/bfs" ] || { echo "::error::vendor missing: search-tools/$d/bfs"; MISSING=1; }
+          done
+          for d in x64-linux arm64-linux x64-darwin arm64-darwin x64-win32; do
+            { [ -f "vendor/search-tools/$d/ugrep" ] || [ -f "vendor/search-tools/$d/ugrep.exe" ]; } || { echo "::error::vendor missing: search-tools/$d/ugrep"; MISSING=1; }
+          done
+          [ "$MISSING" = "0" ] || exit 1
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2, 2026-04-25
         with:
