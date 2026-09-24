@@ -5,9 +5,9 @@ import memoize from 'lodash-es/memoize.js'
 import { homedir } from 'os'
 import * as path from 'path'
 import { logEvent } from 'src/services/analytics/index.js'
-import { isInBundledMode } from './bundledMode.js'
 import { logForDebugging } from './debug.js'
 import { distRoot } from './distRoot.js'
+import { getEmbeddedRg, hasEmbeddedRg } from './embeddedRg.js'
 import { isEnvDefinedFalsy } from './envUtils.js'
 import { execFileNoThrow } from './execFileNoThrow.js'
 import { findExecutable } from './findExecutable.js'
@@ -44,15 +44,17 @@ export const getRipgrepConfig = memoize((): RipgrepConfig => {
     }
   }
 
-  // In bundled (native) mode, ripgrep is statically compiled into bun-internal
-  // and dispatches based on argv[0]. We spawn ourselves with argv0='rg'.
-  if (isInBundledMode()) {
-    return {
-      mode: 'embedded',
-      command: process.execPath,
-      args: ['--no-config'],
-      argv0: 'rg',
+  // In compiled (single-file) binaries the rg executable rides inside the
+  // binary as a base64 payload; getEmbeddedRg stages it via memfd and
+  // returns a spawnable /dev/fd/<n> path (Linux, zero disk writes) or a
+  // cleaned-up tmpfile (macOS/Windows). No bun-internal argv0 trick —
+  // official Bun has no built-in rg.
+  if (hasEmbeddedRg()) {
+    const embedded = getEmbeddedRg()
+    if (embedded) {
+      return { mode: 'embedded', command: embedded.command, args: [] }
     }
+    logForDebugging('[rg] embedded payload present but staging failed → vendor fallback')
   }
 
   const rgRoot = path.resolve(__dirname, 'vendor', 'ripgrep')
