@@ -97,6 +97,7 @@ function memfdSpawnPath(id: string, buffer: Buffer): StagedExecutable | null {
     }
     return null
   }
+  logForDebugging(`[embedded-stage] ${id}: staged via memfd → ${command}`)
   return { command }
 }
 
@@ -138,9 +139,13 @@ function tmpfsSpawnPath(
     // mkdtemp/write/chmod 都会成功但 exec 报 EACCES。落盘后先试跑
     // --version，失败清目录换下一个 base。
     if (!probeSpawnable(bin)) {
+      logForDebugging(
+        `[embedded-stage] ${id}: ${base} not executable (noexec?) → next base`,
+      )
       fs.rmSync(dir, { recursive: true, force: true })
       continue
     }
+    logForDebugging(`[embedded-stage] ${id}: staged via tmpfs → ${bin}`)
     if (!cleanupRegistered) {
       cleanupRegistered = true
       process.on('exit', () => {

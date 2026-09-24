@@ -164,6 +164,9 @@ export function createFindGrepShellIntegration(): string | null {
   // shell 函数就不注入——Windows（无 bfs）只注入 grep→ugrep，find 保持
   // 系统原版。unalias 同样只清有集成的名字。
   if (hasEmbeddedBfsPayload()) {
+    logForDebugging(
+      '[shell-snapshot] find → bfs integration injected (payload present)',
+    )
     parts.push(
       'unalias find 2>/dev/null || true',
       // User shell configs may define aliases like `alias find=gfind`
@@ -175,8 +178,15 @@ export function createFindGrepShellIntegration(): string | null {
         'findutils-default',
       ]),
     )
+  } else {
+    logForDebugging(
+      '[shell-snapshot] find → bfs skipped (no bfs payload in this build) → system find',
+    )
   }
   if (hasEmbeddedUgrepPayload()) {
+    logForDebugging(
+      '[shell-snapshot] grep → ugrep integration injected (payload present)',
+    )
     parts.push(
       'unalias grep 2>/dev/null || true',
       createArgv0ShellFunction('grep', 'ugrep', binaryPath, [
@@ -186,6 +196,10 @@ export function createFindGrepShellIntegration(): string | null {
         '-I',
         ...VCS_DIRECTORIES_TO_EXCLUDE.map(d => `--exclude-dir=${d}`),
       ]),
+    )
+  } else {
+    logForDebugging(
+      '[shell-snapshot] grep → ugrep skipped (no ugrep payload in this build) → system grep',
     )
   }
   if (parts.length === 0) {

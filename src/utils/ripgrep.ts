@@ -52,6 +52,7 @@ export const getRipgrepConfig = memoize((): RipgrepConfig => {
   if (hasEmbeddedRg()) {
     const embedded = getEmbeddedRg()
     if (embedded) {
+      logForDebugging(`[rg] mode=embedded → ${embedded.command}`)
       return { mode: 'embedded', command: embedded.command, args: [] }
     }
     logForDebugging(
