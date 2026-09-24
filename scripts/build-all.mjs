@@ -22,6 +22,7 @@ const ALL_PLATFORMS = [
   'aarch64-apple-darwin',
   'x86_64-apple-darwin',
   'x86_64-pc-windows-msvc',
+  'aarch64-pc-windows-msvc',
 ]
 const platforms =
   PLATFORMS_ARG !== -1 && args[PLATFORMS_ARG + 1]
@@ -64,9 +65,10 @@ function tripleToTarget(triple) {
   const map = {
     'x86_64-unknown-linux-gnu': 'bun-linux-x64',
     'aarch64-unknown-linux-gnu': 'bun-linux-arm64',
-    'x86_64-apple-darwin': 'bun-darwin-x64',
     'aarch64-apple-darwin': 'bun-darwin-arm64',
+    'x86_64-apple-darwin': 'bun-darwin-x64',
     'x86_64-pc-windows-msvc': 'bun-windows-x64',
+    'aarch64-pc-windows-msvc': 'bun-windows-arm64',
   }
   return map[triple]
 }

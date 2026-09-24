@@ -14,7 +14,7 @@
  *   target 形如 bun-linux-x64 / bun-linux-arm64 / bun-darwin-arm64 / bun-windows-x64
  *   不传则编译全部平台。
  */
-import { readFileSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getMacroDefines, DEFAULT_BUILD_FEATURES } from './defines.ts'
 
@@ -24,6 +24,7 @@ const ALL_TARGETS = [
   'bun-darwin-x64',
   'bun-darwin-arm64',
   'bun-windows-x64',
+  'bun-windows-arm64',
 ]
 
 const requested = process.argv.slice(2)
@@ -75,6 +76,7 @@ function targetToTriple(target: string): string {
     'bun-darwin-x64': 'x86_64-apple-darwin',
     'bun-darwin-arm64': 'aarch64-apple-darwin',
     'bun-windows-x64': 'x86_64-pc-windows-msvc',
+    'bun-windows-arm64': 'aarch64-pc-windows-msvc',
   }
   return map[target] ?? 'unknown'
 }
@@ -102,6 +104,7 @@ function targetToRgDir(target: string): string {
     'bun-darwin-x64': 'x64-darwin',
     'bun-darwin-arm64': 'arm64-darwin',
     'bun-windows-x64': 'x64-win32',
+    'bun-windows-arm64': 'arm64-win32',
   }
   return map[target] ?? 'unknown'
 }
@@ -132,6 +135,42 @@ function readRgAsBase64(target: string): string | null {
     `  [embed] ripgrep not found (${candidates[0]}); binary ships without embedded rg`,
   )
   return null
+}
+
+// bfs/ugrep 的 vendor 位（fetch-rg.mjs 预取 / 自建 release 下载），
+// 与 rg 同款 base64 注入（计划书 1.1：readSearchToolAsBase64）。
+function readSearchToolsAsBase64(target: string): {
+  bfs: string | null
+  ugrep: string | null
+} {
+  const dir = targetToRgDir(target)
+  const out: { bfs: string | null; ugrep: string | null } = {
+    bfs: null,
+    ugrep: null,
+  }
+  for (const tool of ['bfs', 'ugrep'] as const) {
+    const binary = target.startsWith('bun-windows') ? `${tool}.exe` : tool
+    const candidates = [
+      join('src', 'utils', 'vendor', 'search-tools', dir, binary),
+      join('vendor', 'search-tools', dir, binary),
+    ]
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        const buffer = readFileSync(candidate)
+        console.log(
+          `  [embed] ${tool} (${dir}): ${Math.round(buffer.length / 1024)} KB`,
+        )
+        out[tool] = buffer.toString('base64')
+        break
+      }
+    }
+    if (!out[tool]) {
+      console.warn(
+        `  [embed] ${tool} not found (${candidates[0]}); binary ships without embedded ${tool}`,
+      )
+    }
+  }
+  return out
 }
 
 // Create a Bun plugin that overrides src/utils/embeddedNatives.gen.ts and
@@ -187,6 +226,7 @@ for (const target of targets) {
 
   // ── 收集当前 target 的 rg（可选：无文件则产物不内嵌，运行时回退）──
   const embeddedRipgrep = readRgAsBase64(target)
+  const embeddedSearchTools = readSearchToolsAsBase64(target)
 
   // ── Bun.build --compile with embedded natives plugin ──
   // minify：compile 此前未开压缩，产物是未压缩源码，体积直接决定 JSC 的
@@ -202,7 +242,13 @@ for (const target of targets) {
       'process.env.NODE_ENV': JSON.stringify('production'),
     },
     features,
-    plugins: [createEmbeddedNativesPlugin(embeddedNatives, embeddedRipgrep)],
+    plugins: [
+      createEmbeddedNativesPlugin(
+        embeddedNatives,
+        embeddedRipgrep,
+        embeddedSearchTools,
+      ),
+    ],
     minify: true,
     format: 'esm',
     bytecode: true,

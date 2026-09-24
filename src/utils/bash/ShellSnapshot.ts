@@ -11,6 +11,10 @@ import {
   embeddedSearchToolsBinaryPath,
   hasEmbeddedSearchTools,
 } from '../embeddedTools.js'
+import {
+  hasEmbeddedBfsPayload,
+  hasEmbeddedUgrepPayload,
+} from '../embeddedSearchTools.js'
 import { getClaudeConfigHomeDir } from '../envUtils.js'
 import { pathExists } from '../file.js'
 import { getFsImplementation } from '../fsOperations.js'
@@ -155,27 +159,53 @@ export function createFindGrepShellIntegration(): string | null {
     return null
   }
   const binaryPath = embeddedSearchToolsBinaryPath()
-  return [
-    // User shell configs may define aliases like `alias find=gfind` or
-    // `alias grep=ggrep` (common on macOS with Homebrew GNU tools). The
-    // snapshot sources user aliases before these function definitions, and
-    // bash expands aliases before function lookup — so a renaming alias
-    // would silently bypass the embedded bfs/ugrep dispatch. Clear them first
-    // (same fix the rg integration uses).
-    'unalias find 2>/dev/null || true',
-    'unalias grep 2>/dev/null || true',
-    createArgv0ShellFunction('find', 'bfs', binaryPath, [
-      '-regextype',
-      'findutils-default',
-    ]),
-    createArgv0ShellFunction('grep', 'ugrep', binaryPath, [
-      '-G',
-      '--ignore-files',
-      '--hidden',
-      '-I',
-      ...VCS_DIRECTORIES_TO_EXCLUDE.map(d => `--exclude-dir=${d}`),
-    ]),
-  ].join('\n')
+  const parts: string[] = []
+  // 工具级降级（对齐官方语义）：bfs/ugrep 哪个不在本 build 里，哪个的
+  // shell 函数就不注入——Windows（无 bfs）只注入 grep→ugrep，find 保持
+  // 系统原版。unalias 同样只清有集成的名字。
+  if (hasEmbeddedBfsPayload()) {
+    logForDebugging(
+      '[shell-snapshot] find → bfs integration injected (payload present)',
+    )
+    parts.push(
+      'unalias find 2>/dev/null || true',
+      // User shell configs may define aliases like `alias find=gfind`
+      // (common on macOS with Homebrew GNU tools); a renaming alias would
+      // silently bypass the embedded dispatch (same fix the rg integration
+      // uses).
+      createArgv0ShellFunction('find', 'bfs', binaryPath, [
+        '-regextype',
+        'findutils-default',
+      ]),
+    )
+  } else {
+    logForDebugging(
+      '[shell-snapshot] find → bfs skipped (no bfs payload in this build) → system find',
+    )
+  }
+  if (hasEmbeddedUgrepPayload()) {
+    logForDebugging(
+      '[shell-snapshot] grep → ugrep integration injected (payload present)',
+    )
+    parts.push(
+      'unalias grep 2>/dev/null || true',
+      createArgv0ShellFunction('grep', 'ugrep', binaryPath, [
+        '-G',
+        '--ignore-files',
+        '--hidden',
+        '-I',
+        ...VCS_DIRECTORIES_TO_EXCLUDE.map(d => `--exclude-dir=${d}`),
+      ]),
+    )
+  } else {
+    logForDebugging(
+      '[shell-snapshot] grep → ugrep skipped (no ugrep payload in this build) → system grep',
+    )
+  }
+  if (parts.length === 0) {
+    return null
+  }
+  return parts.join('\n')
 }
 
 function getConfigFile(shellPath: string): string {
