@@ -183,6 +183,9 @@ jobs:
           if [ -n "${{ matrix.shost }}" ]; then HOST_ARGS="--host=${{ matrix.shost }}"; fi
           LDFLAGS_ARGS="-static"
           if [ "${{ runner.os }}" = "macOS" ]; then LDFLAGS_ARGS=""; fi
+          if [ -n "${{ matrix.shost }}" ]; then LDFLAGS_ARGS=""; fi
+          # 交叉 C++ 静态链接的 libstdc++ 依赖链不稳定——aarch64 交叉用动态
+          # （产物给 arm64 glibc 服务器用，系统自带 libstdc++）
           ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
           make -j4
       - name: Build ugrep (windows official zip)
