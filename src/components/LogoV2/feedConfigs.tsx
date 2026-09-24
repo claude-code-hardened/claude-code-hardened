@@ -1,6 +1,7 @@
 import figures from 'figures';
 import { homedir } from 'os';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import type { Step } from '../../projectOnboardingState.js';
 import { formatCreditAmount, getCachedReferrerReward } from '../../services/api/referral.js';
 import type { LogOption } from '../../types/logs.js';
@@ -20,10 +21,10 @@ export function createRecentActivityFeed(activities: LogOption[]): FeedConfig {
   });
 
   return {
-    title: 'Recent activity',
+    title: t('Recent activity'),
     lines,
-    footer: lines.length > 0 ? '/resume for more' : undefined,
-    emptyMessage: 'No recent activity',
+    footer: lines.length > 0 ? t('/resume for more') : undefined,
+    emptyMessage: t('No recent activity'),
   };
 }
 
@@ -45,13 +46,13 @@ export function createWhatsNewFeed(releaseNotes: string[]): FeedConfig {
 
   const emptyMessage =
     process.env.USER_TYPE === 'ant'
-      ? 'Unable to fetch latest claude-cli-internal commits'
-      : 'Check the Claude Code changelog for updates';
+      ? t('Unable to fetch latest claude-cli-internal commits')
+      : t('Check the Claude Code changelog for updates');
 
   return {
-    title: process.env.USER_TYPE === 'ant' ? "What's new [ANT-ONLY: Latest CC commits]" : "What's new",
+    title: process.env.USER_TYPE === 'ant' ? t("What's new [ANT-ONLY: Latest CC commits]") : t("What's new"),
     lines,
-    footer: lines.length > 0 ? '/release-notes for more' : undefined,
+    footer: lines.length > 0 ? t('/release-notes for more') : undefined,
     emptyMessage,
   };
 }
@@ -70,7 +71,7 @@ export function createProjectOnboardingFeed(steps: Step[]): FeedConfig {
 
   const warningText =
     getCwd() === homedir()
-      ? 'Note: You have launched claude in your home directory. For the best experience, launch it in a project directory instead.'
+      ? t('Note: You have launched claude in your home directory. For the best experience, launch it in a project directory instead.')
       : undefined;
 
   if (warningText) {
@@ -80,7 +81,7 @@ export function createProjectOnboardingFeed(steps: Step[]): FeedConfig {
   }
 
   return {
-    title: 'Tips for getting started',
+    title: t('Tips for getting started'),
     lines,
   };
 }
@@ -88,10 +89,10 @@ export function createProjectOnboardingFeed(steps: Step[]): FeedConfig {
 export function createGuestPassesFeed(): FeedConfig {
   const reward = getCachedReferrerReward();
   const subtitle = reward
-    ? `Share Claude Code and earn ${formatCreditAmount(reward)} of extra usage`
-    : 'Share Claude Code with friends';
+    ? t('Share Claude Code and earn {{amount}} of extra usage', { amount: formatCreditAmount(reward) })
+    : t('Share Claude Code with friends');
   return {
-    title: '3 guest passes',
+    title: t('3 guest passes'),
     lines: [],
     customContent: {
       content: (

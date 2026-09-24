@@ -1,4 +1,5 @@
 import { getDirectConnectServerUrl, getSessionId } from '../bootstrap/state.js'
+import { t } from 'src/i18n/index.js'
 import type { LogOption } from '../types/logs.js'
 
 // Lazy require: stringWidth lives in the @anthropic/ink barrel (see truncate.ts).
@@ -99,9 +100,9 @@ export function calculateOptimalLeftWidth(
  */
 export function formatWelcomeMessage(username: string | null): string {
   if (!username || username.length > MAX_USERNAME_LENGTH) {
-    return 'Welcome back!'
+    return t('Welcome back!')
   }
-  return `Welcome back ${username}!`
+  return t('Welcome back {{username}}!', { username })
 }
 
 /**
