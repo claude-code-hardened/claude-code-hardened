@@ -201,7 +201,81 @@ async function ensureTarget(t) {
   return false
 }
 
+// ── bfs/ugrep：search-tools-prebuilt 自建 release（计划书 1.4） ─────────────
+// 资产是裸二进制（非压缩包）：bfs-<triple> / ugrep-<triple>，直接落 vendor。
+const SEARCH_TOOLS_BASE = `https://github.com/xiaocongyu66/search-tools-prebuilt/releases/download`
+
+// workflow triple → rg 的 vendor 目录布局（<arch>-<platform>）
+const SEARCH_TOOL_TRIPLES = {
+  'x64-linux': 'x86_64-unknown-linux-musl',
+  'arm64-linux': 'aarch64-unknown-linux-musl',
+  'x64-darwin': 'x86_64-apple-darwin',
+  'arm64-darwin': 'aarch64-apple-darwin',
+}
+
+async function searchToolsReleaseTag() {
+  try {
+    // latest release 的 redirect（免 API 限流）
+    const res = await fetch(
+      'https://github.com/xiaocongyu66/search-tools-prebuilt/releases/latest',
+      {
+        method: 'HEAD',
+        redirect: 'follow',
+        signal: AbortSignal.timeout(30_000),
+      },
+    )
+    const finalUrl = res.url || ''
+    return finalUrl.split('/tag/')[1] || null
+  } catch (e) {
+    console.warn(
+      `[fetch-search] release tag resolve failed: ${e instanceof Error ? e.message : e}`,
+    )
+    return null
+  }
+}
+
+async function ensureSearchTool(t, tool, tag) {
+  const dir = t.dir
+  const destDir = join('src', 'utils', 'vendor', 'search-tools', dir)
+  const destBin = join(destDir, tool)
+  if (existsSync(destBin)) {
+    console.log(`[fetch-search] ${dir}/${tool}: already present, skipping`)
+    return true
+  }
+  const triple = SEARCH_TOOL_TRIPLES[dir]
+  if (!triple) return false
+  if (!tag) {
+    console.warn('[fetch-search] no release found in search-tools-prebuilt')
+    return false
+  }
+  const url = `${SEARCH_TOOLS_BASE}/${tag}/${tool}-${triple}`
+  try {
+    console.log(`[fetch-search] ${dir}/${tool}: trying ${url}`)
+    const buf = await fetchBuffer(url)
+    if (buf.length < 20_000) {
+      console.warn(
+        `[fetch-search] ${dir}/${tool}: payload too small (${buf.length}B)`,
+      )
+      return false
+    }
+    mkdirSync(destDir, { recursive: true })
+    writeFileSync(destBin, buf)
+    chmodSync(destBin, 0o755)
+    console.log(
+      `[fetch-search] ${dir}/${tool}: installed (${Math.round(buf.length / 1024)} KB)`,
+    )
+    return true
+  } catch (e) {
+    console.warn(
+      `[fetch-search] ${dir}/${tool}: failed: ${e instanceof Error ? e.message : e}`,
+    )
+    return false
+  }
+}
+
 let failed = 0
+let searchFailed = 0
+const searchTag = await searchToolsReleaseTag()
 for (const t of TARGETS) {
   const ok = await ensureTarget(t)
   if (!ok) {
@@ -210,8 +284,13 @@ for (const t of TARGETS) {
       `[fetch-rg] ${t.dir}: all sources failed — product for this target ships without embedded rg`,
     )
   }
+  // bfs/ugrep 预取（可选增强，失败不阻塞）
+  for (const tool of ['bfs', 'ugrep']) {
+    const okTool = await ensureSearchTool(t, tool, searchTag)
+    if (!okTool) searchFailed++
+  }
 }
 console.log(
-  `[fetch-rg] done: ${TARGETS.length - failed}/${TARGETS.length} targets ready`,
+  `[fetch-rg] done: rg ${TARGETS.length - failed}/${TARGETS.length}, search-tools ${TARGETS.length * 2 - searchFailed}/${TARGETS.length * 2}`,
 )
 process.exit(0) // 单平台失败不阻塞打包（回退链仍在）
