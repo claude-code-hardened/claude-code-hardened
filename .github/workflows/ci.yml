@@ -91,6 +91,30 @@ jobs:
             scc: ''
             scxx: ''
             shost: ''
+          # Linux musl x86_64（静态 .node —— Alpine 等无 glibc 环境原生可用）
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            rgdir: x64-linux-musl
+            scc: musl-gcc
+            scxx: musl-g++
+            shost: ''
+            musl: true
+          # Linux musl ARM64（ARM runner + rust:alpine 容器原生编译）
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            rgdir: arm64-linux-musl
+            scc: gcc
+            scxx: g++
+            shost: ''
+            musl: true
+            alpine: true
+          # Windows ARM64（MSVC ARM64 组件，windows-2022 镜像预装）
+          - os: windows-2022
+            target: aarch64-pc-windows-msvc
+            rgdir: arm64-win32
+            scc: ''
+            scxx: ''
+            shost: ''
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -108,22 +132,41 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
+      - name: Install musl toolchain (linux x64)
+        if: matrix.musl && !matrix.alpine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> $GITHUB_ENV
+
+      - name: Build in rust:alpine container (musl arm64)
+        if: matrix.alpine
+        run: |
+          # ARM runner 上的 musl 原生编译：rust 官方 alpine 镜像（aarch64）
+          docker run --rm -v "$PWD":/work -w /work rust:alpine sh -c '
+            for name in token-counter transcript-parser color-diff file-index; do
+              if [ -f "packages/$name-napi/native/Cargo.toml" ]; then
+                (cd "packages/$name-napi/native" && cargo build --release --target aarch64-unknown-linux-musl)
+              fi
+            done'
+
       - name: Build (token-counter)
+        if: ${{ !matrix.alpine }}
         working-directory: packages/token-counter-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build (transcript-parser)
-        if: hashFiles('packages/transcript-parser-napi/native/Cargo.toml') != ''
+        if: hashFiles('packages/transcript-parser-napi/native/Cargo.toml') != '' && !matrix.alpine
         working-directory: packages/transcript-parser-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build (color-diff)
-        if: hashFiles('packages/color-diff-napi/native/Cargo.toml') != ''
+        if: hashFiles('packages/color-diff-napi/native/Cargo.toml') != '' && !matrix.alpine
         working-directory: packages/color-diff-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Build (file-index)
-        if: hashFiles('packages/file-index-napi/native/Cargo.toml') != ''
+        if: hashFiles('packages/file-index-napi/native/Cargo.toml') != '' && !matrix.alpine
         working-directory: packages/file-index-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
@@ -149,23 +192,40 @@ jobs:
           VER=$(curl -sI https://github.com/tavianator/bfs/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
           mkdir bfs-src
           curl -fsSL "https://github.com/tavianator/bfs/releases/download/${VER}/bfs-${VER}.tar.gz" | tar xz -C bfs-src
-          cd bfs-src
-          ./configure CC="${{ matrix.scc }}" LDFLAGS="-static"
-          make -j4 bfs
+          if [ "${{ matrix.alpine }}" = "true" ]; then
+            # musl arm64：rust:alpine 容器内原生编译
+            docker run --rm -v "$PWD":/work -w /work/gcc-build rust:alpine sh -c '
+              apk add --no-cache oniguruma-dev >/dev/null 2>&1 || true
+              cp -r /work/bfs-src/. .
+              ./configure CC=gcc LDFLAGS="-static" && make -j"$(nproc)" bfs'
+            cp gcc-build/bfs bfs-src/bin/bfs
+          else
+            cd bfs-src
+            ./configure CC="${{ matrix.scc }}" LDFLAGS="-static"
+            make -j4 bfs
+          fi
       - name: Build ugrep
         if: runner.os != 'Windows'
         shell: bash
         run: |
           VER=$(curl -sI https://github.com/Genivia/ugrep/releases/latest | grep -i '^location:' | sed 's|.*/tag/||' | tr -d '\r\n')
           curl -fsSL "https://github.com/Genivia/ugrep/archive/refs/tags/${VER}.tar.gz" | tar xz
-          cd ugrep-*/
-          autoreconf -i
-          HOST_ARGS=""
-          if [ -n "${{ matrix.shost }}" ]; then HOST_ARGS="--host=${{ matrix.shost }}"; fi
-          LDFLAGS_ARGS="-static"
-          if [ "${{ runner.os }}" = "macOS" ]; then LDFLAGS_ARGS=""; fi
-          ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
-          make -j4
+          if [ "${{ matrix.alpine }}" = "true" ]; then
+            docker run --rm -v "$PWD":/work -w /work/gcc-build rust:alpine sh -c '
+              apk add --no-cache autoconf automake libtool pcre2-dev zlib-dev bzip2-dev xz-dev lz4-dev zstd-dev >/dev/null
+              cp -r /work/ugrep-*/. .
+              autoreconf -i && ./configure LDFLAGS="-static" --enable-static && make -j"$(nproc)"'
+            mkdir -p ugrep-out && cp gcc-build/bin/ugrep ugrep-out/ugrep
+          else
+            cd ugrep-*/
+            autoreconf -i
+            HOST_ARGS=""
+            if [ -n "${{ matrix.shost }}" ]; then HOST_ARGS="--host=${{ matrix.shost }}"; fi
+            LDFLAGS_ARGS="-static"
+            if [ "${{ runner.os }}" = "macOS" ]; then LDFLAGS_ARGS=""; fi
+            ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
+            make -j4
+          fi
       - name: Build ugrep (windows official zip)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -202,7 +262,7 @@ jobs:
             cp "$src" "stage/$name/${{ matrix.target }}/$name.node"
           done
           cp bfs-src/bin/bfs "stage/search-tools/${{ matrix.rgdir }}/bfs"
-          cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
+          cp ugrep-*/bin/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep" 2>/dev/null || cp ugrep-out/ugrep "stage/search-tools/${{ matrix.rgdir }}/ugrep"
           find stage -type f
 
       - name: Stage artifacts (windows)
@@ -269,7 +329,7 @@ jobs:
           # 严格化断言：4 模块 × 5 triple + bfs x4 + ugrep x5，缺一即失败
           MISSING=0
           for name in token-counter transcript-parser color-diff file-index; do
-            for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc; do
+            for triple in x86_64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
               [ -f "vendor/$name/$triple/$name.node" ] || { echo "::error::vendor missing: $name/$triple"; MISSING=1; }
             done
           done

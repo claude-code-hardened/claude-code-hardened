@@ -45,6 +45,12 @@ const TARGETS = [
     ext: 'tar.gz',
   },
   {
+    triple: 'x86_64-unknown-linux-musl',
+    dir: 'x64-linux-musl',
+    assetTriple: 'x86_64-unknown-linux-musl',
+    ext: 'tar.gz',
+  },
+  {
     triple: 'aarch64-unknown-linux-gnu',
     dir: 'arm64-linux',
     assetTriple: 'aarch64-unknown-linux-gnu',
@@ -66,6 +72,12 @@ const TARGETS = [
     triple: 'x86_64-pc-windows-msvc',
     dir: 'x64-win32',
     assetTriple: 'x86_64-pc-windows-msvc',
+    ext: 'zip',
+  },
+  {
+    triple: 'aarch64-pc-windows-msvc',
+    dir: 'arm64-win32',
+    assetTriple: 'aarch64-pc-windows-msvc',
     ext: 'zip',
   },
 ]
@@ -224,6 +236,7 @@ for (const t of TARGETS) {
   const missingBfs = [
     'x64-linux',
     'arm64-linux',
+    'x64-linux-musl',
     'x64-darwin',
     'arm64-darwin',
   ].filter(
@@ -232,6 +245,7 @@ for (const t of TARGETS) {
   const missingUgrep = [
     'x64-linux',
     'arm64-linux',
+    'x64-linux-musl',
     'x64-darwin',
     'arm64-darwin',
     'x64-win32',
