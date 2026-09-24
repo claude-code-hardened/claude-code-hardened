@@ -77,9 +77,12 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   // argv0 dispatch（对齐 ant-native）：compile 产物被 `exec -a rg/bfs/ugrep`
-  // 调用时，把内嵌的对应二进制 stage 到内存并透传执行。dev 模式 argv[0]
-  // 是 bun 本体，basename 不命中 → 正常 CLI 流程，零影响。
-  const argv0 = (process.argv[0] ?? '').replace(/^.*[\\/]/, '');
+  // （bash）或 `ARGV0=<tool> execPath`（zsh/Windows，无 exec -a）调用时，
+  // 把内嵌的对应二进制 stage 到内存并透传执行。官方 Bun 不读 ARGV0 env，
+  // 须在此显式兜底——否则 zsh/Windows 的 find/grep 函数会落到 CLI 流程
+  // 把工具参数当 ccb 选项（实测 "unknown option '-G'"）。
+  // dev 模式 argv[0] 是 bun 本体且无 ARGV0，basename 不命中 → 零影响。
+  const argv0 = (process.env.ARGV0 || process.argv[0] || '').replace(/^.*[\\/]/, '');
   if (argv0 === 'rg' || argv0 === 'bfs' || argv0 === 'ugrep') {
     const { dispatchEmbeddedTool } = await import('../utils/embeddedDispatch.js');
     // slice(2)：argv[1] 是 bundle 内部脚本路径，不能透传给工具（与下方
