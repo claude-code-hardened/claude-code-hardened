@@ -187,7 +187,8 @@ jobs:
           # 交叉 C++ 静态链接的 libstdc++ 依赖链不稳定——aarch64 交叉用动态
           # （产物给 arm64 glibc 服务器用，系统自带 libstdc++）
           ./configure CC="${{ matrix.scc }}" CXX="${{ matrix.scxx }}" LDFLAGS="${LDFLAGS_ARGS}" --enable-static $HOST_ARGS
-          make -j4
+          # 只编 ugrep 主目标：indexer 规则硬编码 -static，macOS 缺 crt0 必挂（上游 autobuild 从不在 macOS 编它）
+          make -j4 ugrep
       - name: Build ugrep (windows official zip)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -273,7 +274,7 @@ jobs:
           cd ugrep-*/
           autoreconf -i
           ./configure CC=gcc CXX=g++ LDFLAGS="-static" --enable-static
-          make -j4
+          make -j4 ugrep
 
       - name: Stage artifact
         run: |
