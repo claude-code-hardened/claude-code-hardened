@@ -65,6 +65,7 @@ export const getRipgrepConfig = memoize((): RipgrepConfig => {
     process.platform === 'win32'
       ? path.resolve(rgRoot, `${process.arch}-win32`, 'rg.exe')
       : path.resolve(rgRoot, `${process.arch}-${process.platform}`, 'rg')
+  logForDebugging(`[rg] mode=vendor → ${command}`)
 
   return resolveBuiltinWithFallback(command)
 })

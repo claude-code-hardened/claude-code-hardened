@@ -156,6 +156,11 @@ const VCS_DIRECTORIES_TO_EXCLUDE = [
  */
 export function createFindGrepShellIntegration(): string | null {
   if (!hasEmbeddedSearchTools()) {
+    // dev / 常规构建：无嵌入 payload，find/grep 保持系统原版（可观测性：
+    // debug 日志里能看到这条，避免"没看到集成日志"被当成 bug）
+    logForDebugging(
+      '[shell-snapshot] find/grep integration skipped (no embedded search tools in this build)',
+    )
     return null
   }
   const binaryPath = embeddedSearchToolsBinaryPath()
