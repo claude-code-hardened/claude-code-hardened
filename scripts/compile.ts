@@ -178,23 +178,36 @@ function readSearchToolsAsBase64(target: string): {
 function createEmbeddedNativesPlugin(
   embeddedNatives: Record<string, string>,
   embeddedRipgrep: string | null,
+  embeddedSearchTools: { bfs: string | null; ugrep: string | null },
 ) {
   return {
     name: 'embedded-natives',
     setup(build: any) {
       build.onResolve(
-        { filter: /embedded(Natives|Rg)\.gen(\.ts)?$/ },
+        { filter: /embedded(Natives|Rg|Search)\.gen(\.ts)?$/ },
         args => ({
           path: args.path,
           namespace: 'embedded-natives',
         }),
       )
-      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => ({
-        contents: args.path.includes('embeddedRg')
-          ? `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`
-          : `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`,
-        loader: 'js',
-      }))
+      build.onLoad({ filter: /.*/, namespace: 'embedded-natives' }, args => {
+        if (args.path.includes('embeddedRg')) {
+          return {
+            contents: `export const EMBEDDED_RIPGREP = ${JSON.stringify(embeddedRipgrep)};\n`,
+            loader: 'js',
+          }
+        }
+        if (args.path.includes('embeddedSearch')) {
+          return {
+            contents: `export const EMBEDDED_SEARCH_TOOLS = ${JSON.stringify(embeddedSearchTools)};\n`,
+            loader: 'js',
+          }
+        }
+        return {
+          contents: `export const EMBEDDED_NATIVES = ${JSON.stringify(embeddedNatives)};\n`,
+          loader: 'js',
+        }
+      })
     },
   }
 }
