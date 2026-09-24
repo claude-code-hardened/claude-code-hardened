@@ -113,7 +113,8 @@ function targetToRgDir(target: string): string {
  */
 function readRgAsBase64(target: string): string | null {
   const dir = targetToRgDir(target)
-  const binary = process.platform === 'win32' ? 'rg.exe' : 'rg'
+  // 由 target 推导（host platform 在交叉编译场景会选错文件）
+  const binary = target.startsWith('bun-windows') ? 'rg.exe' : 'rg'
   const candidates = [
     join('src', 'utils', 'vendor', 'ripgrep', dir, binary),
     join('vendor', 'ripgrep', dir, binary),
