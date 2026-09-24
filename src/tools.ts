@@ -5,7 +5,10 @@ import { isSearchExtraToolsEnabledOptimistic } from './utils/searchExtraTools.js
 import { isTodoV2Enabled } from './utils/tasks.js'
 import type { ToolPermissionContext } from './Tool.js'
 import { getDenyRuleForTool } from './utils/permissions/permissions.js'
-import { hasEmbeddedSearchTools } from './utils/embeddedTools.js'
+import {
+  hasEmbeddedBfsPayload,
+  hasEmbeddedUgrepPayload,
+} from './utils/embeddedSearchTools.js'
 import { isEnvTruthy } from './utils/envUtils.js'
 import { isPowerShellToolEnabled } from './utils/shell/shellToolUtils.js'
 import { isAgentSwarmsEnabled } from './utils/agentSwarmsEnabled.js'
@@ -381,10 +384,12 @@ export function getAllBaseTools(): Tools {
     getAgentTool(),
     getTaskOutputTool(),
     getBashTool(),
-    // Ant-native builds have bfs/ugrep embedded in the bun binary (same ARGV0
-    // trick as ripgrep). When available, find/grep in Claude's shell are aliased
-    // to these fast tools, so the dedicated Glob/Grep tools are unnecessary.
-    ...(hasEmbeddedSearchTools() ? [] : [getGlobTool(), getGrepTool()]),
+    // bfs/ugrep embedded builds（同 ARGV0 分发）：shell 里 find/grep 被接管，
+    // 被接管的专用工具移除。工具级降级——只有 bfs 在才移除 GlobTool（find
+    // 接管文件搜索），只有 ugrep 在才移除 GrepTool；Windows（无 bfs）保留
+    // GlobTool。
+    ...(!hasEmbeddedBfsPayload() ? [getGlobTool()] : []),
+    ...(!hasEmbeddedUgrepPayload() ? [getGrepTool()] : []),
     getExitPlanModeV2Tool(),
     getFileReadTool(),
     getFileEditTool(),
