@@ -2369,5 +2369,16 @@
   "no cache reported · includes context resends": "キャッシュ未報告 · コンテキスト再送を含む",
   "⚠ {{n}} insight section(s) failed to generate": "⚠ {n} 個のインサイトセクションの生成に失敗",
   "Model {{model}} was unreachable or returned unparsable output. Re-run /insights to retry.": "モデル {{model}} に到達できないか、解析できない出力が返されました。/insights を再実行してリトライしてください。",
-  "no cache": "キャッシュなし"
+  "no cache": "キャッシュなし",
+  "Welcome to Claude Code for {{ideName}}": "{{ideName}} 向け Claude Code へようこそ",
+  "installed {{kind}} v{{version}}": "{{kind}} v{{version}} をインストール済み",
+  "Claude has context of": "Claude は以下を把握しています:",
+  "open files": "開いているファイル",
+  "and": "と",
+  "selected lines": "選択した行",
+  "Review Claude Code's changes": "Claude Code の変更をレビュー",
+  "in the comfort of your IDE": "IDE から直接",
+  "for Quick Launch": "クイック起動用",
+  "to reference files or lines in your input": "入力でファイルや行を参照する",
+  "Press Enter to continue": "Enter を押して続行"
 }

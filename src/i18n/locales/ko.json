@@ -2369,5 +2369,16 @@
   "no cache reported · includes context resends": "캐시 미보고 · 컨텍스트 재전송 포함",
   "⚠ {{n}} insight section(s) failed to generate": "⚠ 인사이트 섹션 {n}개 생성 실패",
   "Model {{model}} was unreachable or returned unparsable output. Re-run /insights to retry.": "모델 {{model}}에 도달할 수 없거나 파싱할 수 없는 출력이 반환되었습니다. /insights를 다시 실행하여 재시도하세요.",
-  "no cache": "캐시 없음"
+  "no cache": "캐시 없음",
+  "Welcome to Claude Code for {{ideName}}": "{{ideName}}용 Claude Code에 오신 것을 환영합니다",
+  "installed {{kind}} v{{version}}": "{{kind}} v{{version}} 설치됨",
+  "Claude has context of": "Claude가 인식하는 항목:",
+  "open files": "열린 파일",
+  "and": "그리고",
+  "selected lines": "선택한 줄",
+  "Review Claude Code's changes": "Claude Code의 변경 사항 검토",
+  "in the comfort of your IDE": "IDE에서 바로",
+  "for Quick Launch": "빠른 실행용",
+  "to reference files or lines in your input": "입력에서 파일이나 줄 참조하기",
+  "Press Enter to continue": "계속하려면 Enter를 누르세요"
 }

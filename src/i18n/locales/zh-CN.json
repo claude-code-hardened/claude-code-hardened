@@ -2601,5 +2601,16 @@
   "no cache reported · includes context resends": "未上报缓存 · 含全量上下文重发",
   "⚠ {{n}} insight section(s) failed to generate": "⚠ {n} 个洞察区块生成失败",
   "Model {{model}} was unreachable or returned unparsable output. Re-run /insights to retry.": "模型 {{model}} 不可达或返回了无法解析的输出。重跑 /insights 可重试。",
-  "no cache": "无缓存"
+  "no cache": "无缓存",
+  "Welcome to Claude Code for {{ideName}}": "欢迎使用 {{ideName}} 的 Claude Code",
+  "installed {{kind}} v{{version}}": "已安装 {{kind}} v{{version}}",
+  "Claude has context of": "Claude 能感知",
+  "open files": "打开的文件",
+  "and": "和",
+  "selected lines": "选中的行",
+  "Review Claude Code's changes": "审阅 Claude Code 的改动",
+  "in the comfort of your IDE": "尽在 IDE 中",
+  "for Quick Launch": "用于快速启动",
+  "to reference files or lines in your input": "在输入中引用文件或行",
+  "Press Enter to continue": "按 Enter 继续"
 }

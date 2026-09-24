@@ -11,6 +11,7 @@ import {
   toIDEDisplayName,
 } from '../utils/ide.js';
 import { Dialog } from '@anthropic/ink';
+import { t } from 'src/i18n/index.js';
 
 interface Props {
   onDone: () => void;
@@ -43,35 +44,39 @@ export function IdeOnboardingDialog({ onDone, installationStatus }: Props): Reac
         title={
           <>
             <Text color="claude">✻ </Text>
-            <Text>Welcome to Claude Code for {ideName}</Text>
+            <Text>{t('Welcome to Claude Code for {{ideName}}', { ideName })}</Text>
           </>
         }
-        subtitle={installedVersion ? `installed ${pluginOrExtension} v${installedVersion}` : undefined}
+        subtitle={installedVersion ? t('installed {{kind}} v{{version}}', { kind: pluginOrExtension, version: installedVersion }) : undefined}
         color="ide"
         onCancel={onDone}
         hideInputGuide
       >
         <Box flexDirection="column" gap={1}>
           <Text>
-            • Claude has context of <Text color="suggestion">⧉ open files</Text> and{' '}
-            <Text color="suggestion">⧉ selected lines</Text>
+            {`• ${t('Claude has context of')} `}
+            <Text color="suggestion">{`⧉ ${t('open files')}`}</Text>
+            {` ${t('and')} `}
+            <Text color="suggestion">{`⧉ ${t('selected lines')}`}</Text>
           </Text>
           <Text>
-            • Review Claude Code&apos;s changes <Text color="diffAddedWord">+11</Text>{' '}
-            <Text color="diffRemovedWord">-22</Text> in the comfort of your IDE
+            {`• ${t("Review Claude Code's changes")} `}
+            <Text color="diffAddedWord">+11</Text>{' '}
+            <Text color="diffRemovedWord">-22</Text>{' '}
+            {t('in the comfort of your IDE')}
           </Text>
           <Text>
-            • Cmd+Esc<Text dimColor> for Quick Launch</Text>
+            • Cmd+Esc<Text dimColor>{` ${t('for Quick Launch')}`}</Text>
           </Text>
           <Text>
             • {mentionShortcut}
-            <Text dimColor> to reference files or lines in your input</Text>
+            <Text dimColor>{` ${t('to reference files or lines in your input')}`}</Text>
           </Text>
         </Box>
       </Dialog>
       <Box paddingX={1}>
         <Text dimColor italic>
-          Press Enter to continue
+          {t('Press Enter to continue')}
         </Text>
       </Box>
     </>
