@@ -178,10 +178,12 @@ export function createFindGrepShellIntegration(): string | null {
       // (common on macOS with Homebrew GNU tools); a renaming alias would
       // silently bypass the embedded dispatch (same fix the rg integration
       // uses).
-      createArgv0ShellFunction('find', 'bfs', binaryPath, [
-        '-regextype',
-        'findutils-default',
-      ]),
+      // 注：不注入 -regextype findutils-default——bfs 4.1.4 不支持该值
+      // （仅 posix-basic/ed/sed/posix-extended），注入会让每条 find 报
+      // "Unsupported regex type" 完全不可用。实测 bfs 默认 regextype 走
+      // Oniguruma，已兼容 GNU find 的 \(a\|b\) 交替语义（posix-basic 同样
+      // 通过），默认即所需行为。
+      createArgv0ShellFunction('find', 'bfs', binaryPath, []),
     )
   } else {
     logForDebugging(
