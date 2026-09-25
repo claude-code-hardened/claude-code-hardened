@@ -2841,5 +2841,10 @@
   "Yes, and remember this directory": "はい、このディレクトリを記憶",
   "Yes, for this session": "はい、このセッションのみ",
   "Yes, show review": "はい、レビューを表示",
-  "You can always enable it later with /remote-control.": "後から /remote-control でいつでも有効化できます。"
+  "You can always enable it later with /remote-control.": "後から /remote-control でいつでも有効化できます。",
+  "Use Plan Mode to prepare for a complex request before making changes. Press {{shortcut}} twice to enable.": "複雑なリクエストの前に Plan Mode を準備。{{shortcut}} を 2 回押して有効化。",
+  "Hit {{shortcut}} to cycle between default, accept edits, plan, auto, and bypass modes": "{{shortcut}} で default / accept edits / plan / auto / bypass を切り替え",
+  "Use {{shortcut}} to paste images from your clipboard": "{{shortcut}} でクリップボードの画像を貼り付け",
+  "Your default model setting is Opus Plan Mode. Press {{shortcut}} twice to activate Plan Mode and plan with Claude Opus.": "デフォルトモデルは Opus Plan Mode です。{{shortcut}} を 2 回押すと Plan Mode が有効になり Claude Opus で計画します。",
+  "Continue your session in Claude Code Desktop with {{cmd}}": "Claude Code Desktop で {{cmd}} を使ってセッションを続行"
 }

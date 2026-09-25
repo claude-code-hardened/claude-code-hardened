@@ -109,7 +109,7 @@ const externalTips: Tip[] = [
   {
     id: 'plan-mode-for-complex-tasks',
     content: async () =>
-      `Use Plan Mode to prepare for a complex request before making changes. Press ${getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab')} twice to enable.`,
+      t('Use Plan Mode to prepare for a complex request before making changes. Press {{shortcut}} twice to enable.', { shortcut: getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab') }),
     cooldownSessions: 5,
     isRelevant: async () => {
       const config = getGlobalConfig()
@@ -406,14 +406,14 @@ const externalTips: Tip[] = [
   {
     id: 'shift-tab',
     content: async () =>
-      `Hit ${getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab')} to cycle between default, accept edits, plan, auto, and bypass modes`,
+      t('Hit {{shortcut}} to cycle between default, accept edits, plan, auto, and bypass modes', { shortcut: getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab') }),
     cooldownSessions: 10,
     isRelevant: async () => true,
   },
   {
     id: 'image-paste',
     content: async () =>
-      `Use ${getShortcutDisplay('chat:imagePaste', 'Chat', 'ctrl+v')} to paste images from your clipboard`,
+      t('Use {{shortcut}} to paste images from your clipboard', { shortcut: getShortcutDisplay('chat:imagePaste', 'Chat', 'ctrl+v') }),
     cooldownSessions: 20,
     isRelevant: async () => true,
   },
@@ -448,7 +448,7 @@ const externalTips: Tip[] = [
     id: 'desktop-shortcut',
     content: async (ctx?) => {
       const blue = color('suggestion', ctx?.theme ?? 'dark')
-      return `Continue your session in Claude Code Desktop with ${blue('/desktop')}`
+      return t('Continue your session in Claude Code Desktop with {{cmd}}', { cmd: '/desktop' })
     },
     cooldownSessions: 15,
     isRelevant: async () => {
@@ -476,7 +476,7 @@ const externalTips: Tip[] = [
   {
     id: 'opusplan-mode-reminder',
     content: async () =>
-      `Your default model setting is Opus Plan Mode. Press ${getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab')} twice to activate Plan Mode and plan with Claude Opus.`,
+      t('Your default model setting is Opus Plan Mode. Press {{shortcut}} twice to activate Plan Mode and plan with Claude Opus.', { shortcut: getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab') }),
     cooldownSessions: 2,
     async isRelevant() {
       if (process.env.USER_TYPE === 'ant') return false

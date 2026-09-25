@@ -2841,5 +2841,10 @@
   "Yes, and remember this directory": "是，并记住此目录",
   "Yes, for this session": "是，仅本次会话",
   "Yes, show review": "是，显示审查",
-  "You can always enable it later with /remote-control.": "之后随时可用 /remote-control 启用。"
+  "You can always enable it later with /remote-control.": "之后随时可用 /remote-control 启用。",
+  "Use Plan Mode to prepare for a complex request before making changes. Press {{shortcut}} twice to enable.": "用 Plan Mode 准备复杂请求。按 {{shortcut}} 两次启用。",
+  "Hit {{shortcut}} to cycle between default, accept edits, plan, auto, and bypass modes": "按 {{shortcut}} 在 default、accept edits、plan、auto、bypass 模式间切换",
+  "Use {{shortcut}} to paste images from your clipboard": "按 {{shortcut}} 粘贴剪贴板图片",
+  "Your default model setting is Opus Plan Mode. Press {{shortcut}} twice to activate Plan Mode and plan with Claude Opus.": "你的默认模型设置为 Opus Plan Mode。按 {{shortcut}} 两次激活 Plan Mode 并用 Claude Opus 规划。",
+  "Continue your session in Claude Code Desktop with {{cmd}}": "在 Claude Code Desktop 中用 {{cmd}} 继续会话"
 }
