@@ -19,6 +19,7 @@
  * Security: never renders raw API key values. All output uses masked previews.
  */
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import type { AuthStatus } from './getAuthStatus.js';
 
@@ -28,13 +29,14 @@ import type { AuthStatus } from './getAuthStatus.js';
 
 function SubscriptionRow({ subscription }: { subscription: AuthStatus['subscription'] }): React.ReactNode {
   const icon = subscription.active ? '☑' : '☐';
-  const planLabel = subscription.active && subscription.plan ? ` ${subscription.plan} plan` : '';
-  const statusText = subscription.active ? `logged in${planLabel}` : 'not logged in';
+  const planLabel = subscription.active && subscription.plan ? ` ${subscription.plan} ${t('plan')}` : '';
+  const statusText = subscription.active ? `${t('logged in')}${planLabel}` : t('not logged in');
 
   return (
     <Box>
       <Text color={subscription.active ? 'success' : undefined}>
-        {icon} Subscription (claude.ai){'  '}
+        {icon} {t('Subscription (claude.ai)')}
+        {'  '}
       </Text>
       <Text dimColor={!subscription.active}>{statusText}</Text>
     </Box>
@@ -45,8 +47,8 @@ function WorkspaceKeyRow({ workspaceKey }: { workspaceKey: AuthStatus['workspace
   if (!workspaceKey.set) {
     return (
       <Box>
-        <Text>{'☐ Workspace API key                '}</Text>
-        <Text dimColor>not set</Text>
+        <Text>{`☐ ${t('Workspace API key')}                `}</Text>
+        <Text dimColor>{t('not set')}</Text>
       </Box>
     );
   }
@@ -54,9 +56,9 @@ function WorkspaceKeyRow({ workspaceKey }: { workspaceKey: AuthStatus['workspace
   if (!workspaceKey.prefixValid) {
     return (
       <Box>
-        <Text color="warning">{'⚠ Workspace API key                '}</Text>
+        <Text color="warning">{`⚠ ${t('Workspace API key')}                `}</Text>
         <Text>{workspaceKey.keyPreview}</Text>
-        <Text color="warning">{'  (sk-ant-api03-* required)'}</Text>
+        <Text color="warning">{`  ${t('(sk-ant-api03-* required)')}`}</Text>
       </Box>
     );
   }
@@ -64,14 +66,14 @@ function WorkspaceKeyRow({ workspaceKey }: { workspaceKey: AuthStatus['workspace
   // Source label: distinguish env var from saved settings
   const sourceLabel =
     workspaceKey.source === 'settings'
-      ? '  (saved to settings)'
+      ? `  ${t('(saved to settings)')}`
       : workspaceKey.source === 'env'
-        ? '  (from ANTHROPIC_API_KEY env)'
+        ? `  ${t('(from ANTHROPIC_API_KEY env)')}`
         : '';
 
   return (
     <Box>
-      <Text color="success">{'☑ Workspace API key                '}</Text>
+      <Text color="success">{`☑ ${t('Workspace API key')}                `}</Text>
       <Text>{workspaceKey.keyPreview}</Text>
       {sourceLabel ? <Text dimColor>{sourceLabel}</Text> : null}
     </Box>
@@ -89,12 +91,12 @@ function WorkspaceKeyInstructions({
   if (!workspaceKey.set && subscription.active) {
     return (
       <Box flexDirection="column" marginLeft={5} marginTop={0}>
-        <Text dimColor>To enable /vault /agents-platform /memory-stores:</Text>
-        <Text dimColor>{'Press W to set now (saves to settings.json, no restart needed)'}</Text>
-        <Text dimColor>{'  — or —'}</Text>
-        <Text dimColor>{'1. Open https://console.anthropic.com/settings/keys'}</Text>
-        <Text dimColor>{'2. Create a key (sk-ant-api03-*)'}</Text>
-        <Text dimColor>{'3. Set ANTHROPIC_API_KEY=<key> and restart'}</Text>
+        <Text dimColor>{t('To enable /vault /agents-platform /memory-stores:')}</Text>
+        <Text dimColor>{t('Press W to set now (saves to settings.json, no restart needed)')}</Text>
+        <Text dimColor>{t('  — or —')}</Text>
+        <Text dimColor>{t('1. Open https://console.anthropic.com/settings/keys')}</Text>
+        <Text dimColor>{t('2. Create a key (sk-ant-api03-*)')}</Text>
+        <Text dimColor>{t('3. Set ANTHROPIC_API_KEY=<key> and restart')}</Text>
       </Box>
     );
   }
@@ -121,7 +123,7 @@ export function AuthPlaneSummary({ status }: AuthPlaneSummaryProps): React.React
     <Box flexDirection="column" marginBottom={1}>
       {/* Section: Anthropic auth status */}
       <Box marginBottom={0}>
-        <Text bold>Anthropic auth status:</Text>
+        <Text bold>{t('Anthropic auth status:')}</Text>
       </Box>
 
       <Box marginLeft={2} flexDirection="column">
