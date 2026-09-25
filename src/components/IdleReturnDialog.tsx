@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import { formatTokens } from '../utils/format.js';
 import { Select } from './CustomSelect/index.js';
@@ -28,11 +29,11 @@ export function IdleReturnDialog({ idleMinutes, totalInputTokens, onDone }: Prop
         options={[
           {
             value: 'continue' as const,
-            label: 'Continue this conversation',
+            label: t('Continue this conversation'),
           },
           {
             value: 'clear' as const,
-            label: 'Send message as a new conversation',
+            label: t('Send message as a new conversation'),
           },
           {
             value: 'never' as const,

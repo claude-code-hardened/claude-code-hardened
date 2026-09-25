@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
@@ -65,10 +66,10 @@ export function MCPServerApprovalDialog({ serverName, onDone }: Props): React.Re
       <Select
         options={[
           {
-            label: `Use this and all future MCP servers in this project`,
+            label: t(`Use this and all future MCP servers in this project`),
             value: 'yes_all',
           },
-          { label: `Use this MCP server`, value: 'yes' },
+          { label: t(`Use this MCP server`), value: 'yes' },
           { label: `Continue without using this MCP server`, value: 'no' },
         ]}
         onChange={value => onChange(value as 'yes_all' | 'yes' | 'no')}

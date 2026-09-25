@@ -90,7 +90,7 @@ function ClaudeInChromeMenu({
 
   if (!isExtensionInstalled && !isHomespace) {
     options.push({
-      label: 'Install Chrome extension',
+      label: t('Install Chrome extension'),
       value: 'install-extension',
     });
   }

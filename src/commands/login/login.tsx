@@ -109,7 +109,7 @@ export function Login(props: {
             } catch (err) {
               setRemoveState({
                 phase: 'error',
-                message: err instanceof Error ? err.message : 'Failed to remove workspace API key',
+                message: err instanceof Error ? err.message : t('Failed to remove workspace API key'),
               });
             }
           })();

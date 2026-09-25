@@ -3,6 +3,7 @@
  * while a non-complete goal is already active.
  */
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 
 import { Box, Text } from '@anthropic/ink';
 
@@ -62,8 +63,8 @@ export function GoalReplaceConfirmDialog({ currentGoal, newObjective, onConfirm,
         <Box marginTop={1}>
           <Select
             options={[
-              { label: 'Yes, replace the goal', value: 'yes' as const },
-              { label: 'No, keep the current goal', value: 'no' as const },
+              { label: t('Yes, replace the goal'), value: 'yes' as const },
+              { label: t('No, keep the current goal'), value: 'no' as const },
             ]}
             onChange={handleResponse}
             onCancel={onCancel}

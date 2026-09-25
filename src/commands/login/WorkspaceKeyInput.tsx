@@ -13,6 +13,7 @@
  */
 
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { Box, Text, useInput } from '@anthropic/ink';
 import { saveWorkspaceKey } from '../../services/auth/saveWorkspaceKey.js';
 
@@ -202,7 +203,7 @@ export function WorkspaceKeyInputContainer({ onSaved, onCancel }: WorkspaceKeyIn
         await saveWorkspaceKey(key);
         onSaved();
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to save key — unknown error';
+        const msg = err instanceof Error ? err.message : t('Failed to save key — unknown error');
         setSaveError(msg);
         setSaving(false);
       }

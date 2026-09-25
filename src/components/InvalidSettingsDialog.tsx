@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 import { Text, Dialog } from '@anthropic/ink';
 import type { ValidationError } from '../utils/settings/validation.js';
 import { Select } from './CustomSelect/index.js';
@@ -29,9 +30,9 @@ export function InvalidSettingsDialog({ settingsErrors, onContinue, onExit }: Pr
       <Text dimColor>Files with errors are skipped entirely, not just the invalid settings.</Text>
       <Select
         options={[
-          { label: 'Exit and fix manually', value: 'exit' },
+          { label: t('Exit and fix manually'), value: 'exit' },
           {
-            label: 'Continue without these settings',
+            label: t('Continue without these settings'),
             value: 'continue',
           },
         ]}

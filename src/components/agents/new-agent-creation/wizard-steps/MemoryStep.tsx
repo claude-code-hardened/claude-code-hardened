@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { t } from '../../../../i18n/index.js';
 import { Box, Byline, KeyboardShortcutHint } from '@anthropic/ink';
 import { useKeybinding } from '../../../../keybindings/useKeybinding.js';
 import { isAutoMemoryEnabled } from '../../../../memdir/paths.js';
@@ -32,18 +33,18 @@ export function MemoryStep(): ReactNode {
           label: 'User scope (~/.claude/agent-memory/) (Recommended)',
           value: 'user',
         },
-        { label: 'None (no persistent memory)', value: 'none' },
+        { label: t('None (no persistent memory)'), value: 'none' },
         { label: 'Project scope (.claude/agent-memory/)', value: 'project' },
-        { label: 'Local scope (.claude/agent-memory-local/)', value: 'local' },
+        { label: t('Local scope (.claude/agent-memory-local/)'), value: 'local' },
       ]
     : [
         {
           label: 'Project scope (.claude/agent-memory/) (Recommended)',
           value: 'project',
         },
-        { label: 'None (no persistent memory)', value: 'none' },
+        { label: t('None (no persistent memory)'), value: 'none' },
         { label: 'User scope (~/.claude/agent-memory/)', value: 'user' },
-        { label: 'Local scope (.claude/agent-memory-local/)', value: 'local' },
+        { label: t('Local scope (.claude/agent-memory-local/)'), value: 'local' },
       ];
 
   const handleSelect = (value: string): void => {

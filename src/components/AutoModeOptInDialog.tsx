@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 import { logEvent } from 'src/services/analytics/index.js';
 import { Box, Dialog, Link, Text } from '@anthropic/ink';
 import { updateSettingsForSource } from '../utils/settings/settings.js';
@@ -60,12 +61,12 @@ export function AutoModeOptInDialog({ onAccept, onDecline, declineExits }: Props
           ...((process.env.USER_TYPE as string) !== 'ant'
             ? [
                 {
-                  label: 'Yes, and make it my default mode',
+                  label: t('Yes, and make it my default mode'),
                   value: 'accept-default' as const,
                 },
               ]
             : []),
-          { label: 'Yes, enable auto mode', value: 'accept' as const },
+          { label: t('Yes, enable auto mode'), value: 'accept' as const },
           {
             label: declineExits ? 'No, exit' : 'No, go back',
             value: 'decline' as const,

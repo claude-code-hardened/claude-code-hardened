@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { t } from '../../i18n/index.js';
 import type { CommandResultDisplay, LocalJSXCommandContext } from '../../commands.js';
 import { type OptionWithDescription, Select } from '../../components/CustomSelect/select.js';
 import { Dialog } from '@anthropic/ink';
@@ -77,13 +78,13 @@ function RateLimitOptionsMenu({ onDone, context }: RateLimitOptionsMenuProps): R
 
     if (!isMax20x && !isTeamOrEnterprise && upgrade.isEnabled()) {
       actionOptions.push({
-        label: 'Upgrade your plan',
+        label: t('Upgrade your plan'),
         value: 'upgrade',
       });
     }
 
     const cancelOption: OptionWithDescription<RateLimitOptionsMenuOptionType> = {
-      label: 'Stop and wait for limit to reset',
+      label: t('Stop and wait for limit to reset'),
       value: 'cancel',
     };
 

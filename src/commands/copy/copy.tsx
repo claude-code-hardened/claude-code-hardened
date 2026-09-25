@@ -134,7 +134,7 @@ function CopyPicker({ fullText, codeBlocks, messageAge, onDone }: PickerProps): 
       };
     }),
     {
-      label: 'Always copy full response',
+      label: t('Always copy full response'),
       value: 'always' as const,
       description: t('Skip this picker in the future (revert via /config)'),
     },

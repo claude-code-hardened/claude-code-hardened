@@ -36,7 +36,7 @@ export function UltrareviewOverageDialog({ onProceed, onCancel }: Props): React.
   }, [onCancel]);
 
   const options = [
-    { label: 'Proceed with Extra Usage billing', value: 'proceed' },
+    { label: t('Proceed with Extra Usage billing'), value: 'proceed' },
     { label: 'Cancel', value: 'cancel' },
   ];
 

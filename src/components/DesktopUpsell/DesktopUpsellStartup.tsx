@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { useEffect, useState } from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { getDynamicConfig_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js';
@@ -77,7 +78,7 @@ export function DesktopUpsellStartup({ onDone }: Props): React.ReactNode {
   }
 
   const options = [
-    { label: 'Open in Claude Code Desktop', value: 'try' as const },
+    { label: t('Open in Claude Code Desktop'), value: 'try' as const },
     { label: 'Not now', value: 'not-now' as const },
     { label: "Don't ask again", value: 'never' as const },
   ];

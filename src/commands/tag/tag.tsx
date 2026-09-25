@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { t } from '../../i18n/index.js';
 import type { UUID } from 'crypto';
 import * as React from 'react';
 import { getSessionId } from '../../bootstrap/state.js';
@@ -28,7 +29,7 @@ function ConfirmRemoveTag({
         <Select<'yes' | 'no'>
           onChange={value => (value === 'yes' ? onConfirm() : onCancel())}
           options={[
-            { label: 'Yes, remove tag', value: 'yes' },
+            { label: t('Yes, remove tag'), value: 'yes' },
             { label: 'No, keep tag', value: 'no' },
           ]}
         />

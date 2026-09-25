@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { t } from '../../i18n/index.js';
 import { type OptionWithDescription, Select } from '../../components/CustomSelect/index.js';
 import { Pane } from '@anthropic/ink';
 import { Spinner } from '../../components/Spinner.js';
@@ -131,7 +132,7 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
 
     if (tmuxAvailable) {
       options.push({
-        label: 'Use tmux instead',
+        label: t('Use tmux instead'),
         value: 'tmux',
         description: 'Opens teammates in a separate tmux session',
       });
@@ -140,7 +141,7 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
     options.push({
       label: 'Cancel',
       value: 'cancel',
-      description: 'Skip teammate spawning for now',
+      description: t('Skip teammate spawning for now'),
     });
 
     return (
@@ -195,16 +196,16 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
 
     if (tmuxAvailable) {
       options.push({
-        label: 'Use tmux instead',
+        label: t('Use tmux instead'),
         value: 'tmux',
-        description: 'Falls back to tmux for teammate panes',
+        description: t('Falls back to tmux for teammate panes'),
       });
     }
 
     options.push({
       label: 'Cancel',
       value: 'cancel',
-      description: 'Skip teammate spawning for now',
+      description: t('Skip teammate spawning for now'),
     });
 
     return (
@@ -288,16 +289,16 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
 
     if (tmuxAvailable) {
       options.push({
-        label: 'Use tmux instead',
+        label: t('Use tmux instead'),
         value: 'tmux',
-        description: 'Falls back to tmux for teammate panes',
+        description: t('Falls back to tmux for teammate panes'),
       });
     }
 
     options.push({
       label: 'Cancel',
       value: 'cancel',
-      description: 'Skip teammate spawning for now',
+      description: t('Skip teammate spawning for now'),
     });
 
     return (

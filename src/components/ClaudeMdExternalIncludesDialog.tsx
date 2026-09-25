@@ -82,8 +82,8 @@ export function ClaudeMdExternalIncludesDialog({
 
       <Select
         options={[
-          { label: 'Yes, allow external imports', value: 'yes' },
-          { label: 'No, disable external imports', value: 'no' },
+          { label: t('Yes, allow external imports'), value: 'yes' },
+          { label: t('No, disable external imports'), value: 'no' },
         ]}
         onChange={value => handleSelection(value as 'yes' | 'no')}
       />

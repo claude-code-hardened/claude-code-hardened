@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { t } from '../i18n/index.js';
 import type { ChannelEntry } from '../bootstrap/state.js';
 import { Box, Text, Dialog } from '@anthropic/ink';
 import { gracefulShutdownSync } from '../utils/gracefulShutdown.js';
@@ -59,7 +60,7 @@ export function DevChannelsDialog({ channels, onAccept }: Props): React.ReactNod
 
       <Select
         options={[
-          { label: 'I am using this for local development', value: 'accept' },
+          { label: t('I am using this for local development'), value: 'accept' },
           { label: 'Exit', value: 'exit' },
         ]}
         onChange={value => onChange(value as 'accept' | 'exit')}

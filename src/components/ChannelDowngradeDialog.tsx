@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 import { Text } from '@anthropic/ink';
 import { Select } from './CustomSelect/index.js';
 import { Dialog } from '@anthropic/ink';
@@ -32,7 +33,7 @@ export function ChannelDowngradeDialog({ currentVersion, onChoice }: Props): Rea
       <Select
         options={[
           {
-            label: 'Allow possible downgrade to stable version',
+            label: t('Allow possible downgrade to stable version'),
             value: 'downgrade' as ChannelDowngradeChoice,
           },
           {

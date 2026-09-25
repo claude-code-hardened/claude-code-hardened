@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { EffortPanel } from '../../components/EffortPanel/EffortPanel.js';
 import { useMainLoopModel } from '../../hooks/useMainLoopModel.js';
 import {
@@ -102,7 +103,7 @@ function unsetEffortLevel(): EffortCommandResult {
     };
   }
   return {
-    message: 'Effort level set to auto',
+    message: t('Effort level set to auto'),
     effortUpdate: { value: undefined },
   };
 }
