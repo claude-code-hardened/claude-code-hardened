@@ -140,7 +140,7 @@ export function clearSessionCaches(
     '@claude-code-hardened/builtin-tools/tools/AgentTool/loadAgentsDir.js'
   ).then(({ clearAgentDefinitionsCache }) => clearAgentDefinitionsCache())
   // Clear SkillTool prompt cache (accumulates per project root)
-  void import('@claude-code-hardened/builtin-tools/tools/SkillTool/prompt.js').then(
-    ({ clearPromptCache }) => clearPromptCache(),
-  )
+  void import(
+    '@claude-code-hardened/builtin-tools/tools/SkillTool/prompt.js'
+  ).then(({ clearPromptCache }) => clearPromptCache())
 }

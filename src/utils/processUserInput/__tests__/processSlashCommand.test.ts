@@ -102,20 +102,23 @@ mock.module(
   }),
 )
 
-mock.module('@claude-code-hardened/builtin-tools/tools/AgentTool/UI.js', () => ({
-  AgentPromptDisplay: () => null,
-  AgentResponseDisplay: () => null,
-  extractLastToolInfo: () => null,
-  renderGroupedAgentToolUse: () => null,
-  renderToolResultMessage: () => null,
-  renderToolUseErrorMessage: () => null,
-  renderToolUseMessage: () => null,
-  renderToolUseProgressMessage: () => null,
-  renderToolUseRejectedMessage: () => null,
-  renderToolUseTag: () => null,
-  userFacingName: () => 'Agent',
-  userFacingNameBackgroundColor: () => 'gray',
-}))
+mock.module(
+  '@claude-code-hardened/builtin-tools/tools/AgentTool/UI.js',
+  () => ({
+    AgentPromptDisplay: () => null,
+    AgentResponseDisplay: () => null,
+    extractLastToolInfo: () => null,
+    renderGroupedAgentToolUse: () => null,
+    renderToolResultMessage: () => null,
+    renderToolUseErrorMessage: () => null,
+    renderToolUseMessage: () => null,
+    renderToolUseProgressMessage: () => null,
+    renderToolUseRejectedMessage: () => null,
+    renderToolUseTag: () => null,
+    userFacingName: () => 'Agent',
+    userFacingNameBackgroundColor: () => 'gray',
+  }),
+)
 
 mock.module('../../messageQueueManager', createMessageQueueManagerMock)
 mock.module('../../messageQueueManager.js', createMessageQueueManagerMock)

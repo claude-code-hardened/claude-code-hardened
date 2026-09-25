@@ -140,9 +140,7 @@ function FeedbackSurveyThanks({
       ) : lastResponse === 'bad' ? (
         <Text dimColor>{t('Use /issue to report model behavior issues.')}</Text>
       ) : (
-        <Text dimColor>
-          {t('Use {{command}} to share detailed feedback anytime.', { command: feedbackCommand })}
-        </Text>
+        <Text dimColor>{t('Use {{command}} to share detailed feedback anytime.', { command: feedbackCommand })}</Text>
       )}
     </Box>
   );

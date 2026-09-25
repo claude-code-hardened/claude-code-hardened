@@ -138,12 +138,18 @@ mock.module(
   '@claude-code-hardened/builtin-tools/tools/FileWriteTool/prompt.js',
   () => ({ FILE_WRITE_TOOL_NAME: TOOL_NAMES.Write }),
 )
-mock.module('@claude-code-hardened/builtin-tools/tools/GlobTool/prompt.js', () => ({
-  GLOB_TOOL_NAME: TOOL_NAMES.Glob,
-}))
-mock.module('@claude-code-hardened/builtin-tools/tools/GrepTool/prompt.js', () => ({
-  GREP_TOOL_NAME: TOOL_NAMES.Grep,
-}))
+mock.module(
+  '@claude-code-hardened/builtin-tools/tools/GlobTool/prompt.js',
+  () => ({
+    GLOB_TOOL_NAME: TOOL_NAMES.Glob,
+  }),
+)
+mock.module(
+  '@claude-code-hardened/builtin-tools/tools/GrepTool/prompt.js',
+  () => ({
+    GREP_TOOL_NAME: TOOL_NAMES.Grep,
+  }),
+)
 mock.module(
   '@claude-code-hardened/builtin-tools/tools/AgentTool/constants.js',
   () => ({

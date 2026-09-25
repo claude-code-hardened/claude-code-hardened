@@ -100,12 +100,18 @@ mock.module(
   '@claude-code-hardened/builtin-tools/tools/FileWriteTool/prompt.js',
   () => ({ FILE_WRITE_TOOL_NAME: 'Write' }),
 )
-mock.module('@claude-code-hardened/builtin-tools/tools/GlobTool/prompt.js', () => ({
-  GLOB_TOOL_NAME: 'Glob',
-}))
-mock.module('@claude-code-hardened/builtin-tools/tools/GrepTool/prompt.js', () => ({
-  GREP_TOOL_NAME: 'Grep',
-}))
+mock.module(
+  '@claude-code-hardened/builtin-tools/tools/GlobTool/prompt.js',
+  () => ({
+    GLOB_TOOL_NAME: 'Glob',
+  }),
+)
+mock.module(
+  '@claude-code-hardened/builtin-tools/tools/GrepTool/prompt.js',
+  () => ({
+    GREP_TOOL_NAME: 'Grep',
+  }),
+)
 mock.module(
   '@claude-code-hardened/builtin-tools/tools/AgentTool/constants.js',
   () => ({ AGENT_TOOL_NAME: 'Agent', VERIFICATION_AGENT_TYPE: 'verification' }),
