@@ -457,7 +457,7 @@ const externalTips: Tip[] = [
     content: async (ctx?) => {
       const blue = color('suggestion', ctx?.theme ?? 'dark')
       return t('Continue your session in Claude Code Desktop with {{cmd}}', {
-        cmd: '/desktop',
+        cmd: blue('/desktop'),
       })
     },
     cooldownSessions: 15,
