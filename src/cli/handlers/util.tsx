@@ -5,6 +5,7 @@
 /* eslint-disable custom-rules/no-process-exit -- CLI subcommand handlers intentionally exit */
 
 import { cwd } from 'process';
+import { t } from '../../i18n/index.js';
 import React from 'react';
 import { WelcomeV2 } from '../../components/LogoV2/WelcomeV2.js';
 import { useManagePlugins } from '../../hooks/useManagePlugins.js';
@@ -31,10 +32,10 @@ export async function setupTokenHandler(root: Root): Promise<void> {
             {showAuthWarning && (
               <Box flexDirection="column">
                 <Text color="warning">
-                  Warning: You already have authentication configured via environment variable or API key helper.
+                  {t('Warning: You already have authentication configured via environment variable or API key helper.')}
                 </Text>
                 <Text color="warning">
-                  The setup-token command will create a new OAuth token which you can use instead.
+                  {t('The setup-token command will create a new OAuth token which you can use instead.')}
                 </Text>
               </Box>
             )}

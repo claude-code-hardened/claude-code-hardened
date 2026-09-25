@@ -2762,5 +2762,14 @@
   "Hit Enter to queue up additional messages while Claude is working.": "Claude 工作时按 Enter 排队追加消息。",
   "Send messages to Claude while it works to steer Claude in real-time": "在 Claude 工作时发消息实时引导它",
   "Did you know you can drag and drop image files into your terminal?": "你知道可以把图片文件拖放进终端吗？",
-  "Double-tap esc to rewind the conversation to a previous point in time": "连按两次 esc 回退对话到之前的时间点"
+  "Double-tap esc to rewind the conversation to a previous point in time": "连按两次 esc 回退对话到之前的时间点",
+  "Esc to reject": "Esc 拒绝",
+  "Memory store created": "Memory store 已创建",
+  "Memory store archived": "Memory store 已归档",
+  "Memory created": "Memory 已创建",
+  "Agent created": "Agent 已创建",
+  "This session is available via Remote Control": "此会话可通过 Remote Control 访问",
+  "Warning: You already have authentication configured via environment variable or API key helper.": "警告：你已通过环境变量或 API key helper 配置了认证。",
+  "The setup-token command will create a new OAuth token which you can use instead.": "setup-token 命令会创建新的 OAuth token 供你替代使用。",
+  "Your free ultrareviews for this organization are used. Further reviews bill as Extra Usage (pay-per-use).": "本组织的免费 ultrareview 额度已用完。后续审查按 Extra Usage（按量付费）计费。"
 }

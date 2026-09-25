@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import type { Theme } from '@anthropic/ink';
 import type { Memory, MemoryStore, MemoryVersion } from './memoryStoresApi.js';
@@ -88,7 +89,7 @@ export function MemoryStoresView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'success' as keyof Theme}>
-            Memory store created
+            {t('Memory store created')}
           </Text>
         </Box>
         <Text>ID: {store.memory_store_id}</Text>
@@ -105,7 +106,7 @@ export function MemoryStoresView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'warning' as keyof Theme}>
-            Memory store archived
+            {t('Memory store archived')}
           </Text>
         </Box>
         <Text>ID: {store.memory_store_id}</Text>
@@ -165,7 +166,7 @@ export function MemoryStoresView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'success' as keyof Theme}>
-            Memory created
+            {t('Memory created')}
           </Text>
         </Box>
         <Text>ID: {memory.memory_id}</Text>

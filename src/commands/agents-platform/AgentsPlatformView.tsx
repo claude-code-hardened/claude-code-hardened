@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import type { Theme } from '@anthropic/ink';
 import type { AgentTrigger } from './agentsApi.js';
@@ -57,7 +58,7 @@ export function AgentsPlatformView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'success' as keyof Theme}>
-            Agent created
+            {t('Agent created')}
           </Text>
         </Box>
         <Text>ID: {props.agent.id}</Text>

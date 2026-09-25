@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { t } from '../../i18n/index.js';
 import { Select } from '../../components/CustomSelect/select.js';
 import { Box, Dialog, Text } from '@anthropic/ink';
 
@@ -43,7 +44,9 @@ export function UltrareviewOverageDialog({ onProceed, onCancel }: Props): React.
     <Dialog title="Ultrareview billing" onCancel={handleCancel} color="background">
       <Box flexDirection="column" gap={1}>
         <Text>
-          Your free ultrareviews for this organization are used. Further reviews bill as Extra Usage (pay-per-use).
+          {t(
+            'Your free ultrareviews for this organization are used. Further reviews bill as Extra Usage (pay-per-use).',
+          )}
         </Text>
         {isLaunching ? (
           <Text color="background">Launching…</Text>

@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle';
+import { t } from '../../i18n/index.js';
 import { toString as qrToString } from 'qrcode';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
@@ -195,7 +196,7 @@ function BridgeDisconnectDialog({ onDone }: Props): React.ReactNode {
     <Dialog title="Remote Control" onCancel={handleContinue} hideInputGuide>
       <Box flexDirection="column" gap={1}>
         <Text>
-          This session is available via Remote Control
+          {t('This session is available via Remote Control')}
           {displayUrl ? ` at ${displayUrl}` : ''}.
         </Text>
         {showQR && qrLines.length > 0 && (
