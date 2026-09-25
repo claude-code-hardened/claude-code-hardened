@@ -172,9 +172,7 @@ export function AssistantTextMessage({
         return (
           <MessageResponse>
             <Box flexDirection="column">
-              <Text color="error">
-                {truncated ? display.slice(0, MAX_API_ERROR_CHARS) + '…' : display}
-              </Text>
+              <Text color="error">{truncated ? display.slice(0, MAX_API_ERROR_CHARS) + '…' : display}</Text>
               {truncated && <CtrlOToExpand />}
             </Box>
           </MessageResponse>
