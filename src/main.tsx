@@ -4561,7 +4561,7 @@ async function run(): Promise<CommanderCommand> {
         );
       }
     })
-    .version(`${MACRO.VERSION} (Claude Code)`, '-v, --version', 'Output the version number');
+    .version(`${MACRO.VERSION} (Claude Code Hardened)`, '-v, --version', 'Output the version number');
 
   // Worktree flags
   program.option('-w, --worktree [name]', 'Create a new git worktree for this session (optionally specify a name)');
@@ -5415,7 +5415,7 @@ async function run(): Promise<CommanderCommand> {
   // claude update — update ccb to the latest version via npm or bun
   program
     .command('update')
-    .description('Update claude-code-best (ccb) to the latest version')
+    .description('Update claude-code-hardened (ccb) to the latest version')
     .action(async () => {
       const { updateCCB } = await import('./cli/updateCCB.js');
       await updateCCB();

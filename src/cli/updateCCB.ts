@@ -1,5 +1,5 @@
 /**
- * `ccb update` — Check and install the latest version of claude-code-best.
+ * `ccb update` — Check and install the latest version of claude-code-hardened.
  *
  * Detection strategy:
  *  1. If `bun` is available and the current installation was done via bun → use `bun update -g`
@@ -16,7 +16,7 @@ import { execFileNoThrowWithCwd } from '../utils/execFileNoThrow.js'
 import { gracefulShutdown } from '../utils/gracefulShutdown.js'
 import { writeToStdout } from '../utils/process.js'
 
-const PACKAGE_NAME = 'claude-code-best'
+const PACKAGE_NAME = 'claude-code-hardened'
 
 function getCurrentVersion(): string {
   // Read version from the nearest package.json (walks up from dist root)

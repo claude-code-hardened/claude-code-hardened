@@ -1,16 +1,16 @@
 {
-  "name": "claude-code-best",
+  "name": "claude-code-hardened",
   "version": "2.8.4",
   "description": "Reverse-engineered Anthropic Claude Code CLI — interactive AI coding assistant in the terminal",
   "type": "module",
-  "author": "claude-code-best <claude-code-best@proton.me>",
+  "author": "claude-code-hardened <claude-code-hardened@proton.me>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/claude-code-best/claude-code.git"
+    "url": "git+https://github.com/xiaocongyu66/claude-code-hardened.git"
   },
-  "homepage": "https://github.com/claude-code-best/claude-code#readme",
+  "homepage": "https://github.com/xiaocongyu66/claude-code-hardened#readme",
   "bugs": {
-    "url": "https://github.com/claude-code-best/claude-code/issues"
+    "url": "https://github.com/xiaocongyu66/claude-code-hardened/issues"
   },
   "keywords": [
     "claude",
@@ -27,7 +27,7 @@
   "bin": {
     "ccb": "dist/cli-node.js",
     "ccb-bun": "dist/cli-bun.js",
-    "claude-code-best": "dist/cli-node.js"
+    "claude-code-hardened": "dist/cli-node.js"
   },
   "workspaces": [
     "packages/*",
