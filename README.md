@@ -65,7 +65,7 @@ CLAUDE_BRIDGE_BASE_URL=https://remote-control.claude-code-best.win/ CLAUDE_BRIDG
 
 一定要最新版本的 bun 啊, 不然一堆奇奇怪怪的 BUG!!! bun upgrade!!!
 
-- 📦 [Bun](https://bun.sh/) >= 1.3.11
+- 📦 [Bun](https://bun.sh/) >= 1.4.0
 
 **安装 Bun：**
 
