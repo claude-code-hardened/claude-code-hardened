@@ -21,7 +21,7 @@ jobs:
 
       # Bun 追 latest（性能）——lockfile 由当前 Bun 重算，格式兼容由 CI frozen-lockfile 把关
       - name: Install Bun (latest)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2, 2026-04-25
         with:
           bun-version: latest
 
