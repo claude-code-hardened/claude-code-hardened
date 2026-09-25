@@ -1,5 +1,6 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import { Box, Text, stringWidth } from '@anthropic/ink';
+import { t } from '../i18n/index.js';
 import * as React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeGlimmerIndex, computeShimmerSegments, SHIMMER_INTERVAL_MS } from '../bridge/bridgeStatusUtil.js';
@@ -315,9 +316,9 @@ function SpinnerWithVerbInner({
   const effectiveTip = contextTipsActive
     ? undefined
     : showClearTip && !nextTask
-      ? 'Use /clear to start fresh when switching topics and free up context'
+      ? t('Use /clear to start fresh when switching topics and free up context')
       : showBtwTip && !nextTask
-        ? "Use /btw to ask a quick side question without interrupting Claude's current work"
+        ? t("Use /btw to ask a quick side question without interrupting Claude's current work")
         : spinnerTip;
 
   // Budget text (ant-only) — shown above the tip line
@@ -327,7 +328,7 @@ function SpinnerWithVerbInner({
     if (budget !== null && budget > 0) {
       const tokens = getTurnOutputTokens();
       if (tokens >= budget) {
-        budgetText = `Target: ${formatNumber(tokens)} used (${formatNumber(budget)} min ${figures.tick})`;
+        budgetText = `${t('Target:')} ${formatNumber(tokens)} ${t('used')} (${formatNumber(budget)} ${t('min')} ${figures.tick})`;
       } else {
         const pct = Math.round((tokens / budget) * 100);
         const remaining = budget - tokens;
@@ -390,7 +391,7 @@ function SpinnerWithVerbInner({
           )}
           {(nextTask || effectiveTip) && (
             <MessageResponse>
-              <Text dimColor>{nextTask ? `Next: ${nextTask.subject}` : `Tip: ${effectiveTip}`}</Text>
+              <Text dimColor>{nextTask ? `${t('Next:')} ${nextTask.subject}` : `${t('Tip:')} ${effectiveTip}`}</Text>
             </MessageResponse>
           )}
         </Box>

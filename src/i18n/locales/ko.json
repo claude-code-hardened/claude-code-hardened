@@ -2747,5 +2747,20 @@
   "Evening (18-24)": "저녁 (18-24)",
   "Night (0-6)": "심야 (0-6)",
   "No active assistant sessions found.": "활성 assistant 세션이 없습니다.",
-  "Start assistant daemon": "assistant 데몬 시작"
+  "Start assistant daemon": "assistant 데몬 시작",
+  "Use /clear to start fresh when switching topics and free up context": "주제 전환 시 /clear로 새로 시작하고 컨텍스트 확보",
+  "Use /btw to ask a quick side question without interrupting Claude's current work": "Claude 작업을 방해하지 않고 /btw로 옆질문",
+  "Tip:": "팁:",
+  "Next:": "다음:",
+  "Target:": "목표:",
+  "used": "사용",
+  "min": "최소",
+  "Start with small features or bug fixes, tell Claude to propose a plan, and verify its suggested edits": "작은 기능이나 버그 수정으로 시작하고, Claude에게 계획을 제안하게 하고, 제안된 수정을 확인하세요",
+  "Use git worktrees to run multiple Claude sessions in parallel.": "git worktree로 여러 Claude 세션을 병렬 실행하세요.",
+  "Press Option+Enter to send a multi-line message": "Option+Enter로 여러 줄 메시지 전송",
+  "Press Shift+Enter to send a multi-line message": "Shift+Enter로 여러 줄 메시지 전송",
+  "Hit Enter to queue up additional messages while Claude is working.": "Claude 작업 중 Enter로 메시지 추가 대기열 등록.",
+  "Send messages to Claude while it works to steer Claude in real-time": "Claude 작업 중 메시지를 보내 실시간으로 방향 조정",
+  "Did you know you can drag and drop image files into your terminal?": "터미널에 이미지 파일을 드래그 앤 드롭할 수 있다는 걸 아셨나요?",
+  "Double-tap esc to rewind the conversation to a previous point in time": "esc 두 번 눌러 대화를 이전 시점으로 되감기"
 }

@@ -2747,5 +2747,20 @@
   "Evening (18-24)": "晚間 (18-24)",
   "Night (0-6)": "深夜 (0-6)",
   "No active assistant sessions found.": "未找到活躍的 assistant 會話。",
-  "Start assistant daemon": "啟動 assistant 守護程序"
+  "Start assistant daemon": "啟動 assistant 守護程序",
+  "Use /clear to start fresh when switching topics and free up context": "用 /clear 在切換話題時清爽開始並釋放上下文",
+  "Use /btw to ask a quick side question without interrupting Claude's current work": "用 /btw 問個不打斷 Claude 當前工作的旁問",
+  "Tip:": "提示：",
+  "Next:": "下一步：",
+  "Target:": "目標：",
+  "used": "已用",
+  "min": "最少",
+  "Start with small features or bug fixes, tell Claude to propose a plan, and verify its suggested edits": "從小功能或 bug 修復開始，讓 Claude 提出計劃，並核對其建議的修改",
+  "Use git worktrees to run multiple Claude sessions in parallel.": "使用 git worktree 並行執行多個 Claude 會話。",
+  "Press Option+Enter to send a multi-line message": "按 Option+Enter 傳送多行訊息",
+  "Press Shift+Enter to send a multi-line message": "按 Shift+Enter 傳送多行訊息",
+  "Hit Enter to queue up additional messages while Claude is working.": "Claude 工作時按 Enter 排隊追加訊息。",
+  "Send messages to Claude while it works to steer Claude in real-time": "在 Claude 工作時發訊息即時引導它",
+  "Did you know you can drag and drop image files into your terminal?": "你知道可以把圖片檔案拖放進終端機嗎？",
+  "Double-tap esc to rewind the conversation to a previous point in time": "連按兩次 esc 回退對話到之前的時間點"
 }

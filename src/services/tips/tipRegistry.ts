@@ -1,4 +1,5 @@
 import chalk from 'chalk'
+import { t } from '../../i18n/index.js'
 import { logForDebugging } from 'src/utils/debug.js'
 import { fileHistoryEnabled } from 'src/utils/fileHistory.js'
 import {
@@ -96,7 +97,9 @@ const externalTips: Tip[] = [
   {
     id: 'new-user-warmup',
     content: async () =>
-      `Start with small features or bug fixes, tell Claude to propose a plan, and verify its suggested edits`,
+      t(
+        'Start with small features or bug fixes, tell Claude to propose a plan, and verify its suggested edits',
+      ),
     cooldownSessions: 3,
     async isRelevant() {
       const config = getGlobalConfig()
@@ -142,7 +145,7 @@ const externalTips: Tip[] = [
   {
     id: 'git-worktrees',
     content: async () =>
-      'Use git worktrees to run multiple Claude sessions in parallel.',
+      t('Use git worktrees to run multiple Claude sessions in parallel.'),
     cooldownSessions: 10,
     isRelevant: async () => {
       try {
@@ -184,8 +187,8 @@ const externalTips: Tip[] = [
     id: 'shift-enter',
     content: async () =>
       env.terminal === 'Apple_Terminal'
-        ? 'Press Option+Enter to send a multi-line message'
-        : 'Press Shift+Enter to send a multi-line message',
+        ? t('Press Option+Enter to send a multi-line message')
+        : t('Press Shift+Enter to send a multi-line message'),
     cooldownSessions: 10,
     async isRelevant() {
       const config = getGlobalConfig()
@@ -255,7 +258,7 @@ const externalTips: Tip[] = [
   {
     id: 'prompt-queue',
     content: async () =>
-      'Hit Enter to queue up additional messages while Claude is working.',
+      t('Hit Enter to queue up additional messages while Claude is working.'),
     cooldownSessions: 5,
     async isRelevant() {
       const config = getGlobalConfig()
@@ -265,7 +268,7 @@ const externalTips: Tip[] = [
   {
     id: 'enter-to-steer-in-relatime',
     content: async () =>
-      'Send messages to Claude while it works to steer Claude in real-time',
+      t('Send messages to Claude while it works to steer Claude in real-time'),
     cooldownSessions: 20,
     isRelevant: async () => true,
   },
@@ -348,7 +351,7 @@ const externalTips: Tip[] = [
   {
     id: 'drag-and-drop-images',
     content: async () =>
-      'Did you know you can drag and drop image files into your terminal?',
+      t('Did you know you can drag and drop image files into your terminal?'),
     cooldownSessions: 10,
     isRelevant: async () => !env.isSSH(),
   },
@@ -362,7 +365,9 @@ const externalTips: Tip[] = [
   {
     id: 'double-esc',
     content: async () =>
-      'Double-tap esc to rewind the conversation to a previous point in time',
+      t(
+        'Double-tap esc to rewind the conversation to a previous point in time',
+      ),
     cooldownSessions: 10,
     isRelevant: async () => !fileHistoryEnabled(),
   },

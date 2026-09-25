@@ -2747,5 +2747,20 @@
   "Evening (18-24)": "夜 (18-24)",
   "Night (0-6)": "深夜 (0-6)",
   "No active assistant sessions found.": "アクティブな assistant セッションが見つかりません。",
-  "Start assistant daemon": "assistant デーモンを起動"
+  "Start assistant daemon": "assistant デーモンを起動",
+  "Use /clear to start fresh when switching topics and free up context": "話題を切り替えるときは /clear で新規開始し、コンテキストを解放",
+  "Use /btw to ask a quick side question without interrupting Claude's current work": "Claude の作業を中断せず /btw で横質問",
+  "Tip:": "ヒント:",
+  "Next:": "次:",
+  "Target:": "目標:",
+  "used": "使用",
+  "min": "最少",
+  "Start with small features or bug fixes, tell Claude to propose a plan, and verify its suggested edits": "小さな機能やバグ修正から始め、Claude に計画を提案させ、その修正案を確認しましょう",
+  "Use git worktrees to run multiple Claude sessions in parallel.": "git worktree で複数の Claude セッションを並行実行。",
+  "Press Option+Enter to send a multi-line message": "Option+Enter で複数行メッセージを送信",
+  "Press Shift+Enter to send a multi-line message": "Shift+Enter で複数行メッセージを送信",
+  "Hit Enter to queue up additional messages while Claude is working.": "Claude の作業中に Enter でメッセージを追加入力。",
+  "Send messages to Claude while it works to steer Claude in real-time": "Claude の作業中にメッセージを送りリアルタイムで誘導",
+  "Did you know you can drag and drop image files into your terminal?": "画像ファイルをターミナルにドラッグ＆ドロップできるのを知っていますか？",
+  "Double-tap esc to rewind the conversation to a previous point in time": "esc を 2 回押すと会話を過去の時点に巻き戻せます"
 }
