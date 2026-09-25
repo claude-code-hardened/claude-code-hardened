@@ -2412,5 +2412,14 @@
   "Share Claude Code with friends": "Claude Code を友達と共有",
   "Share Claude Code and earn {{amount}} of extra usage": "Claude Code を共有して {{amount}} の追加利用枠を獲得",
   "Welcome back!": "おかえりなさい！",
-  "Welcome back {{username}}!": "{{username}} さん、おかえりなさい！"
+  "Welcome back {{username}}!": "{{username}} さん、おかえりなさい！",
+  "How is Claude doing this session? (optional)": "今回のセッションで Claude の調子はどうですか？（任意）",
+  "How well did Claude use its memory? (optional)": "Claude によるメモリの活用はどうでしたか？（任意）",
+  "Bad": "悪い",
+  "Fine": "まあまあ",
+  "Good": "良い",
+  "Thanks for the feedback!": "フィードバックありがとうございます！",
+  "(Optional) Press [{{key}}] to tell us what went well": "（任意）[{{key}}] を押して良かった点を教えてください",
+  "Use /issue to report model behavior issues.": "/issue でモデルの動作問題を報告してください。",
+  "Use {{command}} to share detailed feedback anytime.": "いつでも {{command}} で詳細なフィードバックを共有できます。"
 }

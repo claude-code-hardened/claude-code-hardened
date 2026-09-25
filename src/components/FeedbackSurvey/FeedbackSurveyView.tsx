@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { useDebouncedDigitInput } from './useDebouncedDigitInput.js';
 import type { FeedbackSurveyResponse } from './utils.js';
 
@@ -23,7 +24,7 @@ const inputToResponse: Record<ResponseInput, FeedbackSurveyResponse> = {
 export const isValidResponseInput = (input: string): input is ResponseInput =>
   (RESPONSE_INPUTS as readonly string[]).includes(input);
 
-const DEFAULT_MESSAGE = 'How is Claude doing this session? (optional)';
+const DEFAULT_MESSAGE = t('How is Claude doing this session? (optional)');
 
 export function FeedbackSurveyView({
   onSelect,
@@ -48,22 +49,22 @@ export function FeedbackSurveyView({
       <Box marginLeft={2}>
         <Box width={10}>
           <Text>
-            <Text color="ansi:cyan">1</Text>: Bad
+            <Text color="ansi:cyan">1</Text>: {t('Bad')}
           </Text>
         </Box>
         <Box width={10}>
           <Text>
-            <Text color="ansi:cyan">2</Text>: Fine
+            <Text color="ansi:cyan">2</Text>: {t('Fine')}
           </Text>
         </Box>
         <Box width={10}>
           <Text>
-            <Text color="ansi:cyan">3</Text>: Good
+            <Text color="ansi:cyan">3</Text>: {t('Good')}
           </Text>
         </Box>
         <Box>
           <Text>
-            <Text color="ansi:cyan">0</Text>: Dismiss
+            <Text color="ansi:cyan">0</Text>: {t('Dismiss')}
           </Text>
         </Box>
       </Box>

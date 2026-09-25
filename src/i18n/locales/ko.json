@@ -2412,5 +2412,14 @@
   "Share Claude Code with friends": "친구와 Claude Code 공유하기",
   "Share Claude Code and earn {{amount}} of extra usage": "Claude Code를 공유하고 {{amount}}의 추가 사용량 받기",
   "Welcome back!": "다시 오신 것을 환영합니다!",
-  "Welcome back {{username}}!": "{{username}} 님, 다시 오신 것을 환영합니다!"
+  "Welcome back {{username}}!": "{{username}} 님, 다시 오신 것을 환영합니다!",
+  "How is Claude doing this session? (optional)": "이번 세션에서 Claude은 어떻게 작동하고 있나요? (선택 사항)",
+  "How well did Claude use its memory? (optional)": "Claude의 메모리 활용은 어땠나요? (선택 사항)",
+  "Bad": "나쁨",
+  "Fine": "보통",
+  "Good": "좋음",
+  "Thanks for the feedback!": "피드백 감사합니다!",
+  "(Optional) Press [{{key}}] to tell us what went well": "(선택 사항) [{{key}}]를 눌러 잘 된 점을 알려주세요",
+  "Use /issue to report model behavior issues.": "/issue로 모델 동작 문제를 보고하세요.",
+  "Use {{command}} to share detailed feedback anytime.": "언제든지 {{command}}로 상세한 피드백을 공유하세요."
 }

@@ -4,6 +4,7 @@ import {
   logEvent,
 } from 'src/services/analytics/index.js';
 import { Box, Text } from '@anthropic/ink';
+import { t } from '../../i18n/index.js';
 import { FeedbackSurveyView, isValidResponseInput } from './FeedbackSurveyView.js';
 import type { TranscriptShareResponse } from './TranscriptSharePrompt.js';
 import { TranscriptSharePrompt } from './TranscriptSharePrompt.js';
@@ -130,16 +131,18 @@ function FeedbackSurveyThanks({
 
   return (
     <Box marginTop={1} flexDirection="column">
-      <Text color="success">Thanks for the feedback!</Text>
+      <Text color="success">{t('Thanks for the feedback!')}</Text>
       {showFollowUp ? (
         <Text dimColor>
-          (Optional) Press [<Text color="ansi:cyan">1</Text>] to tell us what went well {' \u00b7 '}
+          {t('(Optional) Press [{{key}}] to tell us what went well', { key: '1' })} {' \u00b7 '}
           {feedbackCommand}
         </Text>
       ) : lastResponse === 'bad' ? (
-        <Text dimColor>Use /issue to report model behavior issues.</Text>
+        <Text dimColor>{t('Use /issue to report model behavior issues.')}</Text>
       ) : (
-        <Text dimColor>Use {feedbackCommand} to share detailed feedback anytime.</Text>
+        <Text dimColor>
+          {t('Use {{command}} to share detailed feedback anytime.', { command: feedbackCommand })}
+        </Text>
       )}
     </Box>
   );

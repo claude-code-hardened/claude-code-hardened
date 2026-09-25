@@ -2644,5 +2644,14 @@
   "Share Claude Code with friends": "與朋友分享 Claude Code",
   "Share Claude Code and earn {{amount}} of extra usage": "分享 Claude Code 賺取 {{amount}} 額外用量",
   "Welcome back!": "歡迎回來！",
-  "Welcome back {{username}}!": "歡迎回來 {{username}}！"
+  "Welcome back {{username}}!": "歡迎回來 {{username}}！",
+  "How is Claude doing this session? (optional)": "本次會話中 Claude 表現如何？（可選）",
+  "How well did Claude use its memory? (optional)": "Claude 對記憶的使用效果如何？（可選）",
+  "Bad": "差",
+  "Fine": "尚可",
+  "Good": "好",
+  "Thanks for the feedback!": "感謝你的回饋！",
+  "(Optional) Press [{{key}}] to tell us what went well": "（可選）按 [{{key}}] 告訴我們哪裡做得好",
+  "Use /issue to report model behavior issues.": "使用 /issue 回報模型行為問題。",
+  "Use {{command}} to share detailed feedback anytime.": "隨時使用 {{command}} 分享詳細回饋。"
 }

@@ -6517,7 +6517,7 @@ export function REPL({
                         inputValue={inputValue}
                         setInputValue={setInputValue}
                         onRequestFeedback={handleSurveyRequestFeedback}
-                        message="How well did Claude use its memory? (optional)"
+                        message={t('How well did Claude use its memory? (optional)')}
                       />
                     ) : (
                       <FeedbackSurvey
