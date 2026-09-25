@@ -5,7 +5,7 @@
 // unguarded code.
 
 import * as React from 'react';
-import { t } from '../i18n/index.js';
+import { t } from '../../i18n/index.js';
 import { useState } from 'react';
 import { type ChannelEntry, getAllowedChannels, getHasDevChannels } from '../../bootstrap/state.js';
 import { getBuiltinPlugins } from '../../plugins/builtinPlugins.js';

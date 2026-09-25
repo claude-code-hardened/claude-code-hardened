@@ -1,3 +1,4 @@
+import { POWERSHELL_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/PowerShellTool/toolName.js';
 import { t } from '../../../i18n/index.js';
 import type { PermissionUpdate } from '../../../utils/permissions/PermissionUpdateSchema.js';
 import { shouldShowAlwaysAllowOptions } from '../../../utils/permissions/permissionsLoader.js';
