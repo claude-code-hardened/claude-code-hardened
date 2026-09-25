@@ -139,13 +139,13 @@ export function getFilePermissionOptions({
       if (operationType === 'read') {
         sessionLabel = (
           <Text>
-            Yes, allow reading from <Text bold>{dirName}/</Text> during this session
+            {t('Yes, allow reading from')} <Text bold>{dirName}/</Text> {t('during this session')}
           </Text>
         );
       } else {
         sessionLabel = (
           <Text>
-            Yes, allow all edits in <Text bold>{dirName}/</Text> during this session{' '}
+            {t('Yes, allow all edits in')} <Text bold>{dirName}/</Text> {t('during this session')}{' '}
             <Text bold>({modeCycleShortcut})</Text>
           </Text>
         );

@@ -55,7 +55,7 @@ export function FilePermissionDialog<T extends ToolInput = ToolInput>({
   onReject,
   title,
   subtitle,
-  question = 'Do you want to proceed?',
+  question = t('Do you want to proceed?'),
   content,
   completionType = 'tool_use_single',
   path,

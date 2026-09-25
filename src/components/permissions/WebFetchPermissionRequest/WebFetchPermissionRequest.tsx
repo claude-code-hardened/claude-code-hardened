@@ -55,7 +55,7 @@ export function WebFetchPermissionRequest({
       result.push({
         label: (
           <Text>
-            Yes, and don&apos;t ask again for <Text bold>{hostname}</Text>
+            {t("Yes, and don't ask again for")} <Text bold>{hostname}</Text>
           </Text>
         ),
         value: 'yes-dont-ask-again-domain',
@@ -65,7 +65,7 @@ export function WebFetchPermissionRequest({
     result.push({
       label: (
         <Text>
-          No, and tell Claude what to do differently <Text bold>(esc)</Text>
+          {t('No, and tell Claude what to do differently')} <Text bold>(esc)</Text>
         </Text>
       ),
       value: 'no',
@@ -124,7 +124,7 @@ export function WebFetchPermissionRequest({
 
       <Box flexDirection="column">
         <PermissionRuleExplanation permissionResult={toolUseConfirm.permissionResult} toolType="tool" />
-        <Text>Do you want to allow Claude to fetch this content?</Text>
+        <Text>{t('Do you want to allow Claude to fetch this content?')}</Text>
         <Select options={options} onChange={onChange} onCancel={() => onChange('no')} />
       </Box>
     </PermissionDialog>

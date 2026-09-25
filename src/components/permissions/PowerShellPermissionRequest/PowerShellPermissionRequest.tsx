@@ -228,7 +228,7 @@ export function PowerShellPermissionRequest(props: PermissionRequestProps): Reac
           <PermissionDecisionDebugInfo permissionResult={toolUseConfirm.permissionResult} toolName="PowerShell" />
           {toolUseContext.options.debug && (
             <Box justifyContent="flex-end" marginTop={1}>
-              <Text dimColor>Ctrl-D to hide debug info</Text>
+              <Text dimColor>{t('Ctrl-D to hide debug info')}</Text>
             </Box>
           )}
         </>
@@ -241,7 +241,7 @@ export function PowerShellPermissionRequest(props: PermissionRequestProps): Reac
                 <Text color="warning">{destructiveWarning}</Text>
               </Box>
             )}
-            <Text>Do you want to proceed?</Text>
+            <Text>{t('Do you want to proceed?')}</Text>
             <Select
               options={options}
               inlineDescriptions
@@ -258,7 +258,7 @@ export function PowerShellPermissionRequest(props: PermissionRequestProps): Reac
                 ' · Tab to amend'}
               {explainerState.enabled && ` · ctrl+e to ${explainerState.visible ? 'hide' : 'explain'}`}
             </Text>
-            {toolUseContext.options.debug && <Text dimColor>Ctrl+d to show debug info</Text>}
+            {toolUseContext.options.debug && <Text dimColor>{t('Ctrl+d to show debug info')}</Text>}
           </Box>
         </>
       )}

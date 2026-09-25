@@ -49,7 +49,7 @@ export function PermissionRuleInput({ onCancel, onSubmit, ruleBehavior }: Permis
         </Text>
         <Box flexDirection="column">
           <Text>
-            Permission rules are a tool name, optionally followed by a specifier in parentheses.
+            {t('Permission rules are a tool name, optionally followed by a specifier in parentheses.')}
             <Newline />
             e.g., <Text bold>{permissionRuleValueToString({ toolName: WebFetchTool.name })}</Text>
             <Text bold={false}> or </Text>

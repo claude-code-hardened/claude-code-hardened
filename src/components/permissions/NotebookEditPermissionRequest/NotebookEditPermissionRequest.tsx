@@ -47,7 +47,8 @@ export function NotebookEditPermissionRequest(props: PermissionRequestProps): Re
       title="Edit notebook"
       question={
         <Text>
-          Do you want to {editTypeText} <Text bold>{basename(notebook_path)}</Text>?
+          {t('Do you want to')} {editTypeText} <Text bold>{basename(notebook_path)}</Text>
+          {t('?')}
         </Text>
       }
       content={

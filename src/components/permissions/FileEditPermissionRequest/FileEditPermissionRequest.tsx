@@ -51,7 +51,8 @@ export function FileEditPermissionRequest(props: PermissionRequestProps): React.
       subtitle={relative(getCwd(), file_path)}
       question={
         <Text>
-          Do you want to make this edit to <Text bold>{basename(file_path)}</Text>?
+          {t('Do you want to make this edit to')} <Text bold>{basename(file_path)}</Text>
+          {t('?')}
         </Text>
       }
       content={

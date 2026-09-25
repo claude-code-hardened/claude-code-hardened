@@ -45,7 +45,7 @@ export function MonitorPermissionRequest({
       opts.push({
         label: (
           <Text>
-            Yes, and don{'\u2019'}t ask again for <Text bold>{toolUseConfirm.tool.name}</Text> commands
+            {t('Yes, and don’t ask again for')} <Text bold>{toolUseConfirm.tool.name}</Text> {t('commands')}
           </Text>
         ),
         value: 'yes-dont-ask-again',

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import { getAgentName, getTeammateColor, getTeamName } from '../../utils/teammate.js';
 import { Spinner } from '../Spinner.js';
@@ -35,12 +36,12 @@ export function WorkerPendingPermission({ toolName, description }: Props): React
       )}
 
       <Box>
-        <Text dimColor>Tool: </Text>
+        <Text dimColor>{t('Tool:')} </Text>
         <Text>{toolName}</Text>
       </Box>
 
       <Box>
-        <Text dimColor>Action: </Text>
+        <Text dimColor>{t('Action:')} </Text>
         <Text>{description}</Text>
       </Box>
 

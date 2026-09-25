@@ -42,7 +42,7 @@ import { useShellPermissionFeedback } from '../useShellPermissionFeedback.js';
 import { logUnaryPermissionEvent } from '../utils.js';
 import { bashToolUseOptions } from './bashToolUseOptions.js';
 
-const CHECKING_TEXT = 'Attempting to auto-approve\u2026';
+const CHECKING_TEXT = t('Attempting to auto-approve…');
 
 // Isolates the 20fps shimmer clock from BashPermissionRequestInner. Before this
 // extraction, useShimmerAnimation lived inside the 535-line Inner body, so every
@@ -450,7 +450,7 @@ function BashPermissionRequestInner({
     ) : toolUseConfirm.classifierCheckInProgress ? (
       <ClassifierCheckingSubtitle />
     ) : classifierWasChecking ? (
-      <Text dimColor>Requires manual approval</Text>
+      <Text dimColor>{t('Requires manual approval')}</Text>
     ) : undefined
   ) : undefined;
 
@@ -475,7 +475,7 @@ function BashPermissionRequestInner({
           <PermissionDecisionDebugInfo permissionResult={toolUseConfirm.permissionResult} toolName="Bash" />
           {toolUseContext.options.debug && (
             <Box justifyContent="flex-end" marginTop={1}>
-              <Text dimColor>Ctrl-D to hide debug info</Text>
+              <Text dimColor>{t('Ctrl-D to hide debug info')}</Text>
             </Box>
           )}
         </>
@@ -494,7 +494,7 @@ function BashPermissionRequestInner({
               </Box>
             )}
             <Text dimColor={feature('BASH_CLASSIFIER') ? toolUseConfirm.classifierAutoApproved : false}>
-              Do you want to proceed?
+              {t('Do you want to proceed?')}
             </Text>
             <Select
               options={
@@ -519,7 +519,7 @@ function BashPermissionRequestInner({
                 ' · Tab to add feedback'}
               {explainerState.enabled && ` · ctrl+e to ${explainerState.visible ? 'hide' : 'explain'}`}
             </Text>
-            {toolUseContext.options.debug && <Text dimColor>Ctrl+d to show debug info</Text>}
+            {toolUseContext.options.debug && <Text dimColor>{t('Ctrl+d to show debug info')}</Text>}
           </Box>
         </>
       )}

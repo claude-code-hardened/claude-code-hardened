@@ -65,7 +65,7 @@ export function SkillPermissionRequest(props: PermissionRequestProps): React.Rea
       alwaysAllowOptions.push({
         label: (
           <Text>
-            Yes, and don&apos;t ask again for <Text bold>{skill}</Text> in <Text bold>{originalCwd}</Text>
+            {t("Yes, and don't ask again for")} <Text bold>{skill}</Text> {t('in')} <Text bold>{originalCwd}</Text>
           </Text>
         ),
         value: 'yes-exact',
@@ -78,7 +78,7 @@ export function SkillPermissionRequest(props: PermissionRequestProps): React.Rea
         alwaysAllowOptions.push({
           label: (
             <Text>
-              Yes, and don&apos;t ask again for <Text bold>{commandPrefix + ':*'}</Text> commands in{' '}
+              {t("Yes, and don't ask again for")} <Text bold>{commandPrefix + ':*'}</Text> {t('commands')} {t('in')}{' '}
               <Text bold>{originalCwd}</Text>
             </Text>
           ),
@@ -214,7 +214,7 @@ export function SkillPermissionRequest(props: PermissionRequestProps): React.Rea
 
   return (
     <PermissionDialog title={`Use skill "${skill}"?`} workerBadge={workerBadge}>
-      <Text>Claude may use instructions, code, or files from this Skill.</Text>
+      <Text>{t('Claude may use instructions, code, or files from this Skill.')}</Text>
       <Box flexDirection="column" paddingX={2} paddingY={1}>
         <Text dimColor>{commandObj?.description}</Text>
       </Box>

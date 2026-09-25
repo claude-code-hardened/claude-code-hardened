@@ -1,4 +1,4 @@
-import { POWERSHELL_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/PowerShellTool/toolName.js';
+import { t } from '../../../i18n/index.js';
 import type { PermissionUpdate } from '../../../utils/permissions/PermissionUpdateSchema.js';
 import { shouldShowAlwaysAllowOptions } from '../../../utils/permissions/permissionsLoader.js';
 import type { OptionWithDescription } from '../../CustomSelect/select.js';
@@ -30,7 +30,7 @@ export function powershellToolUseOptions({
       type: 'input',
       label: 'Yes',
       value: 'yes',
-      placeholder: 'and tell Claude what to do next',
+      placeholder: t('and tell Claude what to do next'),
       onChange: onAcceptFeedbackChange,
       allowEmptySubmitToCancel: true,
     });
@@ -58,7 +58,7 @@ export function powershellToolUseOptions({
     if (editablePrefix !== undefined && onEditablePrefixChange && !hasNonPowerShellSuggestions) {
       options.push({
         type: 'input',
-        label: 'Yes, and don\u2019t ask again for',
+        label: t('Yes, and don\u2019t ask again for'),
         value: 'yes-prefix-edited',
         placeholder: 'command prefix (e.g., Get-Process:*)',
         initialValue: editablePrefix,
@@ -84,7 +84,7 @@ export function powershellToolUseOptions({
       type: 'input',
       label: 'No',
       value: 'no',
-      placeholder: 'and tell Claude what to do differently',
+      placeholder: t('and tell Claude what to do differently'),
       onChange: onRejectFeedbackChange,
       allowEmptySubmitToCancel: true,
     });

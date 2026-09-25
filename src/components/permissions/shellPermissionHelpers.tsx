@@ -117,14 +117,17 @@ export function generateShellSuggestionsLabel(
       const dirName = basename(firstPath) || firstPath;
       return (
         <Text>
-          Yes, allow reading from <Text bold>{dirName}</Text>
-          {sep} from this project
+          {t('Yes, allow reading from')} <Text bold>{dirName}</Text> {t('from this project')}
         </Text>
       );
     }
 
     // Multiple read paths
-    return <Text>Yes, allow reading from {formatPathList(readPaths)} from this project</Text>;
+    return (
+      <Text>
+        {t('Yes, allow reading from')} {formatPathList(readPaths)} {t('from this project')}
+      </Text>
+    );
   }
 
   if (hasDirectories && !hasReadPaths && !hasCommands) {
@@ -134,21 +137,24 @@ export function generateShellSuggestionsLabel(
       const dirName = basename(firstDir) || firstDir;
       return (
         <Text>
-          Yes, and always allow access to <Text bold>{dirName}</Text>
-          {sep} from this project
+          {t('Yes, and always allow access to')} <Text bold>{dirName}</Text> {t('from this project')}
         </Text>
       );
     }
 
     // Multiple directories
-    return <Text>Yes, and always allow access to {formatPathList(directories)} from this project</Text>;
+    return (
+      <Text>
+        {t('Yes, and always allow access to')} {formatPathList(directories)} {t('from this project')}
+      </Text>
+    );
   }
 
   if (hasCommands && !hasDirectories && !hasReadPaths) {
     // Only shell command permissions
     return (
       <Text>
-        {"Yes, and don't ask again for "}
+        {t("Yes, and don't ask again for ")}
         {commandListDisplayTruncated(shellCommands)} commands in <Text bold>{getOriginalCwd()}</Text>
       </Text>
     );
@@ -160,7 +166,11 @@ export function generateShellSuggestionsLabel(
     const allPaths = [...directories, ...readPaths];
     if (hasDirectories && hasReadPaths) {
       // Mixed - use generic "access to"
-      return <Text>Yes, and always allow access to {formatPathList(allPaths)} from this project</Text>;
+      return (
+        <Text>
+          {t('Yes, and always allow access to')} {formatPathList(allPaths)} {t('from this project')}
+        </Text>
+      );
     }
   }
 
