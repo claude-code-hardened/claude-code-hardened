@@ -94,7 +94,7 @@ export function clearSessionCaches(
   // Clear tungsten session usage tracking
   if (process.env.USER_TYPE === 'ant') {
     void import(
-      '@claude-code-best/builtin-tools/tools/TungstenTool/TungstenTool.js'
+      '@claude-code-hardened/builtin-tools/tools/TungstenTool/TungstenTool.js'
     ).then(({ clearSessionsWithTungstenUsage, resetInitializationState }) => {
       clearSessionsWithTungstenUsage()
       resetInitializationState()
@@ -127,20 +127,20 @@ export function clearSessionCaches(
   clearSessionEnvVars()
   // Clear WebFetch URL cache (up to 50MB of cached page content)
   void import(
-    '@claude-code-best/builtin-tools/tools/WebFetchTool/utils.js'
+    '@claude-code-hardened/builtin-tools/tools/WebFetchTool/utils.js'
   ).then(({ clearWebFetchCache }) => clearWebFetchCache())
   // Clear SearchExtraTools description cache (full tool prompts, ~500KB for 50 MCP tools)
   void import(
-    '@claude-code-best/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js'
+    '@claude-code-hardened/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js'
   ).then(({ clearSearchExtraToolsDescriptionCache }) =>
     clearSearchExtraToolsDescriptionCache(),
   )
   // Clear agent definitions cache (accumulates per-cwd via EnterWorktreeTool)
   void import(
-    '@claude-code-best/builtin-tools/tools/AgentTool/loadAgentsDir.js'
+    '@claude-code-hardened/builtin-tools/tools/AgentTool/loadAgentsDir.js'
   ).then(({ clearAgentDefinitionsCache }) => clearAgentDefinitionsCache())
   // Clear SkillTool prompt cache (accumulates per project root)
-  void import('@claude-code-best/builtin-tools/tools/SkillTool/prompt.js').then(
+  void import('@claude-code-hardened/builtin-tools/tools/SkillTool/prompt.js').then(
     ({ clearPromptCache }) => clearPromptCache(),
   )
 }

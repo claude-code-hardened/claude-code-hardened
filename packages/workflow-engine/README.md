@@ -1,4 +1,4 @@
-# @claude-code-best/workflow-engine
+# @claude-code-hardened/workflow-engine
 
 Deterministic JS script orchestration engine for multi-agent workflows. The core layer has zero runtime dependencies and talks to the outside world exclusively through **port adapters** — you bring your own agent backend, journal store, and progress sink.
 
@@ -9,9 +9,9 @@ When you orchestrate multiple LLM agents, you want the orchestration itself to b
 ## Installation
 
 ```bash
-bun add @claude-code-best/workflow-engine
+bun add @claude-code-hardened/workflow-engine
 # or
-npm install @claude-code-best/workflow-engine
+npm install @claude-code-hardened/workflow-engine
 ```
 
 Runtime peer requirements: `ajv` and `zod` are pulled in automatically as dependencies.
@@ -24,7 +24,7 @@ import {
   createHostHandle,
   runWorkflow,
   type WorkflowPorts,
-} from '@claude-code-best/workflow-engine'
+} from '@claude-code-hardened/workflow-engine'
 
 const script = `
 export const meta = { name: 'hello', description: 'minimal demo' }

@@ -38,7 +38,7 @@ import {
 } from 'transcript-parser-napi'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
 import * as sessionIngress from '../services/api/sessionIngress.js'
-import { REPL_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/REPLTool/constants.js'
+import { REPL_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/REPLTool/constants.js'
 import {
   type AgentId,
   asAgentId,

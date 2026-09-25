@@ -18,7 +18,7 @@ import {
   REPL_TOOL_NAME,
   REPL_ONLY_TOOLS,
   isReplModeEnabled,
-} from '@claude-code-best/builtin-tools/tools/REPLTool/constants.js'
+} from '@claude-code-hardened/builtin-tools/tools/REPLTool/constants.js'
 export { REPL_ONLY_TOOLS }
 export {
   ALL_AGENT_DISALLOWED_TOOLS,
@@ -42,147 +42,147 @@ import { feature } from 'bun:bundle'
 /* eslint-disable @typescript-eslint/no-require-imports */
 const getAgentTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/AgentTool/AgentTool.js') as typeof import('@claude-code-best/builtin-tools/tools/AgentTool/AgentTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/AgentTool/AgentTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/AgentTool/AgentTool.js')
   ).AgentTool
 const getSkillTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/SkillTool/SkillTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SkillTool/SkillTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/SkillTool/SkillTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SkillTool/SkillTool.js')
   ).SkillTool
 const getBashTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/BashTool/BashTool.js')
   ).BashTool
 const getFileEditTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileEditTool/FileEditTool.js')
   ).FileEditTool
 const getFileReadTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileReadTool/FileReadTool.js')
   ).FileReadTool
 const getFileWriteTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
   ).FileWriteTool
 const getGlobTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/GlobTool/GlobTool.js') as typeof import('@claude-code-best/builtin-tools/tools/GlobTool/GlobTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/GlobTool/GlobTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/GlobTool/GlobTool.js')
   ).GlobTool
 const getNotebookEditTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/NotebookEditTool/NotebookEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/NotebookEditTool/NotebookEditTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/NotebookEditTool/NotebookEditTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/NotebookEditTool/NotebookEditTool.js')
   ).NotebookEditTool
 const getWebFetchTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/WebFetchTool/WebFetchTool.js') as typeof import('@claude-code-best/builtin-tools/tools/WebFetchTool/WebFetchTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/WebFetchTool/WebFetchTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/WebFetchTool/WebFetchTool.js')
   ).WebFetchTool
 const getTaskStopTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TaskStopTool/TaskStopTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskStopTool/TaskStopTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TaskStopTool/TaskStopTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TaskStopTool/TaskStopTool.js')
   ).TaskStopTool
 const getBriefTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/BriefTool/BriefTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BriefTool/BriefTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/BriefTool/BriefTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/BriefTool/BriefTool.js')
   ).BriefTool
 const getTaskOutputTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TaskOutputTool/TaskOutputTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskOutputTool/TaskOutputTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TaskOutputTool/TaskOutputTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TaskOutputTool/TaskOutputTool.js')
   ).TaskOutputTool
 const getWebSearchTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/WebSearchTool/WebSearchTool.js') as typeof import('@claude-code-best/builtin-tools/tools/WebSearchTool/WebSearchTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/WebSearchTool/WebSearchTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/WebSearchTool/WebSearchTool.js')
   ).WebSearchTool
 const getTodoWriteTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TodoWriteTool/TodoWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TodoWriteTool/TodoWriteTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TodoWriteTool/TodoWriteTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TodoWriteTool/TodoWriteTool.js')
   ).TodoWriteTool
 const getExitPlanModeV2Tool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js')
   ).ExitPlanModeV2Tool
 const getArtifactTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ArtifactTool/ArtifactTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ArtifactTool/ArtifactTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ArtifactTool/ArtifactTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ArtifactTool/ArtifactTool.js')
   ).ArtifactTool
 const getTestingPermissionTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/testing/TestingPermissionTool.js') as typeof import('@claude-code-best/builtin-tools/tools/testing/TestingPermissionTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/testing/TestingPermissionTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/testing/TestingPermissionTool.js')
   ).TestingPermissionTool
 const getGrepTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/GrepTool/GrepTool.js') as typeof import('@claude-code-best/builtin-tools/tools/GrepTool/GrepTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/GrepTool/GrepTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/GrepTool/GrepTool.js')
   ).GrepTool
 const getTungstenTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TungstenTool/TungstenTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TungstenTool/TungstenTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TungstenTool/TungstenTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TungstenTool/TungstenTool.js')
   ).TungstenTool
 const getAskUserQuestionTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js') as typeof import('@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js')
   ).AskUserQuestionTool
 const getLSPTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/LSPTool/LSPTool.js') as typeof import('@claude-code-best/builtin-tools/tools/LSPTool/LSPTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/LSPTool/LSPTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/LSPTool/LSPTool.js')
   ).LSPTool
 const getListMcpResourcesTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js')
   ).ListMcpResourcesTool
 const getReadMcpResourceTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js')
   ).ReadMcpResourceTool
 const getSearchExtraToolsTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js')
   ).SearchExtraToolsTool
 const getExecuteTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ExecuteTool/ExecuteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExecuteTool/ExecuteTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ExecuteTool/ExecuteTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ExecuteTool/ExecuteTool.js')
   ).ExecuteTool
 const getEnterPlanModeTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/EnterPlanModeTool/EnterPlanModeTool.js') as typeof import('@claude-code-best/builtin-tools/tools/EnterPlanModeTool/EnterPlanModeTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/EnterPlanModeTool/EnterPlanModeTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/EnterPlanModeTool/EnterPlanModeTool.js')
   ).EnterPlanModeTool
 const getEnterWorktreeTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/EnterWorktreeTool/EnterWorktreeTool.js') as typeof import('@claude-code-best/builtin-tools/tools/EnterWorktreeTool/EnterWorktreeTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/EnterWorktreeTool/EnterWorktreeTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/EnterWorktreeTool/EnterWorktreeTool.js')
   ).EnterWorktreeTool
 const getExitWorktreeTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ExitWorktreeTool/ExitWorktreeTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExitWorktreeTool/ExitWorktreeTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ExitWorktreeTool/ExitWorktreeTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ExitWorktreeTool/ExitWorktreeTool.js')
   ).ExitWorktreeTool
 const getConfigTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ConfigTool/ConfigTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ConfigTool/ConfigTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ConfigTool/ConfigTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ConfigTool/ConfigTool.js')
   ).ConfigTool
 const getLocalMemoryRecallTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js') as typeof import('@claude-code-best/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js')
   ).LocalMemoryRecallTool
 const getVaultHttpFetchTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js') as typeof import('@claude-code-best/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js')
   ).VaultHttpFetchTool
 const getTaskCreateTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js')
   ).TaskCreateTool
 const getTaskGetTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TaskGetTool/TaskGetTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskGetTool/TaskGetTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TaskGetTool/TaskGetTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TaskGetTool/TaskGetTool.js')
   ).TaskGetTool
 const getTaskUpdateTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TaskUpdateTool/TaskUpdateTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskUpdateTool/TaskUpdateTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TaskUpdateTool/TaskUpdateTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TaskUpdateTool/TaskUpdateTool.js')
   ).TaskUpdateTool
 const getTaskListTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/TaskListTool/TaskListTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TaskListTool/TaskListTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/TaskListTool/TaskListTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TaskListTool/TaskListTool.js')
   ).TaskListTool
 const getSyntheticOutputToolName = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SyntheticOutputTool/SyntheticOutputTool.js')
   ).SYNTHETIC_OUTPUT_TOOL_NAME
 
 // Dead code elimination: conditional loaders (feature() must stay in the
@@ -191,81 +191,81 @@ const REPLToolLoader =
   process.env.USER_TYPE === 'ant'
     ? () =>
         (
-          require('@claude-code-best/builtin-tools/tools/REPLTool/REPLTool.js') as typeof import('@claude-code-best/builtin-tools/tools/REPLTool/REPLTool.js')
+          require('@claude-code-hardened/builtin-tools/tools/REPLTool/REPLTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/REPLTool/REPLTool.js')
         ).REPLTool
     : null
 const SuggestBackgroundPRToolLoader =
   process.env.USER_TYPE === 'ant'
     ? () =>
         (
-          require('@claude-code-best/builtin-tools/tools/SuggestBackgroundPRTool/SuggestBackgroundPRTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SuggestBackgroundPRTool/SuggestBackgroundPRTool.js')
+          require('@claude-code-hardened/builtin-tools/tools/SuggestBackgroundPRTool/SuggestBackgroundPRTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SuggestBackgroundPRTool/SuggestBackgroundPRTool.js')
         ).SuggestBackgroundPRTool
     : null
 const SleepToolLoader =
   feature('PROACTIVE') || feature('KAIROS')
     ? () =>
         (
-          require('@claude-code-best/builtin-tools/tools/SleepTool/SleepTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SleepTool/SleepTool.js')
+          require('@claude-code-hardened/builtin-tools/tools/SleepTool/SleepTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SleepTool/SleepTool.js')
         ).SleepTool
     : null
 const getCronTools = (): Tool[] => [
   (
-    require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronCreateTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronCreateTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ScheduleCronTool/CronCreateTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ScheduleCronTool/CronCreateTool.js')
   ).CronCreateTool,
   (
-    require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronDeleteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronDeleteTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ScheduleCronTool/CronDeleteTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ScheduleCronTool/CronDeleteTool.js')
   ).CronDeleteTool,
   (
-    require('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronListTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ScheduleCronTool/CronListTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ScheduleCronTool/CronListTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ScheduleCronTool/CronListTool.js')
   ).CronListTool,
 ]
 const RemoteTriggerToolLoader = feature('AGENT_TRIGGERS_REMOTE')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/RemoteTriggerTool/RemoteTriggerTool.js') as typeof import('@claude-code-best/builtin-tools/tools/RemoteTriggerTool/RemoteTriggerTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/RemoteTriggerTool/RemoteTriggerTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/RemoteTriggerTool/RemoteTriggerTool.js')
       ).RemoteTriggerTool
   : null
 const MonitorToolLoader = feature('MONITOR_TOOL')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/MonitorTool/MonitorTool.js') as typeof import('@claude-code-best/builtin-tools/tools/MonitorTool/MonitorTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/MonitorTool/MonitorTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/MonitorTool/MonitorTool.js')
       ).MonitorTool
   : null
 const SendUserFileToolLoader = feature('KAIROS')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/SendUserFileTool/SendUserFileTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SendUserFileTool/SendUserFileTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/SendUserFileTool/SendUserFileTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SendUserFileTool/SendUserFileTool.js')
       ).SendUserFileTool
   : null
 const PushNotificationToolLoader =
   feature('KAIROS') || feature('KAIROS_PUSH_NOTIFICATION')
     ? () =>
         (
-          require('@claude-code-best/builtin-tools/tools/PushNotificationTool/PushNotificationTool.js') as typeof import('@claude-code-best/builtin-tools/tools/PushNotificationTool/PushNotificationTool.js')
+          require('@claude-code-hardened/builtin-tools/tools/PushNotificationTool/PushNotificationTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/PushNotificationTool/PushNotificationTool.js')
         ).PushNotificationTool
     : null
 const SubscribePRToolLoader = feature('KAIROS_GITHUB_WEBHOOKS')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/SubscribePRTool/SubscribePRTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SubscribePRTool/SubscribePRTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/SubscribePRTool/SubscribePRTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SubscribePRTool/SubscribePRTool.js')
       ).SubscribePRTool
   : null
 
 // Lazy require to break circular dependency: tools.ts -> TeamCreateTool/TeamDeleteTool -> ... -> tools.ts
 const getTeamCreateTool = () =>
-  require('@claude-code-best/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js')
-    .TeamCreateTool as typeof import('@claude-code-best/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js').TeamCreateTool
+  require('@claude-code-hardened/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js')
+    .TeamCreateTool as typeof import('@claude-code-hardened/builtin-tools/tools/TeamCreateTool/TeamCreateTool.js').TeamCreateTool
 const getTeamDeleteTool = () =>
-  require('@claude-code-best/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js')
-    .TeamDeleteTool as typeof import('@claude-code-best/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js').TeamDeleteTool
+  require('@claude-code-hardened/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js')
+    .TeamDeleteTool as typeof import('@claude-code-hardened/builtin-tools/tools/TeamDeleteTool/TeamDeleteTool.js').TeamDeleteTool
 const getSendMessageTool = () =>
-  require('@claude-code-best/builtin-tools/tools/SendMessageTool/SendMessageTool.js')
-    .SendMessageTool as typeof import('@claude-code-best/builtin-tools/tools/SendMessageTool/SendMessageTool.js').SendMessageTool
+  require('@claude-code-hardened/builtin-tools/tools/SendMessageTool/SendMessageTool.js')
+    .SendMessageTool as typeof import('@claude-code-hardened/builtin-tools/tools/SendMessageTool/SendMessageTool.js').SendMessageTool
 
 const GoalToolLoader = feature('GOAL')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/GoalTool/GoalTool.js') as typeof import('@claude-code-best/builtin-tools/tools/GoalTool/GoalTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/GoalTool/GoalTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/GoalTool/GoalTool.js')
       ).GoalTool
   : null
 // Dead code elimination: conditional import for CLAUDE_CODE_VERIFY_PLAN
@@ -273,7 +273,7 @@ const VerifyPlanExecutionToolLoader =
   process.env.CLAUDE_CODE_VERIFY_PLAN === 'true'
     ? () =>
         (
-          require('@claude-code-best/builtin-tools/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js') as typeof import('@claude-code-best/builtin-tools/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js')
+          require('@claude-code-hardened/builtin-tools/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js')
         ).VerifyPlanExecutionTool
     : null
 // Dead code elimination: conditional import for OVERFLOW_TEST_TOOL.
@@ -281,25 +281,25 @@ const VerifyPlanExecutionToolLoader =
 // OVERFLOW_TEST_TOOL_NAME, so the original untyped require semantics are kept.
 const OverflowTestToolLoader = feature('OVERFLOW_TEST_TOOL')
   ? () =>
-      require('@claude-code-best/builtin-tools/tools/OverflowTestTool/OverflowTestTool.js')
+      require('@claude-code-hardened/builtin-tools/tools/OverflowTestTool/OverflowTestTool.js')
         .OverflowTestTool
   : null
 const CtxInspectToolLoader = feature('CONTEXT_COLLAPSE')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/CtxInspectTool/CtxInspectTool.js') as typeof import('@claude-code-best/builtin-tools/tools/CtxInspectTool/CtxInspectTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/CtxInspectTool/CtxInspectTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/CtxInspectTool/CtxInspectTool.js')
       ).CtxInspectTool
   : null
 const TerminalCaptureToolLoader = feature('TERMINAL_PANEL')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/TerminalCaptureTool/TerminalCaptureTool.js') as typeof import('@claude-code-best/builtin-tools/tools/TerminalCaptureTool/TerminalCaptureTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/TerminalCaptureTool/TerminalCaptureTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TerminalCaptureTool/TerminalCaptureTool.js')
       ).TerminalCaptureTool
   : null
 const WebBrowserToolLoader = feature('WEB_BROWSER_TOOL')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/WebBrowserTool/WebBrowserTool.js') as typeof import('@claude-code-best/builtin-tools/tools/WebBrowserTool/WebBrowserTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/WebBrowserTool/WebBrowserTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/WebBrowserTool/WebBrowserTool.js')
       ).WebBrowserTool
   : null
 const coordinatorModeModuleLoader = feature('COORDINATOR_MODE')
@@ -309,25 +309,25 @@ const coordinatorModeModuleLoader = feature('COORDINATOR_MODE')
 const SnipToolLoader = feature('HISTORY_SNIP')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/SnipTool/SnipTool.js') as typeof import('@claude-code-best/builtin-tools/tools/SnipTool/SnipTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/SnipTool/SnipTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/SnipTool/SnipTool.js')
       ).SnipTool
   : null
 const DiscoverSkillsToolLoader = feature('EXPERIMENTAL_SKILL_SEARCH')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/DiscoverSkillsTool/DiscoverSkillsTool.js') as typeof import('@claude-code-best/builtin-tools/tools/DiscoverSkillsTool/DiscoverSkillsTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/DiscoverSkillsTool/DiscoverSkillsTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/DiscoverSkillsTool/DiscoverSkillsTool.js')
       ).DiscoverSkillsTool
   : null
 const ReviewArtifactToolLoader = feature('REVIEW_ARTIFACT')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/ReviewArtifactTool/ReviewArtifactTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ReviewArtifactTool/ReviewArtifactTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/ReviewArtifactTool/ReviewArtifactTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ReviewArtifactTool/ReviewArtifactTool.js')
       ).ReviewArtifactTool
   : null
 const ListPeersToolLoader = feature('UDS_INBOX')
   ? () =>
       (
-        require('@claude-code-best/builtin-tools/tools/ListPeersTool/ListPeersTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ListPeersTool/ListPeersTool.js')
+        require('@claude-code-hardened/builtin-tools/tools/ListPeersTool/ListPeersTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ListPeersTool/ListPeersTool.js')
       ).ListPeersTool
   : null
 const WorkflowToolLoader = feature('WORKFLOW_SCRIPTS')
@@ -341,7 +341,7 @@ const WorkflowToolLoader = feature('WORKFLOW_SCRIPTS')
 const getPowerShellTool = () => {
   if (!isPowerShellToolEnabled()) return null
   return (
-    require('@claude-code-best/builtin-tools/tools/PowerShellTool/PowerShellTool.js') as typeof import('@claude-code-best/builtin-tools/tools/PowerShellTool/PowerShellTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/PowerShellTool/PowerShellTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/PowerShellTool/PowerShellTool.js')
   ).PowerShellTool
 }
 

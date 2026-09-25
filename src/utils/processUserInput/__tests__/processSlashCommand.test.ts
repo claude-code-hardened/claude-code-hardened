@@ -73,7 +73,7 @@ mock.module('bun:bundle', () => ({
 }))
 
 mock.module(
-  '@claude-code-best/builtin-tools/tools/AgentTool/runAgent.js',
+  '@claude-code-hardened/builtin-tools/tools/AgentTool/runAgent.js',
   () => ({
     runAgent: async function* () {
       runAgentStartCount += 1
@@ -102,7 +102,7 @@ mock.module(
   }),
 )
 
-mock.module('@claude-code-best/builtin-tools/tools/AgentTool/UI.js', () => ({
+mock.module('@claude-code-hardened/builtin-tools/tools/AgentTool/UI.js', () => ({
   AgentPromptDisplay: () => null,
   AgentResponseDisplay: () => null,
   extractLastToolInfo: () => null,

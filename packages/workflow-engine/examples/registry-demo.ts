@@ -18,7 +18,7 @@ import {
   type AgentRunParams,
   type AgentRunResult,
   type WorkflowPorts,
-} from '@claude-code-best/workflow-engine'
+} from '@claude-code-hardened/workflow-engine'
 
 const strongAdapter: AgentAdapter = {
   id: 'strong',

@@ -37,8 +37,8 @@ function isTextBlock(block: ContentBlockParam): block is TextBlockParam {
 
 import * as path from 'path';
 import { useTerminalSize } from 'src/hooks/useTerminalSize.js';
-import type { FileEditOutput } from '@claude-code-best/builtin-tools/tools/FileEditTool/types.js';
-import type { Output as FileWriteToolOutput } from '@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js';
+import type { FileEditOutput } from '@claude-code-hardened/builtin-tools/tools/FileEditTool/types.js';
+import type { Output as FileWriteToolOutput } from '@claude-code-hardened/builtin-tools/tools/FileWriteTool/FileWriteTool.js';
 import {
   BASH_STDERR_TAG,
   BASH_STDOUT_TAG,

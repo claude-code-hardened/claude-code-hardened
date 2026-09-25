@@ -104,7 +104,7 @@ Guidelines:
     if (appState.replBridgeEnabled) {
       try {
         const { uploadBriefAttachment } = await import(
-          '@claude-code-best/builtin-tools/tools/BriefTool/upload.js'
+          '@claude-code-hardened/builtin-tools/tools/BriefTool/upload.js'
         )
         fileUuid = await uploadBriefAttachment(file_path, fileSize, {
           replBridgeEnabled: true,

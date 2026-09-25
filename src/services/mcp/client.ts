@@ -55,19 +55,19 @@ import {
 // inside functions, so the tools load on first MCP connect.
 const getListMcpResourcesTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ListMcpResourcesTool/ListMcpResourcesTool.js')
   ).ListMcpResourcesTool
-import type { MCPProgress } from '@claude-code-best/builtin-tools/tools/MCPTool/MCPTool.js'
+import type { MCPProgress } from '@claude-code-hardened/builtin-tools/tools/MCPTool/MCPTool.js'
 // Lazy require: MCPTool's module pulls its UI -> @anthropic/ink. Only used
 // inside connect functions (tool pool assembly), after ink would be loaded.
 const getMCPTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/MCPTool/MCPTool.js') as typeof import('@claude-code-best/builtin-tools/tools/MCPTool/MCPTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/MCPTool/MCPTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/MCPTool/MCPTool.js')
   ).MCPTool
-import { createMcpAuthTool } from '@claude-code-best/builtin-tools/tools/McpAuthTool/McpAuthTool.js'
+import { createMcpAuthTool } from '@claude-code-hardened/builtin-tools/tools/McpAuthTool/McpAuthTool.js'
 const getReadMcpResourceTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js') as typeof import('@claude-code-best/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ReadMcpResourceTool/ReadMcpResourceTool.js')
   ).ReadMcpResourceTool
 import { createAbortController } from '../../utils/abortController.js'
 import { count } from '../../utils/array.js'
@@ -137,12 +137,12 @@ import { getLoggingSafeMcpBaseUrl } from './utils.js'
 import {
   isMcpSessionExpiredError as isMcpSessionExpiredErrorFromPackage,
   MAX_MCP_DESCRIPTION_LENGTH as PKG_MAX_MCP_DESCRIPTION_LENGTH,
-} from '@claude-code-best/mcp-client'
+} from '@claude-code-hardened/mcp-client'
 import {
   captureStderr,
   recursivelySanitizeUnicode,
   type StderrCapture,
-} from '@claude-code-best/mcp-client'
+} from '@claude-code-hardened/mcp-client'
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const fetchMcpSkillsForClient = feature('MCP_SKILLS')
@@ -154,7 +154,7 @@ const fetchMcpSkillsForClient = feature('MCP_SKILLS')
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { AssistantMessage } from 'src/types/message.js'
 /* eslint-enable @typescript-eslint/no-require-imports */
-import { classifyMcpToolForCollapse } from '@claude-code-best/builtin-tools/tools/MCPTool/classifyForCollapse.js'
+import { classifyMcpToolForCollapse } from '@claude-code-hardened/builtin-tools/tools/MCPTool/classifyForCollapse.js'
 import { clearKeychainCache } from '../../utils/secureStorage/macOsKeychainHelpers.js'
 import { sleep } from '../../utils/sleep.js'
 import {

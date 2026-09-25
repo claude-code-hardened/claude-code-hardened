@@ -5,7 +5,7 @@ import { type KeyboardEvent, Box, Text } from '@anthropic/ink';
 import { useKeybinding, useKeybindings } from '../../../keybindings/useKeybinding.js';
 import { t } from '../../../i18n/index.js';
 import { useAppState } from '../../../state/AppState.js';
-import type { Question } from '@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js';
+import type { Question } from '@claude-code-hardened/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js';
 import { getExternalEditor } from '../../../utils/editor.js';
 import { toIDEDisplayName } from '../../../utils/ide.js';
 import { editPromptInEditor } from '../../../utils/promptEditor.js';

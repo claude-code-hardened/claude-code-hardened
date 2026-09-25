@@ -12,7 +12,7 @@ import type { StatsStore } from './context/stats.js';
 import type { Root } from '@anthropic/ink';
 import { renderAndRun, showSetupDialog } from './interactiveHelpers.js';
 import type { AppState } from './state/AppStateStore.js';
-import type { AgentMemoryScope } from '@claude-code-best/builtin-tools/tools/AgentTool/agentMemory.js';
+import type { AgentMemoryScope } from '@claude-code-hardened/builtin-tools/tools/AgentTool/agentMemory.js';
 import type { TeleportRemoteResponse } from './utils/conversationRecovery.js';
 import type { FpsMetrics } from './utils/fpsTracker.js';
 import type { ValidationError } from './utils/settings/validation.js';

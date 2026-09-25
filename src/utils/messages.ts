@@ -110,36 +110,36 @@ import type {
   HookEvent,
   SDKAssistantMessageError,
 } from 'src/entrypoints/agentSdkTypes.js'
-import { EXPLORE_AGENT } from '@claude-code-best/builtin-tools/tools/AgentTool/built-in/exploreAgent.js'
-import { PLAN_AGENT } from '@claude-code-best/builtin-tools/tools/AgentTool/built-in/planAgent.js'
-import { areExplorePlanAgentsEnabled } from '@claude-code-best/builtin-tools/tools/AgentTool/builtInAgents.js'
-import { AGENT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/AgentTool/constants.js'
-import { ASK_USER_QUESTION_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/AskUserQuestionTool/prompt.js'
+import { EXPLORE_AGENT } from '@claude-code-hardened/builtin-tools/tools/AgentTool/built-in/exploreAgent.js'
+import { PLAN_AGENT } from '@claude-code-hardened/builtin-tools/tools/AgentTool/built-in/planAgent.js'
+import { areExplorePlanAgentsEnabled } from '@claude-code-hardened/builtin-tools/tools/AgentTool/builtInAgents.js'
+import { AGENT_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/AgentTool/constants.js'
+import { ASK_USER_QUESTION_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/AskUserQuestionTool/prompt.js'
 // Lazy requires: these tool implementations pull @anthropic/ink via their UI
 // modules, and messages.ts is part of main.tsx's pre-commander evaluation.
 // All uses are inside functions, so tools load on first message rendering.
 const getBashTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/BashTool/BashTool.js')
   ).BashTool
 const getExitPlanModeV2Tool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js') as typeof import('@claude-code-best/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js')
+    require('@claude-code-hardened/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/ExitPlanModeTool/ExitPlanModeV2Tool.js')
   ).ExitPlanModeV2Tool
 const getFileEditTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileEditTool/FileEditTool.js')
   ).FileEditTool
 const getFileWriteTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
   ).FileWriteTool
 import {
   FILE_READ_TOOL_NAME,
   MAX_LINES_TO_READ,
-} from '@claude-code-best/builtin-tools/tools/FileReadTool/prompt.js'
-import { GLOB_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/GlobTool/prompt.js'
-import { GREP_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/GrepTool/prompt.js'
+} from '@claude-code-hardened/builtin-tools/tools/FileReadTool/prompt.js'
+import { GLOB_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/GlobTool/prompt.js'
+import { GREP_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/GrepTool/prompt.js'
 import type { DeepImmutable } from 'src/types/utils.js'
 import { getStrictToolResultPairing } from '../bootstrap/state.js'
 import type { SpinnerMode } from '../components/Spinner.js'
@@ -157,16 +157,16 @@ import {
   type Tools,
   toolMatchesName,
 } from '../Tool.js'
-import type { Output as FileReadToolOutput } from '@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js'
+import type { Output as FileReadToolOutput } from '@claude-code-hardened/builtin-tools/tools/FileReadTool/FileReadTool.js'
 // Lazy require (see comment above): FileReadTool's module pulls its UI -> ink.
 const getFileReadTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileReadTool/FileReadTool.js')
   ).FileReadTool
-import { SEND_MESSAGE_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/SendMessageTool/constants.js'
-import { TASK_CREATE_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/TaskCreateTool/constants.js'
-import { TASK_OUTPUT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/TaskOutputTool/constants.js'
-import { TASK_UPDATE_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/TaskUpdateTool/constants.js'
+import { SEND_MESSAGE_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/SendMessageTool/constants.js'
+import { TASK_CREATE_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/TaskCreateTool/constants.js'
+import { TASK_OUTPUT_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/TaskOutputTool/constants.js'
+import { TASK_UPDATE_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/TaskUpdateTool/constants.js'
 import type { PermissionMode } from '../types/permissions.js'
 import { normalizeToolInput, normalizeToolInputForAPI } from './api.js'
 import { getCurrentProjectConfig } from './config.js'

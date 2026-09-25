@@ -6,17 +6,17 @@ import {
   mcpInfoFromString,
 } from '../../services/mcp/mcpStringUtils.js'
 import type { Tool, ToolPermissionContext, ToolUseContext } from '../../Tool.js'
-import { AGENT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/AgentTool/constants.js'
+import { AGENT_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/AgentTool/constants.js'
 // Lazy require: shouldUseSandbox (via bashPermissions) pulls BashTool's UI ->
 // @anthropic/ink, and permissions.ts is part of main.tsx's pre-commander
 // evaluation. Both call sites are inside permission-check functions.
 const getShouldUseSandbox = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/BashTool/shouldUseSandbox.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/shouldUseSandbox.js')
+    require('@claude-code-hardened/builtin-tools/tools/BashTool/shouldUseSandbox.js') as typeof import('@claude-code-hardened/builtin-tools/tools/BashTool/shouldUseSandbox.js')
   ).shouldUseSandbox
-import { BASH_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/BashTool/toolName.js'
-import { POWERSHELL_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/PowerShellTool/toolName.js'
-import { REPL_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/REPLTool/constants.js'
+import { BASH_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/BashTool/toolName.js'
+import { POWERSHELL_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/PowerShellTool/toolName.js'
+import { REPL_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/REPLTool/constants.js'
 import type { AssistantMessage } from '../../types/message.js'
 import { extractOutputRedirections } from '../bash/commands.js'
 import { logForDebugging } from '../debug.js'

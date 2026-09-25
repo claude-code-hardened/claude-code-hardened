@@ -24,13 +24,13 @@ import type { LocalAgentTaskState } from '../../tasks/LocalAgentTask/LocalAgentT
 // autoCompact -> compact). Used inside the compaction query only.
 const getFileReadTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileReadTool/FileReadTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileReadTool/FileReadTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileReadTool/FileReadTool.js')
   ).FileReadTool
 import {
   FILE_READ_TOOL_NAME,
   FILE_UNCHANGED_STUB,
-} from '@claude-code-best/builtin-tools/tools/FileReadTool/prompt.js'
-import { SearchExtraToolsTool } from '@claude-code-best/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js'
+} from '@claude-code-hardened/builtin-tools/tools/FileReadTool/prompt.js'
+import { SearchExtraToolsTool } from '@claude-code-hardened/builtin-tools/tools/SearchExtraToolsTool/SearchExtraToolsTool.js'
 import type { AgentId } from '../../types/ids.js'
 import type {
   AssistantMessage,

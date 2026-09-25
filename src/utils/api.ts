@@ -22,30 +22,30 @@ import type { ScopedMcpServerConfig } from 'src/services/mcp/types.js'
 // functions (input normalization switch), so tools load on first use.
 const getBashTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-best/builtin-tools/tools/BashTool/BashTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/BashTool/BashTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/BashTool/BashTool.js')
   ).BashTool
 const getFileWriteTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileWriteTool/FileWriteTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileWriteTool/FileWriteTool.js')
   ).FileWriteTool
 const getFileEditTool = () =>
   (
-    require('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-best/builtin-tools/tools/FileEditTool/FileEditTool.js')
+    require('@claude-code-hardened/builtin-tools/tools/FileEditTool/FileEditTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/FileEditTool/FileEditTool.js')
   ).FileEditTool
 import {
   normalizeFileEditInput,
   stripTrailingWhitespace,
-} from '@claude-code-best/builtin-tools/tools/FileEditTool/utils.js'
+} from '@claude-code-hardened/builtin-tools/tools/FileEditTool/utils.js'
 import { getTools } from 'src/tools.js'
 import type { AgentId } from 'src/types/ids.js'
 import type { z } from 'zod/v4'
 import { CLI_SYSPROMPT_PREFIXES } from '../constants/system.js'
 import { roughTokenCountEstimation } from '../services/tokenEstimation.js'
 import type { Tool, ToolPermissionContext, Tools } from '../Tool.js'
-import { AGENT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/AgentTool/constants.js'
-import type { AgentDefinition } from '@claude-code-best/builtin-tools/tools/AgentTool/loadAgentsDir.js'
-import { EXIT_PLAN_MODE_V2_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/ExitPlanModeTool/constants.js'
-import { TASK_OUTPUT_TOOL_NAME } from '@claude-code-best/builtin-tools/tools/TaskOutputTool/constants.js'
+import { AGENT_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/AgentTool/constants.js'
+import type { AgentDefinition } from '@claude-code-hardened/builtin-tools/tools/AgentTool/loadAgentsDir.js'
+import { EXIT_PLAN_MODE_V2_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/ExitPlanModeTool/constants.js'
+import { TASK_OUTPUT_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/TaskOutputTool/constants.js'
 import type { Message } from '../types/message.js'
 import { isAgentSwarmsEnabled } from './agentSwarmsEnabled.js'
 import {

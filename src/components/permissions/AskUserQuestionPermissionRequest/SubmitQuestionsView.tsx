@@ -1,7 +1,7 @@
 import figures from 'figures';
 import React from 'react';
 import { Box, Text } from '@anthropic/ink';
-import type { Question } from '@claude-code-best/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js';
+import type { Question } from '@claude-code-hardened/builtin-tools/tools/AskUserQuestionTool/AskUserQuestionTool.js';
 import { t } from '../../../i18n/index.js';
 import type { PermissionDecision } from '../../../utils/permissions/PermissionResult.js';
 import { Select } from '../../CustomSelect/index.js';

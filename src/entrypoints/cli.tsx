@@ -176,7 +176,7 @@ async function main(): Promise<void> {
 
   if (args[0] === 'weixin') {
     profileCheckpoint('cli_weixin_path');
-    const { handleWeixinCli } = await import('@claude-code-best/weixin');
+    const { handleWeixinCli } = await import('@claude-code-hardened/weixin');
     const { enableConfigs } = await import('../utils/config.js');
     const { initializeAnalyticsSink } = await import('../services/analytics/sink.js');
     const { shutdownDatadog } = await import('../services/analytics/datadog.js');

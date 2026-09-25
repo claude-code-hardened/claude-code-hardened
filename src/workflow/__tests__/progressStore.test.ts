@@ -4,7 +4,7 @@ import {
   createProgressStoreFromBus,
   type RunProgress,
 } from '../progress/store.js'
-import type { AgentRunResult } from '@claude-code-best/workflow-engine'
+import type { AgentRunResult } from '@claude-code-hardened/workflow-engine'
 
 const ok = (o: string): AgentRunResult => ({
   kind: 'ok',

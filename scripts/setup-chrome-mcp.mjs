@@ -20,7 +20,7 @@ if (process.env.CLAUDE_CODE_SKIP_CHROME_MCP_SETUP === '1') {
 
 const require = createRequire(import.meta.url)
 const cliPath = require.resolve(
-  '@claude-code-best/mcp-chrome-bridge/dist/cli.js',
+  '@claude-code-hardened/mcp-chrome-bridge/dist/cli.js',
 )
 
 const userArgs = process.argv.slice(2)
