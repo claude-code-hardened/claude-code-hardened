@@ -33,7 +33,9 @@ export function ManagedSettingsSecurityDialog({ settings, onAccept, onReject }: 
     <PermissionDialog color="warning" titleColor="warning" title="Managed settings require approval">
       <Box flexDirection="column" gap={1} paddingTop={1}>
         <Text>
-          {t('Your organization has configured managed settings that could allow execution of arbitrary code or interception')}
+          {t(
+            'Your organization has configured managed settings that could allow execution of arbitrary code or interception',
+          )}
           of your prompts and responses.
         </Text>
 

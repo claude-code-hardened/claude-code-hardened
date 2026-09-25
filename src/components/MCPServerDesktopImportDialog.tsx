@@ -83,7 +83,9 @@ export function MCPServerDesktopImportDialog({ servers, scope, onDone }: Props):
       >
         {collisions.length > 0 && (
           <Text color="warning">
-            {t('Note: Some servers already exist with the same name. If selected, they will be imported with a numbered')}
+            {t(
+              'Note: Some servers already exist with the same name. If selected, they will be imported with a numbered',
+            )}
             suffix.
           </Text>
         )}

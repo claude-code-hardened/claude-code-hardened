@@ -51,7 +51,9 @@ export function ChannelsNotice(): React.ReactNode {
     <Box paddingLeft={2} flexDirection="column">
       <Text color="error">Listening for channel messages from: {list}</Text>
       <Text dimColor>
-        {t('Experimental · inbound messages will be pushed into this session, this carries prompt injection risks. Restart')}
+        {t(
+          'Experimental · inbound messages will be pushed into this session, this carries prompt injection risks. Restart',
+        )}
         Claude Code without {flag} to disable.
       </Text>
       {unmatched.map(u => (
