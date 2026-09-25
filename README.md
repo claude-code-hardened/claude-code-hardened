@@ -12,7 +12,7 @@
 
 这是 A\ (Anthropic) 官方 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 完整复原的工程化项目。而且, 我们持续跟进并实现了企业版或者需要登陆 Claude 账号才能使用的特性, 并在此基础上扩展了更多好玩的特性， 关闭了所有的外部封控点。我们完全兼容 CC 原有的配置， 你不需要改原始配置文件， Dynamic Workflow、Goal 等功能全都在。
 
-在复原基础上，本项目做了系统性**加固与性能优化**：长会话内存峰值降低 100-300 MB（流式拼接 O(n²)、消息数组多次拷贝、MCP/Bash 输出缓冲等 10 项已修复）、对照官方 CHANGELOG 治理 11 处内存泄漏、代码分割使启动 RSS 从 ~1GB 降至 ~500MB；rg/bfs/ugrep 三搜索工具全嵌入单文件产物（纯内存执行，shell 里 find/grep/rg 无缝接管）；zh-CN/zh-TW/ja/ko 四语言界面完整汉化；并持续修复输入、分发、构建链路上的 bug。
+本项目基于 [CCB（claude-code-best）](https://github.com/claude-code-best/claude-code) 继续**加固**，感谢 CCB 上游在内存与性能优化上的大量工作。我们在其基础上：修复了搜索嵌入、输入等一系列 bug，让 shell 里的 find/grep/rg 无缝走嵌入的 bfs/ugrep/ripgrep（更快更省内存），补齐了四语言（zh-CN/zh-TW/ja/ko）翻译，并持续修复构建与依赖链路问题。
 
 [文档在这里](https://ccb.agent-aura.top/) | [Discord 群组，群主在线答疑](https://discord.gg/uApuzJWGKX)
 
