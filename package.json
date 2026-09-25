@@ -103,6 +103,7 @@
     "@claude-code-hardened/builtin-tools": "workspace:*",
     "@claude-code-hardened/mcp-client": "workspace:*",
     "@claude-code-hardened/weixin": "workspace:*",
+    "@claude-code-hardened/workflow-engine": "workspace:*",
     "@commander-js/extra-typings": "^15.0.0",
     "@growthbook/growthbook": "^1.6.5",
     "@langfuse/otel": "^5.1.0",
