@@ -160,15 +160,20 @@ export function AssistantTextMessage({
     default:
       if (startsWithApiErrorPrefix(text)) {
         const truncated = !verbose && text.length > MAX_API_ERROR_CHARS;
+        // 渲染层汉化前缀：数据层保持 'API Error' 英文（startsWithApiErrorPrefix
+        // 等字符串 guard 依赖它），上游 error.message 原样保留。
+        const localizedPrefix = t(API_ERROR_MESSAGE_PREFIX);
+        const display =
+          text === API_ERROR_MESSAGE_PREFIX
+            ? t('{{prefix}}: Please wait a moment and try again.', { prefix: localizedPrefix })
+            : text.startsWith(`${API_ERROR_MESSAGE_PREFIX}: `)
+              ? `${localizedPrefix}:${text.slice(API_ERROR_MESSAGE_PREFIX.length)}`
+              : text;
         return (
           <MessageResponse>
             <Box flexDirection="column">
               <Text color="error">
-                {text === API_ERROR_MESSAGE_PREFIX
-                  ? t('{{prefix}}: Please wait a moment and try again.', { prefix: API_ERROR_MESSAGE_PREFIX })
-                  : truncated
-                    ? text.slice(0, MAX_API_ERROR_CHARS) + '…'
-                    : text}
+                {truncated ? display.slice(0, MAX_API_ERROR_CHARS) + '…' : display}
               </Text>
               {truncated && <CtrlOToExpand />}
             </Box>

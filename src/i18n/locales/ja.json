@@ -2676,5 +2676,9 @@
   "Remove the saved workspace API key?": "保存済みのワークスペース API キーを削除しますか？",
   "(settings.json only — env var is unaffected)": "（settings.json のみ — 環境変数は影響を受けません）",
   "Removing…": "削除中…",
-  "Press Y to confirm, N to cancel": "Y で確認、N でキャンセル"
+  "Press Y to confirm, N to cancel": "Y で確認、N でキャンセル",
+  "Interrupted": "中断されました",
+  "· What should Claude do instead?": "· 次に Claude に何をさせますか？",
+  "· [ANT-ONLY] /issue to report a model issue": "· [ANT-ONLY] /issue でモデルの問題を報告",
+  "API Error": "API エラー"
 }

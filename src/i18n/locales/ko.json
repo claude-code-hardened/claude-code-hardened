@@ -2676,5 +2676,9 @@
   "Remove the saved workspace API key?": "저장된 워크스페이스 API 키를 제거하시겠습니까?",
   "(settings.json only — env var is unaffected)": "(settings.json만 해당 — 환경 변수는 영향받지 않음)",
   "Removing…": "제거 중…",
-  "Press Y to confirm, N to cancel": "Y로 확인, N으로 취소"
+  "Press Y to confirm, N to cancel": "Y로 확인, N으로 취소",
+  "Interrupted": "중단됨",
+  "· What should Claude do instead?": "· 이제 Claude에게 무엇을 시킬까요?",
+  "· [ANT-ONLY] /issue to report a model issue": "· [ANT-ONLY] /issue로 모델 문제 보고",
+  "API Error": "API 오류"
 }

@@ -2676,5 +2676,9 @@
   "Remove the saved workspace API key?": "移除已保存的工作区 API key？",
   "(settings.json only — env var is unaffected)": "（仅 settings.json — 环境变量不受影响）",
   "Removing…": "移除中…",
-  "Press Y to confirm, N to cancel": "按 Y 确认，N 取消"
+  "Press Y to confirm, N to cancel": "按 Y 确认，N 取消",
+  "Interrupted": "已中斷",
+  "· What should Claude do instead?": "· 接下來希望 Claude 做什麼？",
+  "· [ANT-ONLY] /issue to report a model issue": "· [ANT-ONLY] 使用 /issue 报告模型问题",
+  "API Error": "API 错误"
 }
