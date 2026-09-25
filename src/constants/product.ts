@@ -1,5 +1,5 @@
 export const PRODUCT_URL =
-  'https://github.com/xiaocongyu66/claude-code-hardened'
+  'https://github.com/claude-code-hardened/claude-code-hardened'
 
 // Claude Code Remote session URLs
 export const CLAUDE_AI_BASE_URL = 'https://claude.ai'

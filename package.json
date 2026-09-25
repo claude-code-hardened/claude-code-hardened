@@ -6,11 +6,11 @@
   "author": "claude-code-hardened <claude-code-hardened@proton.me>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xiaocongyu66/claude-code-hardened.git"
+    "url": "git+https://github.com/claude-code-hardened/claude-code-hardened.git"
   },
-  "homepage": "https://github.com/xiaocongyu66/claude-code-hardened#readme",
+  "homepage": "https://github.com/claude-code-hardened/claude-code-hardened#readme",
   "bugs": {
-    "url": "https://github.com/xiaocongyu66/claude-code-hardened/issues"
+    "url": "https://github.com/claude-code-hardened/claude-code-hardened/issues"
   },
   "keywords": [
     "claude",

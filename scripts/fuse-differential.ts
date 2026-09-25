@@ -196,19 +196,19 @@ function agent(agentType: string, whenToUse: string): UnifiedItem {
 const UNIFIED_ITEMS: UnifiedItem[] = [
   mcpResource(
     'github',
-    'repos/xiaocongyu66/claude-code-hardened',
+    'repos/claude-code-hardened/claude-code-hardened',
     'claude-code',
     'main repository',
   ),
   mcpResource(
     'github',
-    'repos/xiaocongyu66/claude-code-hardened/issues',
+    'repos/claude-code-hardened/claude-code-hardened/issues',
     'issues',
     'issue tracker',
   ),
   mcpResource(
     'github',
-    'repos/xiaocongyu66/claude-code-hardened/pulls',
+    'repos/claude-code-hardened/claude-code-hardened/pulls',
     'pulls',
     'pull requests',
   ),
