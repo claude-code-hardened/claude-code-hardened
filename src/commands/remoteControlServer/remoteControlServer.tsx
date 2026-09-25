@@ -1,6 +1,7 @@
 import { type ChildProcess } from 'child_process';
 import { resolve } from 'path';
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { useEffect, useState } from 'react';
 import { getBridgeDisabledReason } from '../../bridge/bridgeEnabled.js';
 import { getBridgeAccessToken } from '../../bridge/bridgeConfig.js';
@@ -156,7 +157,7 @@ function ServerManagementDialog({ onDone }: Props): React.ReactNode {
         </Text>
         {logPreview.length > 0 && (
           <Box flexDirection="column">
-            <Text dimColor>Recent logs:</Text>
+            <Text dimColor>{t('Recent logs:')}</Text>
             {logPreview.map((line, i) => (
               <Text key={i} dimColor>
                 {line}
@@ -166,16 +167,16 @@ function ServerManagementDialog({ onDone }: Props): React.ReactNode {
         )}
         <Box flexDirection="column">
           <ListItem isFocused={focusIndex === 0}>
-            <Text>Stop server</Text>
+            <Text>{t('Stop server')}</Text>
           </ListItem>
           <ListItem isFocused={focusIndex === 1}>
-            <Text>Restart server</Text>
+            <Text>{t('Restart server')}</Text>
           </ListItem>
           <ListItem isFocused={focusIndex === 2}>
             <Text>Continue</Text>
           </ListItem>
         </Box>
-        <Text dimColor>Enter to select · Esc to continue</Text>
+        <Text dimColor>{t('Enter to select · Esc to continue')}</Text>
       </Box>
     </Dialog>
   );

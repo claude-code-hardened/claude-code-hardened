@@ -1909,10 +1909,10 @@ function generateTimeOfDayChart(messageHours: number[]): string {
 
   // Group into time periods
   const periods = [
-    { label: 'Morning (6-12)', range: [6, 7, 8, 9, 10, 11] },
-    { label: 'Afternoon (12-18)', range: [12, 13, 14, 15, 16, 17] },
-    { label: 'Evening (18-24)', range: [18, 19, 20, 21, 22, 23] },
-    { label: 'Night (0-6)', range: [0, 1, 2, 3, 4, 5] },
+    { label: t('Morning (6-12)'), range: [6, 7, 8, 9, 10, 11] },
+    { label: t('Afternoon (12-18)'), range: [12, 13, 14, 15, 16, 17] },
+    { label: t('Evening (18-24)'), range: [18, 19, 20, 21, 22, 23] },
+    { label: t('Night (0-6)'), range: [0, 1, 2, 3, 4, 5] },
   ]
 
   const hourCounts: Record<number, number> = {}

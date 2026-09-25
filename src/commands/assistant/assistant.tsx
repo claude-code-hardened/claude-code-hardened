@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { useState } from 'react';
 import { resolve } from 'path';
 import { Box, Text } from '@anthropic/ink';
@@ -101,19 +102,19 @@ export function NewInstallWizard({ defaultDir, onInstalled, onCancel, onError }:
   return (
     <Dialog title="Assistant Setup" onCancel={onCancel} hideInputGuide>
       <Box flexDirection="column" gap={1}>
-        <Text>No active assistant sessions found.</Text>
+        <Text>{t('No active assistant sessions found.')}</Text>
         <Text>
           Start a daemon in <Text bold>{defaultDir || '.'}</Text> to create a cloud session?
         </Text>
         <Box flexDirection="column">
           <ListItem isFocused={focusIndex === 0}>
-            <Text>Start assistant daemon</Text>
+            <Text>{t('Start assistant daemon')}</Text>
           </ListItem>
           <ListItem isFocused={focusIndex === 1}>
             <Text>Cancel</Text>
           </ListItem>
         </Box>
-        <Text dimColor>Enter to select · Esc to cancel</Text>
+        <Text dimColor>{t('Enter to select · Esc to cancel')}</Text>
       </Box>
     </Dialog>
   );

@@ -54,7 +54,7 @@ function SetupNotes({ messages }: { messages: string[] }): React.ReactNode {
       <Box>
         <Text color="warning">
           <StatusIcon status="warning" withSpace />
-          Setup notes:
+          {t('Setup notes:')}
         </Text>
       </Box>
       {messages.map((message, index) => (
@@ -216,7 +216,7 @@ function Install({ onDone, force, target }: InstallProps): React.ReactNode {
           <Box>
             <StatusIcon status="success" withSpace />
             <Text color="success" bold>
-              Claude Code successfully installed!
+              {t('Claude Code successfully installed!')}
             </Text>
           </Box>
           <Box marginLeft={2} flexDirection="column" gap={1}>

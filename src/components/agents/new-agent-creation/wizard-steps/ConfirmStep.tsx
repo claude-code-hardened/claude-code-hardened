@@ -91,7 +91,7 @@ export function ConfirmStep({ tools, existingAgents, onSave, onSaveAndEdit, erro
 
         <Box marginTop={1}>
           <Text>
-            <Text bold>Description</Text> (tells Claude when to use this agent):
+            <Text bold>{t('Description')}</Text> (tells Claude when to use this agent):
           </Text>
         </Box>
         <Box marginLeft={2} marginTop={1}>
@@ -100,7 +100,7 @@ export function ConfirmStep({ tools, existingAgents, onSave, onSaveAndEdit, erro
 
         <Box marginTop={1}>
           <Text>
-            <Text bold>System prompt</Text>:
+            <Text bold>{t('System prompt')}</Text>:
           </Text>
         </Box>
         <Box marginLeft={2} marginTop={1}>

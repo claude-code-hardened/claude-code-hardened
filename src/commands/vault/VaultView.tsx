@@ -77,7 +77,7 @@ export function VaultView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'success' as keyof Theme}>
-            Vault created
+            {t('Vault created')}
           </Text>
         </Box>
         <Text>ID: {vault.vault_id}</Text>
@@ -93,7 +93,7 @@ export function VaultView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'warning' as keyof Theme}>
-            Vault archived
+            {t('Vault archived')}
           </Text>
         </Box>
         <Text>ID: {vault.vault_id}</Text>
@@ -150,7 +150,7 @@ export function VaultView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'success' as keyof Theme}>
-            Credential added
+            {t('Credential added')}
           </Text>
         </Box>
         <Text>ID: {credentialId}</Text>
@@ -167,7 +167,7 @@ export function VaultView(props: Props): React.ReactNode {
       <Box flexDirection="column">
         <Box>
           <Text bold color={'warning' as keyof Theme}>
-            Credential archived
+            {t('Credential archived')}
           </Text>
         </Box>
         <Text>ID: {credentialId}</Text>

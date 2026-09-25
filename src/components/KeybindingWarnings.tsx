@@ -31,7 +31,7 @@ export function KeybindingWarnings(): React.ReactNode {
   return (
     <Box flexDirection="column" marginTop={1} marginBottom={1}>
       <Text bold color={errors.length > 0 ? 'error' : 'warning'}>
-        Keybinding Configuration Issues
+        {t('Keybinding Configuration Issues')}
       </Text>
       <Box>
         <Text dimColor>Location: </Text>

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import { Select } from '../CustomSelect/select.js';
 import { PermissionDialog } from '../permissions/PermissionDialog.js';
@@ -55,7 +56,7 @@ export function LspRecommendationMenu({
       value: 'yes',
     },
     {
-      label: 'No, not now',
+      label: t('No, not now'),
       value: 'no',
     },
     {
@@ -67,7 +68,7 @@ export function LspRecommendationMenu({
       value: 'never',
     },
     {
-      label: 'Disable all LSP recommendations',
+      label: t('Disable all LSP recommendations'),
       value: 'disable',
     },
   ];
@@ -88,11 +89,11 @@ export function LspRecommendationMenu({
           </Box>
         )}
         <Box>
-          <Text dimColor>Triggered by:</Text>
+          <Text dimColor>{t('Triggered by:')}</Text>
           <Text> {fileExtension} files</Text>
         </Box>
         <Box marginTop={1}>
-          <Text>Would you like to install this LSP plugin?</Text>
+          <Text>{t('Would you like to install this LSP plugin?')}</Text>
         </Box>
         <Box>
           <Select options={options} onChange={onSelect} onCancel={() => onResponse('no')} />

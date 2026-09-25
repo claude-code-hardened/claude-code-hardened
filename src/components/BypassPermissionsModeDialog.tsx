@@ -57,14 +57,14 @@ export function BypassPermissionsModeDialog({ onAccept }: Props): React.ReactNod
     <Dialog title="WARNING: Claude Code running in Bypass Permissions mode" color="error" onCancel={handleEscape}>
       <Box flexDirection="column" gap={1}>
         <Text>
-          In Bypass Permissions mode, Claude Code will not ask for your approval before running potentially dangerous
+          {t('In Bypass Permissions mode, Claude Code will not ask for your approval before running potentially dangerous')}
           commands.
           <Newline />
-          This mode should only be used in a sandboxed container/VM that has restricted internet access and can easily
+          {t('This mode should only be used in a sandboxed container/VM that has restricted internet access and can easily')}
           be restored if damaged.
         </Text>
         <Text>
-          By proceeding, you accept all responsibility for actions taken while running in Bypass Permissions mode.
+          {t('By proceeding, you accept all responsibility for actions taken while running in Bypass Permissions mode.')}
         </Text>
 
         <Link url="https://code.claude.com/docs/en/security" />

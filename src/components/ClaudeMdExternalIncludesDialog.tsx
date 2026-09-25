@@ -58,7 +58,7 @@ export function ClaudeMdExternalIncludesDialog({
       hideInputGuide={!isStandaloneDialog}
     >
       <Text>
-        This project&apos;s CLAUDE.md imports files outside the current working directory. Never allow this for
+        {t("This project's CLAUDE.md imports files outside the current working directory. Never allow this for")}
         third-party repositories.
       </Text>
 

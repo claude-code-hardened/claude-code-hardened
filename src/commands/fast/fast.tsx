@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { useState } from 'react';
 import type { CommandResultDisplay, LocalJSXCommandContext } from '../../commands.js';
 import { Dialog } from '@anthropic/ink';
@@ -124,9 +125,9 @@ export function FastModePicker({
         exitState.pending ? (
           <Text>Press {exitState.keyName} again to exit</Text>
         ) : isUnavailable ? (
-          <Text>Esc to cancel</Text>
+          <Text>{t('Esc to cancel')}</Text>
         ) : (
-          <Text>Tab to toggle · Enter to confirm · Esc to cancel</Text>
+          <Text>{t('Tab to toggle · Enter to confirm · Esc to cancel')}</Text>
         )
       }
     >

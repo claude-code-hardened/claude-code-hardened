@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import { Select } from '../CustomSelect/select.js';
 import { PermissionDialog } from '../permissions/PermissionDialog.js';
@@ -55,7 +56,7 @@ export function PluginHintMenu({
       value: 'no',
     },
     {
-      label: "No, and don't show plugin installation hints again",
+      label: t("No, and don't show plugin installation hints again"),
       value: 'disable',
     },
   ];
@@ -73,7 +74,7 @@ export function PluginHintMenu({
           <Text> {pluginName}</Text>
         </Box>
         <Box>
-          <Text dimColor>Marketplace:</Text>
+          <Text dimColor>{t('Marketplace:')}</Text>
           <Text> {marketplaceName}</Text>
         </Box>
         {pluginDescription && (
@@ -82,7 +83,7 @@ export function PluginHintMenu({
           </Box>
         )}
         <Box marginTop={1}>
-          <Text>Would you like to install it?</Text>
+          <Text>{t('Would you like to install it?')}</Text>
         </Box>
         <Box>
           <Select options={options} onChange={onSelect} onCancel={() => onResponse('no')} />

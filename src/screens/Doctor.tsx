@@ -331,7 +331,7 @@ export function Doctor({ onDone }: Props): React.ReactNode {
       {agentInfo?.failedFiles && agentInfo.failedFiles.length > 0 && (
         <Box flexDirection="column">
           <Text bold color="error">
-            Agent Parse Errors
+            {t('Agent Parse Errors')}
           </Text>
           <Text color="error">└ Failed to parse {agentInfo.failedFiles.length} agent file(s):</Text>
           {agentInfo.failedFiles.map((file, i) => (
@@ -342,11 +342,11 @@ export function Doctor({ onDone }: Props): React.ReactNode {
         </Box>
       )}
 
-      {/* Plugin Errors */}
+      {/* {t('Plugin Errors')} */}
       {pluginsErrors.length > 0 && (
         <Box flexDirection="column">
           <Text bold color="error">
-            Plugin Errors
+            {t('Plugin Errors')}
           </Text>
           <Text color="error">└ {pluginsErrors.length} plugin error(s) detected:</Text>
           {pluginsErrors.map((error, i) => (
@@ -358,11 +358,11 @@ export function Doctor({ onDone }: Props): React.ReactNode {
         </Box>
       )}
 
-      {/* Unreachable Permission Rules Warning */}
+      {/* {t('Unreachable Permission Rules')} Warning */}
       {contextWarnings?.unreachableRulesWarning && (
         <Box flexDirection="column">
           <Text bold color="warning">
-            Unreachable Permission Rules
+            {t('Unreachable Permission Rules')}
           </Text>
           <Text>
             └{' '}

@@ -5,6 +5,7 @@
 // unguarded code.
 
 import * as React from 'react';
+import { t } from '../i18n/index.js';
 import { useState } from 'react';
 import { type ChannelEntry, getAllowedChannels, getHasDevChannels } from '../../bootstrap/state.js';
 import { getBuiltinPlugins } from '../../plugins/builtinPlugins.js';
@@ -50,7 +51,7 @@ export function ChannelsNotice(): React.ReactNode {
     <Box paddingLeft={2} flexDirection="column">
       <Text color="error">Listening for channel messages from: {list}</Text>
       <Text dimColor>
-        Experimental · inbound messages will be pushed into this session, this carries prompt injection risks. Restart
+        {t('Experimental · inbound messages will be pushed into this session, this carries prompt injection risks. Restart')}
         Claude Code without {flag} to disable.
       </Text>
       {unmatched.map(u => (
