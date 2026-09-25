@@ -14,14 +14,20 @@
     "types": ["bun"],
     "paths": {
       "src/*": ["./src/*"],
-      "@claude-code-hardened/builtin-tools/*": ["./packages/builtin-tools/src/*"],
+      "@claude-code-hardened/builtin-tools/*": [
+        "./packages/builtin-tools/src/*"
+      ],
       "@claude-code-hardened/builtin-tools": [
         "./packages/builtin-tools/src/index.ts"
       ],
       "@claude-code-hardened/mcp-client/*": ["./packages/mcp-client/src/*"],
-      "@claude-code-hardened/mcp-client": ["./packages/mcp-client/src/index.ts"],
+      "@claude-code-hardened/mcp-client": [
+        "./packages/mcp-client/src/index.ts"
+      ],
       "@claude-code-hardened/agent-tools/*": ["./packages/agent-tools/src/*"],
-      "@claude-code-hardened/agent-tools": ["./packages/agent-tools/src/index.ts"],
+      "@claude-code-hardened/agent-tools": [
+        "./packages/agent-tools/src/index.ts"
+      ],
       "@claude-code-hardened/weixin/*": ["./packages/weixin/src/*"],
       "@claude-code-hardened/weixin": ["./packages/weixin/src/index.ts"],
       "@claude-code-hardened/workflow-engine/*": [
