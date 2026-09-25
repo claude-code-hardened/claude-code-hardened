@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 import { logEvent } from 'src/services/analytics/index.js';
 // eslint-disable-next-line custom-rules/prefer-use-keybindings -- enter to continue
 import { Box, Dialog, Link, Newline, Text, useInput } from '@anthropic/ink';

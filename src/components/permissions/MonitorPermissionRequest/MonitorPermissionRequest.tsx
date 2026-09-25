@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
+import { t } from '../../../i18n/index.js';
 import { Box, Text, useTheme } from '@anthropic/ink';
 import { getTheme } from '../../../utils/theme.js';
 import { env } from '../../../utils/env.js';

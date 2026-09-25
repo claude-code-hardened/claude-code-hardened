@@ -1,4 +1,5 @@
 import { basename, relative } from 'path';
+import { t } from '../../../i18n/index.js';
 import React from 'react';
 import { FileEditToolDiff } from 'src/components/FileEditToolDiff.js';
 import { getCwd } from 'src/utils/cwd.js';

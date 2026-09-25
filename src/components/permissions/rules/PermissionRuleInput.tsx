@@ -1,4 +1,5 @@
 import figures from 'figures';
+import { t } from '../../../i18n/index.js';
 import * as React from 'react';
 import { useState } from 'react';
 import TextInput from '../../../components/TextInput.js';

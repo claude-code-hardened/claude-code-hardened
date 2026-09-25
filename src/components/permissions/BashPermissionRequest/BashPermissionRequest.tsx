@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle';
+import { t } from '../../../i18n/index.js';
 import figures from 'figures';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useTheme } from '@anthropic/ink';

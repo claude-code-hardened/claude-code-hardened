@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { t } from '../../../i18n/index.js';
 import { Box, Text, useTheme } from '@anthropic/ink';
 import { WebFetchTool } from '@claude-code-hardened/builtin-tools/tools/WebFetchTool/WebFetchTool.js';
 import { shouldShowAlwaysAllowOptions } from '../../../utils/permissions/permissionsLoader.js';

@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
+import { t } from '../../../i18n/index.js';
 import { logError } from 'src/utils/log.js';
 import { getOriginalCwd } from '../../../bootstrap/state.js';
 import { Box, Text } from '@anthropic/ink';

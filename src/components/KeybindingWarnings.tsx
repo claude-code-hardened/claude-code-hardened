@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import {
   getCachedKeybindingWarnings,

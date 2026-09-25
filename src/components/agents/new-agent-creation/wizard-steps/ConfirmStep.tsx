@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { t } from '../../../../i18n/index.js';
 import { type KeyboardEvent, Box, Byline, KeyboardShortcutHint, Text } from '@anthropic/ink';
 import { useKeybinding } from '../../../../keybindings/useKeybinding.js';
 import { isAutoMemoryEnabled } from '../../../../memdir/paths.js';

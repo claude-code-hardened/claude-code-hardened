@@ -1,4 +1,5 @@
 import { basename, sep } from 'path';
+import { t } from '../../i18n/index.js';
 import { type ReactNode } from 'react';
 import { getOriginalCwd } from '../../bootstrap/state.js';
 import { Text } from '@anthropic/ink';

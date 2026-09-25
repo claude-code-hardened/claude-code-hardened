@@ -1,4 +1,5 @@
 import figures from 'figures';
+import { t } from '../i18n/index.js';
 import { join } from 'path';
 import React, { Suspense, use, useCallback, useEffect, useMemo, useState } from 'react';
 import { KeybindingWarnings } from 'src/components/KeybindingWarnings.js';

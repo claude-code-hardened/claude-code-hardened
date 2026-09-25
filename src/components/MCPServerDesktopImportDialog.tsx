@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { t } from '../i18n/index.js';
 import { gracefulShutdown } from 'src/utils/gracefulShutdown.js';
 import { writeToStdout } from 'src/utils/process.js';
 import { Box, color, Text, useTheme, Byline, Dialog, KeyboardShortcutHint } from '@anthropic/ink';

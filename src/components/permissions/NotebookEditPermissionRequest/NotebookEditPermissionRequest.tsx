@@ -1,4 +1,5 @@
 import { basename } from 'path';
+import { t } from '../../../i18n/index.js';
 import React from 'react';
 import type { z } from 'zod/v4';
 import { Text } from '@anthropic/ink';

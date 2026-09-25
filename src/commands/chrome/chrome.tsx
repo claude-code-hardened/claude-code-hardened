@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { t } from '../../i18n/index.js';
 import { type OptionWithDescription, Select } from '../../components/CustomSelect/select.js';
 import { Dialog } from '@anthropic/ink';
 import { Box, Text } from '@anthropic/ink';

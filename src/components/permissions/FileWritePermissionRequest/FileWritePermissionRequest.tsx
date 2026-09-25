@@ -1,4 +1,5 @@
 import { basename, relative } from 'path';
+import { t } from '../../../i18n/index.js';
 import React, { useMemo } from 'react';
 import type { z } from 'zod/v4';
 import { Text } from '@anthropic/ink';
