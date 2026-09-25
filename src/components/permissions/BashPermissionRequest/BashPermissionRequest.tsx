@@ -43,7 +43,8 @@ import { useShellPermissionFeedback } from '../useShellPermissionFeedback.js';
 import { logUnaryPermissionEvent } from '../utils.js';
 import { bashToolUseOptions } from './bashToolUseOptions.js';
 
-const CHECKING_TEXT = t('Attempting to auto-approve…');
+// 渲染时取值：模块顶层 t() 会固化模块加载时的 locale（settings 未就绪/热更新不生效）
+const CHECKING_TEXT = () => t('Attempting to auto-approve…');
 
 // Isolates the 20fps shimmer clock from BashPermissionRequestInner. Before this
 // extraction, useShimmerAnimation lived inside the 535-line Inner body, so every
@@ -52,11 +53,11 @@ const CHECKING_TEXT = t('Attempting to auto-approve…');
 // has a Compiler bailout (see below), so nothing was auto-memoized — the full
 // JSX tree was reconstructed 20-60 times per classifier check.
 function ClassifierCheckingSubtitle(): React.ReactNode {
-  const [ref, glimmerIndex] = useShimmerAnimation('requesting', CHECKING_TEXT, false);
+  const [ref, glimmerIndex] = useShimmerAnimation('requesting', CHECKING_TEXT(), false);
   return (
     <Box ref={ref}>
       <Text>
-        {[...CHECKING_TEXT].map((char, i) => (
+        {[...CHECKING_TEXT()].map((char, i) => (
           <ShimmerChar
             key={i}
             char={char}
