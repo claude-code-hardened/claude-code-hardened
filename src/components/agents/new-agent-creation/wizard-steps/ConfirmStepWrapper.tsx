@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { t } from '../../../../i18n/index.js';
 import { type ReactNode, useCallback, useState } from 'react';
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -85,7 +86,7 @@ export function ConfirmStepWrapper({ tools, existingAgents, onComplete }: Props)
           : `Created agent: ${chalk.bold(wizardData.finalAgent.agentType)}`;
         onComplete(message);
       } catch (err) {
-        setSaveError(err instanceof Error ? err.message : 'Failed to save agent');
+        setSaveError(err instanceof Error ? err.message : t('Failed to save agent'));
       }
     },
     [wizardData, onComplete, setAppState],

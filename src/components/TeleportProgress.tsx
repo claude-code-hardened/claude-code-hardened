@@ -1,4 +1,5 @@
 import figures from 'figures';
+import { t } from '../i18n/index.js';
 import * as React from 'react';
 import { useState } from 'react';
 import type { Root } from '@anthropic/ink';
@@ -20,10 +21,10 @@ type Props = {
 const SPINNER_FRAMES = ['◐', '◓', '◑', '◒'];
 
 const STEPS: { key: TeleportProgressStep; label: string }[] = [
-  { key: 'validating', label: 'Validating session' },
-  { key: 'fetching_logs', label: 'Fetching session logs' },
-  { key: 'fetching_branch', label: 'Getting branch info' },
-  { key: 'checking_out', label: 'Checking out branch' },
+  { key: 'validating', label: t('Validating session') },
+  { key: 'fetching_logs', label: t('Fetching session logs') },
+  { key: 'fetching_branch', label: t('Getting branch info') },
+  { key: 'checking_out', label: t('Checking out branch') },
 ];
 
 export function TeleportProgress({ currentStep, sessionId }: Props): React.ReactNode {

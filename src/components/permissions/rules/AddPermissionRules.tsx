@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../../../i18n/index.js';
 import { useCallback } from 'react';
 import { Select } from '../../../components/CustomSelect/select.js';
 import { Box, Dialog, Text } from '@anthropic/ink';
@@ -22,20 +23,20 @@ export function optionForPermissionSaveDestination(saveDestination: EditableSett
   switch (saveDestination) {
     case 'localSettings':
       return {
-        label: 'Project settings (local)',
+        label: t('Project settings (local)'),
         description: `Saved in ${getRelativeSettingsFilePathForSource('localSettings')}`,
         value: saveDestination,
       };
     case 'projectSettings':
       return {
-        label: 'Project settings',
+        label: t('Project settings'),
         description: `Checked in at ${getRelativeSettingsFilePathForSource('projectSettings')}`,
         value: saveDestination,
       };
     case 'userSettings':
       return {
         label: 'User settings',
-        description: `Saved in at ~/.claude/settings.json`,
+        description: t(`'Saved in at ~/.claude/settings.json'`),
         value: saveDestination,
       };
   }

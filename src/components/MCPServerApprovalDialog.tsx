@@ -70,7 +70,7 @@ export function MCPServerApprovalDialog({ serverName, onDone }: Props): React.Re
             value: 'yes_all',
           },
           { label: t(`Use this MCP server`), value: 'yes' },
-          { label: `Continue without using this MCP server`, value: 'no' },
+          { label: t(`'Continue without using this MCP server'`), value: 'no' },
         ]}
         onChange={value => onChange(value as 'yes_all' | 'yes' | 'no')}
         onCancel={() => onChange('no')}

@@ -30,20 +30,20 @@ export function MemoryStep(): ReactNode {
   const memoryOptions: MemoryOption[] = isUserScope
     ? [
         {
-          label: 'User scope (~/.claude/agent-memory/) (Recommended)',
+          label: t('User scope (~/.claude/agent-memory/) (Recommended)'),
           value: 'user',
         },
         { label: t('None (no persistent memory)'), value: 'none' },
-        { label: 'Project scope (.claude/agent-memory/)', value: 'project' },
+        { label: t('Project scope (.claude/agent-memory/)'), value: 'project' },
         { label: t('Local scope (.claude/agent-memory-local/)'), value: 'local' },
       ]
     : [
         {
-          label: 'Project scope (.claude/agent-memory/) (Recommended)',
+          label: t('Project scope (.claude/agent-memory/) (Recommended)'),
           value: 'project',
         },
         { label: t('None (no persistent memory)'), value: 'none' },
-        { label: 'User scope (~/.claude/agent-memory/)', value: 'user' },
+        { label: t('User scope (~/.claude/agent-memory/)'), value: 'user' },
         { label: t('Local scope (.claude/agent-memory-local/)'), value: 'local' },
       ];
 

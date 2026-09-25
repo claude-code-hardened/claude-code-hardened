@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { t } from '../../../../i18n/index.js';
 import { Box, Byline, KeyboardShortcutHint } from '@anthropic/ink';
 import { ConfigurableShortcutHint } from '../../../ConfigurableShortcutHint.js';
 import { Select } from '../../../CustomSelect/select.js';
@@ -11,11 +12,11 @@ export function MethodStep(): ReactNode {
 
   const methodOptions = [
     {
-      label: 'Generate with Claude (recommended)',
+      label: t('Generate with Claude (recommended)'),
       value: 'generate',
     },
     {
-      label: 'Manual configuration',
+      label: t('Manual configuration'),
       value: 'manual',
     },
   ];

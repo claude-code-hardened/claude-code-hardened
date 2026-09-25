@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { t } from '../../../../i18n/index.js';
 import { Box, Byline, KeyboardShortcutHint } from '@anthropic/ink';
 import type { SettingSource } from '../../../../utils/settings/constants.js';
 import { ConfigurableShortcutHint } from '../../../ConfigurableShortcutHint.js';
@@ -12,11 +13,11 @@ export function LocationStep(): ReactNode {
 
   const locationOptions = [
     {
-      label: 'Project (.claude/agents/)',
+      label: t('Project (.claude/agents/)'),
       value: 'projectSettings' as SettingSource,
     },
     {
-      label: 'Personal (~/.claude/agents/)',
+      label: t('Personal (~/.claude/agents/)'),
       value: 'userSettings' as SettingSource,
     },
   ];

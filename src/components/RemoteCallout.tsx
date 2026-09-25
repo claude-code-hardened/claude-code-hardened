@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
+import { t } from '../i18n/index.js';
 import { isBridgeEnabled } from '../bridge/bridgeEnabled.js';
 import { Box, Text } from '@anthropic/ink';
 import { getClaudeAIOAuthTokens } from '../utils/auth.js';
@@ -35,13 +36,13 @@ export function RemoteCallout({ onDone }: Props): React.ReactNode {
 
   const options: OptionWithDescription<RemoteCalloutSelection>[] = [
     {
-      label: 'Enable Remote Control for this session',
-      description: 'Opens a secure connection to claude.ai.',
+      label: t('Enable Remote Control for this session'),
+      description: t('Opens a secure connection to claude.ai.'),
       value: 'enable',
     },
     {
       label: 'Never mind',
-      description: 'You can always enable it later with /remote-control.',
+      description: t('You can always enable it later with /remote-control.'),
       value: 'dismiss',
     },
   ];

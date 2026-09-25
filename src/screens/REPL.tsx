@@ -4926,7 +4926,7 @@ export function REPL({
         ) {
           void sendNotification(
             {
-              message: 'Claude is waiting for your input',
+              message: t('Claude is waiting for your input'),
               notificationType: 'idle_prompt',
             },
             terminal,

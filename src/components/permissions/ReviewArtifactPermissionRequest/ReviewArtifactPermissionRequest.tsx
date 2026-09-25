@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../../../i18n/index.js';
 import { Box, Text } from '@anthropic/ink';
 import { Select } from '../../CustomSelect/select.js';
 import { usePermissionRequestLogging } from '../hooks.js';
@@ -54,7 +55,7 @@ export function ReviewArtifactPermissionRequest({
         <Box marginTop={1}>
           <Select
             options={[
-              { label: 'Yes, show review', value: 'yes' as const },
+              { label: t('Yes, show review'), value: 'yes' as const },
               { label: 'No, skip', value: 'no' as const },
             ]}
             onChange={handleResponse}

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { t } from '../../i18n/index.js';
 import { join } from 'path';
 import { stat, writeFile } from 'fs/promises';
 import figures from 'figures';
@@ -185,12 +186,12 @@ export function UltraplanChoiceDialog({
       {
         label: 'Implement here',
         value: 'here' as const,
-        description: 'Inject plan into the current conversation',
+        description: t('Inject plan into the current conversation'),
       },
       {
-        label: 'Start new session',
+        label: t('Start new session'),
         value: 'fresh' as const,
-        description: 'Clear conversation and start with only the plan',
+        description: t('Clear conversation and start with only the plan'),
       },
       {
         label: 'Cancel',

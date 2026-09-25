@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { t } from '../i18n/index.js';
 import figures from 'figures';
 import * as React from 'react';
 import { color, Text } from '@anthropic/ink';
@@ -207,7 +208,7 @@ export function buildSettingSourcesProperties(): Property[] {
 
   return [
     {
-      label: 'Setting sources',
+      label: t('Setting sources'),
       value: sourceNames,
     },
   ];
@@ -312,7 +313,7 @@ export function buildAPIProviderProperties(): Property[] {
     const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL;
     if (anthropicBaseUrl) {
       properties.push({
-        label: 'Anthropic base URL',
+        label: t('Anthropic base URL'),
         value: anthropicBaseUrl,
       });
     }
@@ -320,7 +321,7 @@ export function buildAPIProviderProperties(): Property[] {
     const bedrockBaseUrl = process.env.BEDROCK_BASE_URL;
     if (bedrockBaseUrl) {
       properties.push({
-        label: 'Bedrock base URL',
+        label: t('Bedrock base URL'),
         value: bedrockBaseUrl,
       });
     }
@@ -339,7 +340,7 @@ export function buildAPIProviderProperties(): Property[] {
     const vertexBaseUrl = process.env.VERTEX_BASE_URL;
     if (vertexBaseUrl) {
       properties.push({
-        label: 'Vertex base URL',
+        label: t('Vertex base URL'),
         value: vertexBaseUrl,
       });
     }
@@ -366,7 +367,7 @@ export function buildAPIProviderProperties(): Property[] {
     const foundryBaseUrl = process.env.ANTHROPIC_FOUNDRY_BASE_URL;
     if (foundryBaseUrl) {
       properties.push({
-        label: 'Microsoft Foundry base URL',
+        label: t('Microsoft Foundry base URL'),
         value: foundryBaseUrl,
       });
     }
@@ -374,7 +375,7 @@ export function buildAPIProviderProperties(): Property[] {
     const foundryResource = process.env.ANTHROPIC_FOUNDRY_RESOURCE;
     if (foundryResource) {
       properties.push({
-        label: 'Microsoft Foundry resource',
+        label: t('Microsoft Foundry resource'),
         value: foundryResource,
       });
     }
@@ -387,7 +388,7 @@ export function buildAPIProviderProperties(): Property[] {
   } else if (apiProvider === 'gemini') {
     const geminiBaseUrl = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
     properties.push({
-      label: 'Gemini base URL',
+      label: t('Gemini base URL'),
       value: geminiBaseUrl,
     });
   } else if (apiProvider === 'grok') {
@@ -399,7 +400,7 @@ export function buildAPIProviderProperties(): Property[] {
   } else if (apiProvider === 'openai') {
     const openaiBaseUrl = process.env.OPENAI_BASE_URL;
     properties.push({
-      label: 'OpenAI base URL',
+      label: t('OpenAI base URL'),
       value: openaiBaseUrl,
     });
   }

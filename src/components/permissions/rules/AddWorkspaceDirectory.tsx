@@ -29,11 +29,11 @@ const REMEMBER_DIRECTORY_OPTIONS: Array<{
 }> = [
   {
     value: 'yes-session',
-    label: 'Yes, for this session',
+    label: t('Yes, for this session'),
   },
   {
     value: 'yes-remember',
-    label: 'Yes, and remember this directory',
+    label: t('Yes, and remember this directory'),
   },
   {
     value: 'no',

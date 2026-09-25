@@ -23,7 +23,7 @@ const WORKFLOWS: WorkflowOption[] = [
   },
   {
     value: 'claude-review' as const,
-    label: 'Claude Code Review - Automated code review on new PRs',
+    label: t('Claude Code Review - Automated code review on new PRs'),
   },
 ];
 

@@ -122,7 +122,7 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
   function renderInitialPrompt(): React.ReactNode {
     const options: OptionWithDescription<string>[] = [
       {
-        label: 'Install it2 now',
+        label: t('Install it2 now'),
         value: 'install',
         description: packageManager
           ? `Uses ${packageManager} to install the it2 CLI tool`
@@ -134,7 +134,7 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
       options.push({
         label: t('Use tmux instead'),
         value: 'tmux',
-        description: 'Opens teammates in a separate tmux session',
+        description: t('Opens teammates in a separate tmux session'),
       });
     }
 
@@ -190,7 +190,7 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
       {
         label: 'Try again',
         value: 'retry',
-        description: 'Retry the installation',
+        description: t('Retry the installation'),
       },
     ];
 
@@ -283,7 +283,7 @@ export function It2SetupPrompt({ onDone, tmuxAvailable }: Props): React.ReactNod
       {
         label: 'Try again',
         value: 'retry',
-        description: 'Verify the connection again',
+        description: t('Verify the connection again'),
       },
     ];
 
