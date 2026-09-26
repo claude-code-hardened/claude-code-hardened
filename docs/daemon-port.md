@@ -61,21 +61,27 @@ npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
 | `T` | chunk-f37h5e27 | 响应发送（JSON + `\n`） | `sendReply` |
 | `vD`（chunk-g15kbmn7） | 同上 | controlKey 校验（length 预检 + timingSafeEqual） | `verifyControlKey` 1:1 |
 | `RTo`（chunk-7y633cde） | 同上 | peer uid 对比 | `peerUidReject` |
-| `K`（同上） | 同上 | peer uid 读取（`Bun.ant.getPeerUid(fd)`） | `getPeerUid`（降级，见下） |
+| `K`（同上） | 同上 | peer uid 读取（`Bun.ant.getPeerUid(fd)`） | `getPeerUid`（bun:ffi 补齐，见下） |
 | 路径计算（chunk-t2tcad5k） | 同上 | `join(tmpdir, cc-daemon-<uid>, sha256(root).slice(0,8))` | `daemonSockDir` |
 | `STo`/`osn` | chunk-t2tcad5k | control.key 读（≤4096B + trim） | `readControlKey` |
 
 ## 遇到的坑与降级方案
 
-### ① `Bun.ant.getPeerUid(fd)` 是 Anthropic 定制 Bun 的私有 API
+### ① `Bun.ant.getPeerUid(fd)` 是 Anthropic 定制 Bun 的私有 API → bun:ffi 补齐
 
-官方 peer uid 校验依赖 `Bun.ant.getPeerUid`——标准 Bun/Node 没有这个 API，也没有等价的 `SO_PEERCRED` 暴露。
+官方 peer uid 校验依赖 `Bun.ant.getPeerUid`——标准 Bun/Node 没有这个 API。
 
-**降级方案**（`getPeerUid` in `controlProtocol.ts`）：
+**逆向定位**：binary 字符串表里 `getPeerPid` 与 `getPeerUid` 并列出现（同一 native 能力返回 pid/uid/gid 三元组），伴随 `EPEERCRED` 错误码和 `[peer-cred] peer pid unavailable (fd=` 日志文案——**语义钉死为 Linux `getsockopt(SO_PEERCRED)` 返回 `struct ucred{pid,uid,gid}`**（darwin 对应 `getpeereid`）。
 
-- 检测到 `Bun.ant.getPeerUid` 存在（如未来 cch 换用定制 Bun）→ 1:1 走官方路径；
-- 不存在 → 返回 `null`，**跳过 uid 校验，仅保留 control.key 认证**。这与官方语义兼容：官方自己也有"读不到 peer 凭证就放行"的分支（`i == null → null`），且对 legacy 客户端本来就允许 peerUid-only 豁免。
-- 安全补偿：`control.key` 文件权限 0600 + 目录 0700（与官方一致），socket 目录继承 `/tmp/cch-daemon-<uid>` 的用户隔离语义。
+**FFI 补齐**（`src/daemon/peerCredentials.ts`，`bun:ffi`，零依赖）：
+
+- linux：`getsockopt(fd, SOL_SOCKET=1, SO_PEERCRED=17, &ucred[12B], &len[4B])`，DataView 读 pid/uid/gid；
+- darwin：`getpeereid(fd, &uid, &gid)`（libSystem.B.dylib）；
+- win32：返回 null（官方 K() 同）；
+- 运行在 Anthropic bundle 下时**优先直通 `Bun.ant.getPeerPid/getPeerUid`**，标准 Bun 才走 FFI；
+- libc 不存在/dlopen 失败 → null + warn（与官方 K() 的 catch 行为一致）。
+
+**真实 socket 验证**：daemon 与 client 同进程组实测，`getPeerUid → 0`（== daemon uid）、`getPeerPid → 客户端真实 pid`——与官方行为完全一致，peer uid 门完整生效。
 
 ### ② socket 路径命名空间冲突
 
@@ -145,6 +151,7 @@ npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
 | 文件 | 职责 |
 |------|------|
 | `src/daemon/controlProtocol.ts` | 纯协议层：路径计算、key 读写/校验、peer uid、帧发送、错误码类型（全部纯函数，可单测） |
+| `src/daemon/peerCredentials.ts` | `bun:ffi` 重实现 `Bun.ant.getPeerPid/getPeerUid`（linux SO_PEERCRED / darwin getpeereid，Anthropic bundle 下直通原 API） |
 | `src/daemon/controlServer.ts` | 服务端：连接处理 + 15 op 分发 + qt 状态机（依赖注入 handles/settled/回调，可测） |
 | `src/daemon/controlClient.ts` | 客户端：connect + auth + 单请求（`cch daemon status` 等使用） |
 | `src/daemon/main.ts` | supervisor 集成：启动时 bind control.sock（失败降级 warn 继续跑），shutdown 时 close |
@@ -155,4 +162,4 @@ npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
 - **messagingSock**（每 worker 的消息通道）：官方 dispatch 响应里带回，需要 worker 侧实现；
 - **on-demand 生命周期**（最后客户端断开 → idle_exit）：现有 supervisor 是常驻模型，需要 lease 计数驱动；
 - **service install**（launchctl/systemd）：官方在此版本也禁用了，低优先级；
-- **peer uid 的完整方案**：如需与官方完全一致，要么等标准 Bun 暴露 `SO_PEERCRED`，要么走 `Bun.ffi` 自行 `getsockopt`（列入评估）。
+- **peer uid 的完整方案**：✅ 已通过 bun:ffi 补齐（`src/daemon/peerCredentials.ts`，SO_PEERCRED/getpeereid，真实 socket 验证通过）——见"坑 ①"。

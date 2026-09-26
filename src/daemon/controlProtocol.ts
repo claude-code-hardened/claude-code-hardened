@@ -9,6 +9,7 @@ import {
 import { homedir, tmpdir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
 import { Socket } from 'net'
+import { getPeerUid as getPeerUidFfi } from './peerCredentials.js'
 
 /**
  * Control socket protocol — 1:1 port of the official claude daemon
@@ -181,22 +182,18 @@ export function peerUidMismatchError(
 }
 
 /**
- * Peer uid via Bun.ant.getPeerUid when available (Anthropic-bundled Bun).
- * Standard Bun/Node lack it — returns null (check skipped, key auth still
- * applies). Matches upstream's K(): windows → null, fd < 0 → null,
- * lookup failure → null + warn.
+ * Peer uid — 1:1 with upstream K(): windows → null, fd < 0 → null,
+ * lookup failure → null + warn. Under the Anthropic-bundled Bun this is
+ * Bun.ant.getPeerUid directly; on standard Bun it is re-implemented via
+ * bun:ffi (SO_PEERCRED / getpeereid) so the wire behavior matches the
+ * official daemon without a custom runtime.
  */
 export function getPeerUid(socket: Socket): number | null {
   if (process.platform === 'win32') return null
-  const bun = globalThis as {
-    Bun?: { ant?: { getPeerUid?: (fd: number) => number } }
-  }
-  const getPeerUidFn = bun.Bun?.ant?.getPeerUid
-  if (!getPeerUidFn) return null
   const fd = (socket as unknown as { _handle?: { fd?: number } })._handle?.fd
   if (typeof fd !== 'number' || fd < 0) return null
   try {
-    return getPeerUidFn(fd)
+    return getPeerUidFfi(socket)
   } catch (err) {
     console.warn(
       `[daemon] peer uid lookup failed: ${err instanceof Error ? err.message : String(err)}`,
