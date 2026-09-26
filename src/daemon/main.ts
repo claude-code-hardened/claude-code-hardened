@@ -677,8 +677,20 @@ function spawnWorker(
   }
 
   console.log(`[daemon] spawning worker '${worker.kind}'`)
+  // 诊断（unknown option 排查）：打印 supervisor 视角的最终 argv——
+  // BOOTSTRAP_ARGS 来自 sanitizeExecArgv(process.execArgv)，bun 11673
+  // 在 compile 单文件下会把 app 参数泄漏进 execArgv，若 sanitize 漏滤
+  // 会拼出 ['daemon','start','--daemon-worker=…'] 这样的畸形 argv
+  if (process.env['DAEMON_DEBUG'] === '1') {
+    console.log(
+      `[daemon][debug] execArgv=${JSON.stringify(process.execArgv)} argv=${JSON.stringify(process.argv)}`,
+    )
+  }
 
   const launch = buildCliLaunch([`--daemon-worker=${worker.kind}`], { env })
+  if (process.env['DAEMON_DEBUG'] === '1') {
+    console.log(`[daemon][debug] worker args=${JSON.stringify(launch.args)}`)
+  }
 
   const child = spawnCli(launch, {
     cwd: dir,
