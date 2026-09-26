@@ -105,12 +105,25 @@ export function sessionRootHash(root: string): string {
   return createHash('sha256').update(resolve(root)).digest('hex').slice(0, 8)
 }
 
-/** /tmp/cc-daemon-<uid>/<hash8> — verbatim upstream layout (seamless switch). */
+/**
+ * /tmp/cc-daemon-<uid>/<hash8> — verbatim upstream layout.
+ *
+ * hash 输入必须是 config root（~/.claude），不是 supervisor 工作目录：
+ * 官方 Z() 对 Se()（config home）取 sha256——实测官方探测
+ * /tmp/cc-daemon-0/addcfb49 = sha256('/root/.claude')[:8]。传工作目录
+ * 会算出完全不同的 hash，两边永远连不上（cch 实测 e9671acd vs 官方
+ * addcfb49）。
+ */
 export function daemonSockDir(root: string): string {
   const uid = process.getuid?.() ?? 0
   const termuxPrefix = process.env['TERMUX_VERSION'] && process.env['PREFIX']
   const base = termuxPrefix ? join(termuxPrefix, 'tmp') : tmpdir()
   return join(base, `cc-daemon-${uid}`, sessionRootHash(root))
+}
+
+/** 官方语义的 sock dir（hash config root）——server/client 统一走这个。 */
+export function officialSockDir(): string {
+  return daemonSockDir(getClaudeConfigHomeDir())
 }
 
 export function controlSockPath(root: string): string {

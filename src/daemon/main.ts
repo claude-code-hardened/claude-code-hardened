@@ -17,7 +17,7 @@ import {
   clearLock,
   signalableByCurrentUser,
 } from './daemonLock.js'
-import { daemonSockDir, controlSockPath } from './controlProtocol.js'
+import { officialSockDir, controlSockPath } from './controlProtocol.js'
 import { createMessagingServer } from './messagingServer.js'
 import { ensureControlKey, type ControlRequest } from './controlProtocol.js'
 import {
@@ -194,7 +194,7 @@ async function showUnifiedStatus(): Promise<void> {
   }
   console.log(`launcher: ${getLauncherRecord() ?? '(none running)'}`)
 
-  const sockDir = daemonSockDir(resolve('.'))
+  const sockDir = officialSockDir()
   const sockPath = controlSockPath(resolve('.'))
   console.log(`\nbg sessions:`)
   console.log(`  sock dir:     ${sockDir}`)
@@ -442,7 +442,7 @@ async function runSupervisor(args: string[]): Promise<void> {
           }
           // messagingSock：每会话操作通道（send/read/status/close），
           // dispatch 响应带回（官方 wire contract）
-          const messagingSock = join(daemonSockDir(dir), `msg-${short}.sock`)
+          const messagingSock = join(officialSockDir(), `msg-${short}.sock`)
           const tmux = result.engineUsed === 'tmux'
           const bridge = {
             send: async (text: string) => {
