@@ -177,7 +177,7 @@ async function ensureTarget(t) {
         /* 无 .sha256 资产时跳过校验（仍受大小+解压+可执行探测保护） */
       }
 
-      const work = mkdtempSync(join(tmpdir(), 'ccb-rg-fetch-'))
+      const work = mkdtempSync(join(tmpdir(), 'cch-rg-fetch-'))
       const archivePath = join(work, name)
       const extractDir = join(work, 'x')
       mkdirSync(extractDir, { recursive: true })
@@ -242,7 +242,7 @@ async function ensureUgrepWin() {
   try {
     console.log(`[fetch-search] x64-win32/ugrep: trying ${url}`)
     const buf = await fetchBuffer(url)
-    const work = mkdtempSync(join(tmpdir(), 'ccb-ugrep-win-'))
+    const work = mkdtempSync(join(tmpdir(), 'cch-ugrep-win-'))
     const zipPath = join(work, 'ugrep.zip')
     const extractDir = join(work, 'x')
     mkdirSync(extractDir, { recursive: true })

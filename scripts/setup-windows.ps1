@@ -1,6 +1,6 @@
-# setup-windows.ps1 — Windows 上给 ccb 配齐 ripgrep / 可选单文件化
+# setup-windows.ps1 — Windows 上给 cch 配齐 ripgrep / 可选单文件化
 # 用法（PowerShell）：
-#   cd <ccb 仓库根>
+#   cd <cch 仓库根>
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1          # 只配 rg
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1 -Compile # 再做单文件化
 param(
@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # ── 1. ripgrep：下载 rg.exe 到 dist\vendor\ripgrep ──────────────────────────
-# ccb 的 getRipgrepConfig 会按 distRoot/vendor/ripgrep 找平台二进制（win32 特判 .exe）
+# cch 的 getRipgrepConfig 会按 distRoot/vendor/ripgrep 找平台二进制（win32 特判 .exe）
 $rgVersion = '14.1.0'
 $rgDir = Join-Path (Join-Path (Get-Location) 'dist') 'vendor\ripgrep'
 $rgExe = Join-Path $rgDir 'rg.exe'
@@ -40,7 +40,7 @@ if ($Compile) {
   Write-Host 'bundle ...'
   bun run build.ts
   Write-Host 'compile 单文件（内嵌 ripgrep）...'
-  $exe = Join-Path (Get-Location) 'ccb.exe'
+  $exe = Join-Path (Get-Location) 'cch.exe'
   bun build --compile dist/entrypoints/cli.js --outfile $exe
   Write-Host "✓ 单文件产物: $exe（之后 rg 由 argv0='rg' 分发，isInBundledMode 自动启用）"
 } else {

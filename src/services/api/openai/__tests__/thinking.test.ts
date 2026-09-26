@@ -215,9 +215,9 @@ describe('buildOpenAIRequestBody — thinking params', () => {
       ...baseParams,
       enableThinking: false,
       maxTokens: 1024,
-      promptCacheKey: 'ccb:session-123',
+      promptCacheKey: 'cch:session-123',
     })
-    expect(body.prompt_cache_key).toBe('ccb:session-123')
+    expect(body.prompt_cache_key).toBe('cch:session-123')
   })
 
   test('does not send prompt_cache_key to compatible providers when omitted', () => {
