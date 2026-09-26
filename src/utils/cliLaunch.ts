@@ -95,11 +95,30 @@ const SCRIPT_PATH: string | undefined = process.argv[1]
  * 优先采用。
  */
 function resolveRealSelfPath(): string {
-  const argv0 = process.argv[0] ?? ''
   const execPath = process.execPath ?? ''
-  if (execPath.startsWith('/$bunfs/') || execPath.startsWith('/$BUNFS/')) {
-    if (argv0 && !argv0.startsWith('/$bunfs/')) return argv0
+  if (!execPath.startsWith('/$bunfs/') && !execPath.startsWith('/$BUNFS/')) {
+    return execPath
   }
+  // 优先级：/proc/self/exe（kernel 权威，Linux）> Bun.whichSelf > argv[0]
+  // 实测 compile 产物的 argv[0] 是字符串 "bun"（非路径），不可用作兜底
+  if (process.platform === 'linux') {
+    try {
+      return readlinkSync('/proc/self/exe')
+    } catch {
+      // fall through
+    }
+  }
+  const bun = globalThis as { Bun?: { whichSelf?: () => string } }
+  if (typeof bun.Bun?.whichSelf === 'function') {
+    try {
+      const self = bun.Bun.whichSelf()
+      if (self && !self.startsWith('/$bunfs/')) return self
+    } catch {
+      // fall through
+    }
+  }
+  const argv0 = process.argv[0] ?? ''
+  if (argv0.startsWith('/') && !argv0.startsWith('/$bunfs/')) return argv0
   return execPath
 }
 
