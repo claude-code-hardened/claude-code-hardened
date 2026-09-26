@@ -438,6 +438,7 @@ export function createControlServer(
           continue
         }
         void handleControlRequest(deps, socket, req).catch(() => {
+          // sendReply 自带 EPIPE 防御：内部失败只销毁连接，不打崩 daemon
           sendReply(socket, {
             ok: false,
             error: 'internal error',

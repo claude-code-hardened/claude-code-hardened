@@ -167,10 +167,23 @@ export function verifyControlKey(
 
 /**
  * Upstream T: single JSON line reply. Destroyed sockets are a no-op.
+ *
+ * EPIPE 防御（PR #7 同款坑）：对端 RST 后 socket.destroyed 可能仍为
+ * false，end()/write() 会触发异步 EPIPE——由连接的 error 监听消化；
+ * 这里包住同步抛错路径，保证回退链（catch 里的 sendReply）不再抛，
+ * 未捕获异常会直接打崩整个 daemon。
  */
 export function sendReply(socket: Socket, resp: ControlResponse): void {
-  if (socket.destroyed) return
-  socket.end(JSON.stringify(resp) + '\n')
+  try {
+    if (socket.destroyed) return
+    socket.end(JSON.stringify(resp) + '\n')
+  } catch {
+    try {
+      socket.destroy()
+    } catch {
+      // already destroyed
+    }
+  }
 }
 
 /** Upstream RTo message text, kept verbatim for wire compatibility. */
