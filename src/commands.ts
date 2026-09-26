@@ -393,9 +393,8 @@ const env = lazyCommand(() => require('./commands/env/index.js'))
 const exportCommand = lazyCommand(() => require('./commands/export/index.js'))
 const model = lazyCommand(() => require('./commands/model/index.js'))
 const tag = lazyCommand(() => require('./commands/tag/index.js'))
-const outputStyle = lazyCommand(() =>
-  require('./commands/output-style/index.js'),
-)
+// /output-style 已按官方 recent-changes 移除——Output styles 仍存在，
+// 配置入口并入 /config（Output style 段）。
 const remoteEnv = lazyCommand(() => require('./commands/remote-env/index.js'))
 const upgrade = lazyCommand(() => require('./commands/upgrade/index.js'))
 // extra-usage/index.ts has no default export — both commands are named.
@@ -516,7 +515,6 @@ const COMMANDS = memoize((): Command[] => [
   mobile,
   mode,
   model,
-  outputStyle,
   remoteEnv,
   plugin,
   pr_comments,

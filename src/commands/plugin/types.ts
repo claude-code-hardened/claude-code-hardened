@@ -8,6 +8,8 @@ export type ViewState =
   | { type: 'menu' } // 返回插件功能总菜单
   | { type: 'help' } // 展示帮助说明
   | { type: 'validate'; path?: string } // 校验指定路径下的插件包
+  | { type: 'eval'; path?: string } // 评估 harness（行为面 + 上下文成本）
+  | { type: 'eval-init'; path?: string } // eval 脚手架初始化
   | {
       type: 'browse-marketplace' // 在指定市场中浏览/安装插件
       targetMarketplace: string // 目标市场标识

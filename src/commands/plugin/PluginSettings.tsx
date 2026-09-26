@@ -25,6 +25,7 @@ import { formatErrorMessage, getErrorGuidance } from './PluginErrors.js';
 import { type ParsedCommand, parsePluginArgs } from './parseArgs.js';
 import type { PluginSettingsProps, ViewState } from './types.js';
 import { ValidatePlugin } from './ValidatePlugin.js';
+import { EvalPlugin } from './EvalPlugin.js';
 
 type TabId = 'discover' | 'installed' | 'marketplaces' | 'errors';
 
@@ -585,6 +586,10 @@ function getInitialViewState(parsedCommand: ParsedCommand): ViewState {
       return { type: 'help' };
     case 'validate':
       return { type: 'validate', path: parsedCommand.path };
+    case 'eval':
+      return { type: 'eval', path: parsedCommand.path };
+    case 'eval-init':
+      return { type: 'eval-init', path: parsedCommand.path };
     case 'install':
       if (parsedCommand.marketplace) {
         return {
@@ -817,6 +822,14 @@ export function PluginSettings({ onComplete, args, showMcpRedirectMessage }: Plu
 
   if (viewState.type === 'validate') {
     return <ValidatePlugin onComplete={onComplete} path={viewState.path} />;
+  }
+
+  if (viewState.type === 'eval') {
+    return <EvalPlugin onComplete={onComplete} path={viewState.path} />;
+  }
+
+  if (viewState.type === 'eval-init') {
+    return <EvalPlugin onComplete={onComplete} path={viewState.path} initMode />;
   }
 
   if (viewState.type === 'marketplace-menu') {
