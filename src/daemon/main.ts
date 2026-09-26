@@ -1,7 +1,7 @@
 import { type ChildProcess } from 'child_process'
 import { randomBytes, randomUUID } from 'crypto'
-import { existsSync, readFileSync, statSync } from 'fs'
-import { resolve, join } from 'path'
+import { existsSync, mkdirSync, readFileSync, statSync } from 'fs'
+import { dirname, join, resolve } from 'path'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
 import { buildCliLaunch, spawnCli } from '../utils/cliLaunch.js'
@@ -564,6 +564,13 @@ async function runSupervisor(args: string[]): Promise<void> {
       },
       officialControlSockPath(),
     )
+    // sockDir 必须先建：listen 一个不存在目录里的 socket → Bun 报
+    // "Failed to listen on unix socket"（实测，2026-09-27）。官方在
+    // STo()/roster 写入路径里递归建目录，这里对齐。
+    mkdirSync(dirname(officialControlSockPath()), {
+      recursive: true,
+      mode: 0o700,
+    })
     await new Promise<void>((resolve, reject) => {
       controlServer!.once('error', reject)
       controlServer!.listen(officialControlSockPath(), () => resolve())
