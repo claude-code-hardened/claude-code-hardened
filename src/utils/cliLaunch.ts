@@ -84,7 +84,26 @@ const BOOTSTRAP_ARGS: readonly string[] = Object.freeze(
   sanitizeExecArgv(process.execArgv),
 )
 const SCRIPT_PATH: string | undefined = process.argv[1]
-const EXEC_PATH: string = process.execPath
+
+/**
+ * 真实可 exec 的自身 binary 路径。
+ *
+ * compile 单文件产物里 process.execPath 是 bunfs 虚拟路径
+ * （/$bunfs/root/<name>）——kernel 无法直接 exec（bun 本体会把它当
+ * script 重跑完整 CLI，落到 commander 报 unknown option）。argv[0] 是
+ * kernel exec 的真实路径（实测 /root/cch-linux-arm64），bunfs 形态时
+ * 优先采用。
+ */
+function resolveRealSelfPath(): string {
+  const argv0 = process.argv[0] ?? ''
+  const execPath = process.execPath ?? ''
+  if (execPath.startsWith('/$bunfs/') || execPath.startsWith('/$BUNFS/')) {
+    if (argv0 && !argv0.startsWith('/$bunfs/')) return argv0
+  }
+  return execPath
+}
+
+const EXEC_PATH: string = resolveRealSelfPath()
 const IS_WINDOWS = process.platform === 'win32'
 
 // ---------------------------------------------------------------------------
