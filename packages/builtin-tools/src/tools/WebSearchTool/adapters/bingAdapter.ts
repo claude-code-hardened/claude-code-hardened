@@ -210,7 +210,8 @@ export function resolveBingUrl(rawUrl: string): string | undefined {
   // 避免子串匹配被 evil-bing.com 等伪装绕过
   try {
     const hostname = new URL(rawUrl).hostname
-    if (!(hostname === 'bing.com' || hostname.endsWith('.bing.com'))) return rawUrl
+    if (!(hostname === 'bing.com' || hostname.endsWith('.bing.com')))
+      return rawUrl
   } catch {
     return rawUrl
   }

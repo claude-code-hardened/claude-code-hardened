@@ -11,7 +11,8 @@
       "!!**/dist",
       "!!**/dist-stable",
       "!!**/.claude/workflows",
-      "!!**/*.workflow.mjs"
+      "!!**/*.workflow.mjs",
+      "!!**/contributors.svg"
     ]
   },
   "formatter": {
@@ -102,7 +103,9 @@
   },
   "overrides": [
     {
-      "includes": ["**/*.tsx"],
+      "includes": [
+        "**/*.tsx"
+      ],
       "javascript": {
         "formatter": {
           "semicolons": "always"
