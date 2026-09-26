@@ -53,9 +53,11 @@ function createPkillShadow(): string {
   return [
     'unalias pkill 2>/dev/null || true',
     'function pkill {',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash 源码字面（${} 是 shell 语法非 TS 模板）
     '  if [ -n "${CLAUDE_PID:-}" ] && [ -r "/proc/${CLAUDE_PID}/comm" ]; then',
     '    local _cc_skip="" _cc_a',
     '    local -a _cc_probe=()',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash 源码字面（${} 是 shell 语法非 TS 模板）
     '    for _cc_a in ${1+"$@"}; do',
     '      if [ -n "$_cc_skip" ]; then _cc_skip=""; continue; fi',
     '      case "$_cc_a" in',
@@ -67,11 +69,14 @@ function createPkillShadow(): string {
     '        *) _cc_probe+=("$_cc_a") ;;',
     '      esac',
     '    done',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash 源码字面（${} 是 shell 语法非 TS 模板）
     '    if command pgrep ${_cc_probe[@]+"${_cc_probe[@]}"} 2>/dev/null | command grep -qx "${CLAUDE_PID}"; then',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash 源码字面（${} 是 shell 语法非 TS 模板）
     '      printf \'pkill: refusing to run \u2014 this pattern matches the Claude CLI process (PID %s). Narrow the pattern, or target your own children with `pkill -P $$ ...`.\\n\' "${CLAUDE_PID}" >&2',
     '      return 1',
     '    fi',
     '  fi',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash 源码字面（${} 是 shell 语法非 TS 模板）
     '  command pkill ${1+"$@"}',
     '}',
   ].join('\n')
@@ -104,6 +109,7 @@ function createArgv0ShellFunction(
     bypassPatterns.length > 0
       ? [
           '  local _cc_a',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: bash 源码字面（${} 是 shell 语法非 TS 模板）
           '  for _cc_a in ${1+"$@"}; do',
           `    case "$_cc_a" in ${bypassPatterns.join('|')}) command ${funcName} ${'"$@"'}; return ;; esac`,
           '  done',
