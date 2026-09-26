@@ -1,5 +1,7 @@
 import { createServer, type Server, type Socket } from 'net'
 import { StringDecoder } from 'string_decoder'
+import { dirname } from 'path'
+import { vetAncestorOwnership } from '../daemon/daemonVet.js'
 
 /**
  * messagingSock — per-worker session message channel (the socket path the
@@ -134,6 +136,8 @@ export function createMessagingServer(
   bridge: SessionBridge,
   sockPath: string,
 ): MessagingServer {
+  // 闸 4（messaging 同款）：bind 侧祖先链属主 + uid 虚拟化检测
+  vetAncestorOwnership(dirname(sockPath))
   const server = createServer((socket: Socket) => {
     socket.on('error', () => socket.destroy())
     socket.setTimeout(30_000, () => socket.destroy())

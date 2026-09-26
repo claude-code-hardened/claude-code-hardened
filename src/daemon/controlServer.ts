@@ -1,5 +1,7 @@
 import { createServer, type Server, type Socket } from 'net'
 import { StringDecoder } from 'string_decoder'
+import { dirname } from 'path'
+import { vetAncestorOwnership } from '../daemon/daemonVet.js'
 import {
   controlKeyPath,
   isValidShortId,
@@ -407,6 +409,8 @@ export function createControlServer(
   deps: ControlServerDeps,
   sockPath: string,
 ): ControlServer {
+  // 闸 1+3（bind 侧）：进程身份溢出/祖先链属主 ≠ uid → ENOTOWNED
+  vetAncestorOwnership(dirname(sockPath))
   const server = createServer((socket: Socket) => {
     deps.addLease(socket)
     socket.on('close', () => deps.removeLease(socket))
