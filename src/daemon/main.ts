@@ -8,6 +8,16 @@ import {
   queryDaemonStatus,
   stopDaemonByPid,
 } from './state.js'
+import {
+  controlSockPath,
+  ensureControlKey,
+  type ControlRequest,
+} from './controlProtocol.js'
+import {
+  createControlServer,
+  type ControlServer,
+  type JobHandle,
+} from './controlServer.js'
 
 /**
  * Exit code used by workers for permanent (non-retryable) failures.
@@ -259,11 +269,57 @@ async function runSupervisor(args: string[]): Promise<void> {
   const controller = new AbortController()
   profileCheckpoint('daemon_supervisor_started')
 
+  // ── Control socket (official-daemon wire contract, 1:1) ──
+  const controlKey = ensureControlKey()
+  const handles = new Map<string, JobHandle>()
+  const settled = new Map<string, { nonce?: string; refusal?: string }>()
+  let controlServer: ControlServer | null = null
+  try {
+    controlServer = createControlServer(
+      {
+        handles,
+        settled,
+        onDispatch: async d => {
+          // Worker dispatch lands here once bg session spawning is wired
+          // to the control plane; request shape is preserved for clients.
+          return { dispatched: true, short: d['short'] }
+        },
+        onNudge: () => {},
+        onShutdown: () => {
+          shutdown()
+        },
+        whenReady: Promise.resolve(),
+        controlKey,
+        addLease: () => {},
+        removeLease: () => {},
+        log: line => console.log(`[daemon] ${line}`),
+        telemetry: event => {
+          console.log(`[daemon] ${event}`)
+        },
+      },
+      controlSockPath(dir),
+    )
+    await new Promise<void>((resolve, reject) => {
+      controlServer!.once('error', reject)
+      controlServer!.listen(controlSockPath(dir), () => resolve())
+    })
+    console.log(`[daemon] control socket bound at ${controlSockPath(dir)}`)
+  } catch (err) {
+    console.warn(
+      `[daemon] control socket unavailable: ${err instanceof Error ? err.message : String(err)}`,
+    )
+    controlServer = null
+  }
+
   // Graceful shutdown
   const shutdown = () => {
     console.log('[daemon] supervisor shutting down...')
     controller.abort()
     removeDaemonState()
+    if (controlServer) {
+      controlServer.close()
+      controlServer = null
+    }
     for (const w of workers) {
       if (w.restartTimer) {
         clearTimeout(w.restartTimer)
