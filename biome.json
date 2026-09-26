@@ -103,9 +103,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "**/*.tsx"
-      ],
+      "includes": ["**/*.tsx"],
       "javascript": {
         "formatter": {
           "semicolons": "always"
