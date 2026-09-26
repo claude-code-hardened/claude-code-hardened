@@ -161,3 +161,31 @@ npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
 - **messagingSock**（每 worker 的消息通道）：官方 dispatch 响应里带回（当前置空），需要 worker 侧消息通道实现；
 - **service install**（launchctl/systemd）：官方在此版本也禁用了，低优先级；
 - **peer uid 的完整方案**：✅ 已通过 bun:ffi 补齐（`src/daemon/peerCredentials.ts`，SO_PEERCRED/getpeereid，真实 socket 验证通过）——见"坑 ①"。
+
+## 实测互连排查记录（2026-09-27，cch-linux-arm64 ↔ 官方 binary）
+
+### 达成
+
+- `control socket bound at /tmp/cc-daemon-0/addcfb49/control.sock`——与官方 binary 探测的路径**逐字一致**（同 uid + 同 hash 输入 → 同 socket）
+- 官方 `claude daemon status` 探测到同一 sock dir（两边互认注册位置）
+- 官方双因素之①（control.key）由官方路径读写成功
+
+### 排查消灭的 5 个缺陷
+
+| # | 缺陷 | 定位手段 |
+|---|------|---------|
+| 1 | sock hash 输入用 supervisor 工作目录（官方 hash config root） | 两边 `daemon status` 的 sock dir 对照（e9671acd vs addcfb49）+ sha256 复算 |
+| 2 | `isInBundledMode()` 在 compile+bytecode 下误判 false（Bun.embeddedFiles 空） | `DAEMON_DEBUG=1` 打印 execArgv/argv——argv[1] 为 bunfs 虚拟路径 = compile self-exec 铁证 |
+| 3 | EXEC_PATH 解析到 bunfs 虚拟路径（kernel 不可 exec，bun 本体把它当 script 重跑完整 CLI 落到 commander） | 同上；compile 产物的 argv[0] 实测是字符串 "bun"，兜底需 `/proc/self/exe` |
+| 4 | `controlSockPath(dir)` 3 处漏切（bind 路径仍 hash 工作目录） | 手动 bind 同路径 OK + binary bind 失败 → 调用点逐一排查 |
+| 5 | sockDir 目录未创建（Bun 报 `Failed to listen on unix socket`，binary 字符串定位） | listen 前补 mkdirSync(recursive, 0o700) |
+
+### 环境层面的边界（非协议问题）
+
+Android 应用沙箱（uid 10405、CapEff=0）里：uid_map 只映射单 uid，daemon 与官方 claude 分属不同 namespace（wrapper 嵌套），**官方 peer uid 探测对官方自己起的 daemon 也同样 unreachable**。完整握手（ping/dispatch 经官方 client）需普通 Linux 环境（VPS/裸机）验证——协议 op/认证/错误码已 100% 对照官方实现，cch 生态内（cch client ↔ cch daemon）握手已在本地实跑通过（on-demand 空闲退出当场验证）。
+
+### 移植中的方法论教训
+
+- **bun compile 产物的进程模型**：embeddedFiles 可能空（bytecode+minify 组合）、argv[0] 是字符串 "bun"、execPath 是 bunfs 虚拟路径——dev 模式经验不适用于 compile 产物，self 路径用 `/proc/self/exe` 判定。
+- **bun 11673 quirk**：单文件可执行下 app 参数会泄漏进 process.execArgv，spawn 链的 bootstrap 参数必须 sanitize 快照。
+- **排查不可观测变量的方法**：加诊断环境变量（DAEMON_DEBUG=1）+ CI 构建产物实跑取证，纸上推演到极限就上实跑。
