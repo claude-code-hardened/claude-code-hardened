@@ -7,6 +7,7 @@ import {
   statSync,
 } from 'fs'
 import { homedir, tmpdir } from 'os'
+import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
 import { isAbsolute, join, resolve } from 'path'
 import { Socket } from 'net'
 import { getPeerUid as getPeerUidFfi } from './peerCredentials.js'
