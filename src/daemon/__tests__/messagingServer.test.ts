@@ -66,15 +66,15 @@ describe('handleMessagingRequest', () => {
       lines: 3,
     })
     expect(resp.ok).toBe(true)
-    expect((resp as { lines: number }).lines).toBe(3)
-    expect((resp as { output: string[] }).output).toHaveLength(3)
+    expect((resp as unknown as { lines: number }).lines).toBe(3)
+    expect((resp as unknown as { output: string[] }).output).toHaveLength(3)
   })
 
   test('status reports alive + engine meta', async () => {
     const resp = await handleMessagingRequest(makeBridge(), { verb: 'status' })
     expect(resp.ok).toBe(true)
-    expect((resp as { alive: boolean }).alive).toBe(true)
-    expect((resp as { engine: string }).engine).toBe('tmux')
+    expect((resp as unknown as { alive: boolean }).alive).toBe(true)
+    expect((resp as unknown as { engine: string }).engine).toBe('tmux')
   })
 
   test('close terminates and reports ok', async () => {
