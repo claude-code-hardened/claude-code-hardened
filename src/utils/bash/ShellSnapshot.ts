@@ -25,6 +25,57 @@ import { subprocessEnv } from '../subprocessEnv.js'
 import { quote } from './shellQuote.js'
 
 const LITERAL_BACKSLASH = '\\'
+
+/**
+ * grep → ugrep 的参数透传集（官方 _be 第 4 参数原文）：交互式 filter/
+ * pager、null 分隔、大小写敏感特殊开关等命中时走系统原生 grep。
+ */
+const GREP_BYPASS_PATTERNS = [
+  '*-filter*',
+  '*-pager*',
+  '*-view*',
+  '*-format-open*',
+  '*-config*',
+  '---*',
+  '-@*',
+  '*-save-config*',
+  '-[Zz]*',
+  '-[!-]*[Zz]*',
+  '--null',
+  '--null-data',
+]
+
+/**
+ * pkill shadow（官方原文 1:1）：pgrep 探测用户 pattern，若匹配 CLAUDE_PID
+ * 则拒绝执行——防止用户 pkill 误杀 CLI 自身进程。
+ */
+function createPkillShadow(): string {
+  return [
+    'unalias pkill 2>/dev/null || true',
+    'function pkill {',
+    '  if [ -n "${CLAUDE_PID:-}" ] && [ -r "/proc/${CLAUDE_PID}/comm" ]; then',
+    '    local _cc_skip="" _cc_a',
+    '    local -a _cc_probe=()',
+    '    for _cc_a in ${1+"$@"}; do',
+    '      if [ -n "$_cc_skip" ]; then _cc_skip=""; continue; fi',
+    '      case "$_cc_a" in',
+    '        --signal) _cc_skip=1 ;;',
+    '        --signal=*|-e|--echo) ;;',
+    '        -[0-9]*) ;;',
+    '        -[PUGOF]?*) _cc_probe+=("$_cc_a") ;;',
+    '        -[ABCDEFGHIJKLMNOPQRSTUVWXYZ][ABCDEFGHIJKLMNOPQRSTUVWXYZ0-9]*) ;;',
+    '        *) _cc_probe+=("$_cc_a") ;;',
+    '      esac',
+    '    done',
+    '    if command pgrep ${_cc_probe[@]+"${_cc_probe[@]}"} 2>/dev/null | command grep -qx "${CLAUDE_PID}"; then',
+    '      printf \'pkill: refusing to run \u2014 this pattern matches the Claude CLI process (PID %s). Narrow the pattern, or target your own children with `pkill -P $$ ...`.\\n\' "${CLAUDE_PID}" >&2',
+    '      return 1',
+    '    fi',
+    '  fi',
+    '  command pkill ${1+"$@"}',
+    '}',
+  ].join('\n')
+}
 const SNAPSHOT_CREATION_TIMEOUT = 10000 // 10 seconds
 
 /**
@@ -41,12 +92,26 @@ function createArgv0ShellFunction(
   argv0: string,
   binaryPath: string,
   prependArgs: string[] = [],
+  bypassPatterns: string[] = [],
 ): string {
   const quotedPath = quote([binaryPath])
   const argSuffix =
     prependArgs.length > 0 ? `${prependArgs.join(' ')} "$@"` : '"$@"'
+  // 官方 _be 的第 4 参数语义：参数命中 bypass pattern（fzf 类交互
+  // filter、特殊模式）→ 透传给系统原生命令（bfs/ugrep 的非交互语义
+  // 会破坏交互 filter 管道）
+  const bypassGuard =
+    bypassPatterns.length > 0
+      ? [
+          '  local _cc_a',
+          '  for _cc_a in ${1+"$@"}; do',
+          `    case "$_cc_a" in ${bypassPatterns.join('|')}) command ${funcName} ${'"$@"'}; return ;; esac`,
+          '  done',
+        ]
+      : []
   return [
     `function ${funcName} {`,
+    ...bypassGuard,
     '  if [[ -n $ZSH_VERSION ]]; then',
     `    ARGV0=${argv0} ${quotedPath} ${argSuffix}`,
     '  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then',
@@ -196,22 +261,27 @@ export function createFindGrepShellIntegration(): string | null {
     )
     parts.push(
       'unalias grep 2>/dev/null || true',
-      createArgv0ShellFunction('grep', 'ugrep', binaryPath, [
-        '-G',
-        '--ignore-files',
-        '--hidden',
-        '-I',
-        ...VCS_DIRECTORIES_TO_EXCLUDE.map(d => `--exclude-dir=${d}`),
-      ]),
+      createArgv0ShellFunction(
+        'grep',
+        'ugrep',
+        binaryPath,
+        [
+          '-G',
+          '--ignore-files',
+          '--hidden',
+          '-I',
+          ...VCS_DIRECTORIES_TO_EXCLUDE.map(d => `--exclude-dir=${d}`),
+        ],
+        GREP_BYPASS_PATTERNS,
+      ),
     )
   } else {
     logForDebugging(
       '[shell-snapshot] grep → ugrep skipped (no ugrep payload in this build) → system grep',
     )
   }
-  if (parts.length === 0) {
-    return null
-  }
+  // pkill shadow（官方 snapshot 同款安全特性）
+  parts.push(createPkillShadow())
   return parts.join('\n')
 }
 
