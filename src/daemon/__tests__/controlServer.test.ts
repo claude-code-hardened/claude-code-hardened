@@ -76,7 +76,7 @@ describe('handleControlRequest (upstream yn)', () => {
     deps.handles.set('aaaaaaaa', makeJob('aaaaaaaa', { isKilling: true }))
     const socket = fakeSocket()
     await handleControlRequest(deps, socket, { op: 'list' })
-    const resp = socket.replies[0] as {
+    const resp = socket.replies[0] as unknown as {
       jobs: Array<{ short: string; dying?: boolean }>
     }
     expect(resp.jobs).toHaveLength(1)

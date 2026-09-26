@@ -187,8 +187,7 @@ export function peerUidMismatchError(
  * lookup failure → null + warn.
  */
 export function getPeerUid(socket: Socket): number | null {
-  if (process.platform === 'windows' || process.platform === 'win32')
-    return null
+  if (process.platform === 'win32') return null
   const bun = globalThis as {
     Bun?: { ant?: { getPeerUid?: (fd: number) => number } }
   }
