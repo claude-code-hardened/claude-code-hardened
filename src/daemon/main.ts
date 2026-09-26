@@ -365,27 +365,27 @@ async function runSupervisor(args: string[]): Promise<void> {
   // tengu_daemon_self_restart_on_upgrade semantics: exit with cause=upgrade
   // and let the next invocation pick up the new binary)
   const IDLE_EXIT_MS = 5_000
-  const spawnedVersion = (MACRO as { VERSION?: string }).VERSION
+  // upgrade 轮询：对比 execPath 的 mtime（binary 被升级替换后变化）。
+  // MACRO.VERSION 是编译期常量，进程内读两次永远相同，不能用。
+  const spawnMtime = getExecMtime()
+  // 显式 start 的 supervisor 在第一个 client 到来前保持常驻；
+  // everHadClient 之后 idle（无 lease 且无 live worker）才退出。
+  let everHadClient = false
   let idleTimer: ReturnType<typeof setInterval> | null = null
   idleTimer = setInterval(() => {
     if (controller.signal.aborted) return
+    if (!everHadClient) return
     if (leases.size > 0) return
     const liveWorker = workers.some(
       w => w.process && w.process.exitCode === null,
     )
     if (liveWorker) return
-    try {
-      const currentVersion = (MACRO as { VERSION?: string }).VERSION
-      if (spawnedVersion && currentVersion !== spawnedVersion) {
-        exitCause = 'upgrade'
-        console.log(
-          `[daemon] version changed ${spawnedVersion} -> ${currentVersion} — self restart on upgrade`,
-        )
-        shutdown()
-        return
-      }
-    } catch {
-      // MACRO unavailable in test env — skip upgrade probe
+    const mtime = getExecMtime()
+    if (spawnMtime !== null && mtime !== null && mtime !== spawnMtime) {
+      exitCause = 'upgrade'
+      console.log('[daemon] binary replaced on disk — self restart on upgrade')
+      shutdown()
+      return
     }
     exitCause = 'idle_exit'
     shutdown()
@@ -551,6 +551,7 @@ async function runSupervisor(args: string[]): Promise<void> {
         whenReady: Promise.resolve(),
         controlKey,
         addLease: socket => {
+          everHadClient = true
           leases.add(socket)
         },
         removeLease: socket => {
