@@ -8,6 +8,8 @@ export type ParsedCommand =
   | { type: 'enable'; plugin?: string }
   | { type: 'disable'; plugin?: string }
   | { type: 'validate'; path?: string }
+  | { type: 'eval'; path?: string }
+  | { type: 'eval-init'; path?: string }
   | {
       type: 'marketplace'
       action?: 'add' | 'remove' | 'update' | 'list'
@@ -73,6 +75,16 @@ export function parsePluginArgs(args?: string): ParsedCommand {
     case 'validate': {
       const target = parts.slice(1).join(' ').trim()
       return { type: 'validate', path: target || undefined }
+    }
+
+    case 'eval': {
+      // 插件评估 harness（官方 claude plugin eval）：行为测试 + 上下文
+      // 成本报告，与 validate（结构校验）互补
+      const sub = parts[1]?.toLowerCase()
+      const target = parts.slice(2).join(' ').trim()
+      if (sub === 'init')
+        return { type: 'eval-init', path: target || undefined }
+      return { type: 'eval', path: target || undefined }
     }
 
     case 'marketplace':
