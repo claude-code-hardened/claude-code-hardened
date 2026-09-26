@@ -61,15 +61,19 @@ export function EvalPlugin({ onComplete, path, initMode }: Props): React.ReactNo
       }
       try {
         const result = await validateManifest(path);
-        if (!result.valid) {
+        if (!result.success) {
           setRows([]);
           setError(
             t('Manifest invalid — run /plugin validate first') +
-              (result.errors?.length ? `: ${result.errors.join('; ')}` : ''),
+              (result.errors.length ? `: ${result.errors.map(e => e.message).join('; ')}` : ''),
           );
           return;
         }
-        const manifest = result.manifest as {
+        // manifest 内容从磁盘读取（ValidationResult 不含 manifest 本体）
+        const manifestPath = join(path, '.claude-plugin', 'plugin.json');
+        const manifest = JSON.parse(
+          readFileSync(existsSync(manifestPath) ? manifestPath : join(path, 'plugin.json'), 'utf8'),
+        ) as {
           tools?: Array<{ name?: string; source?: string }>;
           commands?: Array<{ name?: string; source?: string }>;
           skills?: Array<{ name?: string; source?: string }>;
