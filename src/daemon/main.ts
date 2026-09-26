@@ -1,5 +1,6 @@
 import { type ChildProcess } from 'child_process'
 import { randomBytes, randomUUID } from 'crypto'
+import { existsSync } from 'fs'
 import { resolve, join } from 'path'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
@@ -200,8 +201,10 @@ async function showUnifiedStatus(): Promise<void> {
   console.log(
     `  control.sock: ${reachable ? 'present' : 'absent'} (${sockPath})`,
   )
+  const { listLiveSessions } = await import('../cli/bg.js')
+  const bgSessions = await listLiveSessions()
   console.log(
-    `  bg workers:   ${handles.size ? `${handles.size} dispatched` : '0 in roster.json (control unreachable)'}`,
+    `  bg workers:   ${bgSessions.length > 0 ? `${bgSessions.length} live` : '0 in roster.json (control unreachable)'}`,
   )
 
   console.log('\n=== Background Sessions ===')
