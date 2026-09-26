@@ -1,0 +1,158 @@
+# Daemon Server 移植记录（官方 v2.1.283 → cch）
+
+本文档记录将官方 Claude Code v2.1.283 的 daemon server 控制面 **1:1 移植**到 cch 的完整过程：逆向方法、遇到的坑、降级方案与改造点。移植目标是让 `cch daemon` 具备与官方 `claude daemon` 相同的 control socket 协议（op 动词、认证时序、错误码全集），使两边的客户端/服务端可以互相对话。
+
+## 背景
+
+官方 Claude Code 从 v2.1.16x 起**公开发布了 daemon 能力**（`claude daemon` 子命令 + `claude agents` 后台代理视图），而 cch 作为反编译 fork，此前的 `src/daemon/` 只有社区逆向重建的 supervisor 骨架（PR #170，spawn/backoff/workerRegistry），**没有控制面**——外部进程无法向 daemon 请求 spawn 会话或查询状态。
+
+官方 daemon 的形态是 **Unix domain socket 控制协议**（非 HTTP）：
+
+```
+cch daemon run/status/logs/stop          ← CLI 面
+        │ Unix domain socket
+        ▼
+/tmp/cch-daemon-<uid>/<hash8>/control.sock
+        │ 双重认证：
+        │  ① peer uid 校验（失败回 EPEERUID）
+        │  ② ~/.cch/daemon/control.key（dispatch/reply/permission-response 必需，EAUTH）
+        ▼
+supervisor（on-demand：最后一个客户端断开即退出）
+        │ --daemon-worker
+        ▼
+bg workers（roster + lease 跟踪 + attach journal）
+```
+
+## 逆向过程
+
+### 第一阶段：binary 分析（撞墙）
+
+官方 native binary（`~/.local/share/claude/versions/2.1.283`，240MB bun 单文件）最初看似**只有常量池**：
+
+- `function xxx` / `async function xxx(` 等源码结构在 92MB 区域搜不到；
+- 能看到的只有**字符串常量表**（`daemonMain\x00\x00\x1e\x00...` 形态，符号 + 错误消息）；
+- 由此一度误判为"选择性 bytecode 化，daemon 实现无源码"。
+
+从字符串表仍拿到了 743 条 daemon 相关文本（完整 CLI help、错误文案、`tengu_*` 埋点名、文件协议名），足以重构 CLI 面与文件布局，但拿不到控制流。
+
+### 第二阶段：npm 包（也是坑）
+
+官方 npm 包 `@anthropic-ai/claude-code@2.1.283` 只有 **27KB**：`cli-wrapper.cjs` + `install.cjs` + 平台 binary 下载器——**没有明文 cli.js**。旧版 npm 直接分发明文 bundle 的时代已结束。
+
+### 第三阶段：bun-unpacker（突破）
+
+`npx bun-unpacker <binary> -l` 揭示真相：binary 内嵌 **2371 个文件**，且**每个 JS chunk 都是"明文源码 + JSC bytecode"双份**（bytecode 只是启动加速缓存，源码仍在）。此前启发式抽取漏掉它们是因为 chunk 体积小（多在 1-3KB）且散布在 bytecode 段之间，800B 连续可打印阈值切不开。
+
+```bash
+npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
+# → extracted/chunk-e88tq28v.js  81KB  supervisor 生命周期（daemonMain 全文，明文）
+# → extracted/chunk-f37h5e27.js  65KB  control socket 服务端（F 连接处理 + yn op 分发 + qt 状态机）
+# → extracted/chunk-d8zrwwxn.js  3.6KB --daemon-worker 入口（runDaemonWorker）
+```
+
+### 关键 chunk 与函数对照
+
+| 官方符号（混淆名） | 所在 chunk | 职责 | cch 对应 |
+|-------------------|-----------|------|---------|
+| `daemonMain`（导出名 `wa`） | chunk-e88tq28v | supervisor：lockfile 争用/让位/升级自重启/idle_exit | `src/daemon/main.ts`（已有，增强中） |
+| `F`（createServer 回调） | chunk-f37h5e27 | 连接层：destroy-after-shutdown、30s timeout、peer uid 门 | `createControlServer` |
+| `yn` | chunk-f37h5e27 | op 分发 switch（15 case） | `handleControlRequest` |
+| `qt` | chunk-f37h5e27 | dispatch/await-ack 轮询状态机 | `awaitDispatchSettled` |
+| `T` | chunk-f37h5e27 | 响应发送（JSON + `\n`） | `sendReply` |
+| `vD`（chunk-g15kbmn7） | 同上 | controlKey 校验（length 预检 + timingSafeEqual） | `verifyControlKey` 1:1 |
+| `RTo`（chunk-7y633cde） | 同上 | peer uid 对比 | `peerUidReject` |
+| `K`（同上） | 同上 | peer uid 读取（`Bun.ant.getPeerUid(fd)`） | `getPeerUid`（降级，见下） |
+| 路径计算（chunk-t2tcad5k） | 同上 | `join(tmpdir, cc-daemon-<uid>, sha256(root).slice(0,8))` | `daemonSockDir` |
+| `STo`/`osn` | chunk-t2tcad5k | control.key 读（≤4096B + trim） | `readControlKey` |
+
+## 遇到的坑与降级方案
+
+### ① `Bun.ant.getPeerUid(fd)` 是 Anthropic 定制 Bun 的私有 API
+
+官方 peer uid 校验依赖 `Bun.ant.getPeerUid`——标准 Bun/Node 没有这个 API，也没有等价的 `SO_PEERCRED` 暴露。
+
+**降级方案**（`getPeerUid` in `controlProtocol.ts`）：
+
+- 检测到 `Bun.ant.getPeerUid` 存在（如未来 cch 换用定制 Bun）→ 1:1 走官方路径；
+- 不存在 → 返回 `null`，**跳过 uid 校验，仅保留 control.key 认证**。这与官方语义兼容：官方自己也有"读不到 peer 凭证就放行"的分支（`i == null → null`），且对 legacy 客户端本来就允许 peerUid-only 豁免。
+- 安全补偿：`control.key` 文件权限 0600 + 目录 0700（与官方一致），socket 目录继承 `/tmp/cch-daemon-<uid>` 的用户隔离语义。
+
+### ② socket 路径命名空间冲突
+
+官方用 `/tmp/cc-daemon-<uid>/<hash8>/control.sock`。cch 若直接复用会与官方 daemon 抢同一个目录（uid 相同时 hash8 只取决于会话根，可能撞）。
+
+**改造**：前缀改为 **`cch-daemon-`**（`daemonSockDir`），Windows named pipe 同步改为 `\\.\pipe\cch-daemon-<hash>-<uid>`。日志脱敏正则同步改为 `cch-daemon-[0-9a-f]{8}`（官方 `hw()` 的等价物）。
+
+### ③ control.key 路径
+
+官方：`~/.claude/daemon/control.key`。cch 若写这个路径会污染官方安装的状态。
+
+**改造**：cch 使用 **`~/.cch/daemon/control.key`**（0600/0700），生成逻辑 1:1（`randomBytes(32).toString('hex')`，已存在则复用）。
+
+### ④ bytecode 与明文并存导致的误判
+
+分析早期用"连续可打印 ≥800B"启发式抽明文，结果只抓到 36MB 且 daemon chunk 缺失——小 chunk（1-3KB）被 bytecode 段切碎。**教训**：对 bun compile 产物优先用 bun-unpacker 按嵌入文件表提取，不要靠可打印启发式。
+
+### ⑤ 错误文案是协议面，不翻译
+
+官方所有错误字符串（`EPEERUID` 的 "retry without sudo, or as the daemon owner"、`EAUTH` 的 legacy-client 提示等）按**原文保留**——它们是 wire contract 的一部分，客户端可能按文案匹配行为；i18n 规范（docs/i18n.md）中"给模型/协议看的文本不翻译"原则同样适用于控制协议。
+
+## 协议参考（还原结果）
+
+### op 动词与认证矩阵（15 case）
+
+| op | 认证 | 语义 | 响应 |
+|----|------|------|------|
+| `ping` | 无 | 存活探测 | `{ok, op:"ping", version:{ISSUES_EXPLAINER}}` |
+| `list` | 无 | job 清单（dying 标记） | `{ok, jobs:[record…]}` |
+| `has` | 无 | 按 short 查询 | `{ok, alive, present, ready}` |
+| `await-ack` | 无 | 等待 dispatch 落地 | qt 状态机响应 |
+| `dispatch` | **EAUTH** | 分发后台会话 | qt；stale 连接丢弃埋点 |
+| `reply` | **EAUTH**（old-client 专门文案） | 转发到 job | — |
+| `permission-response` | **EAUTH** | 权限应答转发 | — |
+| `attach` | **legacy 豁免**（无 auth → warn 放行） | 注册 attacher | — |
+| `kill` | 无 | 删 roster + evict（exec+outcome 直接删） | `ENOJOB` |
+| `respawn-stale` | 无 | idle-stale worker 重生 | `{...respawn 结果}` |
+| `resize` | 无 | attacher cols/rows + repaint | — |
+| `ensure-spare` | 无 | 预热备用 worker | `{ok}` |
+| `nudge` / `yield` / `lease` / `leases` / `shutdown` | 无 | supervisor 生命周期 | — |
+
+### qt 状态机（dispatch/await-ack 共用）
+
+```
+轮询（deadline = now + min(timeoutMs, 30s)）:
+  settled.nonce === 请求 nonce？
+    ├─ 有 refusal → {ok:false, code:ECWDGONE}
+    └─ 无         → {ok:true, pid:0, messagingSock:"", via:"cold"}
+  handle 存在且 nonce 匹配 → {ok:true, pid, messagingSock, via}
+  handle 存在但 nonce 不匹配 → 继续（标记 mismatch；dispatched 为
+    dup-live/dropped/refused/closed 时提前跳出）
+  超时:
+    曾见 mismatch → {ok:false, error:"a previous dispatch … ESTALE"}
+    否则          → {ok:false, error:"didn't acknowledge in time", code:ETIMEOUT}
+```
+
+### 错误码全集（14 个，与官方逐一对齐）
+
+`EAUTH`、`ECWDGONE`、`EHOSTDEAD`、`ENOJOB`、`ENOREPLY`、`EPEERUID`、`EPROTO`、`ERESPAWNING`、`ESTALE`、`ESTARTING`、`ETIMEOUT`、`ETOOLARGE`、`EUNKNOWN`、`EUNVERIFIED`——以 `ERROR_CODES` 常量固化，新增/删减协议码时编译期可见。
+
+### supervisor exit cause 枚举（还原自字符串表）
+
+`upgrade / service_recall / displaced / yield / shutdown_op / idle_exit / bg_manager_failed / signal / unknown`。
+
+## cch 侧文件清单
+
+| 文件 | 职责 |
+|------|------|
+| `src/daemon/controlProtocol.ts` | 纯协议层：路径计算、key 读写/校验、peer uid、帧发送、错误码类型（全部纯函数，可单测） |
+| `src/daemon/controlServer.ts` | 服务端：连接处理 + 15 op 分发 + qt 状态机（依赖注入 handles/settled/回调，可测） |
+| `src/daemon/controlClient.ts` | 客户端：connect + auth + 单请求（`cch daemon status` 等使用） |
+| `src/daemon/main.ts` | supervisor 集成：启动时 bind control.sock（失败降级 warn 继续跑），shutdown 时 close |
+
+## 尚未对齐（后续增量）
+
+- **bg 会话 spawn 的真实接线**：`onDispatch` 目前是占位（返回 `{dispatched:true}`），把 `src/cli/bg.ts` 的会话 spawn 接到 control plane 后才有完整的 dispatch→worker→attach 链路；
+- **messagingSock**（每 worker 的消息通道）：官方 dispatch 响应里带回，需要 worker 侧实现；
+- **on-demand 生命周期**（最后客户端断开 → idle_exit）：现有 supervisor 是常驻模型，需要 lease 计数驱动；
+- **service install**（launchctl/systemd）：官方在此版本也禁用了，低优先级；
+- **peer uid 的完整方案**：如需与官方完全一致，要么等标准 Bun 暴露 `SO_PEERCRED`，要么走 `Bun.ffi` 自行 `getsockopt`（列入评估）。
