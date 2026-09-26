@@ -1,6 +1,6 @@
 import { type ChildProcess } from 'child_process'
 import { randomBytes, randomUUID } from 'crypto'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { resolve, join } from 'path'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
@@ -18,6 +18,7 @@ import {
   signalableByCurrentUser,
 } from './daemonLock.js'
 import { daemonSockDir, controlSockPath } from './controlProtocol.js'
+import { createMessagingServer } from './messagingServer.js'
 import { ensureControlKey, type ControlRequest } from './controlProtocol.js'
 import {
   createControlServer,
@@ -430,20 +431,108 @@ async function runSupervisor(args: string[]): Promise<void> {
             logPath: result.logPath,
             engine: result.engineUsed,
           }
+          // messagingSock：每会话操作通道（send/read/status/close），
+          // dispatch 响应带回（官方 wire contract）
+          const messagingSock = join(daemonSockDir(dir), `msg-${short}.sock`)
+          const tmux = result.engineUsed === 'tmux'
+          const bridge = {
+            send: async (text: string) => {
+              const { execFile } = await import('child_process')
+              if (tmux) {
+                await new Promise<void>((res, rej) =>
+                  execFile(
+                    'tmux',
+                    ['send-keys', '-t', result.sessionName, '-l', text],
+                    e => (e ? rej(e) : res()),
+                  ),
+                )
+                await new Promise<void>((res, rej) =>
+                  execFile(
+                    'tmux',
+                    ['send-keys', '-t', result.sessionName, 'Enter'],
+                    e => (e ? rej(e) : res()),
+                  ),
+                )
+              } else {
+                // detached 引擎：输入经会话日志不可达，报错给客户端
+                throw new Error('detached sessions do not accept input')
+              }
+            },
+            read: async (lines: number) => {
+              if (tmux) {
+                const { execFile } = await import('child_process')
+                return await new Promise<string[]>((res, rej) =>
+                  execFile(
+                    'tmux',
+                    [
+                      'capture-pane',
+                      '-p',
+                      '-t',
+                      result.sessionName,
+                      '-S',
+                      String(-lines),
+                    ],
+                    (e, stdout) =>
+                      e ? rej(e) : res(String(stdout).split('\n')),
+                  ),
+                )
+              }
+              // detached：tail 日志
+              try {
+                const content = readFileSync(result.logPath, 'utf8')
+                return content.split('\n').slice(-lines)
+              } catch {
+                return []
+              }
+            },
+            alive: () => pidAlive(result.pid),
+            close: async () => {
+              try {
+                process.kill(result.pid, 'SIGTERM')
+              } catch {
+                // already gone
+              }
+              handles.delete(short)
+            },
+            meta: () => ({
+              engine: result.engineUsed,
+              name: result.sessionName,
+            }),
+          }
+          let messagingServer:
+            | import('./messagingServer.js').MessagingServer
+            | null = null
+          try {
+            messagingServer = createMessagingServer(bridge, messagingSock)
+            await new Promise<void>((res, rej) => {
+              messagingServer!.once('error', rej)
+              messagingServer!.listen(messagingSock, () => res())
+            })
+          } catch {
+            messagingServer = null
+          }
+          record.messagingSock = messagingServer ? messagingSock : ''
           handles.set(short, {
             record,
             dispatch: { launch: { mode: 'exec' } },
             attachers: new Map(),
             respawnIfIdleStale: async () => {
               if (pidAlive(result.pid)) return { respawned: false, alive: true }
-              // exec-mode session died: drop the handle and mark settled
+              // exec-mode session died: drop the handle, close messaging, settle
+              messagingServer?.close()
               handles.delete(short)
               settled.set(short, { nonce })
               return { respawned: false, removed: true }
             },
             alive: () => pidAlive(result.pid),
           })
-          return { dispatched: true, short, nonce, pid: result.pid }
+          return {
+            dispatched: true,
+            short,
+            nonce,
+            pid: result.pid,
+            messagingSock: record.messagingSock,
+          }
         },
         onNudge: () => {},
         onShutdown: () => {
