@@ -140,7 +140,7 @@ export function UltraplanChoiceDialog({
             setMessages(prev => [
               ...prev,
               createSystemMessage(
-                `Previous session saved · resume with: ccb --resume ${previousSessionId}`,
+                `Previous session saved · resume with: cch --resume ${previousSessionId}`,
                 'suggestion',
               ),
             ]);

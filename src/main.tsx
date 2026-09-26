@@ -5412,13 +5412,13 @@ async function run(): Promise<CommanderCommand> {
       await installHandler(target, options);
     });
 
-  // claude update — update ccb to the latest version via npm or bun
+  // claude update — update cch to the latest version via npm or bun
   program
     .command('update')
-    .description('Update claude-code-hardened (ccb) to the latest version')
+    .description('Update claude-code-hardened (cch) to the latest version')
     .action(async () => {
-      const { updateCCB } = await import('./cli/updateCCB.js');
-      await updateCCB();
+      const { updateCCH } = await import('./cli/updateCCH.js');
+      await updateCCH();
     });
 
   // ant-only commands

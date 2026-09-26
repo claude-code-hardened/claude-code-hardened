@@ -70,7 +70,7 @@ function loadNativeFromMemory(
       })
       // MFD_CLOEXEC：fd 随 exec 关闭，防 exec 泄漏
       const fd = libc.symbols.memfd_create(
-        `ccb-native-${moduleName}`,
+        `cch-native-${moduleName}`,
         1,
       ) as number
       if (fd > 2) {

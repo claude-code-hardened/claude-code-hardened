@@ -76,7 +76,7 @@ function memfdSpawnPath(id: string, buffer: Buffer): StagedExecutable | null {
     memfd_create: { args: ['cstring', 'u32'], returns: 'i32' },
   })
   const fd = libc.symbols.memfd_create(
-    `ccb-${id}`,
+    `cch-${id}`,
     1 /* MFD_CLOEXEC */,
   ) as number
   if (!(fd > 2)) return null
@@ -128,7 +128,7 @@ function tmpfsSpawnPath(
   for (const base of bases) {
     let dir: string
     try {
-      dir = fs.mkdtempSync(join(base, `ccb-${id}-`))
+      dir = fs.mkdtempSync(join(base, `cch-${id}-`))
     } catch {
       continue
     }

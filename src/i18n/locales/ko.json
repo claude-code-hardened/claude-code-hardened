@@ -2840,5 +2840,11 @@
   "Hit {{shortcut}} to cycle between default, accept edits, plan, auto, and bypass modes": "{{shortcut}}로 default, accept edits, plan, auto, bypass 모드 전환",
   "Use {{shortcut}} to paste images from your clipboard": "{{shortcut}}로 클립보드 이미지 붙여넣기",
   "Your default model setting is Opus Plan Mode. Press {{shortcut}} twice to activate Plan Mode and plan with Claude Opus.": "기본 모델이 Opus Plan Mode입니다. {{shortcut}} 두 번 눌러 Plan Mode를 활성화하고 Claude Opus로 계획하세요.",
-  "Continue your session in Claude Code Desktop with {{cmd}}": "Claude Code Desktop에서 {{cmd}}로 세션 계속"
+  "Continue your session in Claude Code Desktop with {{cmd}}": "Claude Code Desktop에서 {{cmd}}로 세션 계속",
+  "Run cch --continue or cch --resume to resume a conversation": [
+    "运行 cch --continue 或 cch --resume 恢复会话",
+    "執行 cch --continue 或 cch --resume 恢復會話",
+    "cch --continue または cch --resume で会話を再開",
+    "cch --continue 또는 cch --resume로 대화 재개"
+  ]
 }

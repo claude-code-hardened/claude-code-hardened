@@ -27,7 +27,7 @@ curl "https://cloud-artifacts.claude-code-best.win/7d/V1StGXR8_Z5jdHi6B-myT.html
 ```
                            ┌──────────────────────────┐
 客户端  --POST /upload----▶│  Deno Deploy 边缘代理     │
-                          │  cloud-artifacts.ccb.win  │
+                          │  cloud-artifacts.cch.win  │
                           └────────────┬─────────────┘
                                        │ 透传
                                        ▼
