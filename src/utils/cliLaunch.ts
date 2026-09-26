@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn, type SpawnOptions } from 'child_process'
+import { readlinkSync } from 'fs'
 import { isInBundledMode } from './bundledMode.js'
 import { quote } from './bash/shellQuote.js'
 
