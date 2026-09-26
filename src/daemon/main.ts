@@ -72,7 +72,26 @@ export async function daemonMain(args: string[]): Promise<void> {
   switch (subcommand) {
     // --- Supervisor management ---
     case 'start':
+    case 'run': // 官方别名：piped 场景下前台 supervisor 是默认形态
       await runSupervisor(args.slice(1))
+      break
+    case 'install':
+    case 'service-install':
+      // 官方此版本同样禁用："Service install is disabled in this version —
+      // the daemon runs on demand and exits when the last client disconnects."
+      console.log(
+        'Service install is disabled in this version — the daemon runs on\n' +
+          'demand and exits when the last client disconnects.\n' +
+          'Use `cch daemon start` to run the supervisor explicitly.',
+      )
+      break
+    case 'restart':
+      await handleDaemonStop()
+      await runSupervisor(args.slice(1))
+      break
+    case 'uninstall':
+      // 无已安装 service（launchctl/systemd 未注册），对齐官方幂等语义
+      console.log('no installed service found — nothing to uninstall')
       break
     case 'stop':
       await handleDaemonStop()
@@ -126,9 +145,13 @@ USAGE
   claude daemon [subcommand]
 
 SUBCOMMANDS
-  status      Show daemon and session status (default)
+  status      Show daemon pid, version, uptime
+  run         Run the supervisor in the foreground (default when piped)
   start       Start the daemon supervisor
-  stop        Stop the daemon
+  stop        Shut down the supervisor and terminate background sessions
+  restart     Stop then start the supervisor
+  uninstall   Remove the background service (launchctl/systemd)
+  install     Install as a service (disabled in this version)
   bg          Start a background session
   attach      Attach to a background session
   logs        Show session logs
