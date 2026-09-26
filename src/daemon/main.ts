@@ -1,6 +1,6 @@
 import { type ChildProcess } from 'child_process'
 import { randomBytes, randomUUID } from 'crypto'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { resolve, join } from 'path'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
 import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
@@ -211,6 +211,15 @@ async function showUnifiedStatus(): Promise<void> {
   console.log('\n=== Background Sessions ===')
   const bg = await import('../cli/bg.js')
   await bg.psHandler([])
+}
+
+/** binary 的 mtime（upgrade 轮询用），取不到时返回 null。 */
+function getExecMtime(): number | null {
+  try {
+    return statSync(process.execPath).mtimeMs
+  } catch {
+    return null
+  }
 }
 
 /** 官方 status 的 launcher 行：记录下一个 background service 经由的启动器。 */
