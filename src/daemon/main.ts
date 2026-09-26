@@ -1,6 +1,9 @@
 import { type ChildProcess } from 'child_process'
-import { resolve } from 'path'
+import { randomBytes, randomUUID } from 'crypto'
+import { existsSync, readFileSync } from 'fs'
+import { resolve, join } from 'path'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
+import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
 import { buildCliLaunch, spawnCli } from '../utils/cliLaunch.js'
 import {
   writeDaemonState,
@@ -9,10 +12,14 @@ import {
   stopDaemonByPid,
 } from './state.js'
 import {
-  controlSockPath,
-  ensureControlKey,
-  type ControlRequest,
-} from './controlProtocol.js'
+  acquireLock,
+  readLock,
+  clearLock,
+  signalableByCurrentUser,
+} from './daemonLock.js'
+import { daemonSockDir, controlSockPath } from './controlProtocol.js'
+import { createMessagingServer } from './messagingServer.js'
+import { ensureControlKey, type ControlRequest } from './controlProtocol.js'
 import {
   createControlServer,
   type ControlServer,
@@ -67,7 +74,26 @@ export async function daemonMain(args: string[]): Promise<void> {
   switch (subcommand) {
     // --- Supervisor management ---
     case 'start':
+    case 'run': // 官方别名：piped 场景下前台 supervisor 是默认形态
       await runSupervisor(args.slice(1))
+      break
+    case 'install':
+    case 'service-install':
+      // 官方此版本同样禁用："Service install is disabled in this version —
+      // the daemon runs on demand and exits when the last client disconnects."
+      console.log(
+        'Service install is disabled in this version — the daemon runs on\n' +
+          'demand and exits when the last client disconnects.\n' +
+          'Use `cch daemon start` to run the supervisor explicitly.',
+      )
+      break
+    case 'restart':
+      await handleDaemonStop()
+      await runSupervisor(args.slice(1))
+      break
+    case 'uninstall':
+      // 无已安装 service（launchctl/systemd 未注册），对齐官方幂等语义
+      console.log('no installed service found — nothing to uninstall')
       break
     case 'stop':
       await handleDaemonStop()
@@ -121,9 +147,13 @@ USAGE
   claude daemon [subcommand]
 
 SUBCOMMANDS
-  status      Show daemon and session status (default)
+  status      Show daemon pid, version, uptime
+  run         Run the supervisor in the foreground (default when piped)
   start       Start the daemon supervisor
-  stop        Stop the daemon
+  stop        Shut down the supervisor and terminate background sessions
+  restart     Stop then start the supervisor
+  uninstall   Remove the background service (launchctl/systemd)
+  install     Install as a service (disabled in this version)
   bg          Start a background session
   attach      Attach to a background session
   logs        Show session logs
@@ -148,31 +178,50 @@ OPTIONS (for start)
  * Show unified status: daemon supervisor + background sessions.
  */
 async function showUnifiedStatus(): Promise<void> {
-  // 1. Daemon supervisor status
-  const result = queryDaemonStatus()
-  console.log('=== Daemon Supervisor ===')
-  switch (result.status) {
-    case 'running': {
-      const s = result.state!
-      console.log(`  Status:  running`)
-      console.log(`  PID:     ${s.pid}`)
-      console.log(`  CWD:     ${s.cwd}`)
-      console.log(`  Started: ${s.startedAt}`)
-      console.log(`  Workers: ${s.workerKinds.join(', ')}`)
-      break
-    }
-    case 'stopped':
-      console.log('  Status: stopped')
-      break
-    case 'stale':
-      console.log('  Status: stale (cleaned up)')
-      break
+  // 官方面板形态：daemon 状态行 → launcher 行 → sock dir / control.sock
+  // 可达性 → bg workers roster → bg sessions 明细
+  const lock = readLock()
+  if (!lock || !signalableByCurrentUser(lock.pid)) {
+    console.log('not running')
+  } else {
+    const startedAt = Date.parse(lock.startedAt)
+    const uptimeSec = Number.isFinite(startedAt)
+      ? Math.round((Date.now() - startedAt) / 1000)
+      : -1
+    console.log(
+      `daemon: running (pid=${lock.pid}, origin=${lock.origin}, uptime=${uptimeSec}s)`,
+    )
   }
+  console.log(`launcher: ${getLauncherRecord() ?? '(none running)'}`)
 
-  // 2. Background sessions
+  const sockDir = daemonSockDir(resolve('.'))
+  const sockPath = controlSockPath(resolve('.'))
+  console.log(`\nbg sessions:`)
+  console.log(`  sock dir:     ${sockDir}`)
+  const reachable = existsSync(sockPath)
+  console.log(
+    `  control.sock: ${reachable ? 'present' : 'absent'} (${sockPath})`,
+  )
+  const { listLiveSessions } = await import('../cli/bg.js')
+  const bgSessions = await listLiveSessions()
+  console.log(
+    `  bg workers:   ${bgSessions.length > 0 ? `${bgSessions.length} live` : '0 in roster.json (control unreachable)'}`,
+  )
+
   console.log('\n=== Background Sessions ===')
   const bg = await import('../cli/bg.js')
   await bg.psHandler([])
+}
+
+/** 官方 status 的 launcher 行：记录下一个 background service 经由的启动器。 */
+function getLauncherRecord(): string | null {
+  try {
+    const wrapper = process.env['SHELL']
+    if (!wrapper) return null
+    return `this cch resolves \`${wrapper}\` and will start the next background service through it`
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -269,10 +318,80 @@ async function runSupervisor(args: string[]): Promise<void> {
   const controller = new AbortController()
   profileCheckpoint('daemon_supervisor_started')
 
+  // ── daemon.lock acquisition (official handshake) ──
+  const lockResult = acquireLock('transient')
+  if (lockResult.status === 'held') {
+    console.log(
+      `[daemon] daemon.lock held by pid=${lockResult.holder.pid} (origin=${lockResult.holder.origin}) — a supervisor is already running`,
+    )
+    return
+  }
+  if (lockResult.status === 'replaced-stale') {
+    console.log('[daemon] replacing stale daemon.lock (previous holder exited)')
+  }
+
+  // displaced probing: once the lock moves to another pid, yield and exit
+  let displaced = false
+  const displacedProbe = setInterval(() => {
+    if (controller.signal.aborted || displaced) return
+    const current = readLock()
+    if (current && current.pid !== process.pid) {
+      displaced = true
+      exitCause = 'displaced'
+      console.log(
+        `[daemon] lockfile now held by pid=${current.pid} — displaced, yielding`,
+      )
+      shutdown()
+    }
+  }, 2_000)
+
   // ── Control socket (official-daemon wire contract, 1:1) ──
   const controlKey = ensureControlKey()
   const handles = new Map<string, JobHandle>()
   const settled = new Map<string, { nonce?: string; refusal?: string }>()
+  const leases = new Set<unknown>()
+  let exitCause = 'unknown'
+
+  // on-demand idle exit + upgrade self-restart (official
+  // tengu_daemon_self_restart_on_upgrade semantics: exit with cause=upgrade
+  // and let the next invocation pick up the new binary)
+  const IDLE_EXIT_MS = 5_000
+  const spawnedVersion = (MACRO as { VERSION?: string }).VERSION
+  let idleTimer: ReturnType<typeof setInterval> | null = null
+  idleTimer = setInterval(() => {
+    if (controller.signal.aborted) return
+    if (leases.size > 0) return
+    const liveWorker = workers.some(
+      w => w.process && w.process.exitCode === null,
+    )
+    if (liveWorker) return
+    try {
+      const currentVersion = (MACRO as { VERSION?: string }).VERSION
+      if (spawnedVersion && currentVersion !== spawnedVersion) {
+        exitCause = 'upgrade'
+        console.log(
+          `[daemon] version changed ${spawnedVersion} -> ${currentVersion} — self restart on upgrade`,
+        )
+        shutdown()
+        return
+      }
+    } catch {
+      // MACRO unavailable in test env — skip upgrade probe
+    }
+    exitCause = 'idle_exit'
+    shutdown()
+  }, IDLE_EXIT_MS)
+
+  const pidAlive = (pid: number): boolean => {
+    if (!pid) return false
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   let controlServer: ControlServer | null = null
   try {
     controlServer = createControlServer(
@@ -280,18 +399,154 @@ async function runSupervisor(args: string[]): Promise<void> {
         handles,
         settled,
         onDispatch: async d => {
-          // Worker dispatch lands here once bg session spawning is wired
-          // to the control plane; request shape is preserved for clients.
-          return { dispatched: true, short: d['short'] }
+          // dispatch → spawn a bg session via the engine abstraction
+          // (upstream: qt dispatch with server-issued short/nonce)
+          const { selectEngine } = await import('../cli/bg/engines/index.js')
+          const engine = await selectEngine()
+          const short = randomBytes(4).toString('hex')
+          const nonce = randomUUID()
+          const sessionName = `claude-bg-${short}`
+          const args = Array.isArray(d['args'])
+            ? (d['args'] as string[])
+            : ['-p', String(d['prompt'] ?? '')]
+          const logPath = join(
+            getClaudeConfigHomeDir(),
+            'sessions',
+            'logs',
+            `${sessionName}.log`,
+          )
+          const result = await engine.start({
+            sessionName,
+            args,
+            env: { ...process.env },
+            logPath,
+            cwd: typeof d['cwd'] === 'string' ? d['cwd'] : dir,
+          })
+          const record = {
+            short,
+            nonce,
+            pid: result.pid,
+            messagingSock: '',
+            name: result.sessionName,
+            logPath: result.logPath,
+            engine: result.engineUsed,
+          }
+          // messagingSock：每会话操作通道（send/read/status/close），
+          // dispatch 响应带回（官方 wire contract）
+          const messagingSock = join(daemonSockDir(dir), `msg-${short}.sock`)
+          const tmux = result.engineUsed === 'tmux'
+          const bridge = {
+            send: async (text: string) => {
+              const { execFile } = await import('child_process')
+              if (tmux) {
+                await new Promise<void>((res, rej) =>
+                  execFile(
+                    'tmux',
+                    ['send-keys', '-t', result.sessionName, '-l', text],
+                    e => (e ? rej(e) : res()),
+                  ),
+                )
+                await new Promise<void>((res, rej) =>
+                  execFile(
+                    'tmux',
+                    ['send-keys', '-t', result.sessionName, 'Enter'],
+                    e => (e ? rej(e) : res()),
+                  ),
+                )
+              } else {
+                // detached 引擎：输入经会话日志不可达，报错给客户端
+                throw new Error('detached sessions do not accept input')
+              }
+            },
+            read: async (lines: number) => {
+              if (tmux) {
+                const { execFile } = await import('child_process')
+                return await new Promise<string[]>((res, rej) =>
+                  execFile(
+                    'tmux',
+                    [
+                      'capture-pane',
+                      '-p',
+                      '-t',
+                      result.sessionName,
+                      '-S',
+                      String(-lines),
+                    ],
+                    (e, stdout) =>
+                      e ? rej(e) : res(String(stdout).split('\n')),
+                  ),
+                )
+              }
+              // detached：tail 日志
+              try {
+                const content = readFileSync(result.logPath, 'utf8')
+                return content.split('\n').slice(-lines)
+              } catch {
+                return []
+              }
+            },
+            alive: () => pidAlive(result.pid),
+            close: async () => {
+              try {
+                process.kill(result.pid, 'SIGTERM')
+              } catch {
+                // already gone
+              }
+              handles.delete(short)
+            },
+            meta: () => ({
+              engine: result.engineUsed,
+              name: result.sessionName,
+            }),
+          }
+          let messagingServer:
+            | import('./messagingServer.js').MessagingServer
+            | null = null
+          try {
+            messagingServer = createMessagingServer(bridge, messagingSock)
+            await new Promise<void>((res, rej) => {
+              messagingServer!.once('error', rej)
+              messagingServer!.listen(messagingSock, () => res())
+            })
+          } catch {
+            messagingServer = null
+          }
+          record.messagingSock = messagingServer ? messagingSock : ''
+          handles.set(short, {
+            record,
+            dispatch: { launch: { mode: 'exec' } },
+            attachers: new Map(),
+            respawnIfIdleStale: async () => {
+              if (pidAlive(result.pid)) return { respawned: false, alive: true }
+              // exec-mode session died: drop the handle, close messaging, settle
+              messagingServer?.close()
+              handles.delete(short)
+              settled.set(short, { nonce })
+              return { respawned: false, removed: true }
+            },
+            alive: () => pidAlive(result.pid),
+          })
+          return {
+            dispatched: true,
+            short,
+            nonce,
+            pid: result.pid,
+            messagingSock: record.messagingSock,
+          }
         },
         onNudge: () => {},
         onShutdown: () => {
+          exitCause = 'shutdown_op'
           shutdown()
         },
         whenReady: Promise.resolve(),
         controlKey,
-        addLease: () => {},
-        removeLease: () => {},
+        addLease: socket => {
+          leases.add(socket)
+        },
+        removeLease: socket => {
+          leases.delete(socket)
+        },
         log: line => console.log(`[daemon] ${line}`),
         telemetry: event => {
           console.log(`[daemon] ${event}`)
@@ -315,6 +570,9 @@ async function runSupervisor(args: string[]): Promise<void> {
   const shutdown = () => {
     console.log('[daemon] supervisor shutting down...')
     controller.abort()
+    if (displacedProbe) clearInterval(displacedProbe)
+    if (idleTimer) clearInterval(idleTimer)
+    if (exitCause !== 'displaced') clearLock()
     removeDaemonState()
     if (controlServer) {
       controlServer.close()
