@@ -3,7 +3,7 @@
  *
  * 与 build.ts（splitting bundle）不同：compile 必须单 bundle 内嵌，
  * 不做 code splitting（chunk 是运行时外部文件，装不进二进制）。
- * 产物：dist/ccb-<os>-<arch>[.exe] —— 无需安装 Node/Bun，下载即运行。
+ * 产物：dist/cch-<os>-<arch>[.exe] —— 无需安装 Node/Bun，下载即运行。
  *
  * Native 模块嵌入策略：
  *   - 读取目标平台对应的 .node 文件
@@ -269,7 +269,7 @@ for (const target of targets) {
       // 单数 target 是唯一生效的 API：复数 targets 会被静默忽略，
       // 产物退化为 host 架构（CI x86 上曾把 arm64 名字编成 x86_64 ELF）。
       target,
-      outfile: `dist/ccb-${target.replace(/^bun-/, '')}`,
+      outfile: `dist/cch-${target.replace(/^bun-/, '')}`,
     },
   })
 
@@ -281,6 +281,6 @@ for (const target of targets) {
     process.exit(1)
   }
   console.log(
-    `compiled: dist/ccb-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`,
+    `compiled: dist/cch-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`,
   )
 }

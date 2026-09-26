@@ -317,11 +317,11 @@ async function downloadAndExtract() {
 
   const binaryPath = getBinaryPath()
   const binaryDir = path.dirname(binaryPath)
-  const stampPath = path.join(binaryDir, '.ccb-rg-version')
+  const stampPath = path.join(binaryDir, '.cch-rg-version')
 
   const force = process.argv.includes('--force')
   // Version-aware skip：非空即跳过会让打包安装的用户永远停留在旧版
-  // （Codex P2 review）——读 .ccb-rg-version 戳，版本不符即重下。
+  // （Codex P2 review）——读 .cch-rg-version 戳，版本不符即重下。
   if (!force && existsSync(binaryPath) && statSync(binaryPath).size > 0) {
     let stamped = null
     try {

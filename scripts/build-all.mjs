@@ -112,7 +112,7 @@ if (!SKIP_NATIVE) {
 
 // ── Step 1.5: bundle（cli.js + chunks + cli-node.js/cli-bun.js + vendor）──
 // npm 包的 bin 指向 dist/cli-node.js（shebang node → import './cli.js'），
-// 缺这一步时 tarball 里只有 ccb-* 单文件 binary，npm i -g 后入口不存在。
+// 缺这一步时 tarball 里只有 cch-* 单文件 binary，npm i -g 后入口不存在。
 // compile（Step 2）与 bundle 互不依赖，但 bundle 必须先于 Step 4 pack。
 console.log('\n=== Step 1.5: Bundle (splitting + dual entry points) ===')
 run('bun', ['run', 'build'])
@@ -146,7 +146,7 @@ console.log('\n=== Step 3: Verify binaries ===')
 for (const platform of platforms) {
   const target = tripleToTarget(platform)
   if (!target) continue
-  const outfile = `dist/ccb-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`
+  const outfile = `dist/cch-${target.replace(/^bun-/, '')}${target.endsWith('windows-x64') ? '.exe' : ''}`
   if (existsSync(outfile)) {
     const stats = statSync(outfile)
     console.log(`  ✓ ${outfile} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`)

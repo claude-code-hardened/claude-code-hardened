@@ -392,11 +392,11 @@ jobs:
             [ "$machine" = "34404" ] || { echo "  ✗ $file PE machine=$machine, expected 34404 (0x8664)"; exit 1; }
             echo "  ✓ $file (PE machine=0x8664)"
           }
-          check_elf dist/ccb-linux-x64        "62 0"    # EM_X86_64
-          check_elf dist/ccb-linux-arm64     "183 0"   # EM_AARCH64
-          check_macho dist/ccb-darwin-x64     "7 0 0 1"    # x86_64 LE bytes (CPU_TYPE_X86_64 = 0x01000007)
-          check_macho dist/ccb-darwin-arm64  "12 0 0 1"    # arm64 LE bytes
-          check_pe dist/ccb-windows-x64.exe
+          check_elf dist/cch-linux-x64        "62 0"    # EM_X86_64
+          check_elf dist/cch-linux-arm64     "183 0"   # EM_AARCH64
+          check_macho dist/cch-darwin-x64     "7 0 0 1"    # x86_64 LE bytes (CPU_TYPE_X86_64 = 0x01000007)
+          check_macho dist/cch-darwin-arm64  "12 0 0 1"    # arm64 LE bytes
+          check_pe dist/cch-windows-x64.exe
 
       # 产物运行时冒烟：--version 验证可执行；--check-commands 强制加载全部
       # lazy shim——compile 下缺失模块曾以 "Cannot find module
@@ -405,10 +405,10 @@ jobs:
       - name: Smoke test binary (linux-x64)
         run: |
           set -euo pipefail
-          chmod +x dist/ccb-linux-x64
-          out=$(dist/ccb-linux-x64 --version)
+          chmod +x dist/cch-linux-x64
+          out=$(dist/cch-linux-x64 --version)
           echo "  --version → $out"
-          dist/ccb-linux-x64 --check-commands
+          dist/cch-linux-x64 --check-commands
           echo "  ✓ --check-commands: all command shims loaded"
 
       # 启动性能靶点（阈值级回归由 bench-startup.ts 本机判定；此处为打包期
@@ -421,7 +421,7 @@ jobs:
           for probe in --version --check-commands; do
             for i in 1 2 3; do
               s=$(date +%s%N)
-              dist/ccb-linux-x64 $probe > /dev/null 2>&1
+              dist/cch-linux-x64 $probe > /dev/null 2>&1
               e=$(date +%s%N)
               echo "  probe[$probe] run$i: $(( (e-s)/1000000 ))ms"
             done

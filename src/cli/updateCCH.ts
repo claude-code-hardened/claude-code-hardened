@@ -1,5 +1,5 @@
 /**
- * `ccb update` — Check and install the latest version of claude-code-hardened.
+ * `cch update` — Check and install the latest version of claude-code-hardened.
  *
  * Detection strategy:
  *  1. If `bun` is available and the current installation was done via bun → use `bun update -g`
@@ -91,7 +91,7 @@ function gte(a: string, b: string): boolean {
   return true
 }
 
-export async function updateCCB(): Promise<void> {
+export async function updateCCH(): Promise<void> {
   const currentVersion = getCurrentVersion()
   writeToStdout(`Current version: ${currentVersion}\n`)
 
@@ -114,7 +114,7 @@ export async function updateCCB(): Promise<void> {
 
   // Already up to date?
   if (latestVersion === currentVersion || gte(currentVersion, latestVersion)) {
-    writeToStdout(chalk.green(`ccb is up to date (${currentVersion})`) + '\n')
+    writeToStdout(chalk.green(`cch is up to date (${currentVersion})`) + '\n')
     await gracefulShutdown(0)
     return
   }

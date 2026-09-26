@@ -12,29 +12,29 @@
 
 这是 A\ (Anthropic) 官方 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 完整复原的工程化项目。而且, 我们持续跟进并实现了企业版或者需要登陆 Claude 账号才能使用的特性, 并在此基础上扩展了更多好玩的特性， 关闭了所有的外部封控点。我们完全兼容 CC 原有的配置， 你不需要改原始配置文件， Dynamic Workflow、Goal 等功能全都在。
 
-本项目基于 [CCB（claude-code-best）](https://github.com/claude-code-best/claude-code) 继续**加固**，感谢 CCB 上游在内存与性能优化上的大量工作。我们在其基础上：修复了搜索嵌入、输入等一系列 bug，让 shell 里的 find/grep/rg 无缝走嵌入的 bfs/ugrep/ripgrep（更快更省内存），补齐了四语言（zh-CN/zh-TW/ja/ko）翻译，并持续修复构建与依赖链路问题。
+本项目基于 [CCH（claude-code-best）](https://github.com/claude-code-best/claude-code) 继续**加固**，感谢 CCH 上游在内存与性能优化上的大量工作。我们在其基础上：修复了搜索嵌入、输入等一系列 bug，让 shell 里的 find/grep/rg 无缝走嵌入的 bfs/ugrep/ripgrep（更快更省内存），补齐了四语言（zh-CN/zh-TW/ja/ko）翻译，并持续修复构建与依赖链路问题。
 
-[文档在这里](https://ccb.agent-aura.top/) | [Discord 群组，群主在线答疑](https://discord.gg/uApuzJWGKX)
+[文档在这里](https://cch.agent-aura.top/) | [Discord 群组，群主在线答疑](https://discord.gg/uApuzJWGKX)
 
 | 特性                        | 说明                                                                                                                         | 文档                                                                                                                                      |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | **🎯 Goal 持续驱动**        | `/goal <objective>` 设定目标后，自动跨轮驱动 agent 直至完成；带 token budget、completion/blocked audit、`pause`/`resume`/`continue`/`clear` 子命令，网络中断自动暂停 | 源码 [`commands/goal/`](./src/commands/goal/) · [`services/goal/`](./src/services/goal/)                                                  |
 | **📦 Artifacts（HTML 上传）** | 复刻 Anthropic 官方 Artifacts：模型把 HTML/数据看板/报告上传到公开 URL（7d/30d 自动过期），`/artifacts` 命令集中管理，Cloudflare Worker + R2 完全开源、可自托管 | [8 小时复刻报告](./docs/blog/2026-06-20-cloud-artifacts-8h-recap.md) · [在线 demo](https://cloud-artifacts.claude-code-best.win/30d/c2jfwi3E-y3fTZ1ors-KE.html) |
-| **🧠 Ultracode 多 Agent 编排** | `/ultracode` 注入 workflow 编排手册 + `Workflow` 工具跑确定性 JS 脚本（`agent`/`pipeline`/`parallel`/`phase`）+ `/workflows` 双栏监控面板；支持 journal 重放、token budget、并发 cap | [文档](https://ccb.agent-aura.top/docs/features/workflow-scripts)                                                                         |
-| **Claude 群控技术**         | Pipe IPC 多实例协作：同机 main/sub 自动编排 + LAN 跨机器零配置发现与通讯，`/pipes` 选择面板 + `Shift+↓` 交互 + 消息广播路由 | [Pipe IPC](https://ccb.agent-aura.top/docs/features/uds-inbox) / [LAN](https://ccb.agent-aura.top/docs/features/lan-pipes)                |
-| **ACP 协议一等一支持**      | 支持接入 Zed、Cursor 等 IDE，支持会话恢复、Skills、权限桥接                                                                  | [文档](https://ccb.agent-aura.top/docs/features/acp-zed)                                                                                  |
-| **Remote Control 私有部署** | Docker 自托管远程界面, 可以手机上看 CC                                                                                       | [文档](https://ccb.agent-aura.top/docs/features/remote-control-self-hosting)                                                              |
-| **Langfuse 监控**           | 企业级 Agent 监控, 可以清晰看到每次 agent loop 细节, 可以一键转化为数据集                                                    | [文档](https://ccb.agent-aura.top/docs/features/langfuse-monitoring)                                                                      |
-| **Web Search**              | 内置网页搜索工具, 支持 bing 和 brave 搜索                                                                                    | [文档](https://ccb.agent-aura.top/docs/features/web-browser-tool)                                                                         |
+| **🧠 Ultracode 多 Agent 编排** | `/ultracode` 注入 workflow 编排手册 + `Workflow` 工具跑确定性 JS 脚本（`agent`/`pipeline`/`parallel`/`phase`）+ `/workflows` 双栏监控面板；支持 journal 重放、token budget、并发 cap | [文档](https://cch.agent-aura.top/docs/features/workflow-scripts)                                                                         |
+| **Claude 群控技术**         | Pipe IPC 多实例协作：同机 main/sub 自动编排 + LAN 跨机器零配置发现与通讯，`/pipes` 选择面板 + `Shift+↓` 交互 + 消息广播路由 | [Pipe IPC](https://cch.agent-aura.top/docs/features/uds-inbox) / [LAN](https://cch.agent-aura.top/docs/features/lan-pipes)                |
+| **ACP 协议一等一支持**      | 支持接入 Zed、Cursor 等 IDE，支持会话恢复、Skills、权限桥接                                                                  | [文档](https://cch.agent-aura.top/docs/features/acp-zed)                                                                                  |
+| **Remote Control 私有部署** | Docker 自托管远程界面, 可以手机上看 CC                                                                                       | [文档](https://cch.agent-aura.top/docs/features/remote-control-self-hosting)                                                              |
+| **Langfuse 监控**           | 企业级 Agent 监控, 可以清晰看到每次 agent loop 细节, 可以一键转化为数据集                                                    | [文档](https://cch.agent-aura.top/docs/features/langfuse-monitoring)                                                                      |
+| **Web Search**              | 内置网页搜索工具, 支持 bing 和 brave 搜索                                                                                    | [文档](https://cch.agent-aura.top/docs/features/web-browser-tool)                                                                         |
 | **Poor Mode**               | 穷鬼模式，关闭记忆提取和键入建议,大幅度减少并发请求                                                                          | /poor 可以开关                                                                                                                            |
-| **Channels 频道通知**       | MCP 服务器推送外部消息到会话（飞书/Slack/Discord/微信等），`--channels plugin:name@marketplace` 启用                         | [文档](https://ccb.agent-aura.top/docs/features/channels)                                                                                 |
-| **自定义模型供应商**        | OpenAI/Anthropic/Gemini/Grok 兼容  (`/login`)                                                                                          | [文档](https://ccb.agent-aura.top/docs/features/all-features-guide)                                                                        |
-| Voice Mode                  | 语音输入，支持豆包语言输入（`/voice doubao`）                                                                   | [文档](https://ccb.agent-aura.top/docs/features/voice-mode)                                                                               |
-| Computer Use                | 屏幕截图、键鼠控制                                                                                                           | [文档](https://ccb.agent-aura.top/docs/features/computer-use)                                                                             |
-| Chrome Use                  | 浏览器自动化、表单填写、数据抓取                                                                                             | [自托管](https://ccb.agent-aura.top/docs/features/chrome-use-mcp) [原生版](https://ccb.agent-aura.top/docs/features/claude-in-chrome-mcp) |
-| Sentry                      | 企业级错误追踪                                                                                                               | [文档](https://ccb.agent-aura.top/docs/internals/sentry-setup)                                                                            |
-| GrowthBook                  | 企业级特性开关                                                                                                               | [文档](https://ccb.agent-aura.top/docs/internals/growthbook-adapter)                                                                      |
-| /dream 记忆整理             | 自动整理和优化记忆文件                                                                                                       | [文档](https://ccb.agent-aura.top/docs/features/auto-dream)                                                                               |
+| **Channels 频道通知**       | MCP 服务器推送外部消息到会话（飞书/Slack/Discord/微信等），`--channels plugin:name@marketplace` 启用                         | [文档](https://cch.agent-aura.top/docs/features/channels)                                                                                 |
+| **自定义模型供应商**        | OpenAI/Anthropic/Gemini/Grok 兼容  (`/login`)                                                                                          | [文档](https://cch.agent-aura.top/docs/features/all-features-guide)                                                                        |
+| Voice Mode                  | 语音输入，支持豆包语言输入（`/voice doubao`）                                                                   | [文档](https://cch.agent-aura.top/docs/features/voice-mode)                                                                               |
+| Computer Use                | 屏幕截图、键鼠控制                                                                                                           | [文档](https://cch.agent-aura.top/docs/features/computer-use)                                                                             |
+| Chrome Use                  | 浏览器自动化、表单填写、数据抓取                                                                                             | [自托管](https://cch.agent-aura.top/docs/features/chrome-use-mcp) [原生版](https://cch.agent-aura.top/docs/features/claude-in-chrome-mcp) |
+| Sentry                      | 企业级错误追踪                                                                                                               | [文档](https://cch.agent-aura.top/docs/internals/sentry-setup)                                                                            |
+| GrowthBook                  | 企业级特性开关                                                                                                               | [文档](https://cch.agent-aura.top/docs/internals/growthbook-adapter)                                                                      |
+| /dream 记忆整理             | 自动整理和优化记忆文件                                                                                                       | [文档](https://cch.agent-aura.top/docs/features/auto-dream)                                                                               |
 
 - 🚀 [想要启动项目](#-快速开始源码版)
 - 🐛 [想要调试项目](#vs-code-调试)
@@ -51,10 +51,10 @@ npm i -g claude-code-hardened
 # bun  i -g claude-code-hardened
 # bun pm -g trust claude-code-hardened @claude-code-best/mcp-chrome-bridge
 
-ccb # 以 nodejs 打开 claude code
-ccb-bun # 以 bun 形态打开
-ccb update # 更新到最新版本
-CLAUDE_BRIDGE_BASE_URL=https://remote-control.claude-code-best.win/ CLAUDE_BRIDGE_OAUTH_TOKEN=test-my-key ccb --remote-control # 我们有自部署的远程控制
+cch # 以 nodejs 打开 claude code
+cch-bun # 以 bun 形态打开
+cch update # 更新到最新版本
+CLAUDE_BRIDGE_BASE_URL=https://remote-control.claude-code-best.win/ CLAUDE_BRIDGE_OAUTH_TOKEN=test-my-key cch --remote-control # 我们有自部署的远程控制
 ```
 
 > **安装/更新失败？** 先 `npm rm -g claude-code-hardened` 清理旧版本，再 `npm i -g claude-code-hardened@latest`。仍失败则指定版本号：`npm i -g claude-code-hardened@<版本号>`
@@ -217,7 +217,7 @@ TUI (REPL) 模式需要真实终端，无法直接通过 VS Code launch 启动�
 
 ## 相关文档及网站
 
-- **在线文档（Mintlify）**: [ccb.agent-aura.top](https://ccb.agent-aura.top/) — 文档源码位于 [`docs/`](docs/) 目录，欢迎投稿 PR
+- **在线文档（Mintlify）**: [cch.agent-aura.top](https://cch.agent-aura.top/) — 文档源码位于 [`docs/`](docs/) 目录，欢迎投稿 PR
 - **DeepWiki**: [https://deepwiki.com/claude-code-hardened/claude-code-hardened](https://deepwiki.com/claude-code-hardened/claude-code-hardened)
 
 ## Contributors

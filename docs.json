@@ -170,8 +170,8 @@
   },
   "seo": {
     "metatags": {
-      "og:image": "https://ccb.agent-aura.top/docs/images/og-cover.png",
-      "twitter:image": "https://ccb.agent-aura.top/docs/images/og-cover.png",
+      "og:image": "https://cch.agent-aura.top/docs/images/og-cover.png",
+      "twitter:image": "https://cch.agent-aura.top/docs/images/og-cover.png",
       "twitter:card": "summary_large_image"
     },
     "indexing": "navigable"

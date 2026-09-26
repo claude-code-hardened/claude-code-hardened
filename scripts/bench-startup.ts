@@ -71,7 +71,7 @@ const runs = Number.isInteger(parsedRuns) && parsedRuns > 0 ? parsedRuns : 3
 
 if (!binaryArg || !existsSync(binaryArg)) {
   console.error('用法: bun scripts/bench-startup.ts <binary路径> [--runs 3]')
-  console.error('  binary 应为 CI package job 产物（dist/ccb-<host平台>）')
+  console.error('  binary 应为 CI package job 产物（dist/cch-<host平台>）')
   process.exit(1)
 }
 const binary = binaryArg

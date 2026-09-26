@@ -1,7 +1,7 @@
 /**
  * argv0 分发器（对齐 ant-native 的双身份二进制形态）。
  *
- * compile 产物被 `exec -a rg|bfs|ugrep ccb`（bash）或 `ARGV0=... execPath`
+ * compile 产物被 `exec -a rg|bfs|ugrep cch`（bash）或 `ARGV0=... execPath`
  * （zsh/Windows）调用时，cli.tsx main() 在 Commander 解析前调用本模块：
  * stage 对应的内嵌二进制 → spawnSync 透传 stdio/参数 → 以子进程退出码退出。
  *
