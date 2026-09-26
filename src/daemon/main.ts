@@ -1,6 +1,8 @@
 import { type ChildProcess } from 'child_process'
-import { resolve } from 'path'
+import { randomBytes, randomUUID } from 'crypto'
+import { resolve, join } from 'path'
 import { profileCheckpoint } from '../utils/startupProfiler.js'
+import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
 import { buildCliLaunch, spawnCli } from '../utils/cliLaunch.js'
 import {
   writeDaemonState,
@@ -273,6 +275,33 @@ async function runSupervisor(args: string[]): Promise<void> {
   const controlKey = ensureControlKey()
   const handles = new Map<string, JobHandle>()
   const settled = new Map<string, { nonce?: string; refusal?: string }>()
+  const leases = new Set<unknown>()
+  let exitCause = 'unknown'
+
+  // on-demand idle exit: no leases and no live workers for IDLE_EXIT_MS
+  const IDLE_EXIT_MS = 5_000
+  let idleTimer: ReturnType<typeof setInterval> | null = null
+  idleTimer = setInterval(() => {
+    if (controller.signal.aborted) return
+    if (leases.size > 0) return
+    const liveWorker = workers.some(
+      w => w.process && w.process.exitCode === null,
+    )
+    if (liveWorker) return
+    exitCause = 'idle_exit'
+    shutdown()
+  }, IDLE_EXIT_MS)
+
+  const pidAlive = (pid: number): boolean => {
+    if (!pid) return false
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   let controlServer: ControlServer | null = null
   try {
     controlServer = createControlServer(
@@ -280,18 +309,60 @@ async function runSupervisor(args: string[]): Promise<void> {
         handles,
         settled,
         onDispatch: async d => {
-          // Worker dispatch lands here once bg session spawning is wired
-          // to the control plane; request shape is preserved for clients.
-          return { dispatched: true, short: d['short'] }
+          // dispatch → spawn a bg session via the engine abstraction
+          // (upstream: qt dispatch with server-issued short/nonce)
+          const { selectEngine } = await import('../cli/bg/engines/index.js')
+          const engine = await selectEngine()
+          const short = randomBytes(4).toString('hex')
+          const nonce = randomUUID()
+          const sessionName = `claude-bg-${short}`
+          const args = Array.isArray(d['args'])
+            ? (d['args'] as string[])
+            : ['-p', String(d['prompt'] ?? '')]
+          const logPath = join(
+            getClaudeConfigHomeDir(),
+            'sessions',
+            'logs',
+            `${sessionName}.log`,
+          )
+          const result = await engine.start({
+            sessionName,
+            args,
+            env: { ...process.env },
+            logPath,
+            cwd: typeof d['cwd'] === 'string' ? d['cwd'] : dir,
+          })
+          const record = {
+            short,
+            nonce,
+            pid: result.pid,
+            messagingSock: '',
+            name: result.sessionName,
+            logPath: result.logPath,
+            engine: result.engineUsed,
+          }
+          handles.set(short, {
+            record,
+            dispatch: { launch: { mode: 'exec' } },
+            attachers: new Map(),
+            respawnIfIdleStale: async () => ({ respawned: false }),
+            alive: () => pidAlive(result.pid),
+          })
+          return { dispatched: true, short, nonce, pid: result.pid }
         },
         onNudge: () => {},
         onShutdown: () => {
+          exitCause = 'shutdown_op'
           shutdown()
         },
         whenReady: Promise.resolve(),
         controlKey,
-        addLease: () => {},
-        removeLease: () => {},
+        addLease: socket => {
+          leases.add(socket)
+        },
+        removeLease: socket => {
+          leases.delete(socket)
+        },
         log: line => console.log(`[daemon] ${line}`),
         telemetry: event => {
           console.log(`[daemon] ${event}`)
