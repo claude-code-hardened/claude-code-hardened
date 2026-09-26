@@ -83,17 +83,14 @@ npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
 
 **真实 socket 验证**：daemon 与 client 同进程组实测，`getPeerUid → 0`（== daemon uid）、`getPeerPid → 客户端真实 pid`——与官方行为完全一致，peer uid 门完整生效。
 
-### ② socket 路径命名空间冲突
+### ② ③ socket 路径与 control.key：完全对齐官方（无缝切换）
 
-官方用 `/tmp/cc-daemon-<uid>/<hash8>/control.sock`。cch 若直接复用会与官方 daemon 抢同一个目录（uid 相同时 hash8 只取决于会话根，可能撞）。
+初版曾把前缀改成 `cch-daemon-`、key 路径改到 `~/.cch/daemon/` 以"避免与官方安装冲突"——**这是错误方向**。项目目标是原汁原味、从官方无缝切换到 cch：
 
-**改造**：前缀改为 **`cch-daemon-`**（`daemonSockDir`），Windows named pipe 同步改为 `\\.\pipe\cch-daemon-<hash>-<uid>`。日志脱敏正则同步改为 `cch-daemon-[0-9a-f]{8}`（官方 `hw()` 的等价物）。
+- 官方 daemon 自带 lockfile 争用机制（transient 让位/抢占），同一用户同一会话根同一时刻只有一个 daemon 持锁，不存在真正冲突；
+- hash8 是会话根的 sha256 前缀——官方客户端连 `/tmp/cc-daemon-<uid>/<hash8>/control.sock` 时，连到的就应该是"这个会话根的 daemon"，无论它是官方还是 cch 跑起来的。协议 1:1 的意义正在于此。
 
-### ③ control.key 路径
-
-官方：`~/.claude/daemon/control.key`。cch 若写这个路径会污染官方安装的状态。
-
-**改造**：cch 使用 **`~/.cch/daemon/control.key`**（0600/0700），生成逻辑 1:1（`randomBytes(32).toString('hex')`，已存在则复用）。
+**最终实现**：socket 路径 `/tmp/cc-daemon-<uid>/<hash8>/control.sock`、Windows pipe `\\.\pipe\cc-daemon-<id>-<e>`、key 路径 `~/.claude/daemon/control.key`（0600/0700）——全部与官方逐字对齐，脱敏正则 `hw()` 同步。
 
 ### ④ bytecode 与明文并存导致的误判
 

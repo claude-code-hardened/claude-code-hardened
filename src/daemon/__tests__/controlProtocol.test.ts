@@ -25,7 +25,7 @@ describe('controlProtocol', () => {
     test('sock dir embeds uid and hash, cch- prefix', () => {
       const dir = daemonSockDir('/tmp/work')
       const uid = process.getuid?.() ?? 0
-      expect(dir).toContain(`cch-daemon-${uid}`)
+      expect(dir).toContain(`cc-daemon-${uid}`)
       expect(dir.endsWith(sessionRootHash('/tmp/work'))).toBe(true)
     })
   })
@@ -72,12 +72,12 @@ describe('controlProtocol', () => {
   describe('redactSockPath (upstream hw)', () => {
     test('redacts Linux uid/hash8 layout', () => {
       expect(
-        redactSockPath('bound at /tmp/cch-daemon-0/addcfb49/control.sock'),
-      ).toBe('bound at /tmp/cch-daemon-*/control.sock')
+        redactSockPath('bound at /tmp/cc-daemon-0/addcfb49/control.sock'),
+      ).toBe('bound at /tmp/cc-daemon-*/control.sock')
     })
     test('redacts Windows pipe 16-hex id', () => {
-      expect(redactSockPath('\\\\.\\pipe\\cch-daemon-0123456789abcdef-0')).toBe(
-        '\\\\.\\pipe\\cch-daemon-*-0',
+      expect(redactSockPath('\\\\.\\pipe\\cc-daemon-0123456789abcdef-0')).toBe(
+        '\\\\.\\pipe\\cc-daemon-*-0',
       )
     })
   })
@@ -94,7 +94,7 @@ describe('controlProtocol', () => {
 
   describe('control key file', () => {
     test('ensureControlKey persists and reuses (0600)', () => {
-      // 扰动 HOME 到临时目录，避免碰真实 ~/.cch
+      // 扰动 HOME 到临时目录，避免碰真实 ~/.claude/daemon/control.key
       const fakeHome = mkdtempSync(join(tmpdir(), 'cch-key-test-'))
       const prevHome = process.env['HOME']
       process.env['HOME'] = fakeHome

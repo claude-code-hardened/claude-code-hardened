@@ -16,7 +16,7 @@ import { getPeerUid as getPeerUidFfi } from './peerCredentials.js'
  * (v2.1.283) wire contract:
  *
  *   transport   unix socket /tmp/cc-daemon-<uid>/<hash8>/control.sock
- *               (Windows: named pipe \\.\pipe\cch-daemon-<id>-<e>)
+ *               (Windows: named pipe \\.\pipe\cc-daemon-<id>-<e>)
  *   framing     newline-delimited JSON; server replies JSON + '\n'
  *   request     { op, short?, nonce?, timeoutMs?, auth?, d? }
  *   response    { ok, op?, code?, error?, ... }
@@ -105,24 +105,24 @@ export function sessionRootHash(root: string): string {
   return createHash('sha256').update(resolve(root)).digest('hex').slice(0, 8)
 }
 
-/** /tmp/cch-daemon-<uid>/<hash8> — TERMUX PREFIX /tmp honored like upstream. */
+/** /tmp/cc-daemon-<uid>/<hash8> — verbatim upstream layout (seamless switch). */
 export function daemonSockDir(root: string): string {
   const uid = process.getuid?.() ?? 0
   const termuxPrefix = process.env['TERMUX_VERSION'] && process.env['PREFIX']
   const base = termuxPrefix ? join(termuxPrefix, 'tmp') : tmpdir()
-  return join(base, `cch-daemon-${uid}`, sessionRootHash(root))
+  return join(base, `cc-daemon-${uid}`, sessionRootHash(root))
 }
 
 export function controlSockPath(root: string): string {
   if (process.platform === 'win32') {
-    return `\\\\.\\pipe\\cch-daemon-${sessionRootHash(root)}-${process.getuid?.() ?? 0}`
+    return `\\\\.\\pipe\\cc-daemon-${sessionRootHash(root)}-${process.getuid?.() ?? 0}`
   }
   return join(daemonSockDir(root), 'control.sock')
 }
 
-/** ~/.cch/daemon/control.key — mirror upstream's ~/.claude/daemon/control.key. */
+/** ~/.claude/daemon/control.key — verbatim upstream path. */
 export function controlKeyPath(): string {
-  return join(homedir(), '.cch', 'daemon', 'control.key')
+  return join(homedir(), '.claude', 'daemon', 'control.key')
 }
 
 /** Read the control key (≤4096 bytes guard, trimmed), null when absent. */
@@ -223,13 +223,13 @@ export function peerUidReject(
 
 /**
  * Redact socket dir identifiers from error text before logging (upstream
- * hw() covers the Windows pipe's 16-hex; we additionally cover the Linux
- * layout <uid>/<hash8> so both namespaces collapse to cch-daemon-*).
+ * hw() verbatim, plus the Linux uid/hash8 layout so both namespaces
+ * collapse to cc-daemon-*).
  */
 export function redactSockPath(text: string): string {
   return text
-    .replace(/cch-daemon-\d+\/[0-9a-f]{8}/g, 'cch-daemon-*')
-    .replace(/cch-daemon-[0-9a-f]{16}/g, 'cch-daemon-*')
+    .replace(/cc-daemon-\d+\/[0-9a-f]{8}/g, 'cc-daemon-*')
+    .replace(/cc-daemon-[0-9a-f]{16}/g, 'cc-daemon-*')
 }
 
 export function isValidShortId(id: unknown): id is string {

@@ -375,7 +375,7 @@ export async function handleControlRequest(
     case 'attach': {
       if (req.auth === undefined) {
         deps.log(
-          '[cch-attach] legacy client (no control key) — allowed via peerUid',
+          '[bg-attach] legacy client (no control key) — allowed via peerUid',
         )
       } else if (!authOk) {
         return sendReply(socket, {
