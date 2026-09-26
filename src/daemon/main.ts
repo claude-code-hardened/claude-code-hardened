@@ -11,10 +11,13 @@ import {
   stopDaemonByPid,
 } from './state.js'
 import {
-  controlSockPath,
-  ensureControlKey,
-  type ControlRequest,
-} from './controlProtocol.js'
+  acquireLock,
+  readLock,
+  clearLock,
+  signalableByCurrentUser,
+} from './daemonLock.js'
+import { daemonSockDir, controlSockPath } from './controlProtocol.js'
+import { ensureControlKey, type ControlRequest } from './controlProtocol.js'
 import {
   createControlServer,
   type ControlServer,
@@ -150,31 +153,48 @@ OPTIONS (for start)
  * Show unified status: daemon supervisor + background sessions.
  */
 async function showUnifiedStatus(): Promise<void> {
-  // 1. Daemon supervisor status
-  const result = queryDaemonStatus()
-  console.log('=== Daemon Supervisor ===')
-  switch (result.status) {
-    case 'running': {
-      const s = result.state!
-      console.log(`  Status:  running`)
-      console.log(`  PID:     ${s.pid}`)
-      console.log(`  CWD:     ${s.cwd}`)
-      console.log(`  Started: ${s.startedAt}`)
-      console.log(`  Workers: ${s.workerKinds.join(', ')}`)
-      break
-    }
-    case 'stopped':
-      console.log('  Status: stopped')
-      break
-    case 'stale':
-      console.log('  Status: stale (cleaned up)')
-      break
+  // 官方面板形态：daemon 状态行 → launcher 行 → sock dir / control.sock
+  // 可达性 → bg workers roster → bg sessions 明细
+  const lock = readLock()
+  if (!lock || !signalableByCurrentUser(lock.pid)) {
+    console.log('not running')
+  } else {
+    const startedAt = Date.parse(lock.startedAt)
+    const uptimeSec = Number.isFinite(startedAt)
+      ? Math.round((Date.now() - startedAt) / 1000)
+      : -1
+    console.log(
+      `daemon: running (pid=${lock.pid}, origin=${lock.origin}, uptime=${uptimeSec}s)`,
+    )
   }
+  console.log(`launcher: ${getLauncherRecord() ?? '(none running)'}`)
 
-  // 2. Background sessions
+  const sockDir = daemonSockDir(resolve('.'))
+  const sockPath = controlSockPath(resolve('.'))
+  console.log(`\nbg sessions:`)
+  console.log(`  sock dir:     ${sockDir}`)
+  const reachable = existsSync(sockPath)
+  console.log(
+    `  control.sock: ${reachable ? 'present' : 'absent'} (${sockPath})`,
+  )
+  console.log(
+    `  bg workers:   ${handles.size ? `${handles.size} dispatched` : '0 in roster.json (control unreachable)'}`,
+  )
+
   console.log('\n=== Background Sessions ===')
   const bg = await import('../cli/bg.js')
   await bg.psHandler([])
+}
+
+/** 官方 status 的 launcher 行：记录下一个 background service 经由的启动器。 */
+function getLauncherRecord(): string | null {
+  try {
+    const wrapper = process.env['SHELL']
+    if (!wrapper) return null
+    return `this cch resolves \`${wrapper}\` and will start the next background service through it`
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -271,6 +291,33 @@ async function runSupervisor(args: string[]): Promise<void> {
   const controller = new AbortController()
   profileCheckpoint('daemon_supervisor_started')
 
+  // ── daemon.lock acquisition (official handshake) ──
+  const lockResult = acquireLock('transient')
+  if (lockResult.status === 'held') {
+    console.log(
+      `[daemon] daemon.lock held by pid=${lockResult.holder.pid} (origin=${lockResult.holder.origin}) — a supervisor is already running`,
+    )
+    return
+  }
+  if (lockResult.status === 'replaced-stale') {
+    console.log('[daemon] replacing stale daemon.lock (previous holder exited)')
+  }
+
+  // displaced probing: once the lock moves to another pid, yield and exit
+  let displaced = false
+  const displacedProbe = setInterval(() => {
+    if (controller.signal.aborted || displaced) return
+    const current = readLock()
+    if (current && current.pid !== process.pid) {
+      displaced = true
+      exitCause = 'displaced'
+      console.log(
+        `[daemon] lockfile now held by pid=${current.pid} — displaced, yielding`,
+      )
+      shutdown()
+    }
+  }, 2_000)
+
   // ── Control socket (official-daemon wire contract, 1:1) ──
   const controlKey = ensureControlKey()
   const handles = new Map<string, JobHandle>()
@@ -278,8 +325,11 @@ async function runSupervisor(args: string[]): Promise<void> {
   const leases = new Set<unknown>()
   let exitCause = 'unknown'
 
-  // on-demand idle exit: no leases and no live workers for IDLE_EXIT_MS
+  // on-demand idle exit + upgrade self-restart (official
+  // tengu_daemon_self_restart_on_upgrade semantics: exit with cause=upgrade
+  // and let the next invocation pick up the new binary)
   const IDLE_EXIT_MS = 5_000
+  const spawnedVersion = (MACRO as { VERSION?: string }).VERSION
   let idleTimer: ReturnType<typeof setInterval> | null = null
   idleTimer = setInterval(() => {
     if (controller.signal.aborted) return
@@ -288,6 +338,19 @@ async function runSupervisor(args: string[]): Promise<void> {
       w => w.process && w.process.exitCode === null,
     )
     if (liveWorker) return
+    try {
+      const currentVersion = (MACRO as { VERSION?: string }).VERSION
+      if (spawnedVersion && currentVersion !== spawnedVersion) {
+        exitCause = 'upgrade'
+        console.log(
+          `[daemon] version changed ${spawnedVersion} -> ${currentVersion} — self restart on upgrade`,
+        )
+        shutdown()
+        return
+      }
+    } catch {
+      // MACRO unavailable in test env — skip upgrade probe
+    }
     exitCause = 'idle_exit'
     shutdown()
   }, IDLE_EXIT_MS)
@@ -392,6 +455,9 @@ async function runSupervisor(args: string[]): Promise<void> {
   const shutdown = () => {
     console.log('[daemon] supervisor shutting down...')
     controller.abort()
+    if (displacedProbe) clearInterval(displacedProbe)
+    if (idleTimer) clearInterval(idleTimer)
+    if (exitCause !== 'displaced') clearLock()
     removeDaemonState()
     if (controlServer) {
       controlServer.close()
