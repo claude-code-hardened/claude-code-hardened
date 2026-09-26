@@ -765,10 +765,13 @@ const VERBS = [
  * Generate a cryptographically random integer in the range [0, max)
  */
 function randomInt(max: number): number {
-  // Use crypto.randomBytes for better randomness than Math.random
-  const bytes = randomBytes(4)
-  const value = bytes.readUInt32BE(0)
-  return value % max
+  // crypto.randomBytes + rejection sampling：剔除取模偏差区间
+  //（CodeQL js/biased-cryptographic-random）
+  const limit = Math.floor(0x1_0000_0000 / max) * max
+  for (;;) {
+    const value = randomBytes(4).readUInt32BE(0)
+    if (value < limit) return value % max
+  }
 }
 
 /**

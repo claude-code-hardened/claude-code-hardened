@@ -14,7 +14,7 @@ import type { BalanceProvider } from './types.js'
 
 function getBaseUrl(): string | null {
   const url = process.env.OPENAI_BASE_URL
-  if (url && /\bapi\.deepseek\.com\b/i.test(url)) return url.replace(/\/+$/, '')
+  if (url && /^https?:\/\/[^/]*api\.deepseek\.com(\/|$)/i.test(url)) return url.replace(/\/+$/, '')
   if (process.env.DEEPSEEK_API_KEY) return 'https://api.deepseek.com'
   return null
 }

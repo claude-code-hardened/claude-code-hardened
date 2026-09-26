@@ -206,8 +206,14 @@ export function resolveBingUrl(rawUrl: string): string | undefined {
     }
   }
 
-  // Direct external URL (not a Bing-internal page)
-  if (!rawUrl.includes('bing.com')) return rawUrl
+  // Direct external URL (not a Bing-internal page) — hostname 精确判定，
+  // 避免子串匹配被 evil-bing.com 等伪装绕过
+  try {
+    const hostname = new URL(rawUrl).hostname
+    if (!(hostname === 'bing.com' || hostname.endsWith('.bing.com'))) return rawUrl
+  } catch {
+    return rawUrl
+  }
 
   return undefined
 }

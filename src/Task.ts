@@ -97,10 +97,12 @@ const TASK_ID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'
 
 export function generateTaskId(type: TaskType): string {
   const prefix = getTaskIdPrefix(type)
-  const bytes = randomBytes(8)
+  // rejection sampling 消 modulo bias（CodeQL js/biased-cryptographic-random）
+  const safeMax = 256 - (256 % TASK_ID_ALPHABET.length)
   let id = prefix
-  for (let i = 0; i < 8; i++) {
-    id += TASK_ID_ALPHABET[bytes[i]! % TASK_ID_ALPHABET.length]
+  while (id.length < prefix.length + 8) {
+    const byte = randomBytes(1)[0]!
+    if (byte < safeMax) id += TASK_ID_ALPHABET[byte % TASK_ID_ALPHABET.length]
   }
   return id
 }
