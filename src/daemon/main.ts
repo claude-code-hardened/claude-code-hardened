@@ -17,7 +17,7 @@ import {
   clearLock,
   signalableByCurrentUser,
 } from './daemonLock.js'
-import { officialSockDir, controlSockPath } from './controlProtocol.js'
+import { officialSockDir, officialControlSockPath } from './controlProtocol.js'
 import { createMessagingServer } from './messagingServer.js'
 import { ensureControlKey, type ControlRequest } from './controlProtocol.js'
 import {
@@ -195,7 +195,7 @@ async function showUnifiedStatus(): Promise<void> {
   console.log(`launcher: ${getLauncherRecord() ?? '(none running)'}`)
 
   const sockDir = officialSockDir()
-  const sockPath = controlSockPath(resolve('.'))
+  const sockPath = officialControlSockPath()
   console.log(`\nbg sessions:`)
   console.log(`  sock dir:     ${sockDir}`)
   const reachable = existsSync(sockPath)
@@ -562,13 +562,13 @@ async function runSupervisor(args: string[]): Promise<void> {
           console.log(`[daemon] ${event}`)
         },
       },
-      controlSockPath(dir),
+      officialControlSockPath(),
     )
     await new Promise<void>((resolve, reject) => {
       controlServer!.once('error', reject)
-      controlServer!.listen(controlSockPath(dir), () => resolve())
+      controlServer!.listen(officialControlSockPath(), () => resolve())
     })
-    console.log(`[daemon] control socket bound at ${controlSockPath(dir)}`)
+    console.log(`[daemon] control socket bound at ${officialControlSockPath()}`)
   } catch (err) {
     console.warn(
       `[daemon] control socket unavailable: ${err instanceof Error ? err.message : String(err)}`,

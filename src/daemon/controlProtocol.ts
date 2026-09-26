@@ -127,6 +127,11 @@ export function officialSockDir(): string {
   return daemonSockDir(getClaudeConfigHomeDir())
 }
 
+/** 官方语义的 control.sock 路径——同样 hash config root。 */
+export function officialControlSockPath(): string {
+  return controlSockPath(getClaudeConfigHomeDir())
+}
+
 export function controlSockPath(root: string): string {
   if (process.platform === 'win32') {
     return `\\\\.\\pipe\\cc-daemon-${sessionRootHash(root)}-${process.getuid?.() ?? 0}`
