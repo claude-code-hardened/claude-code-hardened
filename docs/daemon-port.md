@@ -155,8 +155,9 @@ npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
 
 ## 尚未对齐（后续增量）
 
-- **bg 会话 spawn 的真实接线**：`onDispatch` 目前是占位（返回 `{dispatched:true}`），把 `src/cli/bg.ts` 的会话 spawn 接到 control plane 后才有完整的 dispatch→worker→attach 链路；
-- **messagingSock**（每 worker 的消息通道）：官方 dispatch 响应里带回，需要 worker 侧实现；
-- **on-demand 生命周期**（最后客户端断开 → idle_exit）：现有 supervisor 是常驻模型，需要 lease 计数驱动；
+- ✅ **bg 会话 spawn 接线**：`onDispatch` 已接 `selectEngine().start()`（服务端签发 short/nonce → 引擎 spawn → JobHandle 注册，exec mode + pid 存活检测）；
+- ✅ **on-demand 生命周期**：lease 计数 + 无 live worker 空闲 5s → `idle_exit`（对齐官方"最后客户端断开即退出"）；
+- ✅ **respawn-stale 语义**：exec-mode 会话死亡 → handle 删除 + settled 标记；
+- **messagingSock**（每 worker 的消息通道）：官方 dispatch 响应里带回（当前置空），需要 worker 侧消息通道实现；
 - **service install**（launchctl/systemd）：官方在此版本也禁用了，低优先级；
 - **peer uid 的完整方案**：✅ 已通过 bun:ffi 补齐（`src/daemon/peerCredentials.ts`，SO_PEERCRED/getpeereid，真实 socket 验证通过）——见"坑 ①"。

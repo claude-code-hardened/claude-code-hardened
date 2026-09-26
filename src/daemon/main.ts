@@ -345,7 +345,13 @@ async function runSupervisor(args: string[]): Promise<void> {
             record,
             dispatch: { launch: { mode: 'exec' } },
             attachers: new Map(),
-            respawnIfIdleStale: async () => ({ respawned: false }),
+            respawnIfIdleStale: async () => {
+              if (pidAlive(result.pid)) return { respawned: false, alive: true }
+              // exec-mode session died: drop the handle and mark settled
+              handles.delete(short)
+              settled.set(short, { nonce })
+              return { respawned: false, removed: true }
+            },
             alive: () => pidAlive(result.pid),
           })
           return { dispatched: true, short, nonce, pid: result.pid }
