@@ -274,9 +274,7 @@ export {
   type PaintedWindow,
 } from './hooks/extended.js'
 export {
-  useInView,
   useDebouncedCallback,
-  useAnimationTimer,
   useFrames,
   repaintFloor,
   type Cancelable,
