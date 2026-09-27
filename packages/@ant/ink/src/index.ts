@@ -285,7 +285,7 @@ export { useTerminalViewport as useElementInView } from './hooks/use-in-view.js'
 export type { ThemeOverride as ThemeOverrideEntry } from './hooks/extended.js'
 export { MouseActionEvent as PointerEvent } from './core/events/mouse-action-event.js'
 export { Decorative } from './components/Decorative.js'
-export { useTerminalViewport as useElementInView } from './hooks/use-in-view.js'
+
 export {
   KillRingProvider,
   createKillRingStore,
