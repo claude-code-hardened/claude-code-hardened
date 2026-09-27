@@ -3014,5 +3014,8 @@
   "Find flaky tests and propose fixes": "找出不穩定測試並提出修復",
   "Review changed files across dimensions, verify each finding": "多維度審查變更檔案，逐條核驗發現",
   "Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.": "進入多代理工作流編排模式：Workflow 工具的使用時機、腳本原語、品質模式、確定性約束",
-  "Service install is disabled in this version — the daemon runs on\ndemand and exits when the last client disconnects.\nUse `cch daemon start` to run the supervisor explicitly.": "此版本已停用服務安裝——守護程序按需執行，並在最後一個用戶端斷開時結束。\n用 `cch daemon start` 明確執行 supervisor。"
+  "Service install is disabled in this version — the daemon runs on\ndemand and exits when the last client disconnects.\nUse `cch daemon start` to run the supervisor explicitly.": "此版本已停用服務安裝——守護程序按需執行，並在最後一個用戶端斷開時結束。\n用 `cch daemon start` 明確執行 supervisor。",
+  "Allow for this session ({{count}} {{unit}})": "允許本工作階段（{{count}} {{unit}}）",
+  " · {{tools}} tool {{use}} · {{tokens}} tokens": " · {{tools}} 個工具 {{use}} · {{tokens}} token",
+  "{{count}} other {{unit}} will be hidden while Claude works.": "Claude 工作期間，其餘 {{count}} 個{{unit}}將被隱藏。"
 }
