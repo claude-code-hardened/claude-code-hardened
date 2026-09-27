@@ -65,6 +65,12 @@ function useRssDisplay(): RssState | null {
   useEffect(() => {
     function update(): void {
       const mb = process.memoryUsage().rss / (1024 * 1024);
+      const { startDaemonSessionCountPoller, getDaemonSessionCount } =
+        require('../../daemon/footerDaemonCount.js') as typeof import('../../daemon/footerDaemonCount');
+      useEffect(() => {
+        startDaemonSessionCountPoller();
+      }, []);
+      const daemonSessionCount = getDaemonSessionCount();
       const level = mb >= 1024 ? 'error' : mb >= 512 ? 'warning' : 'normal';
       const text = formatFileSize(mb * 1024 * 1024);
       setState(prev => (prev?.text === text ? prev : { text, level }));
@@ -465,6 +471,14 @@ function ModeIndicator({
             color={rssState.level === 'error' ? 'error' : rssState.level === 'warning' ? 'warning' : undefined}
           >
             {rssState.text} · pid:{process.pid}
+          </Text>,
+        ]
+      : []),
+    // Daemon session count — 本机 daemon 在时显示已托管会话数（异步缓存，5s 刷新）
+    ...(daemonSessionCount !== null
+      ? [
+          <Text dimColor key="daemon-count">
+            daemon · {daemonSessionCount} 个会话
           </Text>,
         ]
       : []),
