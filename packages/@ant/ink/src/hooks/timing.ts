@@ -166,7 +166,7 @@ export function useTimeout(
   a: VoidFn | number,
   b?: number | unknown[],
   c?: unknown[],
-): void | boolean {
+): boolean | undefined {
   const ctx = useContext(AppContext as never) as {
     setTimeout?: (fn: () => void, ms: number) => unknown
   }
@@ -209,8 +209,7 @@ export function useTimeout(
     getSnapshot as () => boolean,
   )
 
-  if (isFnForm) return undefined
-  return expired
+  return isFnForm ? undefined : expired
 }
 
 // ── shims ──
