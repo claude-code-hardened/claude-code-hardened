@@ -43,9 +43,17 @@ async function queryOnce(): Promise<void> {
   await new Promise<void>(resolve => {
     const { connect } = require('net') as typeof import('net')
     let settled = false
-    const finish = () => {
+    const finish = async () => {
       if (!settled) {
         settled = true
+        // control 不可达 → 兜底 roster.json（与 /daemon 面板的 bg workers 同源）
+        try {
+          const { listLiveSessions } =
+            require('../cli/bg.js') as typeof import('../cli/bg.js')
+          cachedCount = (await listLiveSessions()).length
+        } catch {
+          cachedCount = null
+        }
         resolve()
       }
     }
@@ -53,12 +61,12 @@ async function queryOnce(): Promise<void> {
     try {
       sock = connect(officialControlSockPath())
     } catch {
-      resolve()
+      void finish()
       return
     }
     sock.setTimeout(2_000, () => {
       sock.destroy()
-      finish()
+      void finish()
     })
     let buf = ''
     sock.once('connect', () => {
@@ -84,8 +92,8 @@ async function queryOnce(): Promise<void> {
         }
       } catch {}
       sock.destroy()
-      finish()
+      void finish()
     })
-    sock.on('error', () => finish())
+    sock.on('error', () => void finish())
   })
 }
