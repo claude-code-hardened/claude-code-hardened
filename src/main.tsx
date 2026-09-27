@@ -5238,14 +5238,34 @@ async function run(): Promise<CommanderCommand> {
     .description('List configured agents')
     .option('--setting-sources <sources>', 'Comma-separated list of setting sources to load (user, project, local).')
     .action(async () => {
-      // 官方语义融合：先列 bg 会话（fleet view——`cch --bg` 打印的 short id 的
-      // 列表源），再列 configured agents
+      // 官方 `claude agents` = FleetView TUI（FleetViewWithComposerBack 体系）。
+      // 会话行来自 roster（tempo 推断），↑/↓ 选择 + enter attach；
+      // 非 TTY（管道/headless）回退纯文本列表。
       const bg = await import('./cli/bg.js');
       const sessions = await bg.listLiveSessions();
-      if (sessions.length > 0) {
-        console.log(`Background sessions (${sessions.length}):`);
-        for (const s of sessions) {
-          console.log(`  ${s.sessionId?.slice(0, 8) ?? ''}  ${s.kind}  ${s.name ?? s.sessionId ?? ''}  ${s.cwd}`);
+      const { toFleetRows } = await import('./components/FleetView.js');
+      const rows = toFleetRows(sessions);
+      if (process.stdout.isTTY) {
+        const { render } = await import('./ink.js');
+        const { FleetView } = await import('./components/FleetView.js');
+        const { waitUntilExit } = render(
+          <FleetView
+            rows={rows}
+            onAttach={row => {
+              void (async () => {
+                const handlers = await import('./cli/bg.js');
+                await handlers.attachHandler(row.shortId);
+              })();
+            }}
+          />,
+        );
+        await waitUntilExit();
+        process.exit(0);
+      }
+      if (rows.length > 0) {
+        console.log(`Background sessions (${rows.length}):`);
+        for (const r of rows) {
+          console.log(`  ${r.shortId}  ${r.tempo}  ${r.name}  ${r.cwd}`);
         }
         console.log('');
       }
