@@ -576,6 +576,13 @@ async function runSupervisor(args: string[]): Promise<void> {
       controlServer!.once('error', reject)
       controlServer!.listen(officialControlSockPath(), () => resolve())
     })
+    const { isPeerVerificationDegraded, DEGRADED_PEER_MESSAGE } =
+      require('./daemonVet.js') as typeof import('./daemonVet')
+    if (isPeerVerificationDegraded()) {
+      console.warn(
+        `[daemon] degraded peer verification: ${DEGRADED_PEER_MESSAGE}`,
+      )
+    }
     console.log(`[daemon] control socket bound at ${officialControlSockPath()}`)
   } catch (err) {
     console.warn(
