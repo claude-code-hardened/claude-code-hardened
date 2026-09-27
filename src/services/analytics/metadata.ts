@@ -6,7 +6,6 @@
  * event metadata across all analytics systems (Datadog, 1P).
  */
 
-import { COMPUTER_USE_MCP_SERVER_NAME } from '../../utils/computerUse/common.js'
 import { extname } from 'path'
 import memoize from 'lodash-es/memoize.js'
 import { env, getHostPlatformForAnalytics } from '../../utils/env.js'
@@ -135,12 +134,12 @@ let builtinMcpServerNamesCache: ReadonlySet<string> | null = null
 function getBuiltinMcpServerNames(): ReadonlySet<string> {
   if (builtinMcpServerNamesCache) return builtinMcpServerNamesCache
   const names: string[] = []
+  // computerUse/common.ts 的 COMPUTER_USE_MCP_SERVER_NAME = 'computer-use'
+  // ——字面量内联而非 import：该模块 import env，静态引入会闭合
+  // metadata→computerUse→env↔envDynamic 的循环依赖（CI audit 实锤 TDZ），
+  // 且 dist 切 chunk 后 require 该模块会抛 async TypeError。
   if (feature('CHICAGO_MCP')) {
-    try {
-      names.push(COMPUTER_USE_MCP_SERVER_NAME)
-    } catch {
-      // 静态 import 在 feature 关闭的构建里不存在
-    }
+    names.push('computer-use')
   }
   builtinMcpServerNamesCache = new Set(names)
   return builtinMcpServerNamesCache
