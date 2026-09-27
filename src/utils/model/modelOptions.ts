@@ -362,7 +362,7 @@ function getChatGPTCodexModelOptions(): ModelOption[] {
     ...CHATGPT_CODEX_MODEL_OPTIONS.map(model => ({
       value: model.value,
       label: model.label,
-      description: model.description,
+      description: model.description ? t(model.description) : model.description,
       descriptionForModel: `${model.description} (${model.value})`,
     })),
   ]
