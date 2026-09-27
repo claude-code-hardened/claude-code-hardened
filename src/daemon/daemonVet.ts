@@ -139,9 +139,14 @@ export function vetBindUid(): UidVetResult {
 export const UID_COLLAPSES_MESSAGE =
   'refusing to use the daemon socket: this process runs in a user namespace without a uid mapping, so directory and peer ownership cannot be verified (start it with a mapping, e.g. unshare -Ur)'
 
+/** 显式豁免：非标准环境（proot/无 uid mapping 容器）的 opt-in 门。官方无此变量——
+ * 标准 Linux 行为完全不变（默认仍拒）；仅为 Android/proot 等不官方环境保留可用性。 */
+export const ALLOW_NO_UID_MAP_ENV = 'CLAUDE_CODE_DAEMON_ALLOW_NO_UID_MAP'
+
 /** upstread k()：在门上抛（同步、可复用）。 */
 export function assertUidVetted(): void {
   if (vetBindUid().uidCollapses) {
+    if (process.env[ALLOW_NO_UID_MAP_ENV] === '1') return
     throw Object.assign(new Error(UID_COLLAPSES_MESSAGE), { code: ENOTOWNED })
   }
 }
