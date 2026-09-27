@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import {
   CRON_DELETE_TOOL_NAME,
   CRON_LIST_TOOL_NAME,
@@ -8,7 +9,7 @@ import { registerBundledSkill } from '../bundledSkills.js'
 export function registerCronListSkill(): void {
   registerBundledSkill({
     name: 'cron-list',
-    description: 'List all scheduled cron jobs in this session',
+    description: t('List all scheduled cron jobs in this session'),
     whenToUse:
       'When the user wants to see their scheduled/recurring tasks, check active cron jobs, or review what is currently looping.',
     userInvocable: true,
@@ -27,7 +28,7 @@ export function registerCronListSkill(): void {
 export function registerCronDeleteSkill(): void {
   registerBundledSkill({
     name: 'cron-delete',
-    description: 'Cancel a scheduled cron job by ID',
+    description: t('Cancel a scheduled cron job by ID'),
     whenToUse:
       'When the user wants to cancel, stop, or remove a scheduled/recurring task or cron job.',
     argumentHint: '<job-id>',

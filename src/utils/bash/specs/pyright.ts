@@ -1,18 +1,19 @@
+import { t } from '../../../i18n/index.js';
 import type { CommandSpec } from '../registry.js'
 
 export default {
   name: 'pyright',
-  description: 'Type checker for Python',
+  description: t('Type checker for Python'),
   options: [
-    { name: ['--help', '-h'], description: 'Show help message' },
+    { name: ['--help', '-h'], description: t('Show help message') },
     { name: '--version', description: 'Print pyright version and exit' },
     {
       name: ['--watch', '-w'],
-      description: 'Continue to run and watch for changes',
+      description: t('Continue to run and watch for changes'),
     },
     {
       name: ['--project', '-p'],
-      description: 'Use the configuration file at this location',
+      description: t('Use the configuration file at this location'),
       args: { name: 'FILE OR DIRECTORY' },
     },
     { name: '-', description: 'Read file or directory list from stdin' },
@@ -33,7 +34,7 @@ export default {
     },
     {
       name: '--ignoreexternal',
-      description: 'Ignore external imports for --verifytypes',
+      description: t('Ignore external imports for --verifytypes'),
     },
     {
       name: '--pythonpath',
@@ -42,12 +43,12 @@ export default {
     },
     {
       name: '--pythonplatform',
-      description: 'Analyze for platform',
+      description: t('Analyze for platform'),
       args: { name: 'PLATFORM' },
     },
     {
       name: '--pythonversion',
-      description: 'Analyze for Python version',
+      description: t('Analyze for Python version'),
       args: { name: 'VERSION' },
     },
     {
@@ -69,11 +70,11 @@ export default {
     },
     {
       name: '--skipunannotated',
-      description: 'Skip type analysis of unannotated functions',
+      description: t('Skip type analysis of unannotated functions'),
     },
     {
       name: '--warnings',
-      description: 'Use exit code of 1 if warnings are reported',
+      description: t('Use exit code of 1 if warnings are reported'),
     },
     {
       name: '--threads',
@@ -84,7 +85,7 @@ export default {
   args: {
     name: 'files',
     description:
-      'Specify files or directories to analyze (overrides config file)',
+      t('Specify files or directories to analyze (overrides config file)'),
     isVariadic: true,
     isOptional: true,
   },

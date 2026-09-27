@@ -1,3 +1,4 @@
+import { t } from '../../../i18n/index.js';
 import type {
   SessionModeState,
   SessionConfigOption,
@@ -14,7 +15,7 @@ export function buildConfigOptions(
     {
       id: 'mode',
       name: 'Mode',
-      description: 'Session permission mode',
+      description: t('Session permission mode'),
       category: 'mode',
       type: 'select' as const,
       currentValue: modes.currentModeId,
@@ -29,7 +30,7 @@ export function buildConfigOptions(
     {
       id: 'model',
       name: 'Model',
-      description: 'AI model to use',
+      description: t('AI model to use'),
       category: 'model',
       type: 'select' as const,
       currentValue: models.currentModelId,

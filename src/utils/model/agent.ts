@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import type { PermissionMode } from '../permissions/PermissionMode.js'
 import { capitalize } from '../stringUtils.js'
 import { MODEL_ALIASES, type ModelAlias } from './aliases.js'
@@ -136,22 +137,22 @@ export function getAgentModelOptions(): AgentModelOption[] {
     {
       value: 'sonnet',
       label: 'Sonnet',
-      description: 'Balanced performance - best for most agents',
+      description: t('Balanced performance - best for most agents'),
     },
     {
       value: 'opus',
       label: 'Opus',
-      description: 'Most capable for complex reasoning tasks',
+      description: t('Most capable for complex reasoning tasks'),
     },
     {
       value: 'haiku',
       label: 'Haiku',
-      description: 'Fast and efficient for simple tasks',
+      description: t('Fast and efficient for simple tasks'),
     },
     {
       value: 'inherit',
       label: 'Inherit from parent',
-      description: 'Use the same model as the main conversation',
+      description: t('Use the same model as the main conversation'),
     },
   ]
 }

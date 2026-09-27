@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import type { CCBMode } from './types.js'
 
 const DR_SHARP_SYSTEM_PROMPT = `You are Dr. Sharp, a meticulous code reviewer and diagnostician.
@@ -49,7 +50,7 @@ export const DEFAULT_MODES: CCBMode[] = [
   {
     name: 'Default',
     slug: 'default',
-    description: 'Balanced mode for everyday development',
+    description: t('Balanced mode for everyday development'),
     icon: '⚡',
     systemPrompt: '',
     ui: {
@@ -68,7 +69,7 @@ export const DEFAULT_MODES: CCBMode[] = [
   {
     name: 'Gentle',
     slug: 'gentle',
-    description: 'Patient explanations, great for learning',
+    description: t('Patient explanations, great for learning'),
     icon: '🌸',
     companionSpecies: 'cat',
     systemPrompt:
@@ -91,7 +92,7 @@ export const DEFAULT_MODES: CCBMode[] = [
   {
     name: 'Dr. Sharp',
     slug: 'sharp',
-    description: 'Strict review, focused on code quality',
+    description: t('Strict review, focused on code quality'),
     icon: '🔍',
     companionSpecies: 'owl',
     systemPrompt: DR_SHARP_SYSTEM_PROMPT,
@@ -110,7 +111,7 @@ export const DEFAULT_MODES: CCBMode[] = [
   {
     name: 'Workhorse',
     slug: 'workhorse',
-    description: 'Auto-execute, minimal confirmations',
+    description: t('Auto-execute, minimal confirmations'),
     icon: '🐴',
     companionSpecies: 'capybara',
     systemPrompt:
@@ -133,7 +134,7 @@ export const DEFAULT_MODES: CCBMode[] = [
   {
     name: 'Token Saver',
     slug: 'token-saver',
-    description: 'Minimal replies, save tokens',
+    description: t('Minimal replies, save tokens'),
     icon: '💰',
     companionSpecies: 'snail',
     systemPrompt:
@@ -157,7 +158,7 @@ export const DEFAULT_MODES: CCBMode[] = [
   {
     name: 'Super AI',
     slug: 'super-ai',
-    description: 'Deep thinking, comprehensive analysis',
+    description: t('Deep thinking, comprehensive analysis'),
     icon: '🧠',
     companionSpecies: 'dragon',
     systemPrompt:

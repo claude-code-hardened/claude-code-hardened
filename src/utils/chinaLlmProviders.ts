@@ -45,7 +45,7 @@ export const CHINA_LLM_PROVIDERS: ProviderPreset[] = [
   {
     id: 'deepseek',
     label: 'DeepSeek',
-    description: 'Cheapest pricing, best code, 5M free tokens',
+    description: t('Cheapest pricing, best code, 5M free tokens'),
     icon: '\u{1F525}',
     baseURL: 'https://api.deepseek.com',
     apiKeyPage: 'https://platform.deepseek.com/api_keys',
@@ -74,7 +74,7 @@ export const CHINA_LLM_PROVIDERS: ProviderPreset[] = [
   {
     id: 'zhipu',
     label: 'Zhipu GLM',
-    description: 'Free models, Coding Plan, strong reasoning',
+    description: t('Free models, Coding Plan, strong reasoning'),
     icon: '\u{1F9E0}',
     baseURL: 'https://open.bigmodel.cn/api/paas/v4',
     apiKeyPage: 'https://open.bigmodel.cn/user/apiKeys',
@@ -91,14 +91,14 @@ export const CHINA_LLM_PROVIDERS: ProviderPreset[] = [
           label: 'Lite',
           price: '¥72/mo ($30/quarter)',
           credits: '~400 prompts/week',
-          description: 'GLM-5.1/5-Turbo/4.7/4.5-Air, MCP tools',
+          description: t('GLM-5.1/5-Turbo/4.7/4.5-Air, MCP tools'),
         },
         {
           id: 'pro',
           label: 'Pro',
           price: '¥216/mo ($90/quarter)',
           credits: '~2000 prompts/week',
-          description: 'Lite + GLM-5, 5x quota',
+          description: t('Lite + GLM-5, 5x quota'),
         },
         {
           id: 'max',
@@ -140,7 +140,7 @@ export const CHINA_LLM_PROVIDERS: ProviderPreset[] = [
   {
     id: 'qwen',
     label: 'Tongyi Qianwen',
-    description: 'Alibaba Cloud, Coding Plan, 90-day free tier',
+    description: t('Alibaba Cloud, Coding Plan, 90-day free tier'),
     icon: '☁️',
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     apiKeyPage: 'https://bailian.console.aliyun.com',
@@ -158,7 +158,7 @@ export const CHINA_LLM_PROVIDERS: ProviderPreset[] = [
           label: 'Pro',
           price: '¥200/mo',
           credits: 'Includes Qwen/GLM/Kimi/MiniMax models',
-          description: 'Entry tier (Lite discontinued 2026/03)',
+          description: t('Entry tier (Lite discontinued 2026/03)'),
         },
       ],
     },
@@ -209,7 +209,7 @@ export const CHINA_LLM_PROVIDERS: ProviderPreset[] = [
           label: 'Lite',
           price: '¥39/mo ($6/mo)',
           credits: '4.1B Credits/mo',
-          description: 'Light use, all MiMo models',
+          description: t('Light use, all MiMo models'),
         },
         {
           id: 'standard',

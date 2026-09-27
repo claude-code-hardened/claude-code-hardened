@@ -1,11 +1,12 @@
+import { t } from '../../../i18n/index.js';
 import type { CommandSpec } from '../registry.js'
 
 const time: CommandSpec = {
   name: 'time',
-  description: 'Time a command',
+  description: t('Time a command'),
   args: {
     name: 'command',
-    description: 'Command to time',
+    description: t('Command to time'),
     isCommand: true,
   },
 }

@@ -3,6 +3,7 @@
  * Extracted from sessionLifecycle.ts to keep that module under the 500-line
  * budget. The barrel (./index.ts) imports this module for its side effect.
  */
+import { t } from '../../../i18n/index.js';
 import { randomUUID } from 'node:crypto'
 import type {
   NewSessionRequest,
@@ -198,30 +199,30 @@ async function createSession(
       {
         id: 'default',
         name: 'Default',
-        description: 'Standard behavior, prompts for dangerous operations',
+        description: t('Standard behavior, prompts for dangerous operations'),
       },
       {
         id: 'acceptEdits',
         name: 'Accept Edits',
-        description: 'Auto-accept file edit operations',
+        description: t('Auto-accept file edit operations'),
       },
       {
         id: 'plan',
         name: 'Plan Mode',
-        description: 'Planning mode, no actual tool execution',
+        description: t('Planning mode, no actual tool execution'),
       },
       {
         id: 'auto',
         name: 'Auto',
         description:
-          'Use a model classifier to approve/deny permission prompts.',
+          t('Use a model classifier to approve/deny permission prompts.'),
       },
       ...(isBypassAvailable
         ? [
             {
               id: 'bypassPermissions' as const,
               name: 'Bypass Permissions',
-              description: 'Skip all permission checks',
+              description: t('Skip all permission checks'),
             },
           ]
         : []),

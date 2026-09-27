@@ -1,4 +1,5 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
+import { t } from '../../i18n/index.js';
 import { getInitialMainLoopModel } from '../../bootstrap/state.js'
 import {
   isClaudeAISubscriber,
@@ -333,20 +334,20 @@ function getMergedOpus1MOption(fastMode = false): ModelOption {
 const MaxSonnet46Option: ModelOption = {
   value: 'sonnet',
   label: 'Sonnet',
-  description: 'Sonnet 4.6 · Best for everyday tasks',
+  description: t('Sonnet 4.6 · Best for everyday tasks'),
 }
 
 const MaxHaiku45Option: ModelOption = {
   value: 'haiku',
   label: 'Haiku',
-  description: 'Haiku 4.5 · Fastest for quick answers',
+  description: t('Haiku 4.5 · Fastest for quick answers'),
 }
 
 function getOpusPlanOption(): ModelOption {
   return {
     value: 'opusplan',
     label: 'Opus Plan Mode',
-    description: 'Use Opus 4.7 in plan mode, Sonnet 4.6 otherwise',
+    description: t('Use Opus 4.7 in plan mode, Sonnet 4.6 otherwise'),
   }
 }
 
@@ -620,7 +621,7 @@ export function getModelOptions(fastMode = false): ModelOption[] {
       options.push({
         value: customModel,
         label: customModel,
-        description: 'Custom model',
+        description: t('Custom model'),
       })
     }
     return filterModelOptionsByAllowlist(options)

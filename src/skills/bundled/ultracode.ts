@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { registerBundledSkill } from '../bundledSkills.js'
 
 /**
@@ -49,7 +50,7 @@ Every script must begin with \`export const meta = {...}\`:
 \`\`\`js
 export const meta = {
   name: 'find-flaky-tests',
-  description: 'Find flaky tests and propose fixes',   // one-line, shown in permission dialog
+  description: t('Find flaky tests and propose fixes'),   // one-line, shown in permission dialog
   phases: [                                            // one entry per phase() call
     { title: 'Scan', detail: 'grep test logs for retries' },
     { title: 'Fix', detail: 'one agent per flaky test' },
@@ -120,7 +121,7 @@ The canonical multi-stage pattern — pipeline by default, each dimension verifi
 \`\`\`js
 export const meta = {
   name: 'review-changes',
-  description: 'Review changed files across dimensions, verify each finding',
+  description: t('Review changed files across dimensions, verify each finding'),
   phases: [{ title: 'Review' }, { title: 'Verify' }],
 }
 const DIMENSIONS = [{key: 'bugs', prompt: '...'}, {key: 'perf', prompt: '...'}]
@@ -220,7 +221,7 @@ export function registerUltracodeSkill(): void {
   registerBundledSkill({
     name: 'ultracode',
     description:
-      'Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.',
+      t('Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.'),
     whenToUse:
       'When a task can be decomposed or parallelized, needs multi-perspective confidence (e.g. find then adversarially verify), exceeds a single context (large migrations, broad audits, long-tail enumeration), or needs resume/auditability — orchestrate multiple subagents with the Workflow tool.',
     userInvocable: true,

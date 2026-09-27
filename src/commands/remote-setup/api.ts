@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import axios from 'axios'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -143,7 +144,7 @@ export async function createDefaultEnvironment(): Promise<boolean> {
       {
         name: 'Default',
         kind: 'anthropic_cloud',
-        description: 'Default - trusted network access',
+        description: t('Default - trusted network access'),
         config: {
           environment_type: 'anthropic',
           cwd: '/home/user',

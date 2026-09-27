@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { BROWSER_TOOLS } from '@ant/claude-for-chrome-mcp'
 import { chmod, mkdir, readFile, writeFile } from 'fs/promises'
 import { homedir } from 'os'
@@ -196,7 +197,7 @@ export async function installChromeNativeHostManifest(
 
   const manifest = {
     name: NATIVE_HOST_IDENTIFIER,
-    description: 'Claude Code Browser Extension Native Host',
+    description: t('Claude Code Browser Extension Native Host'),
     path: manifestBinaryPath,
     type: 'stdio',
     allowed_origins: [

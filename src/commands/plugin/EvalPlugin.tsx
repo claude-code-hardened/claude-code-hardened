@@ -68,7 +68,7 @@ export function EvalPlugin({ onComplete, path, initMode }: Props): React.ReactNo
               JSON.stringify(
                 {
                   version: 1,
-                  description: 'Plugin evaluation harness — add cases and re-run /plugin eval',
+                  description: t('Plugin evaluation harness — add cases and re-run /plugin eval'),
                   cases: [] as Array<{ name: string; input: string; expect: string }>,
                 },
                 null,

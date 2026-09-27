@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import type { Attributes, Meter, MetricOptions } from '@opentelemetry/api'
 import type { logs } from '@opentelemetry/api-logs'
@@ -935,35 +936,35 @@ export function setMeter(
 
   // Initialize all counters using the provided factory
   STATE.sessionCounter = createCounter('claude_code.session.count', {
-    description: 'Count of CLI sessions started',
+    description: t('Count of CLI sessions started'),
   })
   STATE.locCounter = createCounter('claude_code.lines_of_code.count', {
     description:
       "Count of lines of code modified, with the 'type' attribute indicating whether lines were added or removed",
   })
   STATE.prCounter = createCounter('claude_code.pull_request.count', {
-    description: 'Number of pull requests created',
+    description: t('Number of pull requests created'),
   })
   STATE.commitCounter = createCounter('claude_code.commit.count', {
-    description: 'Number of git commits created',
+    description: t('Number of git commits created'),
   })
   STATE.costCounter = createCounter('claude_code.cost.usage', {
-    description: 'Cost of the Claude Code session',
+    description: t('Cost of the Claude Code session'),
     unit: 'USD',
   })
   STATE.tokenCounter = createCounter('claude_code.token.usage', {
-    description: 'Number of tokens used',
+    description: t('Number of tokens used'),
     unit: 'tokens',
   })
   STATE.codeEditToolDecisionCounter = createCounter(
     'claude_code.code_edit_tool.decision',
     {
       description:
-        'Count of code editing tool permission decisions (accept/reject) for Edit, Write, and NotebookEdit tools',
+        t('Count of code editing tool permission decisions (accept/reject) for Edit, Write, and NotebookEdit tools'),
     },
   )
   STATE.activeTimeCounter = createCounter('claude_code.active_time.total', {
-    description: 'Total active time in seconds',
+    description: t('Total active time in seconds'),
     unit: 's',
   })
 }

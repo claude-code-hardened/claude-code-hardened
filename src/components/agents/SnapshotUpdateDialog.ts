@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import React from 'react'
 import { Dialog, Text } from '@anthropic/ink'
 import type { AgentMemoryScope } from '@claude-code-hardened/builtin-tools/tools/AgentTool/agentMemory.js'
@@ -36,19 +37,19 @@ export function SnapshotUpdateDialog({
           label: 'Merge snapshot into current memory',
           value: 'merge',
           description:
-            'Keep current memory and ask Claude to merge in the snapshot changes.',
+            t('Keep current memory and ask Claude to merge in the snapshot changes.'),
         },
         {
           label: 'Keep current memory',
           value: 'keep',
           description:
-            'Ignore this snapshot update and continue with current memory.',
+            t('Ignore this snapshot update and continue with current memory.'),
         },
         {
           label: 'Replace with snapshot',
           value: 'replace',
           description:
-            'Overwrite current memory files with the snapshot contents.',
+            t('Overwrite current memory files with the snapshot contents.'),
         },
       ],
       onChange: onComplete as (value: unknown) => void,
