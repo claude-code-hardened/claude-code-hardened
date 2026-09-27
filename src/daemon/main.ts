@@ -77,6 +77,14 @@ export async function daemonMain(args: string[]): Promise<void> {
     case 'run': // 官方别名：piped 场景下前台 supervisor 是默认形态
       await runSupervisor(args.slice(1))
       break
+    case 'ping': {
+      // AC-6 诊断面：附着 client 的版本握手（lean client 入口检查）
+      const { pingDaemon } = await import('./sharedClient.js')
+      const ok = await pingDaemon(resolve('.'))
+      console.log(ok ? 'daemon alive' : 'daemon unreachable')
+      if (!ok) process.exitCode = 1
+      break
+    }
     case 'install':
     case 'service-install':
       // 官方此版本同样禁用："Service install is disabled in this version —
@@ -112,6 +120,17 @@ export async function daemonMain(args: string[]): Promise<void> {
       break
     }
     case 'attach': {
+      // messagingSock 版附着（lean client）：优先走 control plane 寻址，
+      // 找不到目标回退 tmux/detached 的 attachHandler
+      const short = args[1]
+      const { findAttachTarget, leanAttachLoop } = await import(
+        './leanAttach.js'
+      )
+      const target = short ? await findAttachTarget(short) : null
+      if (target) {
+        await leanAttachLoop(target)
+        break
+      }
       const bg = await import('../cli/bg.js')
       await bg.attachHandler(args[1])
       break
@@ -435,7 +454,14 @@ async function runSupervisor(args: string[]): Promise<void> {
             short,
             nonce,
             pid: result.pid,
+            procStart: Date.now(),
             messagingSock: '',
+            rendezvousSock: join(officialSockDir(), `rv-${short}.sock`),
+            rvAuth: randomBytes(16).toString('hex'),
+            ptyAuth: randomBytes(16).toString('hex'),
+            cliVersion: (MACRO as { VERSION?: string }).VERSION,
+            startedAt: Date.now(),
+            attempt: 0,
             name: result.sessionName,
             logPath: result.logPath,
             engine: result.engineUsed,

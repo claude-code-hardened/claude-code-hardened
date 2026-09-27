@@ -19,11 +19,67 @@ import {
  * upstream's exact response shapes and error codes.
  */
 
+/** remote IPC path refine（官方 me()）：daemon 的 IPC socket 必须是绝对路径。 */
+/** 官方 firedInteractiveMarks：合法标记过滤 + 最多保留 2 条。 */
+export function trimInteractiveMarks(
+  raw: Array<{ kind?: string } | unknown>,
+): Array<{ kind: string; [k: string]: unknown }> {
+  const ok: Array<{ kind: string; [k: string]: unknown }> = []
+  for (const item of raw) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof (item as { kind?: unknown }).kind === 'string'
+    ) {
+      ok.push(item as { kind: string; [k: string]: unknown })
+    }
+  }
+  return ok.slice(0, 2)
+}
+
+export function refineRemoteIpcPath(p: string | undefined): string | undefined {
+  if (p === undefined || p === '') return p
+  if (!p.startsWith('/'))
+    throw Object.assign(new Error('remote IPC path must be absolute'), {
+      code: 'EPROTO',
+    })
+  return p
+}
+
+/**
+ * JobRecord schema 对齐官方 roster worker（官方 Be）：
+ * rendezvousSock 为 required（会合通道），ptySock/messagingSock optional，
+ * procStart/sessionId/cliVersion/attempt/pendingRespawn 同字段名。
+ */
 export interface JobRecord {
   short: string
   nonce?: string
   pid: number
+  /** 进程启动时刻 ms（recycled pid 判定：pidAlive 但 procStart 变化 = 复用进程） */
+  procStart?: number
+  /** bridge session 寻址键 */
+  sessionId?: string
+  /** 会合通道（官方 required） */
+  rendezvousSock?: string
+  /** PTY 通道 */
+  ptySock?: string
+  /** 消息通道 */
   messagingSock?: string
+  cliVersion?: string
+  startedAt?: number
+  attempt?: number
+  /** 重启 pending 原因（'upgrade'） */
+  pendingRespawn?: 'upgrade'
+  /** 会合通道 auth token（官方 rvAuth——每 job 独立 nonce） */
+  rvAuth?: string
+  /** PTY 通道 auth token（官方 ptyAuth） */
+  ptyAuth?: string
+  /** REPL 进程 pid（官方 replPid——REPL 托管在 daemon 时） */
+  replPid?: number
+  /** REPL 进程启动时刻（官方 replProcStart——recycled 判定） */
+  replProcStart?: number
+  /** 已触发的交互标记（官方 firedInteractiveMarks，最多 2 条） */
+  firedInteractiveMarks?: Array<{ kind: string; [k: string]: unknown }>
   outcome?: string
   [k: string]: unknown
 }

@@ -154,7 +154,26 @@ export interface AncestorVetEntry {
   uid?: number
 }
 
-/** 官方 T()：祖先链逐级 stat，属主非同 uid → ENOTOWNED；权限偏差 → chmod 0700。 */
+/** 公共 sticky 目录白名单（官方 M，_To() 原文）：属主不校验（/tmp 1777 属 root 是常态）。 */
+const PUBLIC_ANCESTOR_WHITELIST = new Set([
+  '/',
+  '/dev',
+  '/dev/shm',
+  '/run',
+  '/run/user',
+  '/tmp',
+  '/var',
+  '/var/tmp',
+  '/var/run',
+  '/home',
+  '/var/home',
+  '/root',
+  '/var/roothome',
+  '/mnt',
+  '/mnt/wslg',
+])
+
+/** 官方 T()：祖先链逐级 stat，属主非同 uid → ENOTOWNED；白名单目录跳过。 */
 export function vetAncestorOwnership(rootPath: string): {
   ok: boolean
   code?: string
@@ -177,6 +196,8 @@ export function vetAncestorOwnership(rootPath: string): {
     }
     const st = lstatSync(p)
     entries.push({ path: p, present: true, uid: st.uid })
+    // 公共白名单（/tmp 等 sticky 目录）跳过属主校验——官方 M 集合语义
+    if (PUBLIC_ANCESTOR_WHITELIST.has(p)) continue
     if (uid !== undefined && st.uid !== uid) {
       return {
         ok: false,
