@@ -281,7 +281,8 @@ export class TerminalModeManager {
   set(mode: TerminalModeName, entry: TerminalModeEntry): string {
     if (this.isSet(mode)) return ''
     let out = this.add(entry)
-    if (mode === 'altScreen') out += this.add({ ...entry, mode: 'altScreenKeys' })
+    if (mode === 'altScreen')
+      out += this.add({ ...entry, mode: 'altScreenKeys' })
     return this.suspended ? '' : out
   }
 

@@ -276,24 +276,30 @@ export interface ThemeOverride {
  *   watchSystemTheme / onThemeSave
  */
 export interface ThemeContextContract {
-  /** 当前主题 id（toe/useThemeSetting 写入）。 */
+  /** 当前主题 id（'dark' | 'light' | 'auto' 等）。 */
+  themeSetting: string
+  /** 主题 id 写入。 */
   setThemeSetting: (id: string) => void
-  /** 当前主题对象。 */
-  currentTheme: Record<string, string>
+  /** 预览主题（设置面板实时预览）。 */
+  setPreviewTheme: (id: string) => void
+  /** 保存当前预览。 */
+  savePreview: () => void
+  /** 取消预览。 */
+  cancelPreview: () => void
+  /** 当前主题对象（id 或解析值）。 */
+  currentTheme: string
   /** overrides 折叠后的最终值。 */
   resolvedTheme: Record<string, string>
   /** session 级覆盖层。 */
-  activeThemeOverrides: ThemeOverride[]
+  activeThemeOverrides: ThemeOverride[] | undefined
+  /** 用户自定义主题表（数组形态）。 */
+  customThemes: ThemeOverride[]
   /** 激活的自定义主题。 */
-  activeCustomTheme: ThemeOverride | null
-  /** 重新加载用户自定义主题表。 */
-  reloadCustomThemes: () => void
-  /** 预览覆盖（设置面板实时预览）。 */
+  activeCustomTheme: ThemeOverride | undefined
+  /** 重新加载自定义主题（async）。 */
+  reloadCustomThemes: () => Promise<void>
+  /** 预览覆盖（兼容别名）。 */
   setPreviewOverrides: (o: ThemeOverride | null) => void
-  /** 系统主题变化观察（noe）。 */
-  watchSystemTheme: (cb: (dark: boolean) => void) => VoidFn
-  /** 主题保存回调（onThemeSave）。 */
-  onThemeSave: (name: string, values: Record<string, string>) => void
 }
 
 const ThemeOverridesContext = useMemoSafe<Partial<ThemeContextContract>>()
@@ -310,33 +316,36 @@ export function useCustomThemes(): Record<string, ThemeOverride> {
   return useContext(ThemeOverridesContext)?.custom ?? {}
 }
 
-/** 官方 useResolvedTheme：Context 的 resolvedTheme 优先，折叠兜底。 */
-export function useResolvedTheme(
-  base: Record<string, string>,
-): Record<string, string> {
-  const ctx = useContext(ThemeOverridesContext)
-  const active = useActiveThemeOverrides()
-  return useMemo(() => {
-    if (ctx?.resolvedTheme) return ctx.resolvedTheme
-    const out = { ...base }
-    for (const o of active) Object.assign(out, o.values)
-    return out
-  }, [ctx?.resolvedTheme, base, active])
+/** 官方 fE：useResolvedTheme()——无参返回 resolvedTheme（fE 原文）。 */
+export function useResolvedTheme(): Record<string, string> {
+  return (
+    (useContext(ThemeOverridesContext) as Partial<ThemeContextContract>)
+      ?.resolvedTheme ?? {}
+  )
 }
 
-/** 官方 Zn：useTheme()——currentTheme（契约字段）。 */
-export function useTheme(): Record<string, string> {
-  return useContext(ThemeOverridesContext)?.currentTheme ?? {}
+/** 官方 Zn：useTheme()——返回 [currentTheme, setThemeSetting]（Zn 原文：数组契约）。 */
+export function useTheme(): [string, (id: string) => void] {
+  const { currentTheme, setThemeSetting } = useContext(
+    ThemeOverridesContext,
+  ) as Partial<ThemeContextContract>
+  return [currentTheme ?? 'dark', setThemeSetting ?? noop]
 }
 
-/** 官方 toe：useThemeSetting()——主题 id 设置器。 */
-export function useThemeSetting(): (id: string) => void {
-  return useContext(ThemeOverridesContext)?.setThemeSetting ?? noop
+/** 官方 toe：useThemeSetting()——返回当前 themeSetting id（toe 原文）。 */
+export function useThemeSetting(): string {
+  return (
+    (useContext(ThemeOverridesContext) as Partial<ThemeContextContract>)
+      ?.themeSetting ?? 'dark'
+  )
 }
 
-/** 官方 dqt：usePreviewTheme()——预览覆盖设置器。 */
-export function usePreviewTheme(): (o: ThemeOverride | null) => void {
-  return useContext(ThemeOverridesContext)?.setPreviewOverrides ?? noop
+/** 官方 dqt：usePreviewTheme()——预览通道（setPreviewTheme 字段）。 */
+export function usePreviewTheme(): (id: string) => void {
+  return (
+    (useContext(ThemeOverridesContext) as Partial<ThemeContextContract>)
+      ?.setPreviewTheme ?? noop
+  )
 }
 
 // ── 树工具（Per / Wbe 原文）──
