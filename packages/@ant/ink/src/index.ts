@@ -251,3 +251,22 @@ export { StatusIcon } from './theme/StatusIcon.js'
 export { Tabs, Tab, useTabsWidth, useTabHeaderFocus } from './theme/Tabs.js'
 export { Byline } from './theme/Byline.js'
 export { KeyboardShortcutHint } from './theme/KeyboardShortcutHint.js'
+
+// ── 官方 2.1.283 导出面补齐（hooks/extended + focus 顶层面）──
+export { useFocus, useHasFocus, type FocusOptions } from './hooks/use-focus.js'
+export {
+  useClock,
+  useInputClock,
+  startClockInterval,
+  useMeasured,
+  usePaintedRows,
+  useFinePointer,
+  useIsScreenReaderEnabled,
+  useActiveThemeOverrides,
+  useCustomThemes,
+  useResolvedTheme,
+  rootOf,
+  topWithin,
+  ThemeOverridesProvider,
+  type ThemeOverride,
+} from './hooks/extended.js'
