@@ -80,7 +80,7 @@ export async function daemonMain(args: string[]): Promise<void> {
     case 'ping': {
       // AC-6 诊断面：附着 client 的版本握手（lean client 入口检查）
       const { pingDaemon } = await import('./sharedClient.js')
-      const ok = await pingDaemon(config.dir || resolve('.'))
+      const ok = await pingDaemon(resolve('.'))
       console.log(ok ? 'daemon alive' : 'daemon unreachable')
       if (!ok) process.exitCode = 1
       break

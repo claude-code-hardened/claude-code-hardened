@@ -94,7 +94,7 @@ export async function leanAttachLoop(target: AttachTarget): Promise<void> {
         lines: 30,
       })
       if (resp.ok) {
-        const output = (resp as { output: string[] }).output
+        const output = (resp as unknown as { output: string[] }).output
         const fresh = output.slice(
           lastLines > 0 ? Math.min(lastLines, output.length) : 0,
         )
@@ -105,7 +105,7 @@ export async function leanAttachLoop(target: AttachTarget): Promise<void> {
           output.length > 0
             ? Math.min(lastLines + fresh.length, output.length)
             : 0
-      } else if ((resp as { alive: boolean }).alive === false) {
+      } else if ((resp as unknown as { alive: boolean }).alive === false) {
         console.error('session exited')
         process.exitCode = 1
         return
