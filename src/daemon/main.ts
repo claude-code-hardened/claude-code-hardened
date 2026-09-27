@@ -194,12 +194,23 @@ function getExecMtime(): number | null {
   }
 }
 
-/** 官方 status 的 launcher 行：记录下一个 background service 经由的启动器。 */
+/** 官方 status 的 launcher 行：record 来自 CLAUDE_CODE_PROCESS_WRAPPER（1:1）。 */
 function getLauncherRecord(): string | null {
   try {
-    const wrapper = process.env['SHELL']
-    if (!wrapper) return null
-    return `当前 cch 解析到 \`${wrapper}\`，下一个后台服务将经由它启动`
+    const {
+      getLauncherRecord: wrapperRecord,
+      getWrapperError,
+      serviceKind,
+    } = require('./processWrapper.js') as typeof import('./processWrapper')
+    const err = getWrapperError()
+    if (err)
+      return `warning: ${err} — background sessions will refuse to start rather than run unwrapped`
+    const record = wrapperRecord()
+    if (record) {
+      const kind = serviceKind(false)
+      return `this cch resolves \`${record}\` and will start the next ${kind} through it`
+    }
+    return null
   } catch {
     return null
   }

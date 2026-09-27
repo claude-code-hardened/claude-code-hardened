@@ -135,7 +135,10 @@ export async function pingDaemon(root: string): Promise<boolean> {
  * ensureSharedDaemon：daemon 不在 → 自动拉起（start 一次），返回存活状态。
  * 回退语义由调用方处理（连接失败回退 spawn）。
  */
-export async function ensureSharedDaemon(root: string): Promise<boolean> {
+export async function ensureSharedDaemon(
+  root: string,
+  opts: { wrapperArgv?: string[] } = {},
+): Promise<boolean> {
   if (isSharedDaemonAlive(root)) return true
   const { spawn } = require('child_process') as typeof import('child_process')
   const { buildCliLaunch } = require('../utils/cliLaunch.js') as {
@@ -146,11 +149,25 @@ export async function ensureSharedDaemon(root: string): Promise<boolean> {
     }
   }
   const launch = buildCliLaunch(['daemon', 'start'])
-  const child = spawn(launch.execPath, launch.args, {
-    detached: true,
-    stdio: 'ignore',
-    env: launch.env,
-  })
+  // 官方 launcher 协议：CLAUDE_CODE_PROCESS_WRAPPER 设置时 daemon 经 wrapper
+  // exec 链启动（"will start the next background service through it"）。
+  const wrapperArgv = opts.wrapperArgv ?? []
+  const child =
+    wrapperArgv.length > 0
+      ? spawn(
+          wrapperArgv[0]!,
+          [...wrapperArgv.slice(1), launch.execPath, ...launch.args],
+          {
+            detached: true,
+            stdio: 'ignore',
+            env: launch.env,
+          },
+        )
+      : spawn(launch.execPath, launch.args, {
+          detached: true,
+          stdio: 'ignore',
+          env: launch.env,
+        })
   child.unref()
   // 拉 init 窗口：等 control.sock 出现（最多 5s）
   for (let i = 0; i < 25; i++) {

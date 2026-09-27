@@ -290,15 +290,27 @@ export async function killHandler(target: string | undefined): Promise<void> {
  * falls back to DetachedEngine on Windows or when tmux is absent.
  */
 export async function handleBgStart(args: string[]): Promise<void> {
-  // 官方 launcher 语义：首次 bg 服务需求时经启动通道被动拉起共享 daemon
-  // （"will start the next background service through it"）。探测 → 不在则
-  // 拉起 → 5s init 窗口；拉起失败静默回退（本会话不受阻，会话仍可独立
-  // spawn——cch 不做官方的 refuse-unwrapped 强制）。
+  // 官方 launcher 协议（1:1）：
+  // ① CLAUDE_CODE_PROCESS_WRAPPER 设置但不可用 → refuse（stderr + exit 1，
+  //    "refuse to start rather than run unwrapped"）
+  // ② record 可用 → 经 wrapper argv 拉起共享 daemon（"will start the next
+  //    background service through it"）
+  // ③ 未设置 → 无 launcher，daemon ensure 走默认 detached 通道
+  const pw = await import('../daemon/processWrapper.js')
+  const wrapperError = pw.getWrapperError()
+  if (wrapperError) {
+    const diag = await pw.wrapperDiagnostics()
+    pw.refuse('bg', diag ?? wrapperError)
+  }
   try {
     const { ensureSharedDaemon } = await import('../daemon/sharedClient.js')
-    await ensureSharedDaemon()
+    const argv = pw.getWrapperArgv()
+    await ensureSharedDaemon(
+      process.cwd(),
+      argv.length > 0 ? { wrapperArgv: argv } : {},
+    )
   } catch {
-    // supervisor 不可用不阻塞会话发起
+    // supervisor 不可用不阻塞会话发起（未设置 wrapper 的合法形态）
   }
 
   const engine = await selectEngine()
