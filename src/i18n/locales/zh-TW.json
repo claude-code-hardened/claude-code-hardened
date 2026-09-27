@@ -2879,7 +2879,6 @@
   "Usage: claude job status <job-id>": "用法：claude job status <job-id>",
   "Usage: claude job new <template> [args...]": "用法：claude job new <template> [args...]",
   "Usage: claude job reply <job-id> <text>": "用法：claude job reply <job-id> <text>",
-  "Service install is disabled in this version — the daemon runs on\n": "此版本已停用服務安裝——守護程序按需執行，並在最後一個用戶端斷開時結束。",
   "Error: --daemon-worker requires DAEMON feature to be enabled. Set FEATURE_DAEMON=1 or add DAEMON to DEFAULT_BUILD_FEATURES.": "錯誤：--daemon-worker 需要啟用 DAEMON feature。設定 FEATURE_DAEMON=1 或把 DAEMON 加入 DEFAULT_BUILD_FEATURES。",
   "Claude Code on Windows requires git-bash (https://git-scm.com/downloads/win). If installed but not in PATH, set environm": "Windows 上的 Claude Code 需要 git-bash（https://git-scm.com/downloads/win）。若已安裝但不在 PATH 中，請設定環境變數。",
   "Brief tool is not enabled for your account": "你的帳戶未啟用 Brief 工具",
@@ -3031,5 +3030,6 @@
   "Create, update, list, or run scheduled remote agents (triggers) that execute on a cron schedule.": "建立、更新、列出或執行按 cron 調度執行的遠端代理（triggers）。",
   "Find flaky tests and propose fixes": "找出不穩定測試並提出修復",
   "Review changed files across dimensions, verify each finding": "多維度審查變更檔案，逐條核驗發現",
-  "Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.": "進入多代理工作流編排模式：Workflow 工具的使用時機、腳本原語、品質模式、確定性約束"
+  "Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.": "進入多代理工作流編排模式：Workflow 工具的使用時機、腳本原語、品質模式、確定性約束",
+  "Service install is disabled in this version — the daemon runs on\ndemand and exits when the last client disconnects.\nUse `cch daemon start` to run the supervisor explicitly.": "此版本已停用服務安裝——守護程序按需執行，並在最後一個用戶端斷開時結束。\n用 `cch daemon start` 明確執行 supervisor。"
 }

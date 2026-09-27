@@ -2879,7 +2879,6 @@
   "Usage: claude job status <job-id>": "用法：claude job status <job-id>",
   "Usage: claude job new <template> [args...]": "用法：claude job new <template> [args...]",
   "Usage: claude job reply <job-id> <text>": "用法：claude job reply <job-id> <text>",
-  "Service install is disabled in this version — the daemon runs on\n": "このバージョンではサービスインストールは無効です——デーモンはオンデマンドで動作し、最後のクライアント切断時に終了します。",
   "Error: --daemon-worker requires DAEMON feature to be enabled. Set FEATURE_DAEMON=1 or add DAEMON to DEFAULT_BUILD_FEATURES.": "エラー：--daemon-worker には DAEMON feature の有効化が必要です。FEATURE_DAEMON=1 を設定するか、DAEMON を DEFAULT_BUILD_FEATURES に追加してください。",
   "Claude Code on Windows requires git-bash (https://git-scm.com/downloads/win). If installed but not in PATH, set environm": "Windows の Claude Code には git-bash（https://git-scm.com/downloads/win）が必要です。インストール済みだが PATH にない場合は環境変数を設定してください。",
   "Brief tool is not enabled for your account": "あなたのアカウントでは Brief ツールが有効になっていません",
@@ -3031,5 +3030,6 @@
   "Create, update, list, or run scheduled remote agents (triggers) that execute on a cron schedule.": "cron スケジュールで実行されるリモートエージェント（トリガー）を作成・更新・一覧表示・実行します。",
   "Find flaky tests and propose fixes": "フレーキーテストを見つけて修正案を提示します",
   "Review changed files across dimensions, verify each finding": "変更ファイルを複数ディメンションでレビューし、各発見を検証します",
-  "Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.": "マルチエージェントワークフロー編成モードへ：Workflow ツールの使いどころ、スクリプトプリミティブ、品質パターン、決定論的制約"
+  "Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.": "マルチエージェントワークフロー編成モードへ：Workflow ツールの使いどころ、スクリプトプリミティブ、品質パターン、決定論的制約",
+  "Service install is disabled in this version — the daemon runs on\ndemand and exits when the last client disconnects.\nUse `cch daemon start` to run the supervisor explicitly.": "このバージョンではサービスインストールは無効です——デーモンはオンデマンドで動作し、最後のクライアント切断時に終了します。\n`cch daemon start` でスーパーバイザーを明示的に実行してください。"
 }
