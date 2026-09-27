@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Box, Dialog, Text, useAnimationFrame } from '@anthropic/ink';
 import type { Theme } from '@anthropic/ink';
@@ -176,7 +177,7 @@ export function WorkflowsPanel({
         .launch({ resumeFromRunId: focused.runId, name: focused.workflowName }, context, canUseTool)
         .catch(e => onDone(`resume failed: ${(e as Error).message}`));
     },
-    newRun: () => onDone('Tip: start a named workflow with /<name>, or pass name via the Workflow tool.'),
+    newRun: () => onDone(t('Tip: start a named workflow with /<name>, or pass name via the Workflow tool.')),
     quit: () => {
       // In confirm mode q = cancel confirmation (routeWorkflowKey already routed to confirmNo);
       // only in non-confirm mode does it really exit the panel.

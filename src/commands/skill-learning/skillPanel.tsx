@@ -146,7 +146,7 @@ function SkillPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.ReactN
     <Dialog
       title="Skill Learning"
       subtitle={`${actions.length} actions`}
-      onCancel={() => onDone('Skill panel dismissed', { display: 'system' })}
+      onCancel={() => onDone(t('Skill panel dismissed'), { display: 'system' })}
       color="background"
       hideInputGuide
     >

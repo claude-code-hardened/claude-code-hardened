@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import * as React from 'react';
 import { handlePlanModeTransition } from '../../bootstrap/state.js';
 import type { LocalJSXCommandContext } from '../../commands.js';
@@ -62,9 +63,9 @@ export async function call(
     }));
     const description = args.trim();
     if (description && description !== 'open') {
-      onDone('Enabled plan mode', { shouldQuery: true });
+      onDone(t('Enabled plan mode'), { shouldQuery: true });
     } else {
-      onDone('Enabled plan mode');
+      onDone(t('Enabled plan mode'));
     }
     return null;
   }
@@ -74,7 +75,7 @@ export async function call(
   const planPath = getPlanFilePath();
 
   if (!planContent) {
-    onDone('Already in plan mode. No plan written yet.');
+    onDone(t('Already in plan mode. No plan written yet.'));
     return null;
   }
 

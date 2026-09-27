@@ -74,7 +74,7 @@ const brief = {
             source:
               'slash_command' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
           })
-          onDone('Brief tool is not enabled for your account', {
+          onDone(t('Brief tool is not enabled for your account'), {
             display: 'system',
           })
           return null

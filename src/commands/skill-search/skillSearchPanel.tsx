@@ -127,7 +127,7 @@ function SkillSearchPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.
     <Dialog
       title="Skill Search"
       subtitle={`${actions.length} actions`}
-      onCancel={() => onDone('Skill search panel dismissed', { display: 'system' })}
+      onCancel={() => onDone(t('Skill search panel dismissed'), { display: 'system' })}
       color="background"
       hideInputGuide
     >

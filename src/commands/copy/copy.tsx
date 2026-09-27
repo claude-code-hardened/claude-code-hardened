@@ -217,7 +217,7 @@ function CopyPicker({ fullText, codeBlocks, messageAge, onDone }: PickerProps): 
             void handleSelect(selected);
           }}
           onCancel={() => {
-            onDone('Copy cancelled', { display: 'system' });
+            onDone(t('Copy cancelled'), { display: 'system' });
           }}
         />
         <Text dimColor>
@@ -236,7 +236,7 @@ export const call: LocalJSXCommandCall = async (onDone, context, args) => {
   const texts = collectRecentAssistantTexts(context.messages);
 
   if (texts.length === 0) {
-    onDone('No assistant message to copy');
+    onDone(t('No assistant message to copy'));
     return null;
   }
 

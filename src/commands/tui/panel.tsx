@@ -72,7 +72,7 @@ function TuiPanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.ReactNod
     <Dialog
       title="TUI Mode"
       subtitle={`${actions.length} actions`}
-      onCancel={() => onDone('TUI mode panel dismissed', { display: 'system' })}
+      onCancel={() => onDone(t('TUI mode panel dismissed'), { display: 'system' })}
       color="background"
       hideInputGuide
     >

@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import React, { useEffect, useState } from 'react';
 import type { CommandResultDisplay } from '../commands.js';
 // eslint-disable-next-line custom-rules/prefer-use-keybindings -- raw input for "any key" dismiss and y/n prompt
@@ -88,7 +89,7 @@ export function DesktopHandoff({ onDone }: Props): React.ReactNode {
       // Give the user a moment to see the success message
       setTimeout(
         async (onDone: Props['onDone']) => {
-          onDone('Session transferred to Claude Desktop', { display: 'system' });
+          onDone(t('Session transferred to Claude Desktop'), { display: 'system' });
           await gracefulShutdown(0, 'other');
         },
         500,

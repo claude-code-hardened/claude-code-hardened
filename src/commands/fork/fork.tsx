@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { feature } from 'bun:bundle';
 import React from 'react';
 import { AgentTool } from '@claude-code-hardened/builtin-tools/tools/AgentTool/AgentTool.js';
@@ -12,13 +13,13 @@ export async function call(
 ): Promise<React.ReactNode> {
   // Check feature flag
   if (!feature('FORK_SUBAGENT')) {
-    onDone('Fork subagent feature is not enabled. Set FEATURE_FORK_SUBAGENT=1 to enable.', { display: 'system' });
+    onDone(t('Fork subagent feature is not enabled. Set FEATURE_FORK_SUBAGENT=1 to enable.'), { display: 'system' });
     return null;
   }
 
   // Recursive fork guard
   if (isInForkChild(context.messages)) {
-    onDone('Fork is not available inside a forked worker. Complete your task directly using your tools.', {
+    onDone(t('Fork is not available inside a forked worker. Complete your task directly using your tools.'), {
       display: 'system',
     });
     return null;
@@ -26,7 +27,7 @@ export async function call(
 
   const directive = args.trim();
   if (!directive) {
-    onDone('Usage: /fork <directive>\nExample: /fork Fix the null check in validate.ts', { display: 'system' });
+    onDone(t('Usage: /fork <directive>\nExample: /fork Fix the null check in validate.ts'), { display: 'system' });
     return null;
   }
 
@@ -34,7 +35,7 @@ export async function call(
   const lastAssistantMessage = [...context.messages].reverse().find(m => m.type === 'assistant') as any; // Type assertion to avoid complex type import
 
   if (!lastAssistantMessage) {
-    onDone('Cannot fork: no assistant response in conversation history.', { display: 'system' });
+    onDone(t('Cannot fork: no assistant response in conversation history.'), { display: 'system' });
     return null;
   }
 

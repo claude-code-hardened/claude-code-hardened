@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import chalk from 'chalk';
 import * as React from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
@@ -261,7 +262,7 @@ export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
     return <ShowModelAndClose onDone={onDone} />;
   }
   if (COMMON_HELP_ARGS.includes(args)) {
-    onDone('Run /model to open the model selection menu, or /model [modelName] to set the model.', {
+    onDone(t('Run /model to open the model selection menu, or /model [modelName] to set the model.'), {
       display: 'system',
     });
     return;

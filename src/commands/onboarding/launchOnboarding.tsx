@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import * as React from 'react';
 import { Box, Pane, Text, useTheme } from '@anthropic/ink';
 import {
@@ -63,7 +64,7 @@ function ThemeSubcommand({ onDone }: { onDone: (msg: string) => void }): React.R
           logEvent('tengu_onboarding_step', { stepId: meta('theme') });
           onDone(`Theme set to ${setting}.`);
         }}
-        onCancel={() => onDone('Theme picker dismissed.')}
+        onCancel={() => onDone(t('Theme picker dismissed.'))}
         skipExitHandling={true}
       />
     </Pane>
@@ -124,7 +125,7 @@ export const callOnboarding: LocalJSXCommandCall = async (onDone, _context, args
       hasTrustDialogAccepted: false,
     }));
     onDone(
-      'Workspace trust cleared for the current project. ' + 'The trust dialog will appear on the next `claude` launch.',
+      t('Workspace trust cleared for the current project. ') + 'The trust dialog will appear on the next `claude` launch.',
       { display: 'system' },
     );
     return null;
@@ -132,7 +133,7 @@ export const callOnboarding: LocalJSXCommandCall = async (onDone, _context, args
 
   if (sub === 'model') {
     onDone(
-      'Run `/model` to pick the AI model. ' +
+      t('Run `/model` to pick the AI model. ') +
         'Onboarding does not own the model picker; this entry exists for ' +
         'discoverability only.',
       { display: 'system' },
@@ -142,7 +143,7 @@ export const callOnboarding: LocalJSXCommandCall = async (onDone, _context, args
 
   if (sub === 'mcp') {
     onDone(
-      'MCP server setup:\n' +
+      t('MCP server setup:\n') +
         '  - `/mcp` — list configured MCP servers\n' +
         '  - `claude mcp add <name> <command>` — add a server (in your shell)\n' +
         '  - `claude mcp remove <name>` — remove a server\n' +
@@ -175,7 +176,7 @@ export const callOnboarding: LocalJSXCommandCall = async (onDone, _context, args
     hasCompletedOnboarding: false,
   }));
   onDone(
-    'Onboarding flag cleared. The full first-run setup ' +
+    t('Onboarding flag cleared. The full first-run setup ') +
       '(theme, OAuth/API key, security notes, terminal-setup) ' +
       'will run on the next `claude` launch.\n\n' +
       'For individual steps in this session, use:\n' +

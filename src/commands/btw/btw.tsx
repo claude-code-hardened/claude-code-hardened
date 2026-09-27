@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useInterval } from 'usehooks-ts';
@@ -180,7 +181,7 @@ export async function call(
   const question = args?.trim();
 
   if (!question) {
-    onDone('Usage: /btw <your question>', { display: 'system' });
+    onDone(t('Usage: /btw <your question>'), { display: 'system' });
     return null;
   }
 

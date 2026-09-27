@@ -54,12 +54,12 @@ function ToggleTagAndClose({
     const id = getSessionId() as UUID;
 
     if (!id) {
-      onDone('No active session to tag', { display: 'system' });
+      onDone(t('No active session to tag'), { display: 'system' });
       return;
     }
 
     if (!normalizedTag) {
-      onDone('Tag name cannot be empty', { display: 'system' });
+      onDone(t('Tag name cannot be empty'), { display: 'system' });
       return;
     }
 

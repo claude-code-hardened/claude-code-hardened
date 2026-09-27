@@ -67,7 +67,7 @@ function RemoteControlServer({ onDone }: Props): React.ReactNode {
         if (!cancelled) {
           setStatus('running');
           daemonStatus = 'running';
-          onDone('Remote Control Server started. Use /remote-control-server to manage.', { display: 'system' });
+          onDone(t('Remote Control Server started. Use /remote-control-server to manage.'), { display: 'system' });
         }
       } catch (err) {
         if (!cancelled) {
@@ -109,14 +109,14 @@ function ServerManagementDialog({ onDone }: Props): React.ReactNode {
 
   function handleStop(): void {
     stopDaemon();
-    onDone('Remote Control Server stopped.', { display: 'system' });
+    onDone(t('Remote Control Server stopped.'), { display: 'system' });
   }
 
   function handleRestart(): void {
     stopDaemon();
     try {
       startDaemon();
-      onDone('Remote Control Server restarted.', { display: 'system' });
+      onDone(t('Remote Control Server restarted.'), { display: 'system' });
     } catch (err) {
       onDone(`Failed to restart: ${errorMessage(err)}`, { display: 'system' });
     }

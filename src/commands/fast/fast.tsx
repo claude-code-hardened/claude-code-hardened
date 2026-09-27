@@ -85,7 +85,7 @@ export function FastModePicker({
       if (initialFastMode) {
         applyFastMode(false, setAppState);
       }
-      onDone('Fast mode OFF', { display: 'system' });
+      onDone(t('Fast mode OFF'), { display: 'system' });
       return;
     }
     const message = initialFastMode ? `${getFastIconString()} Kept Fast mode ON` : `Kept Fast mode OFF`;

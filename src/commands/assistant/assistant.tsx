@@ -144,7 +144,7 @@ export async function call(
           assistantPanelVisible: true,
         }) as AppState,
     );
-    onDone('KAIROS assistant mode activated.', { display: 'system' });
+    onDone(t('KAIROS assistant mode activated.'), { display: 'system' });
     return null;
   }
 
@@ -160,7 +160,7 @@ export async function call(
           assistantPanelVisible: false,
         }) as AppState,
     );
-    onDone('Assistant panel hidden.', { display: 'system' });
+    onDone(t('Assistant panel hidden.'), { display: 'system' });
   } else {
     setAppState(
       (prev: AppState) =>
@@ -169,7 +169,7 @@ export async function call(
           assistantPanelVisible: true,
         }) as AppState,
     );
-    onDone('Assistant panel opened.', { display: 'system' });
+    onDone(t('Assistant panel opened.'), { display: 'system' });
   }
 
   return null;

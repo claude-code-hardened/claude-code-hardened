@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import * as React from 'react';
 import { type GroveDecision, GroveDialog, PrivacySettingsDialog } from '../../components/grove/Grove.js';
 import {
@@ -27,7 +28,7 @@ export async function call(onDone: LocalJSXCommandOnDone): Promise<React.ReactNo
 
   async function onDoneWithDecision(decision: GroveDecision) {
     if (decision === 'escape' || decision === 'defer') {
-      onDone('Privacy settings dialog dismissed', {
+      onDone(t('Privacy settings dialog dismissed'), {
         display: 'system',
       });
       return;
@@ -38,7 +39,7 @@ export async function call(onDone: LocalJSXCommandOnDone): Promise<React.ReactNo
   async function onDoneWithSettingsCheck() {
     const updatedSettingsResult = await getGroveSettings();
     if (!updatedSettingsResult.success) {
-      onDone('Unable to retrieve updated privacy settings', {
+      onDone(t('Unable to retrieve updated privacy settings'), {
         display: 'system',
       });
       return;

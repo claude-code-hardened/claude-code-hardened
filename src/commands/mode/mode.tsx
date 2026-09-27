@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { useMemo } from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { Select } from '../../components/CustomSelect/select.js';
@@ -33,7 +34,7 @@ function ModePicker({ onDone }: { onDone: LocalJSXCommandOnDone }) {
   }
 
   function handleCancel() {
-    onDone('Mode selection cancelled.', { display: 'system' });
+    onDone(t('Mode selection cancelled.'), { display: 'system' });
   }
 
   return (

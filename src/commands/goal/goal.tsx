@@ -14,6 +14,7 @@
  * `/goal <objective>`  -> set a new goal; if one is already active and not
  *                         complete, a confirmation dialog appears first.
  */
+import { t } from '../../i18n/index.js';
 import * as React from 'react';
 
 import type { LocalJSXCommandContext } from 'src/commands.js';
@@ -198,7 +199,7 @@ export async function call(
         });
       }}
       onCancel={() => {
-        onDone('Kept the current goal. New objective discarded.', {
+        onDone(t('Kept the current goal. New objective discarded.'), {
           display: 'system',
         });
       }}

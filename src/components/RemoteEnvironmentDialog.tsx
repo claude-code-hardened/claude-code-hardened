@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import * as React from 'react';
@@ -65,7 +66,7 @@ export function RemoteEnvironmentDialog({ onDone }: Props): React.ReactNode {
     const selectedEnv = environments.find(env => env.environment_id === value);
 
     if (!selectedEnv) {
-      onDone('Error: Selected environment not found');
+      onDone(t('Error: Selected environment not found'));
       return;
     }
 

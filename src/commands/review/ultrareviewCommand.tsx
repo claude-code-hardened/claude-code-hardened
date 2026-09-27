@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
 import type { LocalJSXCommandCall, LocalJSXCommandOnDone } from '../../types/command.js';
 import { checkOverageGate, confirmOverage, launchRemoteReview } from './reviewRemote.js';
@@ -28,7 +29,7 @@ async function launchAndDone(
     // Precondition failures now return specific ContentBlockParam[] above.
     // null only reaches here on teleport failure (PR mode) or non-github
     // repo — both are CCR/repo connectivity issues.
-    onDone('Ultrareview failed to launch the remote session. Check that this is a GitHub repo and try again.', {
+    onDone(t('Ultrareview failed to launch the remote session. Check that this is a GitHub repo and try again.'), {
       display: 'system',
     });
   }
@@ -38,7 +39,7 @@ export const call: LocalJSXCommandCall = async (onDone, context, args) => {
   const gate = await checkOverageGate();
 
   if (gate.kind === 'not-enabled') {
-    onDone('Free ultrareviews used. Enable Extra Usage at https://claude.ai/settings/billing to continue.', {
+    onDone(t('Free ultrareviews used. Enable Extra Usage at https://claude.ai/settings/billing to continue.'), {
       display: 'system',
     });
     return null;
@@ -62,7 +63,7 @@ export const call: LocalJSXCommandCall = async (onDone, context, args) => {
           // skip this dialog on the next attempt.
           if (!signal.aborted) confirmOverage();
         }}
-        onCancel={() => onDone('Ultrareview cancelled.', { display: 'system' })}
+        onCancel={() => onDone(t('Ultrareview cancelled.'), { display: 'system' })}
       />
     );
   }

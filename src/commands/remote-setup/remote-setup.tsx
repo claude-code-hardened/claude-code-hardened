@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { execa } from 'execa';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
@@ -79,7 +80,7 @@ function Web({ onDone }: { onDone: LocalJSXCommandOnDone }) {
           logEvent('tengu_remote_setup_result', {
             result: 'not_signed_in' as SafeString,
           });
-          onDone('Not signed in to Claude. Run /login first.');
+          onDone(t('Not signed in to Claude. Run /login first.'));
           return;
         case 'gh_not_installed':
         case 'gh_not_authenticated': {

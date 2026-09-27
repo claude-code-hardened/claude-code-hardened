@@ -77,7 +77,7 @@ function BreakCachePanel({ onDone }: { onDone: LocalJSXCommandOnDone }): React.R
     <Dialog
       title="Break Cache"
       subtitle={`${actions.length} actions`}
-      onCancel={() => onDone('Break-cache panel dismissed', { display: 'system' })}
+      onCancel={() => onDone(t('Break-cache panel dismissed'), { display: 'system' })}
       color="background"
       hideInputGuide
     >

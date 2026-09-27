@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import chalk from 'chalk';
 import figures from 'figures';
 import React, { useEffect } from 'react';
@@ -102,7 +103,7 @@ export async function call(
         permissionContext={appState.toolPermissionContext}
         onAddDirectory={handleAddDirectory}
         onCancel={() => {
-          onDone('Did not add a working directory.');
+          onDone(t('Did not add a working directory.'));
         }}
       />
     );

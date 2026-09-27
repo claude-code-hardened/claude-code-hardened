@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { mkdir, writeFile } from 'fs/promises';
 import * as React from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
@@ -61,7 +62,7 @@ function MemoryCommand({
   };
 
   const handleCancel = () => {
-    onDone('Cancelled memory editing', { display: 'system' });
+    onDone(t('Cancelled memory editing'), { display: 'system' });
   };
 
   return (

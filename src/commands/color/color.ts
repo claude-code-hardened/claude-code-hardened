@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import type { UUID } from 'crypto'
 import { getSessionId } from '../../bootstrap/state.js'
 import type { ToolUseContext } from '../../Tool.js'
@@ -25,7 +26,7 @@ export async function call(
   // Teammates cannot set their own color
   if (isTeammate()) {
     onDone(
-      'Cannot set color: This session is a swarm teammate. Teammate colors are assigned by the team leader.',
+      t('Cannot set color: This session is a swarm teammate. Teammate colors are assigned by the team leader.'),
       { display: 'system' },
     )
     return null
@@ -59,7 +60,7 @@ export async function call(
       },
     }))
 
-    onDone('Session color reset to default', { display: 'system' })
+    onDone(t('Session color reset to default'), { display: 'system' })
     return null
   }
 

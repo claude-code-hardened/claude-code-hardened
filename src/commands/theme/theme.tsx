@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import * as React from 'react';
 import type { CommandResultDisplay } from '../../commands.js';
 import { Pane } from '@anthropic/ink';
@@ -20,7 +21,7 @@ function ThemePickerCommand({ onDone }: Props): React.ReactNode {
           onDone(`Theme set to ${setting}`);
         }}
         onCancel={() => {
-          onDone('Theme picker dismissed', { display: 'system' });
+          onDone(t('Theme picker dismissed'), { display: 'system' });
         }}
         skipExitHandling={true}
       />

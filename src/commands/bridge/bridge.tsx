@@ -99,7 +99,7 @@ function BridgeToggle({ onDone, name }: Props): React.ReactNode {
           replBridgeInitialName: name,
         };
       });
-      onDone('Remote Control connecting\u2026', {
+      onDone(t('Remote Control connecting\u2026'), {
         display: 'system',
       });
     })();
