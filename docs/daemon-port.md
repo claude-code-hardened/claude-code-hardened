@@ -225,3 +225,21 @@ daemon 测试 49 例全过：解析（uid_map 脏行 undefined / overflowuid）/
 - **bun compile 产物的进程模型**：embeddedFiles 可能空（bytecode+minify 组合）、argv[0] 是字符串 "bun"、execPath 是 bunfs 虚拟路径——dev 模式经验不适用于 compile 产物，self 路径用 `/proc/self/exe` 判定。
 - **bun 11673 quirk**：单文件可执行下 app 参数会泄漏进 process.execArgv，spawn 链的 bootstrap 参数必须 sanitize 快照。
 - **排查不可观测变量的方法**：加诊断环境变量（DAEMON_DEBUG=1）+ CI 构建产物实跑取证，纸上推演到极限就上实跑。
+
+## 多客户端占用实测（2026-09-27，cch-linux-arm64）
+
+### 实测数据
+
+| 场景 | 进程 | HWM 峰值 | 状态 |
+|------|------|---------|------|
+| daemon 驻留 | `daemon start`（supervisor，常驻） | ~93MB（单进程） | 实测 |
+| 附着 client ×3 | `daemon status` | 未采样到 | 瞬态——输出面板后立即退出 |
+| 独立 headless（对照） | 无 daemon 托管的 spawn | trust 失败无法留驻 | 本环境限制 |
+
+参照量级：每个终端一份完整运行时 ~200MB RSS（同款架构的另一个 fork 实测）；官方 AC-6 的 `daemon/status` 返回 pid + RSSBytes。
+
+### 结论与增量
+
+- **daemon 驻留可行**：93MB 驻留 < 200MB 单终端，且控制面/lockfile/调度由 supervisor 托管（多会话不再各自 spawn）。
+- **"多客户端共享更低占用"的完整收益需要 lean client 架构**：客户端附着 daemon、会话执行在 daemon 侧、客户端只承担 TUI——对应增量 = tui 默认附着优先（socket 断开标 crashed、连接失败回退 spawn、强制旧路开关）。
+- 瞬态查询（status）本身不构成长驻占用，但也不提供附着会话——两者不是同一收益。
