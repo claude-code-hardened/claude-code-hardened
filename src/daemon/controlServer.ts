@@ -1,7 +1,17 @@
 import { createServer, type Server, type Socket } from 'net'
 import { StringDecoder } from 'string_decoder'
 import { dirname } from 'path'
-import { vetAncestorOwnership } from '../daemon/daemonVet.js'
+import {
+  vetAncestorOwnership,
+  isPeerVerificationDegraded,
+  vetPeerCredentialDegraded,
+} from '../daemon/daemonVet.js'
+import {
+  createChallenge,
+  verifyChallenge,
+  PeerRateLimiter,
+  verifyPeerBinary,
+} from './peerAuth.js'
 import {
   controlKeyPath,
   isValidShortId,
@@ -243,6 +253,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+/** 全局限速单例（跨连接共享失败计数）。 */
+let rateLimiter: PeerRateLimiter | null = null
+function getRateLimiter(): PeerRateLimiter {
+  if (!rateLimiter) rateLimiter = new PeerRateLimiter()
+  return rateLimiter
+}
+
+/** 连接建立时下发 challenge（客户端据此算 HMAC）。 */
+export function issueChallenge(): string {
+  return createChallenge()
+}
+
 /**
  * Upstream yn: op dispatch. The auth-gated ops (dispatch/reply/
  * permission-response) reject with EAUTH; attach without auth is a legacy
@@ -256,7 +278,40 @@ export async function handleControlRequest(
   if (req === null || typeof req !== 'object') {
     return sendReply(socket, { ok: false, error: 'bad json', code: 'EUNKNOWN' })
   }
-  const authOk = verifyControlKey(req.auth, deps.controlKey)
+  // 通用防伪造：challenge-response HMAC（key 不上线）。req.auth = HMAC-SHA256(key, req.nonce)。
+  // 降级模式（proot）额外接受明文 key 兼容（peer 交叉验证补偿）；标准模式仅 HMAC。
+  const rl = getRateLimiter()
+  if (rl.isLocked()) {
+    return sendReply(socket, {
+      ok: false,
+      error: `too many failed auths — locked for ${rl.lockedForSec()}s`,
+      code: 'ERATE',
+    })
+  }
+  let authOk = false
+  if (
+    typeof req.auth === 'string' &&
+    typeof (req as { nonce?: unknown }).nonce === 'string'
+  ) {
+    authOk =
+      deps.controlKey != null &&
+      verifyChallenge(
+        deps.controlKey,
+        (req as { nonce: string }).nonce,
+        req.auth,
+      )
+  }
+  if (!authOk && isPeerVerificationDegraded()) {
+    // 降级模式兼容路径：明文 key + peer pid 交叉验证
+    authOk =
+      verifyControlKey(req.auth, deps.controlKey) &&
+      vetPeerCredentialDegraded({
+        uid: process.getuid?.() ?? 0,
+        pid: (req as { peerPid?: number }).peerPid ?? socket.remotePort ?? 0,
+      }).ok
+  }
+  if (authOk) rl.recordSuccess()
+  else rl.recordFailure()
   switch (req.op) {
     case 'ping':
       return sendReply(socket, {

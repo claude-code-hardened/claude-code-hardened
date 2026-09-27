@@ -74,7 +74,14 @@ async function queryOnce(): Promise<void> {
       try {
         key = readFileSync('/root/.claude/daemon/control.key', 'utf8').trim()
       } catch {}
-      sock.write(JSON.stringify({ op: 'list', auth: key }) + '\n')
+      const nonce = require('crypto').randomBytes(32).toString('hex') as string
+      sock.write(
+        JSON.stringify({
+          op: 'list',
+          nonce,
+          auth: require('./peerAuth.js').signChallenge(key, nonce),
+        }) + '\n',
+      )
     })
     sock.on('data', d => {
       buf += d
