@@ -184,6 +184,42 @@ npx bun-unpacker ~/.local/share/claude/versions/2.1.283 -o extracted/
 
 Android 应用沙箱（uid 10405、CapEff=0）里：uid_map 只映射单 uid，daemon 与官方 claude 分属不同 namespace（wrapper 嵌套），**官方 peer uid 探测对官方自己起的 daemon 也同样 unreachable**。完整握手（ping/dispatch 经官方 client）需普通 Linux 环境（VPS/裸机）验证——协议 op/认证/错误码已 100% 对照官方实现，cch 生态内（cch client ↔ cch daemon）握手已在本地实跑通过（on-demand 空闲退出当场验证）。
 
+## ID 隔离四道闸实测记录（2026-09-27）
+
+官方 vet 层还原后，cch daemon 已落齐四道闸。本地实跑取证：
+
+### 实测 1：裸 socket 完整握手（cch daemon 常驻 + newline-JSON 客户端）
+
+```
+连接目标: /tmp/cc-daemon-0/addcfb49/control.sock（官方约定路径，由 config root sha256[:8] 派生）
+请求:  {"op":"ping","auth":"<control.key 64hex>"}
+响应:  {"ok":true,"op":"ping","version":{"ISSUES_EXPLAINER":"...claude-code-hardened..."}}
+```
+
+- 双因素之① control.key 从官方路径（~/.claude/daemon/control.key）读取成功
+- unknown option 缺陷在此版本已消灭（worker args 正确、业务错误为 workspace trust）
+
+### 实测 2：on-demand 空闲退出（官方"最后 client 断开即退出"）
+
+客户端 close 后 lease=0 且无 live worker → **5 秒后 idle_exit**——随后第二发 HAS 查询因服务端已停而超时。生命周期逻辑当场验证（超时不是回归，是特性）。
+
+### 实测 3：permanent error → parking（crash 隔离）
+
+workspace trust 业务错 → `permanent error — parking`（不无限重启）→ supervisor 正常关闭。对齐官方的 park 模型（错误码 78 EXIT_CODE_PERMANENT 语义）。
+
+### 四道闸与防伪造行为对照
+
+| 闸 | cch 行为 | 伪造者看到的行为 |
+|----|---------|----------------|
+| 1 祖先链属主 | bind 前 stat 全链，属主≠uid → ENOTOWNED | 与官方一致的失败文案（refusing to bind: X is owned by uid Y） |
+| 2 对端凭证 | SO_PEERCRED 连接瞬间内核填凭证，≠uid → EPEERUID | 无法伪造（内核权威） |
+| 3 uid 映射性 | uid_map 脏行→undefined；getuid 读数溢出（===overflow）→ 拒所有操作 | 与官方同款 unreachable 文案 |
+| 4 messaging 同款 | 每会话消息通道同套门（此前无——旁路已封） | 经 messagingSock 的伪装在 bind 侧即被 vet |
+
+### 测试面
+
+daemon 测试 49 例全过：解析（uid_map 脏行 undefined / overflowuid）/映射（isFullMap/unmappedUid）/vet（tempdir 通过、/tmp 祖先链 stat、官方原文断言）+ 既有协议矩阵（15 op 认证、qt 状态机、脱敏、文件协议）。
+
 ### 移植中的方法论教训
 
 - **bun compile 产物的进程模型**：embeddedFiles 可能空（bytecode+minify 组合）、argv[0] 是字符串 "bun"、execPath 是 bunfs 虚拟路径——dev 模式经验不适用于 compile 产物，self 路径用 `/proc/self/exe` 判定。
