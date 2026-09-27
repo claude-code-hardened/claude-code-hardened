@@ -77,6 +77,14 @@ export async function daemonMain(args: string[]): Promise<void> {
     case 'run': // 官方别名：piped 场景下前台 supervisor 是默认形态
       await runSupervisor(args.slice(1))
       break
+    case 'ping': {
+      // AC-6 诊断面：附着 client 的版本握手（lean client 入口检查）
+      const { pingDaemon } = await import('./sharedClient.js')
+      const ok = await pingDaemon(config.dir || resolve('.'))
+      console.log(ok ? 'daemon alive' : 'daemon unreachable')
+      if (!ok) process.exitCode = 1
+      break
+    }
     case 'install':
     case 'service-install':
       // 官方此版本同样禁用："Service install is disabled in this version —
