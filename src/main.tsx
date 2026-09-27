@@ -5196,12 +5196,59 @@ async function run(): Promise<CommanderCommand> {
       await setupTokenHandler(root);
     });
 
+  // Official top-level bg command family (registration table archaeology):
+  // "Open a background session in this terminal. <id> is the short id that
+  //  `claude --bg` prints and `claude agents` lists"
+  program
+    .command('attach')
+    .argument('<id>')
+    .description(
+      'Open a background session in this terminal. <id> is the short id that `cch --bg` prints and `cch agents` lists',
+    )
+    .action(async (id: string) => {
+      const bg = await import('./cli/bg.js');
+      await bg.attachHandler(id);
+      process.exit(0);
+    });
+
+  program
+    .command('logs')
+    .argument('<id>')
+    .description("Print a background session's recent terminal output")
+    .action(async (id: string) => {
+      const bg = await import('./cli/bg.js');
+      await bg.logsHandler(id);
+      process.exit(0);
+    });
+
+  program
+    .command('stop')
+    .alias('kill')
+    .argument('<id>')
+    .description('Stop a background session')
+    .action(async (id: string) => {
+      const bg = await import('./cli/bg.js');
+      await bg.killHandler(id);
+      process.exit(0);
+    });
+
   // Agents command - list configured agents
   program
     .command('agents')
     .description('List configured agents')
     .option('--setting-sources <sources>', 'Comma-separated list of setting sources to load (user, project, local).')
     .action(async () => {
+      // 官方语义融合：先列 bg 会话（fleet view——`cch --bg` 打印的 short id 的
+      // 列表源），再列 configured agents
+      const bg = await import('./cli/bg.js');
+      const sessions = await bg.listLiveSessions();
+      if (sessions.length > 0) {
+        console.log(`Background sessions (${sessions.length}):`);
+        for (const s of sessions) {
+          console.log(`  ${s.sessionId?.slice(0, 8) ?? ''}  ${s.kind}  ${s.name ?? s.sessionId ?? ''}  ${s.cwd}`);
+        }
+        console.log('');
+      }
       const { agentsHandler } = await import('./cli/handlers/agents.js');
       await agentsHandler();
       process.exit(0);

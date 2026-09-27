@@ -333,23 +333,23 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Backward-compat: ps/logs/attach/kill → daemon <sub> (deprecated)
+  // Backward-compat: ps/logs/attach/kill → 顶层 bg 命令族（bg.ts handlers）
   if (
     feature('BG_SESSIONS') &&
     (args[0] === 'ps' || args[0] === 'logs' || args[0] === 'attach' || args[0] === 'kill')
   ) {
-    const mapped = args[0] === 'ps' ? 'status' : args[0];
-    const { t } = await import('../i18n/index.js');
-    console.error(t('[deprecated] Use: claude daemon {{cmd}}', { cmd: mapped + (args[1] ? ` ${args[1]}` : '') }));
     profileCheckpoint('cli_daemon_path');
     const { enableConfigs } = await import('../utils/config.js');
     enableConfigs();
     const { setShellIfWindows } = await import('../utils/windowsPaths.js');
     setShellIfWindows();
-    const { initSinks } = await import('../utils/sinks.js');
-    initSinks();
-    const { daemonMain } = await import('../daemon/main.js');
-    await daemonMain([args[0] === 'ps' ? 'status' : args[0]!, ...args.slice(1)]);
+    const bg = await import('../cli/bg.js');
+    const sub = args[0]!;
+    const target = args[1];
+    if (sub === 'ps') await bg.psHandler([]);
+    else if (sub === 'logs') await bg.logsHandler(target);
+    else if (sub === 'attach') await bg.attachHandler(target);
+    else await bg.killHandler(target);
     flushStartupProfile();
     return;
   }
