@@ -339,9 +339,7 @@ export async function handleBgStart(args: string[]): Promise<void> {
     console.log(`  Engine: ${result.engineUsed}`)
     console.log(`  Log: ${result.logPath}`)
     console.log()
-    console.log(
-      `Use \\`cch bg attach ${result.sessionName}\\` to reconnect.`,
-    )
+    console.log(`Use \`cch bg attach ${result.sessionName}\` to reconnect.`)
     console.log(`Use \`cch agents\` to list sessions.`)
     console.log(`Use \`cch stop ${result.sessionName}\` to stop.`)
   } catch (e) {
