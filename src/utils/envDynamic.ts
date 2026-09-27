@@ -139,9 +139,12 @@ export async function initJetBrainsDetection(): Promise<void> {
   }
 }
 
-// Combined export that includes all env properties plus dynamic functions
-export const envDynamic = {
-  ...env, // Include all properties from env
+// Combined export that includes all env properties plus dynamic functions.
+// env 属性经 Proxy 惰性转发而非模块加载期 `...env` 展开——展开会在加载期
+// 触碰 env 的绑定，任何加载顺序/mock.module（audit runner mock env.js）时序
+// 差异都会 TDZ（CI audit 实锤 envDynamic.ts:144）。全部 7 个消费方均为属性
+// 点访问，Proxy 语义兼容。
+const envDynamicOwn = {
   terminal: getTerminalWithJetBrainsDetection(),
   getIsDocker,
   getIsBubblewrapSandbox,
@@ -149,3 +152,13 @@ export const envDynamic = {
   getTerminalWithJetBrainsDetectionAsync,
   initJetBrainsDetection,
 }
+
+export const envDynamic = new Proxy(envDynamicOwn as object, {
+  get(target, key, receiver) {
+    if (key in target) return Reflect.get(target, key, receiver)
+    return Reflect.get(env as object, key, env)
+  },
+  has(target, key) {
+    return key in target || key in env
+  },
+}) as typeof env & typeof envDynamicOwn
