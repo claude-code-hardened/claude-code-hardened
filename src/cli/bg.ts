@@ -87,7 +87,7 @@ function resolveSessionEngine(session: SessionEntry): 'tmux' | 'detached' {
 }
 
 /**
- * `claude daemon status` / `claude ps` — list live sessions.
+ * `cch agents` — list background sessions.
  */
 export async function psHandler(_args: string[]): Promise<void> {
   const sessions = await listLiveSessions()
@@ -123,7 +123,7 @@ export async function psHandler(_args: string[]): Promise<void> {
 }
 
 /**
- * `claude daemon logs <target>` — show logs for a session.
+ * `cch logs <target>` — show logs for a session.
  */
 export async function logsHandler(target: string | undefined): Promise<void> {
   const sessions = await listLiveSessions()
@@ -340,10 +340,10 @@ export async function handleBgStart(args: string[]): Promise<void> {
     console.log(`  Log: ${result.logPath}`)
     console.log()
     console.log(
-      `Use \`claude daemon attach ${result.sessionName}\` to reconnect.`,
+      `Use \\`cch bg attach ${result.sessionName}\\` to reconnect.`,
     )
-    console.log(`Use \`claude daemon status\` to check status.`)
-    console.log(`Use \`claude daemon kill ${result.sessionName}\` to stop.`)
+    console.log(`Use \`cch agents\` to list sessions.`)
+    console.log(`Use \`cch stop ${result.sessionName}\` to stop.`)
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e))
     process.exitCode = 1
