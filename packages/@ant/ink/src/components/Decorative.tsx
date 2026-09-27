@@ -1,4 +1,4 @@
-import { NoSelect } from './NoSelect.js'
+import { NoSelect } from './NoSelect.js';
 
 /**
  * 官方 SA：Decorative 组件（binary @152709648 原文反混淆）。
@@ -14,12 +14,12 @@ export function Decorative({
   children,
   fallback,
 }: {
-  children: React.ReactNode
-  fallback?: React.ReactNode
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
 }): React.ReactNode {
-  const screenReaderEnabled = process.env['CLAUDE_CODE_SCREEN_READER'] === '1'
+  const screenReaderEnabled = process.env['CLAUDE_CODE_SCREEN_READER'] === '1';
   if (screenReaderEnabled) {
-    return fallback ?? null
+    return fallback ?? null;
   }
-  return <NoSelect>{children}</NoSelect>
+  return <NoSelect>{children}</NoSelect>;
 }

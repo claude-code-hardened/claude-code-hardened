@@ -118,9 +118,13 @@ export function fixJediTermWheel<T extends WheelInput>(
       state.lastWheelTime = now
       if (evt.name === 'wheeldown') state.lastWheelTime = now
       // ① 方向反转修正：wheelup 改写为 wheeldown
-      if (evt.name === 'wheelup' && now - state.lastWheelDownTime < WHEEL_FLIP_MS && isBugConfirmed(state)) {
+      if (
+        evt.name === 'wheelup' &&
+        now - state.lastWheelDownTime < WHEEL_FLIP_MS &&
+        isBugConfirmed(state)
+      ) {
         patched ??= inputs.slice(0, p)
-        patched.push({...evt, name: 'wheeldown'})
+        patched.push({ ...evt, name: 'wheeldown' })
         continue
       }
       patched?.push(evt)
