@@ -1,7 +1,14 @@
-import { env } from '../utils/env.js'
+// platform 判定内联（与 utils/env 的 env.platform 同语义）——figures 被
+// i18n/settings 加载链引用，模块级 import env 会形成循环依赖（runner 子进程
+// 实锤 ReferenceError: Cannot access 'env' before initialization）。
+const PLATFORM = (['win32', 'darwin'] as const).includes(
+  process.platform as 'win32' | 'darwin',
+)
+  ? process.platform
+  : 'linux'
 
 // The former is better vertically aligned, but isn't usually supported on Windows/Linux
-export const BLACK_CIRCLE = env.platform === 'darwin' ? '⏺' : '●'
+export const BLACK_CIRCLE = PLATFORM === 'darwin' ? '⏺' : '●'
 export const BULLET_OPERATOR = '∙'
 export const TEARDROP_ASTERISK = '✻'
 export const UP_ARROW = '\u2191' // ↑ - used for opus 1m merge notice
