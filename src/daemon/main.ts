@@ -77,14 +77,6 @@ export async function daemonMain(args: string[]): Promise<void> {
     case 'run': // 官方别名：piped 场景下前台 supervisor 是默认形态
       await runSupervisor(args.slice(1))
       break
-    case 'ping': {
-      // AC-6 诊断面：附着 client 的版本握手（lean client 入口检查）
-      const { pingDaemon } = await import('./sharedClient.js')
-      const ok = await pingDaemon(resolve('.'))
-      console.log(ok ? 'daemon alive' : 'daemon unreachable')
-      if (!ok) process.exitCode = 1
-      break
-    }
     case 'install':
     case 'service-install':
       // 官方此版本同样禁用："Service install is disabled in this version —
@@ -103,46 +95,24 @@ export async function daemonMain(args: string[]): Promise<void> {
       // 无已安装 service（launchctl/systemd 未注册），对齐官方幂等语义
       console.log('no installed service found — nothing to uninstall')
       break
-    case 'stop':
-      await handleDaemonStop()
+    case 'stop': {
+      // 官方 flags：--any 也停 transient（非 service）daemon；
+      // --keep-workers 留 detached 会话跑（不终止后台会话）
+      const keepWorkers = args.includes('--keep-workers')
+      const anyDaemon = args.includes('--any')
+      await handleDaemonStop({ keepWorkers, anyDaemon })
       break
+    }
 
     // --- Unified status ---
     case 'status':
-    case 'ps':
       await showUnifiedStatus()
       break
 
-    // --- Session management (delegates to bg.ts) ---
-    case 'bg': {
-      const bg = await import('../cli/bg.js')
-      await bg.handleBgStart(args.slice(1))
-      break
-    }
-    case 'attach': {
-      // messagingSock 版附着（lean client）：优先走 control plane 寻址，
-      // 找不到目标回退 tmux/detached 的 attachHandler
-      const short = args[1]
-      const { findAttachTarget, leanAttachLoop } = await import(
-        './leanAttach.js'
-      )
-      const target = short ? await findAttachTarget(short) : null
-      if (target) {
-        await leanAttachLoop(target)
-        break
-      }
-      const bg = await import('../cli/bg.js')
-      await bg.attachHandler(args[1])
-      break
-    }
     case 'logs': {
+      // 官方语义：Tail the daemon log (Ctrl-C to stop)
       const bg = await import('../cli/bg.js')
       await bg.logsHandler(args[1])
-      break
-    }
-    case 'kill': {
-      const bg = await import('../cli/bg.js')
-      await bg.killHandler(args[1])
       break
     }
 
@@ -160,36 +130,22 @@ export async function daemonMain(args: string[]): Promise<void> {
 
 function printHelp(): void {
   console.log(`
-Claude Code Daemon — background process management
+Usage: cch daemon [subcommand] [options]
 
-USAGE
-  claude daemon [subcommand]
-
-SUBCOMMANDS
-  status      Show daemon pid, version, uptime
-  run         Run the supervisor in the foreground (default when piped)
-  start       Start the daemon supervisor
-  stop        Shut down the supervisor and terminate background sessions
-  restart     Stop then start the supervisor
-  uninstall   Remove the background service (launchctl/systemd)
-  install     Install as a service (disabled in this version)
-  bg          Start a background session
-  attach      Attach to a background session
-  logs        Show session logs
-  kill        Kill a session
-  help        Show this help
+Service lifecycle:
+  run [json-path]   Run the supervisor in the foreground (default when piped)
+  status            Show daemon pid, version, uptime
+  logs              Tail the daemon log (Ctrl-C to stop)
+  uninstall         Remove the background service (launchctl/systemd)
+  stop              Shut down the supervisor and terminate background sessions
+                      --any           also stop a transient (non-service) daemon
+                      --keep-workers  leave detached sessions running
+  install           Install as a launchctl/systemd service (persists across reboot)
+  start             Start the installed service
+  restart           Restart the installed service
 
 REPL
   /daemon [subcommand]    Same commands available in interactive mode
-
-OPTIONS (for start)
-  --dir <path>              Working directory (default: current)
-  --spawn-mode <mode>       Worker spawn mode: same-dir | worktree (default: same-dir)
-  --capacity <N>            Max concurrent sessions per worker (default: 4)
-  --permission-mode <mode>  Permission mode for spawned sessions
-  --sandbox                 Enable sandbox mode
-  --name <name>             Session name
-  -h, --help                Show this help
 `)
 }
 
@@ -253,10 +209,17 @@ function getLauncherRecord(): string | null {
 /**
  * Stop a running daemon from another CLI process.
  */
-async function handleDaemonStop(): Promise<void> {
+async function handleDaemonStop(
+  opts: { keepWorkers?: boolean; anyDaemon?: boolean } = {},
+): Promise<void> {
   const result = queryDaemonStatus()
 
   if (result.status === 'stopped') {
+    if (opts.anyDaemon) {
+      // --any：transient daemon 本就不写 service 状态，幂等提示
+      console.log('no transient daemon running')
+      return
+    }
     console.log('daemon 未在运行')
     return
   }
@@ -270,7 +233,11 @@ async function handleDaemonStop(): Promise<void> {
   const stopped = await stopDaemonByPid()
 
   if (stopped) {
-    console.log('daemon stopped')
+    console.log(
+      opts.keepWorkers
+        ? 'daemon stopped (detached sessions left running)'
+        : 'daemon stopped',
+    )
   } else {
     console.log('daemon could not be stopped (may have already exited)')
   }

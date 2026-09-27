@@ -167,7 +167,7 @@ export async function logsHandler(target: string | undefined): Promise<void> {
 }
 
 /**
- * `claude daemon attach <target>` — attach to a background session.
+ * `cch bg attach <target>` — attach to a background session.
  *
  * Engine-aware: tmux sessions use tmux attach, detached sessions use log tail.
  */
@@ -181,7 +181,7 @@ export async function attachHandler(target: string | undefined): Promise<void> {
     )
     if (bgSessions.length === 0) {
       console.log(
-        'No background sessions to attach to. Start one with `claude daemon bg`.',
+        'No background sessions to attach to. Start one with `cch bg`.',
       )
       return
     }
@@ -231,7 +231,7 @@ export async function attachHandler(target: string | undefined): Promise<void> {
 }
 
 /**
- * `claude daemon kill <target>` — kill a session.
+ * `cch bg kill <target>` — kill a session.
  */
 export async function killHandler(target: string | undefined): Promise<void> {
   const sessions = await listLiveSessions()
@@ -283,7 +283,7 @@ export async function killHandler(target: string | undefined): Promise<void> {
 }
 
 /**
- * `claude daemon bg [args]` — start a background session.
+ * `cch bg [args]` — start a background session.
  *
  * Cross-platform: uses TmuxEngine on macOS/Linux when tmux is available,
  * falls back to DetachedEngine on Windows or when tmux is absent.
@@ -304,8 +304,8 @@ export async function handleBgStart(args: string[]): Promise<void> {
       'Error: Background sessions with detached engine require -p/--print flag.\n' +
         'The detached engine has no terminal for interactive input.\n\n' +
         'Usage:\n' +
-        '  claude daemon bg -p "your prompt here"\n' +
-        '  echo "prompt" | claude daemon bg --pipe',
+        '  cch bg -p "your prompt here"\n' +
+        '  echo "prompt" | cch bg --pipe',
     )
     if (process.platform !== 'win32') {
       console.error(
