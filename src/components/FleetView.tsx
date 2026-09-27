@@ -1,4 +1,4 @@
-import { Box, Text, useInput, useApp } from '../../ink.js';
+import { Box, Text, useInput, useApp } from '@anthropic/ink';
 import { useEffect, useState } from 'react';
 
 /**
@@ -34,7 +34,7 @@ export function FleetView({
     if (selected >= rows.length) setSelected(Math.max(0, rows.length - 1));
   }, [rows.length, selected]);
 
-  useInput((input, key) => {
+  useInput((input: string, key: { upArrow?: boolean; downArrow?: boolean; return?: boolean; escape?: boolean }) => {
     if (input === 'j' || key.downArrow) {
       setSelected(s => Math.min(rows.length - 1, s + 1));
     } else if (input === 'k' || key.upArrow) {

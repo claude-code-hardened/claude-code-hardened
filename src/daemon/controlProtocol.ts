@@ -34,6 +34,7 @@ export type EErrorCode =
   | 'ENOREPLY'
   | 'EPEERUID'
   | 'EPROTO'
+  | 'ERATE'
   | 'ERESPAWNING'
   | 'ESTALE'
   | 'ESTARTING'
