@@ -159,10 +159,9 @@ export async function createRoot({
   }
   try {
     // 官方 Per 契约的查询源：Map<WriteStream, Ink>（instances.ts 默认导出）
-    const registry =
-      require('./instances.js') as {
-        default: Map<NodeJS.WriteStream, unknown>
-      }
+    const registry = require('./instances.js') as {
+      default: Map<NodeJS.WriteStream, unknown>
+    }
     registry.default.set(stdout, instance as unknown)
   } catch {
     // 注册失败不影响 root 本体

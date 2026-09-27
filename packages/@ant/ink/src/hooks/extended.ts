@@ -118,10 +118,20 @@ function contains(ancestor: unknown, node: unknown): boolean {
 
 // ── 时钟层（na / jo / Iue 原文）──
 
-/** 官方 na：useClock()——返回 now() 函数（ClockNow 缺省 Date.now）。 */
+/** 官方 Yt：useClock()——ClockProvider 必需（错误契约：useClock must be
+ * used within a ClockProvider）；返回 now() 函数。 */
 export function useClock(): () => number {
   const nowFn = useContext(ClockContext as never) as (() => number) | undefined
-  return nowFn ?? Date.now
+  if (!nowFn) {
+    throw new Error('useClock must be used within a ClockProvider')
+  }
+  return nowFn
+}
+
+/** 官方 na：useInputClock()——取当前时钟值（缺省 Date.now）。 */
+export function useInputClock(): number {
+  const nowFn = useContext(ClockContext as never) as (() => number) | undefined
+  return (nowFn ?? Date.now)()
 }
 
 /** 官方 Iue：startClockInterval(store, fn, ms)——自排程循环（finally 重排）。 */
@@ -292,10 +302,9 @@ export function useResolvedTheme(
 
 /** 官方 Per：rootOf(stdout)——instances Map 查已注册 root（createRoot 注册）。 */
 export function rootOf(stdout: NodeJS.WriteStream = process.stdout): unknown {
-  const registry =
-    require('../core/instances.js') as {
-      default: Map<NodeJS.WriteStream, unknown>
-    }
+  const registry = require('../core/instances.js') as {
+    default: Map<NodeJS.WriteStream, unknown>
+  }
   return registry.default.get(stdout)
 }
 

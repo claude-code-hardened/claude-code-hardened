@@ -63,7 +63,7 @@ function computeIsVisible(
   return bottom > viewportTop && offset < viewportBottom
 }
 
-export function useInView(): [
+export function useTerminalViewport(): [
   setRef: (node: unknown) => void,
   isVisible: boolean,
   forceCheck: () => boolean,

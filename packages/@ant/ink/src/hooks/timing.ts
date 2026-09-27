@@ -96,7 +96,7 @@ export function useAnimationTimer(fps: number | null): number {
   return Math.floor(anchorRef.current / slice) * slice
 }
 
-// ── 官方 Ea：useFrames(fps) ──
+// ── 官方 Ea：useAnimationFrameEx(fps)（映射实证：Ea as useAnimationFrame）──
 
 /** 官方 Ce：alt-screen 全量重绘阈值（CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT 时下限 480）。 */
 export function repaintFloor(fps: number): number {
@@ -109,7 +109,7 @@ export function repaintFloor(fps: number): number {
  * visibility 来自 useInView；tick 以 repaintFloor(fps) 帧对齐，
  * 仅在可见时推进 keepAlive 订阅。
  */
-export function useFrames(
+export function useAnimationFrameEx(
   fps: number | null = 16,
   inView:
     | [
