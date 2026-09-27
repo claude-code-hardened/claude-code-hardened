@@ -65,7 +65,9 @@ export class FocusManager {
       this.autoFocusStack.shift()
   }
 
-  focus(node: DOMElement): void {
+  focus(rawNode: DOMElement): void {
+    // 官方语义：先 resolveScope（tabIndex!==-1 直取 / 三级回退）
+    const node = this.resolveScope(rawNode)
     if (node === this.activeElement) return
     if (!this.enabled) return
 

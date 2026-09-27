@@ -31,7 +31,10 @@ export type NodeNames = ElementNames | TextName
 // eslint-disable-next-line @typescript-eslint/naming-convention
 export type DOMElement = {
   nodeName: ElementNames
-  attributes: Record<string, DOMNodeAttribute>
+  attributes: Record<string, DOMNodeAttribute> & {
+    /** 官方 autoFocusStack 的声明键（VJe/handleAutoFocus 契约）。 */
+    autoFocus?: boolean
+  }
   childNodes: DOMNode[]
   textStyles?: TextStyles
 
