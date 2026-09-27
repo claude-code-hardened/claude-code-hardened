@@ -203,7 +203,8 @@ export { useAnimationTimer, useInterval } from './hooks/use-interval.js'
 export { useSelection, useHasSelection } from './hooks/use-selection.js'
 export { default as useStdin } from './hooks/use-stdin.js'
 export { useTerminalSize } from './hooks/useTerminalSize.js'
-export { useTimeout } from './hooks/useTimeout.js'
+export { useTimeout } from './hooks/timing.js'
+export { useTimeout as useElapsedTimeout } from './hooks/useTimeout.js'
 export { useMinDisplayTime } from './hooks/useMinDisplayTime.js'
 export {
   useDoublePress,
