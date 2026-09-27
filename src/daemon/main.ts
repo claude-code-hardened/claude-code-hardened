@@ -120,6 +120,17 @@ export async function daemonMain(args: string[]): Promise<void> {
       break
     }
     case 'attach': {
+      // messagingSock 版附着（lean client）：优先走 control plane 寻址，
+      // 找不到目标回退 tmux/detached 的 attachHandler
+      const short = args[1]
+      const { findAttachTarget, leanAttachLoop } = await import(
+        './leanAttach.js'
+      )
+      const target = short ? await findAttachTarget(short) : null
+      if (target) {
+        await leanAttachLoop(target)
+        break
+      }
       const bg = await import('../cli/bg.js')
       await bg.attachHandler(args[1])
       break
