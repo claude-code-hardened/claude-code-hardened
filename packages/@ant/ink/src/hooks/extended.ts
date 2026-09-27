@@ -269,10 +269,34 @@ export interface ThemeOverride {
   values: Record<string, string>
 }
 
-const ThemeOverridesContext = useMemoSafe<{
-  active: ThemeOverride[]
-  custom: Record<string, ThemeOverride>
-}>()
+/**
+ * 官方主题层 Context 的完整字段契约（binary 字符串表实证）：
+ *   setThemeSetting / currentTheme / resolvedTheme / activeThemeOverrides /
+ *   activeCustomTheme / reloadCustomThemes / setPreviewOverrides /
+ *   watchSystemTheme / onThemeSave
+ */
+export interface ThemeContextContract {
+  /** 当前主题 id（toe/useThemeSetting 写入）。 */
+  setThemeSetting: (id: string) => void
+  /** 当前主题对象。 */
+  currentTheme: Record<string, string>
+  /** overrides 折叠后的最终值。 */
+  resolvedTheme: Record<string, string>
+  /** session 级覆盖层。 */
+  activeThemeOverrides: ThemeOverride[]
+  /** 激活的自定义主题。 */
+  activeCustomTheme: ThemeOverride | null
+  /** 重新加载用户自定义主题表。 */
+  reloadCustomThemes: () => void
+  /** 预览覆盖（设置面板实时预览）。 */
+  setPreviewOverrides: (o: ThemeOverride | null) => void
+  /** 系统主题变化观察（noe）。 */
+  watchSystemTheme: (cb: (dark: boolean) => void) => VoidFn
+  /** 主题保存回调（onThemeSave）。 */
+  onThemeSave: (name: string, values: Record<string, string>) => void
+}
+
+const ThemeOverridesContext = useMemoSafe<Partial<ThemeContextContract>>()
 
 export const ThemeOverridesProvider = ThemeOverridesContext.Provider
 
@@ -286,16 +310,33 @@ export function useCustomThemes(): Record<string, ThemeOverride> {
   return useContext(ThemeOverridesContext)?.custom ?? {}
 }
 
-/** 官方 useResolvedTheme：overrides 折叠后的最终值。 */
+/** 官方 useResolvedTheme：Context 的 resolvedTheme 优先，折叠兜底。 */
 export function useResolvedTheme(
   base: Record<string, string>,
 ): Record<string, string> {
+  const ctx = useContext(ThemeOverridesContext)
   const active = useActiveThemeOverrides()
   return useMemo(() => {
+    if (ctx?.resolvedTheme) return ctx.resolvedTheme
     const out = { ...base }
     for (const o of active) Object.assign(out, o.values)
     return out
-  }, [base, active])
+  }, [ctx?.resolvedTheme, base, active])
+}
+
+/** 官方 Zn：useTheme()——currentTheme（契约字段）。 */
+export function useTheme(): Record<string, string> {
+  return useContext(ThemeOverridesContext)?.currentTheme ?? {}
+}
+
+/** 官方 toe：useThemeSetting()——主题 id 设置器。 */
+export function useThemeSetting(): (id: string) => void {
+  return useContext(ThemeOverridesContext)?.setThemeSetting ?? noop
+}
+
+/** 官方 dqt：usePreviewTheme()——预览覆盖设置器。 */
+export function usePreviewTheme(): (o: ThemeOverride | null) => void {
+  return useContext(ThemeOverridesContext)?.setPreviewOverrides ?? noop
 }
 
 // ── 树工具（Per / Wbe 原文）──

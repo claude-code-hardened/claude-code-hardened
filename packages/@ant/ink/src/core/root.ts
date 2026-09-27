@@ -152,7 +152,19 @@ export async function createRoot({
 
   // 官方 a_t 原文：按 stdout 注册 root 实例（WeakMap）——Per/rootOf 的查询源。
   const rootHandle = {
-    render: (node: React.ReactNode) => instance.render(node),
+    render: (node: React.ReactNode) => {
+      // 官方契约：every Ink root 必挂 KillRingProvider（src/ink.ts 装配语义）
+      const { KillRingProvider } =
+        require('../kill-ring.js') as typeof import('../kill-ring.js')
+      const React = require('react') as {
+        createElement: (
+          t: unknown,
+          props: unknown,
+          ...children: unknown[]
+        ) => React.ReactNode
+      }
+      return instance.render(React.createElement(KillRingProvider, null, node))
+    },
     unmount: () => instance.unmount(),
     waitUntilExit: () => instance.waitUntilExit(),
     root: instance,
