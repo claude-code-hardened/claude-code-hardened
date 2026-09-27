@@ -8,6 +8,8 @@
  *   --dry-run   Show what would be installed without installing
  *   --safe      Roll back to the server-pinned safe version
  */
+import { t } from '../i18n/index.js'
+
 export async function rollback(
   target?: string,
   options?: { list?: boolean; dryRun?: boolean; safe?: boolean },

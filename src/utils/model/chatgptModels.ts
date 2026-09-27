@@ -1,3 +1,5 @@
+import { t } from '../../i18n/index.js'
+
 export type ChatGPTCodexModelOption = {
   value: string
   label: string

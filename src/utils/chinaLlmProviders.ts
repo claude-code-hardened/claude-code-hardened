@@ -3,6 +3,8 @@
  * All providers are OpenAI-compatible — just swap baseURL + apiKey.
  */
 
+import { t } from '../i18n/index.js'
+
 export type ProviderModel = {
   id: string
   label: string
