@@ -290,6 +290,17 @@ export async function killHandler(target: string | undefined): Promise<void> {
  * falls back to DetachedEngine on Windows or when tmux is absent.
  */
 export async function handleBgStart(args: string[]): Promise<void> {
+  // 官方 launcher 语义：首次 bg 服务需求时经启动通道被动拉起共享 daemon
+  // （"will start the next background service through it"）。探测 → 不在则
+  // 拉起 → 5s init 窗口；拉起失败静默回退（本会话不受阻，会话仍可独立
+  // spawn——cch 不做官方的 refuse-unwrapped 强制）。
+  try {
+    const { ensureSharedDaemon } = await import('../daemon/sharedClient.js')
+    await ensureSharedDaemon()
+  } catch {
+    // supervisor 不可用不阻塞会话发起
+  }
+
   const engine = await selectEngine()
 
   // Strip --bg/--background from args (for backward-compat shortcut)
