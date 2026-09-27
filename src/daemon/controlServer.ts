@@ -19,11 +19,40 @@ import {
  * upstream's exact response shapes and error codes.
  */
 
+/** remote IPC path refine（官方 me()）：daemon 的 IPC socket 必须是绝对路径。 */
+export function refineRemoteIpcPath(p: string | undefined): string | undefined {
+  if (p === undefined || p === '') return p
+  if (!p.startsWith('/'))
+    throw Object.assign(new Error('remote IPC path must be absolute'), {
+      code: 'EPROTO',
+    })
+  return p
+}
+
+/**
+ * JobRecord schema 对齐官方 roster worker（官方 Be）：
+ * rendezvousSock 为 required（会合通道），ptySock/messagingSock optional，
+ * procStart/sessionId/cliVersion/attempt/pendingRespawn 同字段名。
+ */
 export interface JobRecord {
   short: string
   nonce?: string
   pid: number
+  /** 进程启动时刻 ms（recycled pid 判定：pidAlive 但 procStart 变化 = 复用进程） */
+  procStart?: number
+  /** bridge session 寻址键 */
+  sessionId?: string
+  /** 会合通道（官方 required） */
+  rendezvousSock?: string
+  /** PTY 通道 */
+  ptySock?: string
+  /** 消息通道 */
   messagingSock?: string
+  cliVersion?: string
+  startedAt?: number
+  attempt?: number
+  /** 重启 pending 原因（'upgrade'） */
+  pendingRespawn?: 'upgrade'
   outcome?: string
   [k: string]: unknown
 }

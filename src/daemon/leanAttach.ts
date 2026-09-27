@@ -111,10 +111,19 @@ export async function leanAttachLoop(target: AttachTarget): Promise<void> {
         return
       }
     } catch (err) {
-      console.error(
-        'attach error:',
-        err instanceof Error ? err.message : String(err),
-      )
+      const raw = err instanceof Error ? err.message : String(err)
+      // 官方错误分类：EKICKED:（被人工踢出）/E[A-Z]+:（协议错误前缀）
+      if (/^EKICKED:\s*/.test(raw)) {
+        console.error(raw.replace(/^EKICKED:\s*/, 'session kicked: '))
+        process.exitCode = 1
+        return
+      }
+      if (/^E[A-Z]+:/.test(raw)) {
+        console.error('attach error:', raw)
+        process.exitCode = 1
+        return
+      }
+      console.error('attach error:', raw)
       process.exitCode = 1
       return
     }
