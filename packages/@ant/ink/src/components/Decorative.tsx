@@ -1,16 +1,25 @@
-import { Box, type BoxProps } from './Box.js';
+import { NoSelect } from './NoSelect.js'
 
 /**
- * 官方 Decorative 组件（2.1.283 导出面）——纯装饰容器：
- * 无交互语义（pointer-events 屏蔽 + aria-hidden 惯例），布局行为同 Box。
- * minified 原文未能独立定位——按官方组件族（BaseBox 变体）契约实现。
+ * 官方 SA：Decorative 组件（binary @152709648 原文反混淆）。
+ *
+ * 原文契约：
+ *   function SA(o){ let {children, fallback} = o; return _t() ? fallback ?? null : children }
+ *   —— _t() = useIsScreenReaderEnabled 的函数语境版。
+ *
+ * 语义：装饰性内容容器——屏幕阅读器启用时不渲染 children（避免辅助
+ * 技术噪音），渲染 fallback（默认 null）。
  */
-export function Decorative(props: BoxProps): React.ReactNode {
-  return (
-    <Box
-      {...props}
-      /* 装饰语义：交互穿透 */
-      pointerEvents="none"
-    />
-  );
+export function Decorative({
+  children,
+  fallback,
+}: {
+  children: React.ReactNode
+  fallback?: React.ReactNode
+}): React.ReactNode {
+  const screenReaderEnabled = process.env['CLAUDE_CODE_SCREEN_READER'] === '1'
+  if (screenReaderEnabled) {
+    return fallback ?? null
+  }
+  return <NoSelect>{children}</NoSelect>
 }
