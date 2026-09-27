@@ -35,27 +35,26 @@ describe('daemonMain subcommand routing', () => {
     const { daemonMain } = await import('../main.js')
     await daemonMain(['help'])
     const output = logLines.join('\n')
-    expect(output).toContain('SUBCOMMANDS')
+    // help 已按官方清单汉化（子命令矩阵对齐：无 bg/attach/kill）
+    expect(output).toContain('服务生命周期')
     expect(output).toContain('status')
     expect(output).toContain('start')
     expect(output).toContain('stop')
-    expect(output).toContain('bg')
-    expect(output).toContain('attach')
     expect(output).toContain('logs')
-    expect(output).toContain('kill')
+    expect(output).toContain('restart')
   })
 
   test('--help is alias for help', async () => {
     const { daemonMain } = await import('../main.js')
     await daemonMain(['--help'])
     const output = logLines.join('\n')
-    expect(output).toContain('SUBCOMMANDS')
+    expect(output).toContain('服务生命周期')
   })
 
   test('-h is alias for help', async () => {
     const { daemonMain } = await import('../main.js')
     await daemonMain(['-h'])
     const output = logLines.join('\n')
-    expect(output).toContain('SUBCOMMANDS')
+    expect(output).toContain('服务生命周期')
   })
 })

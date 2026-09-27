@@ -6,6 +6,7 @@
  * event metadata across all analytics systems (Datadog, 1P).
  */
 
+import { COMPUTER_USE_MCP_SERVER_NAME } from '../../utils/computerUse/common.js'
 import { extname } from 'path'
 import memoize from 'lodash-es/memoize.js'
 import { env, getHostPlatformForAnalytics } from '../../utils/env.js'
@@ -125,17 +126,25 @@ export function isAnalyticsToolDetailsLoggingEnabled(
  * reservation (main.tsx, config.ts addMcpServer) is itself feature-gated, so
  * a user-configured 'computer-use' is possible in builds without the feature.
  */
-/* eslint-disable @typescript-eslint/no-require-imports */
-const BUILTIN_MCP_SERVER_NAMES: ReadonlySet<string> = new Set(
-  feature('CHICAGO_MCP')
-    ? [
-        (
-          require('../../utils/computerUse/common.js') as typeof import('../../utils/computerUse/common.js')
-        ).COMPUTER_USE_MCP_SERVER_NAME,
-      ]
-    : [],
-)
-/* eslint-enable @typescript-eslint/no-require-imports */
+/**
+ * Built-in MCP server names — 惰性求值：dist 产物里 computerUse/common
+ * 被切分为 async chunk，同步 require 会抛 TypeError（集成测试实锤）。
+ * 首次调用后缓存；feature 关闭时为空集。
+ */
+let builtinMcpServerNamesCache: ReadonlySet<string> | null = null
+function getBuiltinMcpServerNames(): ReadonlySet<string> {
+  if (builtinMcpServerNamesCache) return builtinMcpServerNamesCache
+  const names: string[] = []
+  if (feature('CHICAGO_MCP')) {
+    try {
+      names.push(COMPUTER_USE_MCP_SERVER_NAME)
+    } catch {
+      // 静态 import 在 feature 关闭的构建里不存在
+    }
+  }
+  builtinMcpServerNamesCache = new Set(names)
+  return builtinMcpServerNamesCache
+}
 
 /**
  * Spreadable helper for logEvent payloads — returns {mcpServerName, mcpToolName}
@@ -155,7 +164,7 @@ export function mcpToolDetailsForAnalytics(
     return {}
   }
   if (
-    !BUILTIN_MCP_SERVER_NAMES.has(details.serverName) &&
+    !getBuiltinMcpServerNames().has(details.serverName) &&
     !isAnalyticsToolDetailsLoggingEnabled(mcpServerType, mcpServerBaseUrl)
   ) {
     return {}
