@@ -273,3 +273,16 @@ export {
   type FocusManagerApi,
   type PaintedWindow,
 } from './hooks/extended.js'
+export {
+  useInView,
+  useDebouncedCallback,
+  useAnimationTimer,
+  useFrames,
+  repaintFloor,
+  type Cancelable,
+} from './hooks/timing.js'
+export { useInView as useInViewBase } from './hooks/use-in-view.js'
+export type { ThemeOverride as ThemeOverrideEntry } from './hooks/extended.js'
+export { MouseActionEvent as PointerEvent } from './core/events/mouse-action-event.js'
+export { Decorative } from './components/Decorative.js'
+export { useInView } from './hooks/use-in-view.js'
