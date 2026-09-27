@@ -201,33 +201,31 @@ async function showUnifiedStatus(): Promise<void> {
   // 可达性 → bg workers roster → bg sessions 明细
   const lock = readLock()
   if (!lock || !signalableByCurrentUser(lock.pid)) {
-    console.log('not running')
+    console.log('未在运行')
   } else {
     const startedAt = Date.parse(lock.startedAt)
     const uptimeSec = Number.isFinite(startedAt)
       ? Math.round((Date.now() - startedAt) / 1000)
       : -1
     console.log(
-      `daemon: running (pid=${lock.pid}, origin=${lock.origin}, uptime=${uptimeSec}s)`,
+      `daemon：运行中 (pid=${lock.pid}，来源=${lock.origin}，已运行 ${uptimeSec} 秒)`,
     )
   }
-  console.log(`launcher: ${getLauncherRecord() ?? '(none running)'}`)
+  console.log(`启动器：${getLauncherRecord() ?? '（无运行中的）'}`)
 
   const sockDir = officialSockDir()
   const sockPath = officialControlSockPath()
-  console.log(`\nbg sessions:`)
-  console.log(`  sock dir:     ${sockDir}`)
+  console.log(`\n后台会话：`)
+  console.log(`  sock 目录：  ${sockDir}`)
   const reachable = existsSync(sockPath)
-  console.log(
-    `  control.sock: ${reachable ? 'present' : 'absent'} (${sockPath})`,
-  )
+  console.log(`  control.sock：${reachable ? '在' : '缺失'} (${sockPath})`)
   const { listLiveSessions } = await import('../cli/bg.js')
   const bgSessions = await listLiveSessions()
   console.log(
-    `  bg workers:   ${bgSessions.length > 0 ? `${bgSessions.length} live` : '0 in roster.json (control unreachable)'}`,
+    `  后台 worker：${bgSessions.length > 0 ? `${bgSessions.length} 个存活` : 'roster.json 中 0 个（control 不可达）'}`,
   )
 
-  console.log('\n=== Background Sessions ===')
+  console.log('\n=== 后台会话 ===')
   const bg = await import('../cli/bg.js')
   await bg.psHandler([])
 }
@@ -246,7 +244,7 @@ function getLauncherRecord(): string | null {
   try {
     const wrapper = process.env['SHELL']
     if (!wrapper) return null
-    return `this cch resolves \`${wrapper}\` and will start the next background service through it`
+    return `当前 cch 解析到 \`${wrapper}\`，下一个后台服务将经由它启动`
   } catch {
     return null
   }
@@ -259,7 +257,7 @@ async function handleDaemonStop(): Promise<void> {
   const result = queryDaemonStatus()
 
   if (result.status === 'stopped') {
-    console.log('daemon is not running')
+    console.log('daemon 未在运行')
     return
   }
 

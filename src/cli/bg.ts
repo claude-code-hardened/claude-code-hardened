@@ -66,6 +66,20 @@ function formatTime(ts: number): string {
  * Backward-compatible: sessions without an `engine` field are inferred
  * from the presence of `tmuxSessionName`.
  */
+/** 会话状态枚举的显示映射（busy/interactive 等数据值 → 中文）。 */
+const STATUS_LABELS: Record<string, string> = {
+  busy: '忙碌',
+  idle: '空闲',
+  crashed: '已崩溃',
+  exited: '已退出',
+}
+
+/** 会话类型枚举的显示映射。 */
+const KIND_LABELS: Record<string, string> = {
+  interactive: '交互',
+  headless: '无头',
+}
+
 function resolveSessionEngine(session: SessionEntry): 'tmux' | 'detached' {
   if (session.engine) return session.engine
   return session.tmuxSessionName ? 'tmux' : 'detached'
@@ -78,31 +92,29 @@ export async function psHandler(_args: string[]): Promise<void> {
   const sessions = await listLiveSessions()
 
   if (sessions.length === 0) {
-    console.log('No active sessions.')
+    console.log('没有活跃会话。')
     return
   }
 
-  console.log(
-    `${sessions.length} active session${sessions.length > 1 ? 's' : ''}:\n`,
-  )
+  console.log(`共 ${sessions.length} 个活跃会话：\n`)
 
   for (const s of sessions) {
     const engineType = resolveSessionEngine(s)
     const parts: string[] = [
       `  PID: ${s.pid}`,
-      `  Kind: ${s.kind}`,
-      `  Engine: ${engineType}`,
-      `  Session: ${s.sessionId}`,
+      `  类型：${KIND_LABELS[s.kind] ?? s.kind}`,
+      `  引擎：${engineType === 'tmux' ? 'tmux' : '独立进程'}`,
+      `  会话：${s.sessionId}`,
       `  CWD: ${s.cwd}`,
     ]
 
-    if (s.name) parts.push(`  Name: ${s.name}`)
-    if (s.startedAt) parts.push(`  Started: ${formatTime(s.startedAt)}`)
-    if (s.status) parts.push(`  Status: ${s.status}`)
-    if (s.waitingFor) parts.push(`  Waiting for: ${s.waitingFor}`)
+    if (s.name) parts.push(`  名称：${s.name}`)
+    if (s.startedAt) parts.push(`  启动于：${formatTime(s.startedAt)}`)
+    if (s.status) parts.push(`  状态：${STATUS_LABELS[s.status] ?? s.status}`)
+    if (s.waitingFor) parts.push(`  等待：${s.waitingFor}`)
     if (s.bridgeSessionId) parts.push(`  Bridge: ${s.bridgeSessionId}`)
-    if (s.tmuxSessionName) parts.push(`  Tmux: ${s.tmuxSessionName}`)
-    if (s.logPath) parts.push(`  Log: ${s.logPath}`)
+    if (s.tmuxSessionName) parts.push(`  Tmux：${s.tmuxSessionName}`)
+    if (s.logPath) parts.push(`  日志：${s.logPath}`)
 
     console.log(parts.join('\n'))
     console.log()
@@ -117,7 +129,7 @@ export async function logsHandler(target: string | undefined): Promise<void> {
 
   if (!target) {
     if (sessions.length === 0) {
-      console.log('No active sessions.')
+      console.log('没有活跃会话。')
       return
     }
     if (sessions.length === 1) {
