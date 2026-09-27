@@ -20,6 +20,23 @@ import {
  */
 
 /** remote IPC path refine（官方 me()）：daemon 的 IPC socket 必须是绝对路径。 */
+/** 官方 firedInteractiveMarks：合法标记过滤 + 最多保留 2 条。 */
+export function trimInteractiveMarks(
+  raw: Array<{ kind?: string } | unknown>,
+): Array<{ kind: string; [k: string]: unknown }> {
+  const ok: Array<{ kind: string; [k: string]: unknown }> = []
+  for (const item of raw) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof (item as { kind?: unknown }).kind === 'string'
+    ) {
+      ok.push(item as { kind: string; [k: string]: unknown })
+    }
+  }
+  return ok.slice(0, 2)
+}
+
 export function refineRemoteIpcPath(p: string | undefined): string | undefined {
   if (p === undefined || p === '') return p
   if (!p.startsWith('/'))
@@ -53,6 +70,16 @@ export interface JobRecord {
   attempt?: number
   /** 重启 pending 原因（'upgrade'） */
   pendingRespawn?: 'upgrade'
+  /** 会合通道 auth token（官方 rvAuth——每 job 独立 nonce） */
+  rvAuth?: string
+  /** PTY 通道 auth token（官方 ptyAuth） */
+  ptyAuth?: string
+  /** REPL 进程 pid（官方 replPid——REPL 托管在 daemon 时） */
+  replPid?: number
+  /** REPL 进程启动时刻（官方 replProcStart——recycled 判定） */
+  replProcStart?: number
+  /** 已触发的交互标记（官方 firedInteractiveMarks，最多 2 条） */
+  firedInteractiveMarks?: Array<{ kind: string; [k: string]: unknown }>
   outcome?: string
   [k: string]: unknown
 }

@@ -457,6 +457,8 @@ async function runSupervisor(args: string[]): Promise<void> {
             procStart: Date.now(),
             messagingSock: '',
             rendezvousSock: join(officialSockDir(), `rv-${short}.sock`),
+            rvAuth: randomBytes(16).toString('hex'),
+            ptyAuth: randomBytes(16).toString('hex'),
             cliVersion: (MACRO as { VERSION?: string }).VERSION,
             startedAt: Date.now(),
             attempt: 0,
