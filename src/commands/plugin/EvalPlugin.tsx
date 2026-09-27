@@ -2,14 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { t } from '../../i18n/index.js';
 import { validateManifest } from '../../utils/plugins/validatePlugin.js';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-  statSync,
-} from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, statSync } from 'fs';
 import { join } from 'path';
 
 /**
@@ -75,8 +68,7 @@ export function EvalPlugin({ onComplete, path, initMode }: Props): React.ReactNo
               JSON.stringify(
                 {
                   version: 1,
-                  description:
-                    'Plugin evaluation harness — add cases and re-run /plugin eval',
+                  description: 'Plugin evaluation harness — add cases and re-run /plugin eval',
                   cases: [] as Array<{ name: string; input: string; expect: string }>,
                 },
                 null,
