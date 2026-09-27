@@ -334,13 +334,13 @@ function getMergedOpus1MOption(fastMode = false): ModelOption {
 const MaxSonnet46Option: ModelOption = {
   value: 'sonnet',
   label: 'Sonnet',
-  description: t('Sonnet 4.6 · Best for everyday tasks'),
+  description: 'Sonnet 4.6 · Best for everyday tasks',
 }
 
 const MaxHaiku45Option: ModelOption = {
   value: 'haiku',
   label: 'Haiku',
-  description: t('Haiku 4.5 · Fastest for quick answers'),
+  description: 'Haiku 4.5 · Fastest for quick answers',
 }
 
 function getOpusPlanOption(): ModelOption {
