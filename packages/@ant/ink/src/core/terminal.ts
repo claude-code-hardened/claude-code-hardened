@@ -244,3 +244,56 @@ export function writeDiffToTerminal(
   if (useSync) buffer += ESU
   terminal.stdout.write(buffer)
 }
+
+// ── 官方 Eje 等价：终端模式集管理器（bracketedPaste/themeReports/focusEvents/
+// mousePixels/extendedKeys/altScreen/altScreenKeys；set 幂等 + suspend/keep）──
+
+export type TerminalModeName =
+  | 'bracketedPaste'
+  | 'themeReports'
+  | 'focusEvents'
+  | 'mousePixels'
+  | 'extendedKeys'
+  | 'altScreen'
+  | 'altScreenKeys'
+
+export interface TerminalModeEntry {
+  mode: TerminalModeName
+  on: string
+  off: string
+}
+
+/** 官方 Eje：模式集（幂等 set + suspend 批量消化 + kept 记录）。 */
+export class TerminalModeManager {
+  entries: TerminalModeEntry[] = []
+  suspended = false
+  kept: string | undefined
+
+  get isSuspended(): boolean {
+    return this.suspended
+  }
+
+  isSet(mode: TerminalModeName): boolean {
+    return this.entries.some(e => e.mode === mode)
+  }
+
+  /** set：幂等（已设返回空）；altScreen 自动附带 altScreenKeys。 */
+  set(mode: TerminalModeName, entry: TerminalModeEntry): string {
+    if (this.isSet(mode)) return ''
+    let out = this.add(entry)
+    if (mode === 'altScreen') out += this.add({ ...entry, mode: 'altScreenKeys' })
+    return this.suspended ? '' : out
+  }
+
+  reset(mode: TerminalModeName, off: string): string {
+    if (!this.isSet(mode)) return ''
+    const idx = this.entries.findIndex(e => e.mode === mode)
+    if (idx >= 0) this.entries.splice(idx, 1)
+    return off
+  }
+
+  private add(entry: TerminalModeEntry): string {
+    this.entries.push(entry)
+    return entry.on
+  }
+}
