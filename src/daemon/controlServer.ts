@@ -1,11 +1,7 @@
 import { createServer, type Server, type Socket } from 'net'
 import { StringDecoder } from 'string_decoder'
 import { dirname } from 'path'
-import {
-  vetAncestorOwnership,
-  isPeerVerificationDegraded,
-  vetPeerCredentialDegraded,
-} from '../daemon/daemonVet.js'
+import { vetAncestorOwnership } from '../daemon/daemonVet.js'
 import {
   createChallenge,
   verifyChallenge,
