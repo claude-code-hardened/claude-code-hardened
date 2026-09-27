@@ -122,31 +122,29 @@ export async function daemonMain(args: string[]): Promise<void> {
       printHelp()
       break
     default:
-      console.error(`Unknown daemon subcommand: ${subcommand}`)
+      console.error(`未知的 daemon 子命令：${subcommand}`)
       printHelp()
       process.exitCode = 1
   }
 }
 
 function printHelp(): void {
-  console.log(`
-Usage: cch daemon [subcommand] [options]
+  console.log(`用法：cch daemon [子命令] [选项]
 
-Service lifecycle:
-  run [json-path]   Run the supervisor in the foreground (default when piped)
-  status            Show daemon pid, version, uptime
-  logs              Tail the daemon log (Ctrl-C to stop)
-  uninstall         Remove the background service (launchctl/systemd)
-  stop              Shut down the supervisor and terminate background sessions
-                      --any           also stop a transient (non-service) daemon
-                      --keep-workers  leave detached sessions running
-  install           Install as a launchctl/systemd service (persists across reboot)
-  start             Start the installed service
-  restart           Restart the installed service
+服务生命周期：
+  run [json-path]   前台运行 supervisor（管道场景下的默认形态）
+  status            显示 daemon pid、版本、运行时长
+  logs              尾随 daemon 日志（Ctrl-C 停止）
+  uninstall         移除后台服务（launchctl/systemd）
+  stop              关闭 supervisor 并终止后台会话
+                      --any           同时停止 transient（非 service）daemon
+                      --keep-workers  保留 detached 会话继续运行
+  install           安装为 launchctl/systemd 服务（跨重启持久）
+  start             启动已安装的服务
+  restart           重启已安装的服务
 
 REPL
-  /daemon [subcommand]    Same commands available in interactive mode
-`)
+  /daemon [子命令]    交互模式下可用同样的命令`)
 }
 
 /**

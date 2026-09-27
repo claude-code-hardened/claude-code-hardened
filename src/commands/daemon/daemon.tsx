@@ -3,7 +3,7 @@ import type { LocalJSXCommandOnDone, LocalJSXCommandContext } from '../../types/
 /**
  * /daemon slash command — manages daemon and background sessions from the REPL.
  *
- * Subcommands: status | start | stop | bg | attach | logs | kill
+ * 子命令：status | start | stop | logs（bg/attach 走顶层 cch bg）
  * Default (no args): status
  */
 export async function call(
@@ -16,7 +16,7 @@ export async function call(
 
   // attach is interactive/blocking — not available inside the REPL
   if (sub === 'attach') {
-    onDone('Use `claude daemon attach` from the CLI. Attach is not available inside the REPL.', { display: 'system' });
+    onDone('附着请从 CLI 执行 `cch bg attach`。REPL 内不支持附着。', { display: 'system' });
     return null;
   }
 
