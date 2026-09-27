@@ -150,11 +150,24 @@ export async function createRoot({
   // instance by stdout (e.g. external editor pause/resume) can find it.
   instances.set(stdout, instance)
 
-  return {
-    render: node => instance.render(node),
+  // 官方 a_t 原文：按 stdout 注册 root 实例（WeakMap）——Per/rootOf 的查询源。
+  const rootHandle = {
+    render: (node: React.ReactNode) => instance.render(node),
     unmount: () => instance.unmount(),
     waitUntilExit: () => instance.waitUntilExit(),
+    root: instance,
   }
+  try {
+    // 官方 Per 契约的查询源：Map<WriteStream, Ink>（instances.ts 默认导出）
+    const registry =
+      require('./instances.js') as {
+        default: Map<NodeJS.WriteStream, unknown>
+      }
+    registry.default.set(stdout, instance as unknown)
+  } catch {
+    // 注册失败不影响 root 本体
+  }
+  return rootHandle
 }
 
 const getOptions = (

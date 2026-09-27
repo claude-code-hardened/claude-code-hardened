@@ -290,13 +290,13 @@ export function useResolvedTheme(
 
 // ── 树工具（Per / Wbe 原文）──
 
-/** 官方 Per：rootOf(stdout)——instances WeakMap 查已注册 root。 */
+/** 官方 Per：rootOf(stdout)——instances Map 查已注册 root（createRoot 注册）。 */
 export function rootOf(stdout: NodeJS.WriteStream = process.stdout): unknown {
-  const instances = require('../core/instances.js') as {
-    get: (s: NodeJS.WriteStream) => { root?: unknown } | undefined
-  }
-  const inst = instances.get(stdout)
-  return inst?.root
+  const registry =
+    require('../core/instances.js') as {
+      default: Map<NodeJS.WriteStream, unknown>
+    }
+  return registry.default.get(stdout)
 }
 
 /** 官方 Wbe：topWithin(node, root)——累加 computedTop 到 root（rootOff）。 */
