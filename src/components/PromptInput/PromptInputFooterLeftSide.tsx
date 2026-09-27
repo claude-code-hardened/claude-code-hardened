@@ -65,12 +65,6 @@ function useRssDisplay(): RssState | null {
   useEffect(() => {
     function update(): void {
       const mb = process.memoryUsage().rss / (1024 * 1024);
-      const { startDaemonSessionCountPoller, getDaemonSessionCount } =
-        require('../../daemon/footerDaemonCount.js') as typeof import('../../daemon/footerDaemonCount');
-      useEffect(() => {
-        startDaemonSessionCountPoller();
-      }, []);
-      const daemonSessionCount = getDaemonSessionCount();
       const level = mb >= 1024 ? 'error' : mb >= 512 ? 'warning' : 'normal';
       const text = formatFileSize(mb * 1024 * 1024);
       setState(prev => (prev?.text === text ? prev : { text, level }));
@@ -219,6 +213,25 @@ function GoalElapsedIndicator(): React.ReactNode {
       {t('goal')} ({timeStr})
     </Text>
   );
+}
+
+/** footer 的 daemon 会话数订阅（poller 单例 + 1s 同步 tick）。 */
+function useDaemonSessionCount(): number | null {
+  const [count, setCount] = useState<number | null>(() => {
+    const { getDaemonSessionCount, startDaemonSessionCountPoller } =
+      require('../../daemon/footerDaemonCount.js') as typeof import('../../daemon/footerDaemonCount');
+    startDaemonSessionCountPoller();
+    return getDaemonSessionCount();
+  });
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const { getDaemonSessionCount } =
+        require('../../daemon/footerDaemonCount.js') as typeof import('../../daemon/footerDaemonCount');
+      setCount(getDaemonSessionCount());
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, []);
+  return count;
 }
 
 export function PromptInputFooterLeftSide({
@@ -374,6 +387,7 @@ function ModeIndicator({
   }, [voiceEnabled, voiceHintUnderCap]);
   const isKillAgentsConfirmShowing = useAppState(s => s.notifications.current?.key === 'kill-agents-confirm');
   const rssState = useRssDisplay();
+  const daemonSessionCount = useDaemonSessionCount();
   const sessionTokens = useSessionTokenDisplay();
 
   // Derive team info from teamContext (no filesystem I/O needed)
