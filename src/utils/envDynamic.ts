@@ -144,8 +144,15 @@ export async function initJetBrainsDetection(): Promise<void> {
 // 触碰 env 的绑定，任何加载顺序/mock.module（audit runner mock env.js）时序
 // 差异都会 TDZ（CI audit 实锤 envDynamic.ts:144）。全部 7 个消费方均为属性
 // 点访问，Proxy 语义兼容。
+let terminalCache: string | null | undefined
 const envDynamicOwn = {
-  terminal: getTerminalWithJetBrainsDetection(),
+  // getter + memo：加载期不调用（函数体内触碰 env 会 TDZ），首次访问才求值
+  // 并缓存——保持原 `terminal: f()` 的一次性求值语义。
+  get terminal() {
+    if (terminalCache === undefined)
+      terminalCache = getTerminalWithJetBrainsDetection()
+    return terminalCache
+  },
   getIsDocker,
   getIsBubblewrapSandbox,
   isMuslEnvironment,
