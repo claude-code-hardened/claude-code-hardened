@@ -278,8 +278,12 @@ export async function handleControlRequest(
   if (req === null || typeof req !== 'object') {
     return sendReply(socket, { ok: false, error: 'bad json', code: 'EUNKNOWN' })
   }
-  // 通用防伪造：challenge-response HMAC（key 不上线）。req.auth = HMAC-SHA256(key, req.nonce)。
-  // 降级模式（proot）额外接受明文 key 兼容（peer 交叉验证补偿）；标准模式仅 HMAC。
+  // 分层验证链：
+  //   层 1（官方四道闸最上层）：peerUid SO_PEERCRED 精确比对（标准环境）——
+  //      通过 = 最强，明文 key 验证后放行（官方 wire contract 原样）；
+  //      peer uid 不可用（proot/userns 无 mapping）→ 落到层 2。
+  //   层 2（通用链）：challenge-response HMAC（key 不上线）+ 滑窗限速 +
+  //      binary 交叉验证——所有环境的统一防伪造门。
   const rl = getRateLimiter()
   if (rl.isLocked()) {
     return sendReply(socket, {
@@ -288,27 +292,32 @@ export async function handleControlRequest(
       code: 'ERATE',
     })
   }
+  const peerUid = getPeerUid(socket)
+  const daemonUid = process.getuid?.() ?? null
+  const officialUsable = peerUid !== null && daemonUid !== null
   let authOk = false
-  if (
-    typeof req.auth === 'string' &&
-    typeof (req as { nonce?: unknown }).nonce === 'string'
-  ) {
+  if (officialUsable) {
+    // 层 1：官方语义（peer uid 比对 + 明文 key）
+    if (peerUid === daemonUid) {
+      authOk = verifyControlKey(req.auth, deps.controlKey)
+    } else {
+      return sendReply(socket, {
+        ok: false,
+        error: peerUidMismatchError(peerUid, daemonUid),
+        code: 'EAUTH',
+      })
+    }
+  } else {
+    // 层 2：通用链——HMAC 必需（nonce + auth 必须同时存在且有效）
     authOk =
       deps.controlKey != null &&
+      typeof (req as { nonce?: unknown }).nonce === 'string' &&
+      typeof req.auth === 'string' &&
       verifyChallenge(
         deps.controlKey,
         (req as { nonce: string }).nonce,
         req.auth,
       )
-  }
-  if (!authOk && isPeerVerificationDegraded()) {
-    // 降级模式兼容路径：明文 key + peer pid 交叉验证
-    authOk =
-      verifyControlKey(req.auth, deps.controlKey) &&
-      vetPeerCredentialDegraded({
-        uid: process.getuid?.() ?? 0,
-        pid: (req as { peerPid?: number }).peerPid ?? socket.remotePort ?? 0,
-      }).ok
   }
   if (authOk) rl.recordSuccess()
   else rl.recordFailure()

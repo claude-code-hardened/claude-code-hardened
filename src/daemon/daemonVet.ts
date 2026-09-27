@@ -139,49 +139,10 @@ export function vetBindUid(): UidVetResult {
 export const UID_COLLAPSES_MESSAGE =
   'refusing to use the daemon socket: this process runs in a user namespace without a uid mapping, so directory and peer ownership cannot be verified (start it with a mapping, e.g. unshare -Ur)'
 
-/** 显式豁免（保留）：非标准环境的 opt-in 门。 */
-export const ALLOW_NO_UID_MAP_ENV = 'CLAUDE_CODE_DAEMON_ALLOW_NO_UID_MAP'
-
-/**
- * proot/userns 无 mapping 环境检测（降级校验的前提）：
- * uidCollapses（uid_map 为空/溢出 uid）+ proot 特征之一。
- * proot 特征：PROOT_* 环境变量、/proc/1/comm 非 init/systemd 的
- * 嵌套环境（Android 容器常见）、/proc/self/root 与真实根不一致的
- * proot loader 链。标准容器（docker 有完整 mapping）不会进此分支。
- */
-export function isProotLikeEnvironment(): boolean {
-  if (!vetBindUid().uidCollapses) return false
-  if (Object.keys(process.env).some(k => k.startsWith('PROOT_'))) return true
-  try {
-    const comm = require('fs').readFileSync('/proc/1/comm', 'utf8').trim()
-    // proot 容器里 pid1 常是 shell/proot 本体
-    if (['sh', 'bash', 'zsh', 'proot', 'tini'].includes(comm)) return true
-  } catch {}
-  return false
-}
-
-let degradedPeerVerification = false
-
-/** 降级校验是否生效（启动后由 assertUidVetted 标注；面板/日志可引用）。 */
-export function isPeerVerificationDegraded(): boolean {
-  return degradedPeerVerification
-}
-
-/** 降级模式说明文案（透明标注）。 */
-export const DEGRADED_PEER_MESSAGE =
-  'uid mapping unavailable (proot/userns) — degraded peer verification: peer uid must equal self uid + pid liveness + control.key shared secret'
-
-/** upstread k()：分级门——标准环境硬拒（官方语义）；proot-like 降级放行（带替代校验）。 */
+/** upstread k()：官方硬拒（wire 语义）。uidCollapses 时由调用方决定：
+ * controlServer 分层链中该环境走通用 HMAC 链（peerAuth），不走本门。 */
 export function assertUidVetted(): void {
   if (vetBindUid().uidCollapses) {
-    if (isProotLikeEnvironment()) {
-      degradedPeerVerification = true
-      return
-    }
-    if (process.env[ALLOW_NO_UID_MAP_ENV] === '1') {
-      degradedPeerVerification = true
-      return
-    }
     throw Object.assign(new Error(UID_COLLAPSES_MESSAGE), { code: ENOTOWNED })
   }
 }
@@ -212,34 +173,6 @@ const PUBLIC_ANCESTOR_WHITELIST = new Set([
   '/mnt',
   '/mnt/wslg',
 ])
-
-/**
- * 降级模式的对端校验（proot/userns）：peer uid 必须等于 self uid（挡其他
- * 用户的连接）+ pid 存活性（挡伪造 fd 转发）+ control.key 共享密钥由调用
- * 方已验。标准环境不走此路径（完整 SO_PEERCRED uid 比对）。
- */
-export function vetPeerCredentialDegraded(peer: { uid: number; pid: number }): {
-  ok: boolean
-  reason?: string
-} {
-  if (peer.uid !== process.getuid?.()) {
-    return {
-      ok: false,
-      reason: `peer uid ${peer.uid} != self uid (degraded mode)`,
-    }
-  }
-  if (peer.pid <= 1 || !Number.isInteger(peer.pid)) {
-    return { ok: false, reason: `invalid peer pid ${peer.pid}` }
-  }
-  try {
-    if (!require('fs').existsSync(`/proc/${peer.pid}`)) {
-      return { ok: false, reason: `peer pid ${peer.pid} not alive` }
-    }
-  } catch {
-    return { ok: false, reason: `peer pid ${peer.pid} not alive` }
-  }
-  return { ok: true }
-}
 
 /** 官方 T()：祖先链逐级 stat，属主非同 uid → ENOTOWNED；白名单目录跳过。 */
 export function vetAncestorOwnership(rootPath: string): {
