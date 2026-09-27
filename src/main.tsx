@@ -5246,7 +5246,7 @@ async function run(): Promise<CommanderCommand> {
       const { toFleetRows } = await import('./components/FleetView.js');
       const rows = toFleetRows(sessions);
       if (process.stdout.isTTY) {
-        const { render } = await import('./ink.js');
+        const { render } = await import('@anthropic/ink');
         const { FleetView } = await import('./components/FleetView.js');
         const { waitUntilExit } = render(
           <FleetView

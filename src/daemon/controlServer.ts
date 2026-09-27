@@ -10,7 +10,9 @@ import {
 } from './peerAuth.js'
 import {
   controlKeyPath,
+  getPeerUid,
   isValidShortId,
+  peerUidMismatchError,
   peerUidReject,
   readControlKey,
   sendReply,
