@@ -3017,5 +3017,11 @@
   "Find flaky tests and propose fixes": "フレーキーテストを見つけて修正案を提示します",
   "Review changed files across dimensions, verify each finding": "変更ファイルを複数ディメンションでレビューし、各発見を検証します",
   "Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.": "マルチエージェントワークフロー編成モードへ：Workflow ツールの使いどころ、スクリプトプリミティブ、品質パターン、決定論的制約",
-  "Service install is disabled in this version — the daemon runs on\ndemand and exits when the last client disconnects.\nUse `cch daemon start` to run the supervisor explicitly.": "このバージョンではサービスインストールは無効です——デーモンはオンデマンドで動作し、最後のクライアント切断時に終了します。\n`cch daemon start` でスーパーバイザーを明示的に実行してください。"
+  "Service install is disabled in this version — the daemon runs on\ndemand and exits when the last client disconnects.\nUse `cch daemon start` to run the supervisor explicitly.": "このバージョンではサービスインストールは無効です——デーモンはオンデマンドで動作し、最後のクライアント切断時に終了します。\n`cch daemon start` でスーパーバイザーを明示的に実行してください。",
+  "Background session started: {{name}}": "バックグラウンドセッションを起動しました：{{name}}",
+  "  Engine: {{engine}}": "  エンジン：{{engine}}",
+  "  Log: {{path}}": "  ログ：{{path}}",
+  "Use `cch bg attach {{name}}` to reconnect.": "`cch bg attach {{name}}` で再アタッチします。",
+  "Use `cch agents` to list sessions.": "`cch agents` でセッションを一覧表示します。",
+  "Use `cch stop {{name}}` to stop.": "`cch stop {{name}}` で停止します。"
 }

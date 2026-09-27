@@ -335,13 +335,21 @@ export async function handleBgStart(args: string[]): Promise<void> {
       cwd: process.cwd(),
     })
 
-    console.log(`Background session started: ${result.sessionName}`)
-    console.log(`  Engine: ${result.engineUsed}`)
-    console.log(`  Log: ${result.logPath}`)
+    console.log(
+      t('Background session started: {{name}}', { name: result.sessionName }),
+    )
+    console.log(t('  Engine: {{engine}}', { engine: result.engineUsed }))
+    console.log(t('  Log: {{path}}', { path: result.logPath }))
     console.log()
-    console.log(`Use \`cch bg attach ${result.sessionName}\` to reconnect.`)
-    console.log(`Use \`cch agents\` to list sessions.`)
-    console.log(`Use \`cch stop ${result.sessionName}\` to stop.`)
+    console.log(
+      t('Use `cch bg attach {{name}}` to reconnect.', {
+        name: result.sessionName,
+      }),
+    )
+    console.log(t('Use `cch agents` to list sessions.'))
+    console.log(
+      t('Use `cch stop {{name}}` to stop.', { name: result.sessionName }),
+    )
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e))
     process.exitCode = 1

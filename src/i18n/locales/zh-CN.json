@@ -3017,5 +3017,11 @@
   "Service install is disabled in this version — the daemon runs on\ndemand and exits when the last client disconnects.\nUse `cch daemon start` to run the supervisor explicitly.": "此版本已禁用服务安装——守护进程按需运行，并在最后一个客户端断开时退出。\n用 `cch daemon start` 显式运行 supervisor。",
   "Allow for this session ({{count}} {{unit}})": "允许本会话（{{count}} {{unit}}）",
   " · {{tools}} tool {{use}} · {{tokens}} tokens": " · {{tools}} 个工具 {{use}} · {{tokens}} token",
-  "{{count}} other {{unit}} will be hidden while Claude works.": "Claude 工作期间，其余 {{count}} 个{{unit}}将被隐藏。"
+  "{{count}} other {{unit}} will be hidden while Claude works.": "Claude 工作期间，其余 {{count}} 个{{unit}}将被隐藏。",
+  "Background session started: {{name}}": "后台会话已启动：{{name}}",
+  "  Engine: {{engine}}": "  引擎：{{engine}}",
+  "  Log: {{path}}": "  日志：{{path}}",
+  "Use `cch bg attach {{name}}` to reconnect.": "用 `cch bg attach {{name}}` 重新附着。",
+  "Use `cch agents` to list sessions.": "用 `cch agents` 列出会话。",
+  "Use `cch stop {{name}}` to stop.": "用 `cch stop {{name}}` 停止。"
 }
