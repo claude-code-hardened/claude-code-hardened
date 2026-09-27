@@ -3,6 +3,7 @@
  * These are dynamically imported only when `claude plugin *` or `claude plugin marketplace *` runs.
  */
 /* eslint-disable custom-rules/no-process-exit -- CLI subcommand handlers intentionally exit */
+import { t } from '../../i18n/index.js';
 import figures from 'figures'
 import { basename, dirname } from 'path'
 import { setUseCoworkPlugins } from '../../bootstrap/state.js'
@@ -348,7 +349,7 @@ export async function pluginListHandler(options: {
   }
 
   if (pluginIds.length > 0) {
-    console.log('Installed plugins:\n')
+    console.log(t('Installed plugins:\n'))
   }
 
   for (const pluginId of pluginIds.sort()) {
@@ -384,7 +385,7 @@ export async function pluginListHandler(options: {
   }
 
   if (inlinePlugins.length > 0 || inlineLoadErrors.length > 0) {
-    console.log('Session-only plugins (--plugin-dir):\n')
+    console.log(t('Session-only plugins (--plugin-dir):\n'))
     for (const p of inlinePlugins) {
       // Same dirName≠manifestName fallback as the JSON path above — error
       // sources use the dir basename but p.source uses the manifest name.
@@ -464,7 +465,7 @@ export async function marketplaceAddHandler(
       }
     }
 
-    console.log('Adding marketplace...')
+    console.log(t('Adding marketplace...'))
 
     const { name, alreadyMaterialized, resolvedSource } =
       await addMarketplaceSource(marketplaceSource, message => {
@@ -528,7 +529,7 @@ export async function marketplaceListHandler(options: {
       cliOk('No marketplaces configured')
     }
 
-    console.log('Configured marketplaces:\n')
+    console.log(t('Configured marketplaces:\n'))
     names.forEach(name => {
       const marketplace = config[name]
       console.log(`  ${figures.pointer} ${name}`)

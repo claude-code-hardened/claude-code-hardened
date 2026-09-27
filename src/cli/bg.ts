@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { readdir, readFile, unlink } from 'fs/promises'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
@@ -135,7 +136,7 @@ export async function logsHandler(target: string | undefined): Promise<void> {
     if (sessions.length === 1) {
       target = sessions[0]!.sessionId
     } else {
-      console.log('Multiple sessions active. Specify one:')
+      console.log(t('Multiple sessions active. Specify one:'))
       for (const s of sessions) {
         const label = s.name ? `${s.name} (${s.sessionId})` : s.sessionId
         console.log(`  ${label}  PID=${s.pid}`)
@@ -181,14 +182,14 @@ export async function attachHandler(target: string | undefined): Promise<void> {
     )
     if (bgSessions.length === 0) {
       console.log(
-        'No background sessions to attach to. Start one with `cch bg`.',
+        t('No background sessions to attach to. Start one with `cch bg`.'),
       )
       return
     }
     if (bgSessions.length === 1) {
       target = bgSessions[0]!.sessionId
     } else {
-      console.log('Multiple background sessions. Specify one:')
+      console.log(t('Multiple background sessions. Specify one:'))
       for (const s of bgSessions) {
         const label = s.name ? `${s.name} (${s.sessionId})` : s.sessionId
         const engineType = resolveSessionEngine(s)
@@ -238,10 +239,10 @@ export async function killHandler(target: string | undefined): Promise<void> {
 
   if (!target) {
     if (sessions.length === 0) {
-      console.log('No active sessions to kill.')
+      console.log(t('No active sessions to kill.'))
       return
     }
-    console.log('Specify a session to kill:')
+    console.log(t('Specify a session to kill:'))
     for (const s of sessions) {
       const label = s.name ? `${s.name} (${s.sessionId})` : s.sessionId
       console.log(`  ${label}  PID=${s.pid}`)
@@ -261,7 +262,7 @@ export async function killHandler(target: string | undefined): Promise<void> {
   try {
     process.kill(session.pid, 'SIGTERM')
   } catch {
-    console.log('Session already exited.')
+    console.log(t('Session already exited.'))
     return
   }
 
@@ -270,12 +271,12 @@ export async function killHandler(target: string | undefined): Promise<void> {
   if (isProcessRunning(session.pid)) {
     try {
       process.kill(session.pid, 'SIGKILL')
-      console.log('Session force-killed.')
+      console.log(t('Session force-killed.'))
     } catch {
-      console.log('Session exited during grace period.')
+      console.log(t('Session exited during grace period.'))
     }
   } else {
-    console.log('Session stopped.')
+    console.log(t('Session stopped.'))
   }
 
   const pidFile = join(getSessionsDir(), `${session.pid}.json`)
@@ -301,7 +302,7 @@ export async function handleBgStart(args: string[]): Promise<void> {
     !filteredArgs.some(a => a === '-p' || a === '--print' || a === '--pipe')
   ) {
     console.error(
-      'Error: Background sessions with detached engine require -p/--print flag.\n' +
+      t('Error: Background sessions with detached engine require -p/--print flag.\n') +
         'The detached engine has no terminal for interactive input.\n\n' +
         'Usage:\n' +
         '  cch bg -p "your prompt here"\n' +

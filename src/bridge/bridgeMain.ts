@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { feature } from 'bun:bundle'
 import { randomUUID } from 'crypto'
 import { hostname, tmpdir } from 'os'
@@ -2091,7 +2092,7 @@ export async function bridgeMain(args: string[]): Promise<void> {
       sleep(500, undefined, { unref: true }),
     ]).catch(() => {})
     console.error(
-      'Error: Multi-session Remote Control is not enabled for your account yet.',
+      t('Error: Multi-session Remote Control is not enabled for your account yet.'),
     )
     // eslint-disable-next-line custom-rules/no-process-exit
     process.exit(1)
@@ -2202,7 +2203,7 @@ export async function bridgeMain(args: string[]): Promise<void> {
     !baseUrl.includes('127.0.0.1')
   ) {
     console.error(
-      'Error: Remote Control base URL uses HTTP. Only HTTPS or localhost HTTP is allowed.',
+      t('Error: Remote Control base URL uses HTTP. Only HTTPS or localhost HTTP is allowed.'),
     )
     // eslint-disable-next-line custom-rules/no-process-exit
     process.exit(1)
@@ -2237,7 +2238,7 @@ export async function bridgeMain(args: string[]): Promise<void> {
     : undefined
   if (savedSpawnMode === 'worktree' && !worktreeAvailable) {
     console.error(
-      'Warning: Saved spawn mode is worktree but this directory is not a git repository. Falling back to same-dir.',
+      t('Warning: Saved spawn mode is worktree but this directory is not a git repository. Falling back to same-dir.'),
     )
     savedSpawnMode = undefined
     saveCurrentProjectConfig(current => {

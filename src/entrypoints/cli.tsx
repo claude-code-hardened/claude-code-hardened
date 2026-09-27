@@ -2,6 +2,7 @@
 // Performance shim MUST be the first import — it replaces globalThis.performance
 // with a JS-backed implementation before React/OTel capture the native reference.
 // Without this, JSC's C++ Vector grows without bound in long-running sessions.
+import { t } from '../i18n/index.js';
 import '../utils/performanceShim.js';
 import { feature } from 'bun:bundle';
 import { isEnvTruthy } from '../utils/envUtils.js';
@@ -211,7 +212,7 @@ async function main(): Promise<void> {
   if (args[0] === '--daemon-worker' || args[0]?.startsWith('--daemon-worker=')) {
     if (!feature('DAEMON')) {
       console.error(
-        'Error: --daemon-worker requires DAEMON feature to be enabled. Set FEATURE_DAEMON=1 or add DAEMON to DEFAULT_BUILD_FEATURES.',
+        t('Error: --daemon-worker requires DAEMON feature to be enabled. Set FEATURE_DAEMON=1 or add DAEMON to DEFAULT_BUILD_FEATURES.'),
       );
       process.exitCode = 1;
       flushStartupProfile();

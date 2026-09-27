@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { spawnSync } from 'child_process'
@@ -34,7 +35,7 @@ export async function up(): Promise<void> {
 
   if (!upSection) {
     console.log(
-      'No "# claude up" section found in CLAUDE.md.\n' +
+      t('No "# claude up" section found in CLAUDE.md.\n') +
         'Add a section like:\n\n' +
         '  # claude up\n' +
         '  ```bash\n' +
@@ -45,7 +46,7 @@ export async function up(): Promise<void> {
     return
   }
 
-  console.log('Running:\n')
+  console.log(t('Running:\n'))
   console.log(upSection)
   console.log()
 

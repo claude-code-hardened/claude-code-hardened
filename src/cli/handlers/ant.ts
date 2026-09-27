@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import type { Command } from '@commander-js/extra-typings'
 import {
   createTask,
@@ -46,7 +47,7 @@ export async function taskListHandler(opts: {
   }
 
   if (tasks.length === 0) {
-    console.log('No tasks found.')
+    console.log(t('No tasks found.'))
     return
   }
 
@@ -114,7 +115,7 @@ export async function logHandler(
 
   if (logId === undefined) {
     if (logs.length === 0) {
-      console.log('No recent sessions.')
+      console.log(t('No recent sessions.'))
       return
     }
     for (let i = 0; i < Math.min(logs.length, 20); i++) {

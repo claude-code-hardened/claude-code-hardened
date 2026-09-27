@@ -1,5 +1,6 @@
 /* eslint-disable custom-rules/no-process-exit */
 
+import { t } from 'i18n/index.js';
 import { feature } from 'bun:bundle'
 import chalk from 'chalk'
 import {
@@ -441,7 +442,7 @@ export async function setup(
         })
         rl.close()
         if (answer.trim().toLowerCase() !== 'y') {
-          console.error('Aborted.')
+          console.error(t('Aborted.'))
           process.exit(1)
         }
       } else {

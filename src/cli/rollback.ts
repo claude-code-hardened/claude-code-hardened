@@ -13,14 +13,14 @@ export async function rollback(
   options?: { list?: boolean; dryRun?: boolean; safe?: boolean },
 ): Promise<void> {
   if (options?.list) {
-    console.log('Recent versions:')
+    console.log(t('Recent versions:'))
     console.log('  (version listing requires access to the release registry)')
     console.log('  Use `claude update --list` for available versions.')
     return
   }
 
   if (options?.safe) {
-    console.log('Safe rollback: would install the server-pinned safe version.')
+    console.log(t('Safe rollback: would install the server-pinned safe version.'))
     if (options.dryRun) {
       console.log('  (dry run — no changes made)')
       return
@@ -32,7 +32,7 @@ export async function rollback(
 
   if (!target) {
     console.error(
-      'Usage: claude rollback [target]\n\n' +
+      t('Usage: claude rollback [target]\n\n') +
         'Options:\n' +
         '  -l, --list     List recent published versions\n' +
         '  --dry-run      Show what would be installed\n' +

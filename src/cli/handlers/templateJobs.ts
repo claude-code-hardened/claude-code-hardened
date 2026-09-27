@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { randomUUID } from 'crypto'
 import { profileCheckpoint } from '../../utils/startupProfiler.js'
 import { listTemplates, loadTemplate } from '../../jobs/templates.js'
@@ -50,7 +51,7 @@ Template Job Commands:
 function handleStatus(args: string[]): void {
   const jobId = args[0]
   if (!jobId) {
-    console.error('Usage: claude job status <job-id>')
+    console.error(t('Usage: claude job status <job-id>'))
     process.exitCode = 1
     return
   }
@@ -74,8 +75,8 @@ function handleList(): void {
   const templates = listTemplates()
 
   if (templates.length === 0) {
-    console.log('No templates found.')
-    console.log('Place .md files in .claude/templates/ or ~/.claude/templates/')
+    console.log(t('No templates found.'))
+    console.log(t('Place .md files in .claude/templates/ or ~/.claude/templates/'))
     return
   }
 
@@ -94,7 +95,7 @@ function handleList(): void {
 function handleNew(args: string[]): void {
   const templateName = args[0]
   if (!templateName) {
-    console.error('Usage: claude job new <template> [args...]')
+    console.error(t('Usage: claude job new <template> [args...]'))
     process.exitCode = 1
     return
   }
@@ -138,7 +139,7 @@ function handleReply(args: string[]): void {
   const text = args.slice(1).join(' ')
 
   if (!jobId || !text) {
-    console.error('Usage: claude job reply <job-id> <text>')
+    console.error(t('Usage: claude job reply <job-id> <text>'))
     process.exitCode = 1
     return
   }

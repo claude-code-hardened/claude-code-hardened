@@ -3,6 +3,7 @@
  * Dynamically imported only when `claude agents` runs.
  */
 
+import { t } from '../../i18n/index.js';
 import {
   AGENT_SOURCE_GROUPS,
   compareAgentsByName,
@@ -59,7 +60,7 @@ export async function agentsHandler(): Promise<void> {
   }
 
   if (lines.length === 0) {
-    console.log('No agents found.')
+    console.log(t('No agents found.'))
   } else {
     console.log(`${totalActive} active agents\n`)
     console.log(lines.join('\n').trimEnd())

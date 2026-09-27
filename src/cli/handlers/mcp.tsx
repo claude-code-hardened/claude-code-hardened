@@ -3,6 +3,7 @@
  * These are dynamically imported only when the corresponding `claude mcp *` command runs.
  */
 
+import { t } from '../../i18n/index.js';
 import { stat } from 'fs/promises';
 import pMap from 'p-map';
 import { cwd } from 'process';
@@ -153,9 +154,9 @@ export async function mcpListHandler(): Promise<void> {
   logEvent('tengu_mcp_list', {});
   const { servers: configs } = await getAllMcpConfigs();
   if (Object.keys(configs).length === 0) {
-    console.log('No MCP servers configured. Use `claude mcp add` to add a server.');
+    console.log(t('No MCP servers configured. Use `claude mcp add` to add a server.'));
   } else {
-    console.log('Checking MCP server health...\n');
+    console.log(t('Checking MCP server health...\n'));
 
     // Check servers concurrently
     const entries = Object.entries(configs);

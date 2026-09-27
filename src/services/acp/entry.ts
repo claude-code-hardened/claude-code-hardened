@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { AgentSideConnection, ndJsonStream } from '@agentclientprotocol/sdk'
 import type { Stream } from '@agentclientprotocol/sdk'
 import { Readable, Writable } from 'node:stream'
@@ -82,7 +83,7 @@ export async function runAcpAgent(): Promise<void> {
   process.on('SIGINT', shutdown)
 
   process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+    console.error(t('Unhandled Rejection at:'), promise, 'reason:', reason)
   })
 
   // Keep process alive while connection is open

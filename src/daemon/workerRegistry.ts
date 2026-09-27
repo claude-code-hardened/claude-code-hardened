@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { resolve } from 'path'
 import { profileCheckpoint, profileReport } from '../utils/startupProfiler.js'
 import {
@@ -28,7 +29,7 @@ export async function runDaemonWorker(kind?: string): Promise<void> {
   profileCheckpoint('daemon_worker_entry')
   try {
     if (!kind) {
-      console.error('Error: --daemon-worker requires a worker kind')
+      console.error(t('Error: --daemon-worker requires a worker kind'))
       process.exitCode = EXIT_CODE_PERMANENT
       return
     }
