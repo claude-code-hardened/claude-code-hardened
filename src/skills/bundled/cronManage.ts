@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import {
   CRON_DELETE_TOOL_NAME,
   CRON_LIST_TOOL_NAME,

@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { AgentSideConnection, ndJsonStream } from '@agentclientprotocol/sdk'
 import type { Stream } from '@agentclientprotocol/sdk'
 import { Readable, Writable } from 'node:stream'

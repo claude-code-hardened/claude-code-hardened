@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import axios from 'axios'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { logForDebugging } from '../../utils/debug.js'

@@ -125,7 +125,8 @@ export const callOnboarding: LocalJSXCommandCall = async (onDone, _context, args
       hasTrustDialogAccepted: false,
     }));
     onDone(
-      t('Workspace trust cleared for the current project. ') + 'The trust dialog will appear on the next `claude` launch.',
+      t('Workspace trust cleared for the current project. ') +
+        'The trust dialog will appear on the next `claude` launch.',
       { display: 'system' },
     );
     return null;

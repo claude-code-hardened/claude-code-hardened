@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import type { PermissionMode } from '../permissions/PermissionMode.js'
 import { capitalize } from '../stringUtils.js'
 import { MODEL_ALIASES, type ModelAlias } from './aliases.js'

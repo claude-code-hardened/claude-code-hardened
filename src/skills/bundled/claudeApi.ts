@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { readdir } from 'fs/promises'
 import { getCwd } from '../../utils/cwd.js'
 import { registerBundledSkill } from '../bundledSkills.js'

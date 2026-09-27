@@ -2,7 +2,7 @@
 // Extracted from the KAIROS feature gate so it's available unconditionally
 // whenever auto-memory is enabled.
 
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { getAutoMemPath, isAutoMemoryEnabled } from '../../memdir/paths.js'
 import { buildConsolidationPrompt } from '../../services/autoDream/consolidationPrompt.js'
 import { recordConsolidation } from '../../services/autoDream/consolidationLock.js'
@@ -19,8 +19,9 @@ You are performing a manual dream — a reflective pass over your memory files. 
 export function registerDreamSkill(): void {
   registerBundledSkill({
     name: 'dream',
-    description:
-      t('Manually trigger memory consolidation — review, organize, and prune your auto-memory files.'),
+    description: t(
+      'Manually trigger memory consolidation — review, organize, and prune your auto-memory files.',
+    ),
     whenToUse:
       'Use when the user says /dream or wants to manually consolidate memories, organize memory files, or clean up stale entries.',
     userInvocable: true,

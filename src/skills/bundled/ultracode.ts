@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { registerBundledSkill } from '../bundledSkills.js'
 
 /**
@@ -220,8 +220,9 @@ The tool result includes a runId. To resume after a pause, kill, or script edit,
 export function registerUltracodeSkill(): void {
   registerBundledSkill({
     name: 'ultracode',
-    description:
-      t('Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.'),
+    description: t(
+      'Enter multi-agent workflow orchestration mode: when to use the Workflow tool, script primitives, quality patterns, determinism constraints, resume/budget, and files/commands.',
+    ),
     whenToUse:
       'When a task can be decomposed or parallelized, needs multi-perspective confidence (e.g. find then adversarially verify), exceeds a single context (large migrations, broad audits, long-tail enumeration), or needs resume/auditability — orchestrate multiple subagents with the Workflow tool.',
     userInvocable: true,

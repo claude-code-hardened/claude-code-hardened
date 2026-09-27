@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { AGENT_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/AgentTool/constants.js'
 import { ASK_USER_QUESTION_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/AskUserQuestionTool/prompt.js'
 import { ENTER_PLAN_MODE_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/EnterPlanModeTool/constants.js'
@@ -101,8 +101,9 @@ Examples:
 export function registerBatchSkill(): void {
   registerBundledSkill({
     name: 'batch',
-    description:
-      t('Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.'),
+    description: t(
+      'Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.',
+    ),
     whenToUse:
       'Use when the user wants to make a sweeping, mechanical change across many files (migrations, refactors, bulk renames) that can be decomposed into independent parallel units.',
     argumentHint: '<instruction>',

@@ -11,7 +11,7 @@
  * directly — there is no terminal attached.
  */
 
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { parseDeepLink } from './parseDeepLink.js'
 import { homedir } from 'os'
 import { logForDebugging } from '../debug.js'
@@ -66,7 +66,9 @@ export async function handleDeepLinkUri(uri: string): Promise<number> {
   })
   if (!launched) {
     console.error(
-      t('Failed to open a terminal. Make sure a supported terminal emulator is installed.'),
+      t(
+        'Failed to open a terminal. Make sure a supported terminal emulator is installed.',
+      ),
     )
     return 1
   }

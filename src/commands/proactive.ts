@@ -41,7 +41,9 @@ const proactive = {
         } else {
           mod.activateProactive('slash_command')
           onDone(
-            t('Proactive mode enabled — model will work autonomously between ticks'),
+            t(
+              'Proactive mode enabled — model will work autonomously between ticks',
+            ),
             {
               display: 'system',
               metaMessages: [

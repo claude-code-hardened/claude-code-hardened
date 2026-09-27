@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import type { UUID } from 'crypto'
 import { getSessionId } from '../../bootstrap/state.js'
 import {
@@ -27,7 +27,9 @@ export async function call(
   // Prevent teammates from renaming - their names are set by team leader
   if (isTeammate()) {
     onDone(
-      t('Cannot rename: This session is a swarm teammate. Teammate names are set by the team leader.'),
+      t(
+        'Cannot rename: This session is a swarm teammate. Teammate names are set by the team leader.',
+      ),
       { display: 'system' },
     )
     return null
@@ -41,7 +43,9 @@ export async function call(
     )
     if (!generated) {
       onDone(
-        t('Could not generate a name: no conversation context yet. Usage: /rename <name>'),
+        t(
+          'Could not generate a name: no conversation context yet. Usage: /rename <name>',
+        ),
         { display: 'system' },
       )
       return null

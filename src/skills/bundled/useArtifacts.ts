@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { registerBundledSkill } from '../bundledSkills.js'
 
 const USE_ARTIFACTS_PROMPT = `# Using Artifacts
@@ -112,8 +112,9 @@ The hosting service serves the HTML verbatim (including any \`<script>\` you inc
 export function registerUseArtifactsSkill(): void {
   registerBundledSkill({
     name: 'use-artifacts',
-    description:
-      t('Teach the agent when and how to use the artifact tool: what content belongs in artifacts, when to upload/update, and the SearchExtraTools + ExecuteExtraTool invocation flow for the deferred artifact tool.'),
+    description: t(
+      'Teach the agent when and how to use the artifact tool: what content belongs in artifacts, when to upload/update, and the SearchExtraTools + ExecuteExtraTool invocation flow for the deferred artifact tool.',
+    ),
     whenToUse:
       'Use this skill at the start of any complex task that would benefit from a living progress document or a deliverable HTML report.',
     userInvocable: true,

@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import type { UUID } from 'node:crypto'
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -136,7 +136,9 @@ export const callTeleport: LocalJSXCommandCall = async (
           error: meta(msg.slice(0, 200)),
         })
         onDone(
-          t('Teleport: permission denied fetching sessions. Check your OAuth token (`claude auth status`).'),
+          t(
+            'Teleport: permission denied fetching sessions. Check your OAuth token (`claude auth status`).',
+          ),
           { display: 'system' },
         )
         return null
@@ -146,7 +148,9 @@ export const callTeleport: LocalJSXCommandCall = async (
           error: meta(msg.slice(0, 200)),
         })
         onDone(
-          t('Teleport: sessions endpoint returned 404. The Sessions API may not be available for your account.'),
+          t(
+            'Teleport: sessions endpoint returned 404. The Sessions API may not be available for your account.',
+          ),
           { display: 'system' },
         )
         return null
@@ -175,7 +179,9 @@ export const callTeleport: LocalJSXCommandCall = async (
     if (sessions.length === 0) {
       logEvent('tengu_teleport_null', {})
       onDone(
-        t('No active sessions found on claude.ai/code.\nStart a new session at https://claude.ai/code'),
+        t(
+          'No active sessions found on claude.ai/code.\nStart a new session at https://claude.ai/code',
+        ),
         { display: 'system' },
       )
       return null

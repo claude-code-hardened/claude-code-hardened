@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -259,8 +259,9 @@ async function writeSkillGapDraft(
     outputRoot: draftsRoot,
     scope: 'project',
     name: `draft-${buildNameFragment(gap.prompt)}`,
-    description:
-      t('Draft learned skill candidate. Promote after repeated evidence or explicit user correction.'),
+    description: t(
+      'Draft learned skill candidate. Promote after repeated evidence or explicit user correction.',
+    ),
   })
   const skillFile = join(draft.outputPath, 'SKILL.md')
   if (!existsSync(skillFile)) {

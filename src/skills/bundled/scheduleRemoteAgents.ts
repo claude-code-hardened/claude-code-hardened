@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import type { MCPServerConnection } from '../../services/mcp/types.js'
 import { isPolicyAllowed } from '../../services/policyLimits/index.js'
@@ -325,8 +325,9 @@ ${userArgs ? `\n## User Request\n\nThe user said: "${userArgs}"\n\nStart by unde
 export function registerScheduleRemoteAgentsSkill(): void {
   registerBundledSkill({
     name: 'schedule',
-    description:
-      t('Create, update, list, or run scheduled remote agents (triggers) that execute on a cron schedule.'),
+    description: t(
+      'Create, update, list, or run scheduled remote agents (triggers) that execute on a cron schedule.',
+    ),
     whenToUse:
       'When the user wants to schedule a recurring remote agent, set up automated tasks, create a cron job for Claude Code, or manage their scheduled agents/triggers.',
     userInvocable: true,

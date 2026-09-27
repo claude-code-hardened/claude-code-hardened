@@ -3,7 +3,7 @@
 // call is a nice-to-have and safe to skip — teleport + registerRemoteAgentTask
 // is sufficient for the core autofix flow.
 
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import React from 'react'
 import { feature } from 'bun:bundle'
 import {
@@ -142,7 +142,9 @@ export const callAutofixPr: LocalJSXCommandCall = async (
     // 3. freeform — not yet supported
     if (parsed.action === 'freeform') {
       onDone(
-        t('Freeform prompt mode not yet supported. Use /autofix-pr <pr-number>.'),
+        t(
+          'Freeform prompt mode not yet supported. Use /autofix-pr <pr-number>.',
+        ),
         {
           display: 'system',
         },

@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { t } from '../i18n/index.js'
 import { type ChildProcess } from 'child_process'
 import { randomBytes, randomUUID } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, statSync } from 'fs'
@@ -83,7 +83,9 @@ export async function daemonMain(args: string[]): Promise<void> {
       // 官方此版本同样禁用："Service install is disabled in this version —
       // the daemon runs on demand and exits when the last client disconnects."
       console.log(
-        t('Service install is disabled in this version — the daemon runs on\n') +
+        t(
+          'Service install is disabled in this version — the daemon runs on\n',
+        ) +
           'demand and exits when the last client disconnects.\n' +
           'Use `cch daemon start` to run the supervisor explicitly.',
       )

@@ -1,4 +1,4 @@
-import { t } from '../../../i18n/index.js';
+import { t } from '../../../i18n/index.js'
 import type { CommandSpec } from '../registry.js'
 
 export default {
@@ -84,8 +84,9 @@ export default {
   ],
   args: {
     name: 'files',
-    description:
-      t('Specify files or directories to analyze (overrides config file)'),
+    description: t(
+      'Specify files or directories to analyze (overrides config file)',
+    ),
     isVariadic: true,
     isOptional: true,
   },

@@ -20,7 +20,9 @@ export async function rollback(
   }
 
   if (options?.safe) {
-    console.log(t('Safe rollback: would install the server-pinned safe version.'))
+    console.log(
+      t('Safe rollback: would install the server-pinned safe version.'),
+    )
     if (options.dryRun) {
       console.log('  (dry run — no changes made)')
       return

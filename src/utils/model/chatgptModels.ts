@@ -61,8 +61,9 @@ export const CHATGPT_CODEX_MODEL_OPTIONS: ChatGPTCodexModelOption[] = [
   {
     value: 'gpt-5.6-sol',
     label: 'gpt-5.6-sol',
-    description:
-      t('Frontier model for complex coding, research, and real-world work'),
+    description: t(
+      'Frontier model for complex coding, research, and real-world work',
+    ),
   },
   {
     value: 'gpt-5.6-terra',
@@ -72,8 +73,9 @@ export const CHATGPT_CODEX_MODEL_OPTIONS: ChatGPTCodexModelOption[] = [
   {
     value: 'gpt-5.6-luna',
     label: 'gpt-5.6-luna',
-    description:
-      t('Small, fast, and cost-efficient model for simpler coding tasks'),
+    description: t(
+      'Small, fast, and cost-efficient model for simpler coding tasks',
+    ),
   },
   {
     value: 'gpt-5.5',

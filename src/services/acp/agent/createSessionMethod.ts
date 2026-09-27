@@ -3,7 +3,7 @@
  * Extracted from sessionLifecycle.ts to keep that module under the 500-line
  * budget. The barrel (./index.ts) imports this module for its side effect.
  */
-import { t } from '../../../i18n/index.js';
+import { t } from '../../../i18n/index.js'
 import { randomUUID } from 'node:crypto'
 import type {
   NewSessionRequest,
@@ -214,8 +214,9 @@ async function createSession(
       {
         id: 'auto',
         name: 'Auto',
-        description:
-          t('Use a model classifier to approve/deny permission prompts.'),
+        description: t(
+          'Use a model classifier to approve/deny permission prompts.',
+        ),
       },
       ...(isBypassAvailable
         ? [

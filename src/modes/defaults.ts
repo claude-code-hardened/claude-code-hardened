@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { t } from '../i18n/index.js'
 import type { CCBMode } from './types.js'
 
 const DR_SHARP_SYSTEM_PROMPT = `You are Dr. Sharp, a meticulous code reviewer and diagnostician.

@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { randomUUID } from 'crypto'
 import { profileCheckpoint } from '../../utils/startupProfiler.js'
 import { listTemplates, loadTemplate } from '../../jobs/templates.js'
@@ -76,7 +76,9 @@ function handleList(): void {
 
   if (templates.length === 0) {
     console.log(t('No templates found.'))
-    console.log(t('Place .md files in .claude/templates/ or ~/.claude/templates/'))
+    console.log(
+      t('Place .md files in .claude/templates/ or ~/.claude/templates/'),
+    )
     return
   }
 

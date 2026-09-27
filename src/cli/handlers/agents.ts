@@ -3,7 +3,7 @@
  * Dynamically imported only when `claude agents` runs.
  */
 
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import {
   AGENT_SOURCE_GROUPS,
   compareAgentsByName,

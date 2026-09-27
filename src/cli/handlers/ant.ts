@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import type { Command } from '@commander-js/extra-typings'
 import {
   createTask,

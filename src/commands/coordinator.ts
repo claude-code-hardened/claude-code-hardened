@@ -47,7 +47,9 @@ const coordinator = {
           // Enable: set the env var
           process.env.CLAUDE_CODE_COORDINATOR_MODE = '1'
           onDone(
-            t('Coordinator mode enabled — use Agent(subagent_type: "worker") to dispatch tasks'),
+            t(
+              'Coordinator mode enabled — use Agent(subagent_type: "worker") to dispatch tasks',
+            ),
             {
               display: 'system',
               metaMessages: [

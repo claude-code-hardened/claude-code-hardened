@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { t } from '../i18n/index.js'
 import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import type { Attributes, Meter, MetricOptions } from '@opentelemetry/api'
 import type { logs } from '@opentelemetry/api-logs'
@@ -959,8 +959,9 @@ export function setMeter(
   STATE.codeEditToolDecisionCounter = createCounter(
     'claude_code.code_edit_tool.decision',
     {
-      description:
-        t('Count of code editing tool permission decisions (accept/reject) for Edit, Write, and NotebookEdit tools'),
+      description: t(
+        'Count of code editing tool permission decisions (accept/reject) for Edit, Write, and NotebookEdit tools',
+      ),
     },
   )
   STATE.activeTimeCounter = createCounter('claude_code.active_time.total', {

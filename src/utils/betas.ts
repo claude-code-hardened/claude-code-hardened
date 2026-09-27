@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.js';
+import { t } from '../i18n/index.js'
 import { feature } from 'bun:bundle'
 import memoize from 'lodash-es/memoize.js'
 import {
@@ -73,7 +73,9 @@ export function filterAllowedSdkBetas(
 
   if (isClaudeAISubscriber()) {
     console.warn(
-      t('Warning: Custom betas are only available for API key users. Ignoring provided betas.'),
+      t(
+        'Warning: Custom betas are only available for API key users. Ignoring provided betas.',
+      ),
     )
     return undefined
   }

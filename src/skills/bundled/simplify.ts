@@ -1,4 +1,4 @@
-import { t } from '../../i18n/index.js';
+import { t } from '../../i18n/index.js'
 import { AGENT_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/AgentTool/constants.js'
 import { registerBundledSkill } from '../bundledSkills.js'
 
@@ -56,8 +56,9 @@ When done, briefly summarize what was fixed (or confirm the code was already cle
 export function registerSimplifySkill(): void {
   registerBundledSkill({
     name: 'simplify',
-    description:
-      t('Review changed code for reuse, quality, and efficiency, then fix any issues found.'),
+    description: t(
+      'Review changed code for reuse, quality, and efficiency, then fix any issues found.',
+    ),
     userInvocable: true,
     async getPromptForCommand(args) {
       let prompt = SIMPLIFY_PROMPT
