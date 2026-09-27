@@ -2,7 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { t } from '../../i18n/index.js';
 import { validateManifest } from '../../utils/plugins/validatePlugin.js';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  statSync,
+} from 'fs';
 import { join } from 'path';
 
 /**
@@ -55,8 +62,32 @@ export function EvalPlugin({ onComplete, path, initMode }: Props): React.ReactNo
         return;
       }
       if (initMode) {
-        // 官方 eval init：生成评估脚手架（此处落一个最小 manifest 检查模板）
-        setError(t('Eval harness initialized — edit .claude-plugin/plugin.json then re-run /plugin eval'));
+        // 官方 eval init：生成评估 harness 的清单清单（.claude-plugin/eval.json）
+        try {
+          const evalDir = join(path, '.claude-plugin');
+          if (!existsSync(evalDir)) {
+            mkdirSync(evalDir, { recursive: true, mode: 0o755 });
+          }
+          const initFile = join(evalDir, 'eval.json');
+          if (!existsSync(initFile)) {
+            writeFileSync(
+              initFile,
+              JSON.stringify(
+                {
+                  version: 1,
+                  description:
+                    'Plugin evaluation harness — add cases and re-run /plugin eval',
+                  cases: [] as Array<{ name: string; input: string; expect: string }>,
+                },
+                null,
+                2,
+              ),
+            );
+          }
+          setError(t('Eval init done — cases file at .claude-plugin/eval.json'));
+        } catch (err: unknown) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
         return;
       }
       try {
