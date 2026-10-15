@@ -194,11 +194,7 @@ function evaluateCdRules(
   canonical: string,
   currentDir: string,
 ): CdEvaluation {
-  for (const rule of getRulesForTool(
-    permissionContext,
-    CD_TOOL_NAME,
-    'deny',
-  )) {
+  for (const rule of getRulesForTool(permissionContext, CD_TOOL_NAME, 'deny')) {
     const content = rule.ruleValue.ruleContent
     if (content === undefined) {
       return { result: 'blockedByRule', rule }
@@ -208,11 +204,7 @@ function evaluateCdRules(
       return { result: 'blockedByRule', rule }
     }
   }
-  const allowRules = getRulesForTool(
-    permissionContext,
-    CD_TOOL_NAME,
-    'allow',
-  )
+  const allowRules = getRulesForTool(permissionContext, CD_TOOL_NAME, 'allow')
   if (allowRules.length === 0) return { result: 'allowed' }
   for (const rule of allowRules) {
     const content = rule.ruleValue.ruleContent

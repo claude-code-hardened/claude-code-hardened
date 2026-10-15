@@ -79,9 +79,7 @@ const KEY_WINDOW_MS = 75
 const WHEEL_FLIP_MS = 250
 const RESET_WINDOW_MS = 200
 
-interface JetBrainsDetector {
-  (): { jediTerm?: boolean }
-}
+type JetBrainsDetector = () => { jediTerm?: boolean }
 
 /**
  * 官方 F9r：滚轮 bug 修正主函数——修正后的输入数组（无修改时原样返回）。
