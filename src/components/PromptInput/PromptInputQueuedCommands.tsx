@@ -1,7 +1,7 @@
 import { feature } from 'bun:bundle';
 import * as React from 'react';
 import { useMemo } from 'react';
-import { Box } from '@anthropic/ink';
+import { Box, Text } from '@anthropic/ink';
 import { t } from '../../i18n/index.js';
 import { useAppState } from 'src/state/AppState.js';
 import { STATUS_TAG, SUMMARY_TAG, TASK_NOTIFICATION_TAG } from '../../constants/xml.js';
@@ -133,6 +133,11 @@ function PromptInputQueuedCommandsImpl(): React.ReactNode {
           />
         </QueuedMessageProvider>
       ))}
+      {/* 官方 2.1.284 (responsive-mode plugin DRAFT_HINT, _ALL.js 字面量):
+          流式期间排队/有草稿时提示 enter=打断并发送、ctrl+x+enter=排队。 */}
+      <Box marginTop={1}>
+        <Text dimColor>{t('enter to interrupt and send · ctrl+x then enter to queue')}</Text>
+      </Box>
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { PastedContent } from 'src/utils/config.js'
-import { maybeTruncateInput } from './inputPaste.js'
+import { TRUNCATION_THRESHOLD, maybeTruncateInput } from './inputPaste.js'
 
 type Props = {
   input: string
@@ -21,13 +21,17 @@ export function useMaybeTruncateInput({
   const [hasAppliedTruncationToInput, setHasAppliedTruncationToInput] =
     useState(false)
 
-  // Process input for truncation and pasted images from MessageSelector.
+  // 大文本兜底（非粘贴路径，>TRUNCATION_THRESHOLD 事后截断）：粘贴入口
+  // 已在 >800 字符 / >2 换行处折叠为官方占位符（inputPaste.ts
+  // foldPasteAtEntry），经粘贴进来的文本整段不超过入口阈值 + 占位符，
+  // 不会再触发这里的 >10000 截断——兜底保留给 STT insertText、IDE
+  // at-mention、历史恢复等直接 setInput 的超长文本，阈值语义让位给折叠。
   useEffect(() => {
     if (hasAppliedTruncationToInput) {
       return
     }
 
-    if (input.length <= 10_000) {
+    if (input.length <= TRUNCATION_THRESHOLD) {
       return
     }
 

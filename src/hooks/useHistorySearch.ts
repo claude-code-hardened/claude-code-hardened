@@ -111,7 +111,13 @@ export function useHistorySearch(
 
         const display = item.value.display
 
-        const matchPosition = display.lastIndexOf(historyQuery)
+        // Case-insensitive match, mirroring the official implementation
+        // (docs/reverse-284 decompiled/0002-module-005:3118 lowercases both
+        // sides before lastIndexOf). Same char count either way, so the
+        // cursor offset computed below stays aligned.
+        const matchPosition = display
+          .toLowerCase()
+          .lastIndexOf(historyQuery.toLowerCase())
         if (matchPosition !== -1 && !seenPrompts.current.has(display)) {
           seenPrompts.current.add(display)
           setHistoryMatch(item.value)

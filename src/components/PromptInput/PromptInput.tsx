@@ -24,7 +24,7 @@ import { getNativeCSIuTerminalDisplayName } from '../../commands/terminalSetup/t
 import { type Command, hasCommand } from '../../commands.js';
 import { useIsModalOverlayActive } from '../../context/overlayContext.js';
 import { useSetPromptOverlayDialog } from '../../context/promptOverlayContext.js';
-import { formatImageRef, formatPastedTextRef, getPastedTextRefNumLines, parseReferences } from '../../history.js';
+import { formatImageRef, parseReferences } from '../../history.js';
 import type { VerificationStatus } from '../../hooks/useApiKeyVerification.js';
 import { type HistoryMode, useArrowKeyHistory } from '../../hooks/useArrowKeyHistory.js';
 import { useBackgroundAgentTasks } from '../../hooks/useBackgroundAgentTasks.js';
@@ -79,7 +79,7 @@ import {
 } from '../../utils/fastMode.js';
 import { isFullscreenEnvEnabled } from '../../utils/fullscreen.js';
 import type { PromptInputHelpers } from '../../utils/handlePromptSubmit.js';
-import { getImageFromClipboard, PASTE_THRESHOLD } from '../../utils/imagePaste.js';
+import { getImageFromClipboard } from '../../utils/imagePaste.js';
 import type { ImageDimensions } from '../../utils/imageResizer.js';
 import { cacheImagePath, storeImage } from '../../utils/imageStore.js';
 import { isMacosOptionChar, MACOS_OPTION_SPECIAL_CHARS } from '../../utils/keyboardShortcuts.js';
@@ -126,6 +126,7 @@ import { shouldHideTasksFooter } from '../tasks/taskStatusUtils.js';
 import { TeamsDialog } from '../teams/TeamsDialog.js';
 import VimTextInput from '../VimTextInput.js';
 import { getModeFromInput, getValueFromInput } from './inputModes.js';
+import { foldPasteAtEntry } from './inputPaste.js';
 import { FOOTER_TEMPORARY_STATUS_TIMEOUT, Notifications } from './Notifications.js';
 import PromptInputFooter from './PromptInputFooter.js';
 import type { SuggestionItem } from './PromptInputFooterSuggestions.js';
@@ -1394,28 +1395,18 @@ function PromptInput({
       }
     }
 
-    const numLines = getPastedTextRefNumLines(text);
-    // Limit the number of lines to show in the input
-    // If the overall layout is too high then Ink will repaint
-    // the entire terminal.
-    // The actual required height is dependent on the content, this
-    // is just an estimate.
-    const maxLines = Math.min(rows - 10, 2);
-
-    // Use special handling for long pasted text (>PASTE_THRESHOLD chars)
-    // or if it exceeds the number of lines we want to show
-    if (text.length > PASTE_THRESHOLD || numLines > maxLines) {
-      const pasteId = nextPasteIdRef.current++;
-
-      const newContent: PastedContent = {
-        id: pasteId,
-        type: 'text',
-        content: text,
-      };
-
-      setPastedContents(prev => ({ ...prev, [pasteId]: newContent }));
-
-      insertTextAtCursor(formatPastedTextRef(pasteId, numLines));
+    // 官方 2.1.284：折叠在粘贴入口完成——>PASTE_FOLD_THRESHOLD(800) 字符
+    // 或 >2 换行时，整段正文收进 pastedContents，input 只留官方字面量
+    // 占位符 `[Pasted text #N +M lines]`（编号沿用 nextPasteIdRef 递增）。
+    // 判据固定，不再随终端行数波动；>10000 的事后截断仅剩非粘贴兜底
+    // （useMaybeTruncateInput / inputPaste.ts 阈值关系注释）。
+    const pasteId = nextPasteIdRef.current;
+    const fold = foldPasteAtEntry(text, pasteId);
+    if (fold.folded) {
+      const { refText, pastedContent } = fold;
+      nextPasteIdRef.current++;
+      setPastedContents(prev => ({ ...prev, [pasteId]: pastedContent }));
+      insertTextAtCursor(refText);
     } else {
       // For shorter pastes, just insert the text normally
       insertTextAtCursor(text);
