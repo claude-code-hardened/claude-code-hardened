@@ -21,6 +21,7 @@ import {
   fetchToolsForClient,
 } from 'src/services/mcp/client.js'
 import { getMcpConfigByName } from 'src/services/mcp/config.js'
+import { buildSubagentGraceNote } from 'src/services/rateLimitGrace.js'
 import type {
   MCPServerConnection,
   ScopedMcpServerConfig,
@@ -652,6 +653,22 @@ export async function* runAgent({
         }),
       )
     }
+  }
+
+  // ── 2.12 official near-limit wrap-up: subagent dispatch note ─────────────
+  // Official gates subagent wrap-up notes behind tengu_lantern_wick_braid;
+  // CCH register name: FEATURE_LANTERN_WICK_BRAID=1 (default off — zero
+  // injection unless explicitly enabled). Main-loop equivalent lives in
+  // QueryEngine.submitMessage via buildMainTurnGraceNotes.
+  const graceSubagentNote = buildSubagentGraceNote({
+    messages: initialMessages,
+    isSubagentDispatch:
+      querySource.startsWith('agent:') &&
+      agentDefinition.agentType !== 'teammate',
+    now: Date.now(),
+  })
+  if (graceSubagentNote !== null) {
+    initialMessages.push(graceSubagentNote)
   }
 
   // Initialize agent-specific MCP servers (additive to parent's servers)

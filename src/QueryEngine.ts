@@ -34,7 +34,13 @@ import type { CanUseToolFn } from './hooks/useCanUseTool.js'
 import { loadMemoryPrompt } from './memdir/memdir.js'
 import { hasAutoMemPathOverride } from './memdir/paths.js'
 import { query } from './query.js'
+import { currentLimits, getRawUtilization } from './services/claudeAiLimits.js'
 import { categorizeRetryableAPIError } from './services/api/errors.js'
+import {
+  buildMainTurnGraceNotes,
+  installGraceLimitsListener,
+  type GraceLimitsObservation,
+} from './services/rateLimitGrace.js'
 import type { MCPServerConnection } from './services/mcp/types.js'
 import type { AppState } from './state/AppState.js'
 import { type Tools, type ToolUseContext, toolMatchesName } from './Tool.js'
@@ -134,6 +140,11 @@ const snipProjection = feature('HISTORY_SNIP')
   ? (require('./services/compact/snipProjection.js') as typeof import('./services/compact/snipProjection.js'))
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
+
+// 2.12 official near-limit wrap-up: keep the grace state machine fed from
+// claudeAiLimits status emissions between turns and inside subagents.
+// Idempotent; per-response observations also flow in at each turn start below.
+void installGraceLimitsListener()
 
 export type QueryEngineConfig = {
   cwd: string
@@ -437,6 +448,28 @@ export class QueryEngine {
       querySource: 'sdk',
     })
 
+    // ── 2.12 official near-limit wrap-up: main-turn start hook ────────────
+    // query.ts injects the official note per API request; it is outside this
+    // workpackage's scope, so the depth-0 main-turn injection rides here.
+    // Notes are isMeta user messages appended after the user's input, so the
+    // transcript/ack pipeline below treats them like processUserInput output
+    // (isMeta users are excluded from acks and file-history snapshots).
+    const graceTurnNotes = buildMainTurnGraceNotes({
+      messages: this.mutableMessages,
+      isNewDepth0Question:
+        shouldQuery &&
+        options?.isMeta !== true &&
+        messagesFromUserInput.some(m => m.type === 'user' && !m.isMeta),
+      observation: currentGraceLimitsObservation(),
+      now: Date.now(),
+    })
+    for (const note of graceTurnNotes.notes) {
+      messagesFromUserInput.push(note)
+    }
+    for (const notice of graceTurnNotes.notices) {
+      messagesFromUserInput.push(notice)
+    }
+
     // Push new messages, including user input and any attachments
     this.mutableMessages.push(...messagesFromUserInput)
 
@@ -563,6 +596,22 @@ export class QueryEngine {
 
     // Record when system message is yielded for headless latency tracking
     headlessProfilerCheckpoint('system_message_yielded')
+
+    // 2.12: surface the injected grace notes to the SDK stream. They are meta
+    // user messages, so the ack/replay pipeline below never yields them; the
+    // UI notices (system/informational) ride in messages without a yield,
+    // matching the "don't yield other system messages" headless behavior.
+    for (const note of graceTurnNotes.notes) {
+      yield {
+        type: 'user',
+        message: note.message,
+        parent_tool_use_id: null,
+        session_id: getSessionId(),
+        uuid: note.uuid,
+        timestamp: note.timestamp,
+        isReplay: true,
+      } as unknown as SDKUserMessageReplay
+    }
 
     if (!shouldQuery) {
       // Return the results of local slash commands.
@@ -1243,6 +1292,41 @@ export class QueryEngine {
 
   setModel(model: string): void {
     this.config.userSpecifiedModel = model
+  }
+}
+
+/**
+ * 2.12: snapshot of the latest rate-limit readings for the grace wrap-up
+ * state machine. claudeAiLimits refreshes its raw per-window utilization on
+ * every API response (including errors) even when no status change is
+ * emitted, so turn boundaries always observe fresh values; combined with the
+ * installed status listener this keeps the module-level grace singleton in
+ * sync without touching the API layer beyond the 429 branch in errors.ts.
+ */
+function currentGraceLimitsObservation(): GraceLimitsObservation {
+  try {
+    const raw = getRawUtilization()
+    const fiveHour = raw.five_hour
+    const sevenDay = raw.seven_day
+    return {
+      status: currentLimits.status,
+      ...(fiveHour && {
+        fiveHour: {
+          utilization: fiveHour.utilization,
+          resetsAt: fiveHour.resets_at,
+        },
+      }),
+      ...(sevenDay && {
+        sevenDay: {
+          utilization: sevenDay.utilization,
+          resetsAt: sevenDay.resets_at,
+        },
+      }),
+      overageStatus: currentLimits.overageStatus,
+      isUsingOverage: currentLimits.isUsingOverage === true,
+    }
+  } catch {
+    return { status: 'allowed', isUsingOverage: false }
   }
 }
 

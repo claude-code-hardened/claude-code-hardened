@@ -48,6 +48,11 @@ import {
   getRateLimitErrorMessage,
   type OverageDisabledReason,
 } from '../claudeAiLimits.js'
+import {
+  getGraceWrapUp,
+  getWrapUpSyntheticRejection,
+  graceOnRefused,
+} from '../rateLimitGrace.js'
 import { shouldProcessRateLimits } from '../rateLimitMocking.js' // Used for /mock-limits command
 import { extractConnectionErrorDetails, formatAPIError } from './errorUtils.js'
 import { t } from '../../i18n/index.js'
@@ -476,6 +481,27 @@ export function getAssistantMessageFromError(
     error.status === 429 &&
     shouldProcessRateLimits(isClaudeAISubscriber())
   ) {
+    // 2.12 official near-limit wrap-up: a real quota 429 feeds the grace
+    // state machine — like the official onRefused(), the extra-usage
+    // coverage of a live grace zone is cleared. Only applies while the
+    // unified status header is present.
+    if (error.headers?.get?.('anthropic-ratelimit-unified-status') != null) {
+      graceOnRefused()
+    }
+
+    // 2.12: when the wrap-up note was placed and the grace zone is alive and
+    // not covered, this rejection is the expected synthetic end of the
+    // wrapped-up turn, not a hard limit error. Consume the synthetic
+    // rejection ({status:'rejected', unifiedRateLimitFallbackAvailable:false})
+    // at this fallback-selection point: the turn stops silently and the
+    // fallback-model path is not taken.
+    if (getWrapUpSyntheticRejection() !== null) {
+      return createAssistantAPIErrorMessage({
+        content: NO_RESPONSE_REQUESTED,
+        error: 'rate_limit',
+      })
+    }
+
     // Check if this is the new API with multiple rate limit headers
     const rateLimitType = error.headers?.get?.(
       'anthropic-ratelimit-unified-representative-claim',
@@ -488,10 +514,14 @@ export function getAssistantMessageFromError(
     // If we have the new headers, use the new message generation
     if (rateLimitType || overageStatus) {
       // Build limits object from error headers to determine the appropriate message
-      const limits: ClaudeAILimits = {
+      const limits: ClaudeAILimits & { rateLimitGraceActive?: boolean } = {
         status: 'rejected',
         unifiedRateLimitFallbackAvailable: false,
         isUsingOverage: false,
+        // 2.12: a live grace zone marks this rejection as grace-active.
+        ...(getGraceWrapUp().getZone() !== null && {
+          rateLimitGraceActive: true,
+        }),
       }
 
       // Extract rate limit information from headers
