@@ -168,6 +168,101 @@ export function sanitizeModelName(shortName: string): string {
   return 'claude'
 }
 
+// --
+// Module-level attribution file-content cache. This is the cache body that
+// attributionHooks.ts's sweepFileContentCache()/clearAttributionCaches()
+// forward to, mirroring the official attribution module state singleton
+// (`fileContentCache: new Map` with `hooksRegistered: !1` — see
+// docs/reverse-284/decompiled/0054-chunk-dxsxk16b/module-004-uncategorized.js:923
+// and its instantiation as `var Zb=Fi()` at :678).
+//
+// Population: trackFileModification()/trackBulkFileChanges() cache the latest
+// content of each tracked path; tracked deletions drop the entry. Bounded
+// (entries + bytes, same defaults as FileStateCache) so a long session cannot
+// grow it without bound even between compaction sweeps. The compaction path
+// (postCompactCleanup) and /clear (commands/clear/caches.ts) release the
+// cached strings; contents are re-read from disk on demand.
+//
+// Deliberately NOT swept: `repoClassCache` below ("once per process" memo the
+// undercover-mode check reads) and the per-session fileStates/sessionBaselines
+// Maps, which live in AppState and are freed with the conversation itself.
+
+const FILE_CONTENT_CACHE_MAX_ENTRIES = 100
+const FILE_CONTENT_CACHE_MAX_BYTES = 25 * 1024 * 1024
+
+const fileContentCache = new Map<string, string>()
+let fileContentCacheBytes = 0
+
+function recordFileContentInCache(key: string, content: string): void {
+  const bytes = Buffer.byteLength(content, 'utf8')
+  // Refuse to cache a single file whose content alone busts the byte cap
+  // (keeps the eviction loop below terminating and the bound honest).
+  if (bytes > FILE_CONTENT_CACHE_MAX_BYTES) {
+    removeFileContentFromCache(key)
+    return
+  }
+  const previous = fileContentCache.get(key)
+  if (previous !== undefined) {
+    fileContentCacheBytes -= Buffer.byteLength(previous, 'utf8')
+    fileContentCache.delete(key)
+  }
+  fileContentCache.set(key, content)
+  fileContentCacheBytes += bytes
+  while (
+    fileContentCache.size > 0 &&
+    (fileContentCache.size > FILE_CONTENT_CACHE_MAX_ENTRIES ||
+      fileContentCacheBytes > FILE_CONTENT_CACHE_MAX_BYTES)
+  ) {
+    const oldest = fileContentCache.keys().next()
+    if (oldest.done) break
+    const oldestContent = fileContentCache.get(oldest.value)
+    if (oldestContent !== undefined) {
+      fileContentCacheBytes -= Buffer.byteLength(oldestContent, 'utf8')
+    }
+    fileContentCache.delete(oldest.value)
+  }
+}
+
+function removeFileContentFromCache(key: string): void {
+  const previous = fileContentCache.get(key)
+  if (previous !== undefined) {
+    fileContentCacheBytes -= Buffer.byteLength(previous, 'utf8')
+    fileContentCache.delete(key)
+  }
+}
+
+/**
+ * Observable size of the attribution file-content cache.
+ * Test/telemetry seam: the sweep's whole point is that these numbers go to 0.
+ */
+export function getFileContentCacheStats(): {
+  entries: number
+  bytes: number
+} {
+  return { entries: fileContentCache.size, bytes: fileContentCacheBytes }
+}
+
+/**
+ * Release cached file contents after compaction. Best-effort memory release:
+ * nothing reads the cached strings authoritatively, so dropping content early
+ * only costs a re-read from disk on the next tracked edit. Called via
+ * attributionHooks.sweepFileContentCache() from postCompactCleanup.
+ */
+export function sweepFileContentCache(): void {
+  fileContentCache.clear()
+  fileContentCacheBytes = 0
+}
+
+/**
+ * Clear attribution-held caches on /clear and session resume (called via
+ * attributionHooks.clearAttributionCaches() from commands/clear/caches.ts).
+ * The official counterpart also mentions "pending bash states"; CCH has no
+ * such structure, so this drains the file-content cache only.
+ */
+export function clearAttributionCaches(): void {
+  sweepFileContentCache()
+}
+
 /**
  * Attribution state for tracking Claude's contributions to files.
  */
@@ -420,6 +515,12 @@ export function trackFileModification(
     return state
   }
 
+  if (newContent === '') {
+    removeFileContentFromCache(normalizedPath)
+  } else {
+    recordFileContentInCache(normalizedPath, newContent)
+  }
+
   const newFileStates = new Map(state.fileStates)
   newFileStates.set(normalizedPath, newFileState)
 
@@ -470,6 +571,10 @@ export function trackFileDeletion(
   const newFileStates = new Map(state.fileStates)
   newFileStates.set(normalizedPath, newFileState)
 
+  // A tracked deletion removes the file's content from disk — drop the
+  // stale cached body along with it.
+  removeFileContentFromCache(normalizedPath)
+
   logForDebugging(
     `Attribution: Tracked deletion of ${normalizedPath} (${deletedChars} chars removed, total contribution: ${newFileState.claudeContribution})`,
   )
@@ -514,6 +619,9 @@ export function trackBulkFileChanges(
         mtime,
       })
 
+      // Deleted files no longer have content on disk — drop cached body.
+      removeFileContentFromCache(normalizedPath)
+
       logForDebugging(
         `Attribution: Tracked deletion of ${normalizedPath} (${deletedChars} chars removed, total contribution: ${existingContribution + deletedChars})`,
       )
@@ -528,6 +636,12 @@ export function trackBulkFileChanges(
       if (newFileState) {
         const normalizedPath = normalizeFilePath(change.path)
         newFileStates.set(normalizedPath, newFileState)
+
+        if (change.newContent === '') {
+          removeFileContentFromCache(normalizedPath)
+        } else {
+          recordFileContentInCache(normalizedPath, change.newContent)
+        }
 
         logForDebugging(
           `Attribution: Tracked ${newFileState.claudeContribution} chars for ${normalizedPath}`,
