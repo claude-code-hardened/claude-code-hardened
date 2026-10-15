@@ -6,6 +6,11 @@ import { BLOCKQUOTE_BAR } from '../constants/figures.js'
 import { stringWidth, supportsHyperlinks } from '@anthropic/ink'
 import { createHyperlink } from '../utils/hyperlink.js'
 import type { CliHighlight } from './cliHighlight.js'
+import {
+  createByteBudgetCache,
+  type ByteBudgetCache,
+  type ByteBudgetCacheOptions,
+} from './cacheBudget.js'
 import { logForDebugging } from './debug.js'
 
 import { stripPromptXMLTags } from './messages.js'
@@ -378,4 +383,88 @@ export function padAligned(
     return ' '.repeat(padding) + content
   }
   return content + ' '.repeat(padding)
+}
+
+// --- token tree byte estimation (cache accounting, not measurement) ---
+
+/** JS strings are UTF-16, so 2 bytes per character of retained text. */
+const TOKEN_BYTES_PER_CHAR = 2
+
+/**
+ * Flat overhead per token node: object header, type discriminant, raw/text
+ * references and the (usually shared) child token array. A constant, not an
+ * exact measurement of marked v18 node layout.
+ */
+const TOKEN_BYTES_PER_NODE = 64
+
+/**
+ * Rough retained-size estimate for a marked token tree: every `raw`/`text`
+ * string character × 2 plus a flat 64 bytes per node. This is deliberately an
+ * estimate, not a precise value — it double-counts text duplicated between
+ * `raw` and `text`, and ignores field padding — but the number only has to
+ * grow monotonically with what the cache actually retains so that byte-budget
+ * LRU eviction keeps the true footprint near the configured budget. Both
+ * retained strings are counted because cached token trees keep every `raw`
+ * alongside its `text`.
+ *
+ * Walks `tokens`/`items` links structurally (top-level token arrays, List →
+ * ListItem nesting) so it works on the whole `Token` union without casting
+ * away types.
+ */
+export function estimateTokenTreeSize(tokens: readonly Token[]): number {
+  let charCount = 0
+  let nodeCount = 0
+  const stack: unknown[] = [tokens]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (typeof current === 'string') {
+      charCount += current.length
+      continue
+    }
+    if (typeof current !== 'object' || current === null) {
+      continue
+    }
+    // Token arrays (the root lexer output, and every nested `tokens`/`items`
+    // link) are traversed element-wise — spreading can exceed the JS call
+    // stack on documents with >100k tokens.
+    if (Array.isArray(current)) {
+      for (const child of current) {
+        stack.push(child)
+      }
+      continue
+    }
+    nodeCount++
+    const record = current as Record<string, unknown>
+    stack.push(record['raw'], record['text'])
+    const children = record['tokens'] ?? record['items']
+    if (Array.isArray(children)) {
+      for (const child of children) {
+        stack.push(child)
+      }
+    }
+  }
+  return charCount * TOKEN_BYTES_PER_CHAR + nodeCount * TOKEN_BYTES_PER_NODE
+}
+
+export type TokenCache = ByteBudgetCache<string, Token[]>
+
+export type TokenCacheOptions = Pick<
+  ByteBudgetCacheOptions<string, Token[]>,
+  'maxTotalBytes' | 'maxItemBytes'
+>
+
+/**
+ * Create a byte-budgeted cache for marked token trees (see
+ * src/components/Markdown.tsx). Keys are content hashes and values are full
+ * lexer outputs, so the budget bounds the worst case of "many huge messages
+ * retained at once" that an entry-count cap could not.
+ */
+export function createTokenCache(
+  opts: TokenCacheOptions = {},
+): TokenCache {
+  return createByteBudgetCache<string, Token[]>({
+    maxTotalBytes: opts.maxTotalBytes,
+    maxItemBytes: opts.maxItemBytes,
+    estimateSize: estimateTokenTreeSize,
+  })
 }

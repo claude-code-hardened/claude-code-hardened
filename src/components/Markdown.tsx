@@ -1,11 +1,10 @@
 import { marked, type Token, type Tokens } from 'marked';
 import React, { Suspense, use, useMemo, useRef } from 'react';
-import { LRUCache } from 'lru-cache';
 import { useSettings } from '../hooks/useSettings.js';
 import { Ansi, Box, useTheme } from '@anthropic/ink';
 import { type CliHighlight, getCliHighlightPromise } from '../utils/cliHighlight.js';
 import { hashContent } from '../utils/hash.js';
-import { configureMarked, formatToken } from '../utils/markdown.js';
+import { configureMarked, createTokenCache, formatToken } from '../utils/markdown.js';
 import { stripPromptXMLTags } from '../utils/messages.js';
 import { MarkdownTable } from './MarkdownTable.js';
 
@@ -20,7 +19,13 @@ type Props = {
 // scrolling back to a previously-visible message re-parses. Messages are
 // immutable in history; same content → same tokens. Keyed by hash to avoid
 // retaining full content strings (turn50→turn99 RSS regression, #24180).
-const tokenCache = new LRUCache<string, Token[]>({ max: 500 });
+// Bounded by bytes (8 MiB total, 1 MiB per message) instead of the old
+// 500-entry count — a single long message's token tree can reach hundreds of
+// KB, so the entry cap allowed a tens-of-MB worst case. Hit semantics are
+// unchanged: identical content still returns the identical cached tree; only
+// oversized (est. > 1 MiB) trees are never stored and re-lex each render,
+// which is the same as the miss path.
+const tokenCache = createTokenCache();
 
 // Characters that indicate markdown syntax. If none are present, skip the
 // ~3ms marked.lexer call entirely — render as a single paragraph. Covers

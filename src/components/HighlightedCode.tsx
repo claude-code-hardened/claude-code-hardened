@@ -6,13 +6,20 @@ import { isFullscreenEnvEnabled } from '../utils/fullscreen.js';
 import sliceAnsi from '../utils/sliceAnsi.js';
 import { countCharInString } from '../utils/stringUtils.js';
 import { HighlightedCodeFallback } from './HighlightedCode/Fallback.js';
+import {
+  createColorFileCache,
+  getCachedColorFileInstance,
+} from './HighlightedCode/colorFileCache.js';
 import { expectColorFile } from './StructuredDiff/colorDiff.js';
-import type { ColorFile as ColorFileType } from 'color-diff-napi';
 
-// Module-level LRU cache for ColorFile instances to avoid recreating
-// them for the same (filePath, code) across component instances.
-const colorFileCache = new Map<string, { colorFile: ColorFileType; code: string }>();
-const COLOR_FILE_CACHE_MAX = 50;
+// Module-level byte-budgeted LRU cache for ColorFile instances to avoid
+// recreating them for the same (filePath, code) across component instances.
+// Bounded by estimated bytes (8 MiB total, 1 MiB per entry — code×2 + 4 KiB
+// flat napi-handle overhead) instead of the old 50-entry count, which let
+// 50 huge files blow up the heap. Hit semantics unchanged: same filePath and
+// identical code returns the same ColorFile instance without re-parsing;
+// oversized entries are constructed fresh each render, like a cache miss.
+const colorFileCache = createColorFileCache();
 
 type Props = {
   code: string;
@@ -43,22 +50,7 @@ export const HighlightedCode = memo(function HighlightedCode({
     if (!ColorFile) {
       return null;
     }
-    const cacheKey = `${filePath}\0${code.length}`;
-    const cached = colorFileCache.get(cacheKey);
-    if (cached && cached.code === code) {
-      // Move to end (most recently used)
-      colorFileCache.delete(cacheKey);
-      colorFileCache.set(cacheKey, cached);
-      return cached.colorFile;
-    }
-    const instance = new ColorFile(code, filePath);
-    // Evict oldest entry if cache is full
-    if (colorFileCache.size >= COLOR_FILE_CACHE_MAX) {
-      const oldest = colorFileCache.keys().next().value;
-      if (oldest !== undefined) colorFileCache.delete(oldest);
-    }
-    colorFileCache.set(cacheKey, { colorFile: instance, code });
-    return instance;
+    return getCachedColorFileInstance(colorFileCache, ColorFile, code, filePath);
   }, [code, filePath, syntaxHighlightingDisabled]);
 
   useEffect(() => {
