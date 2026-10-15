@@ -1,1 +1,6 @@
-npx lint-staged
+# Prefer the workspace-local binary (Bun workspaces / npx-less environments);
+# fall back to npx for setups without node_modules/.bin.
+if [ -x "$PWD/node_modules/.bin/lint-staged" ]; then
+  exec "$PWD/node_modules/.bin/lint-staged"
+fi
+exec npx lint-staged
