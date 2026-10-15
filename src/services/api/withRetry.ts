@@ -157,10 +157,29 @@ export class CannotRetryError extends Error {
   }
 }
 
+/**
+ * Why the primary model was abandoned in favor of the fallback model.
+ * Mirrors the reason taxonomy carried by the official 2.1.284 fallback error
+ * (docs/reverse-284/full-source/_ALL.js — wH constructor receives a reason
+ * string: "overloaded" | "model_not_found" | "permission_denied" |
+ * "server_error" | "last_resort"; "last_resort" is not wired up in CCH).
+ * This field is CCH's availability record for the switch — consumers can tell
+ * which error class triggered the availability change without re-inspecting
+ * the original error.
+ */
+export type FallbackTriggerReason =
+  | 'overloaded'
+  | 'model_not_found'
+  | 'permission_denied'
+  | 'server_error'
+
 export class FallbackTriggeredError extends Error {
   constructor(
     public readonly originalModel: string,
     public readonly fallbackModel: string,
+    // Default keeps the pre-existing 529-only construction call style valid.
+    public readonly reason: FallbackTriggerReason = 'overloaded',
+    public readonly originalApiError?: unknown,
   ) {
     super(`Model fallback triggered: ${originalModel} -> ${fallbackModel}`)
     this.name = 'FallbackTriggeredError'
@@ -323,6 +342,46 @@ export async function* withRetry<T>(
         throw new CannotRetryError(error, retryContext)
       }
 
+      // Fallback trigger plane: besides 529, model_not_found, permission_denied
+      // and (outside persistent/watchdog retry mode) stateless server_error
+      // switch to the fallback model on first occurrence — zero extra retries,
+      // so the retry budget is not inflated. Entirely gated on fallbackModel
+      // actually being configured (and differing from the model): sessions
+      // without it keep the exact pre-change behavior for all of these classes.
+      if (
+        options.fallbackModel !== undefined &&
+        options.fallbackModel !== options.model
+      ) {
+        let fallbackReason: FallbackTriggerReason | undefined
+        if (isModelNotFoundError(error)) {
+          fallbackReason = 'model_not_found'
+        } else if (isPermissionDeniedError(error)) {
+          fallbackReason = 'permission_denied'
+        } else if (
+          !isPersistentRetryEnabled() &&
+          isStatelessServerError(error)
+        ) {
+          fallbackReason = 'server_error'
+        }
+        if (fallbackReason !== undefined) {
+          logEvent('tengu_api_model_not_found_fallback_triggered', {
+            original_model:
+              options.model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            fallback_model:
+              options.fallbackModel as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            fallback_reason:
+              fallbackReason as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            provider: getAPIProviderForStatsig(),
+          })
+          throw new FallbackTriggeredError(
+            options.model,
+            options.fallbackModel,
+            fallbackReason,
+            error,
+          )
+        }
+      }
+
       // Track consecutive 529 errors
       if (
         is529Error(error) &&
@@ -347,6 +406,8 @@ export async function* withRetry<T>(
             throw new FallbackTriggeredError(
               options.model,
               options.fallbackModel,
+              'overloaded',
+              error,
             )
           }
 
@@ -614,6 +675,61 @@ export function is529Error(error: unknown): boolean {
     error.status === 529 ||
     // See below: the SDK sometimes fails to properly pass the 529 status code during streaming
     (error.message?.includes('"type":"overloaded_error"') ?? false)
+  )
+}
+
+// ── Fallback trigger plane (official 2.1.284 alignment) ────────────────────
+// Beyond 529, the official retry loop switches to fallbackModel on FIRST
+// occurrence of three more error classes, without consuming any retry budget.
+// Evidence: docs/reverse-284/full-source/_ALL.js — trigger condition bytes
+// 9642757-9642950, predicates IUn@9649949, Wjt@2687970 (via Wjt body),
+// aIe@9650062, eIt@9649844.
+
+/** eIt: not_found_error body type, or the streaming fallback where the SDK
+ * only surfaces it inside the message. */
+function isNotFoundTypeError(error: APIError): boolean {
+  return (
+    error.type === 'not_found_error' ||
+    (error.message?.includes('"type":"not_found_error"') ?? false)
+  )
+}
+
+/** IUn: a 404 that names the requested model — the model is unavailable for
+ * this account/endpoint, only a different model can help. */
+export function isModelNotFoundError(error: unknown): boolean {
+  if (!(error instanceof APIError) || error.status !== 404) {
+    return false
+  }
+  return isNotFoundTypeError(error) && (error.message ?? '').includes('model:')
+}
+
+/** Wjt: a 403 permission_error naming the requested model — org policy
+ * denies this model, not the request. */
+export function isPermissionDeniedError(error: unknown): boolean {
+  if (!(error instanceof APIError) || error.status !== 403) {
+    return false
+  }
+  const message = error.message ?? ''
+  const isPermissionError =
+    error.type === 'permission_error' ||
+    message.includes('"type":"permission_error"')
+  return isPermissionError && message.includes('model:')
+}
+
+/** aIe: 5xx other than 529 — stateless server-side failures. The official
+ * trigger additionally requires persistent (watchdog) retry mode to be off
+ * (`!Pq() && aIe(bt)`); that gate is applied at the trigger site. Note the
+ * official code has no per-request idempotency check here — the only
+ * idempotency machinery is the SDK's stainless idempotency key (see
+ * _ALL.js byte 2685060 region), which applies to all POST retries and does
+ * not gate the fallback switch. */
+export function isStatelessServerError(error: unknown): boolean {
+  return (
+    error instanceof APIError &&
+    error.status !== undefined &&
+    error.status >= 500 &&
+    error.status < 600 &&
+    error.status !== 529
   )
 }
 
