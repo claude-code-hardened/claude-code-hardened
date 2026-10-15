@@ -1,0 +1,2191 @@
+{
+  "generatedBy": "scripts/pyref/compare_cch.py",
+  "_staticReviewNote2_13": "静态自查（未重跑，rows 为修复前快照）。修复：①20k边界（boundary_exact_20000）门槛改官方 gross ΣHl：:4544 g<mun 严格小于→恰20000放行（MC.ts:895-901），净额门删除，document 按 Rn 计额（MC.ts:750-812）；②persist时序（image_block_bare_literal）content 真值即调 persist，visual 失败才回退（MC.ts:923-946）；③Tt包装（artifact_marker_tt_wrap）EFt 补 Tt 前缀（MC.ts:972-978），zl 剥 Tt 认已清除（MC.ts:714-725）。tests 增边界/Tt/空串/document/重复块断言。",
+  "fixture": "/root/xiaocongyu66-claude-code/tests/fixtures/pyref/microcompact_vectors.json",
+  "vectorsRun": 18,
+  "fieldsCompared": 217,
+  "aligned": 118,
+  "diverged": 99,
+  "verdictLegend": {
+    "SEMANTIC": "行为/语义分歧 (结果消息或放行决策不同)",
+    "LITERAL": "字面量分歧 (占位文本差异, 行为路径相同位置)",
+    "BASIS": "口径差 (tokensSaved 预览 vs 净额, 行为不受影响)",
+    "NAMING": "仅命名/字段差异 (事件名、日志串、遥测字段)",
+    "EDGE": "边缘路径差 (persist 调用次数等, 结果占位一致)"
+  },
+  "byVerdict": {
+    "BASIS": [
+      "six_clear_oldest_persist_ok:tokensSaved",
+      "boundary_above_20000_aligned:tokensSaved",
+      "mixed_whitelist_and_not:tokensSaved",
+      "persist_failure_literal_fallback:tokensSaved",
+      "image_block_bare_literal:tokensSaved",
+      "already_persisted_skipped:tokensSaved",
+      "already_literal_skipped:tokensSaved",
+      "output_style_source_variant_aligned:tokensSaved"
+    ],
+    "NAMING": [
+      "six_clear_oldest_persist_ok:log",
+      "six_clear_oldest_persist_ok:cchOnly.totalToolUses",
+      "six_clear_oldest_persist_ok:cchOnly.grossTokens",
+      "six_clear_oldest_persist_ok:cchOnly.idleAdmitted",
+      "six_clear_oldest_persist_ok:cchOnly.gapMinutes",
+      "boundary_exact_20000:trigger",
+      "boundary_exact_20000:telemetryEvent",
+      "boundary_exact_20000:log",
+      "boundary_above_20000_aligned:log",
+      "boundary_above_20000_aligned:cchOnly.totalToolUses",
+      "boundary_above_20000_aligned:cchOnly.grossTokens",
+      "boundary_above_20000_aligned:cchOnly.idleAdmitted",
+      "boundary_above_20000_aligned:cchOnly.gapMinutes",
+      "mixed_whitelist_and_not:log",
+      "mixed_whitelist_and_not:cchOnly.totalToolUses",
+      "mixed_whitelist_and_not:cchOnly.grossTokens",
+      "mixed_whitelist_and_not:cchOnly.idleAdmitted",
+      "mixed_whitelist_and_not:cchOnly.gapMinutes",
+      "persist_failure_literal_fallback:log",
+      "persist_failure_literal_fallback:cchOnly.totalToolUses",
+      "persist_failure_literal_fallback:cchOnly.grossTokens",
+      "persist_failure_literal_fallback:cchOnly.idleAdmitted",
+      "persist_failure_literal_fallback:cchOnly.gapMinutes",
+      "image_block_bare_literal:log",
+      "image_block_bare_literal:cchOnly.totalToolUses",
+      "image_block_bare_literal:cchOnly.grossTokens",
+      "image_block_bare_literal:cchOnly.idleAdmitted",
+      "image_block_bare_literal:cchOnly.gapMinutes",
+      "document_source_text_token_count:trigger",
+      "document_source_text_token_count:telemetryEvent",
+      "document_source_text_token_count:log",
+      "already_persisted_skipped:log",
+      "already_persisted_skipped:cchOnly.totalToolUses",
+      "already_persisted_skipped:cchOnly.grossTokens",
+      "already_persisted_skipped:cchOnly.idleAdmitted",
+      "already_persisted_skipped:cchOnly.gapMinutes",
+      "already_literal_skipped:log",
+      "already_literal_skipped:cchOnly.totalToolUses",
+      "already_literal_skipped:cchOnly.grossTokens",
+      "already_literal_skipped:cchOnly.idleAdmitted",
+      "already_literal_skipped:cchOnly.gapMinutes",
+      "empty_string_candidate_official_clears:log",
+      "empty_string_candidate_official_clears:cchOnly.totalToolUses",
+      "empty_string_candidate_official_clears:cchOnly.grossTokens",
+      "empty_string_candidate_official_clears:cchOnly.idleAdmitted",
+      "empty_string_candidate_official_clears:cchOnly.gapMinutes",
+      "output_style_source_variant_aligned:log",
+      "output_style_source_variant_aligned:cchOnly.totalToolUses",
+      "output_style_source_variant_aligned:cchOnly.grossTokens",
+      "output_style_source_variant_aligned:cchOnly.idleAdmitted",
+      "output_style_source_variant_aligned:cchOnly.gapMinutes",
+      "duplicate_tool_result_ids:log",
+      "duplicate_tool_result_ids:cchOnly.totalToolUses",
+      "duplicate_tool_result_ids:cchOnly.grossTokens",
+      "duplicate_tool_result_ids:cchOnly.idleAdmitted",
+      "duplicate_tool_result_ids:cchOnly.gapMinutes",
+      "artifact_marker_tt_wrap:log",
+      "artifact_marker_tt_wrap:cchOnly.totalToolUses",
+      "artifact_marker_tt_wrap:cchOnly.grossTokens",
+      "artifact_marker_tt_wrap:cchOnly.idleAdmitted",
+      "artifact_marker_tt_wrap:cchOnly.gapMinutes",
+      "tt_prefixed_literal_official_skips:log",
+      "tt_prefixed_literal_official_skips:cchOnly.totalToolUses",
+      "tt_prefixed_literal_official_skips:cchOnly.grossTokens",
+      "tt_prefixed_literal_official_skips:cchOnly.idleAdmitted",
+      "tt_prefixed_literal_official_skips:cchOnly.gapMinutes"
+    ],
+    "SEMANTIC": [
+      "boundary_exact_20000:declined",
+      "boundary_exact_20000:toolsCleared",
+      "boundary_exact_20000:toolsKept",
+      "boundary_exact_20000:tokensSaved",
+      "document_source_text_token_count:declined",
+      "document_source_text_token_count:toolsCleared",
+      "document_source_text_token_count:toolsKept",
+      "document_source_text_token_count:tokensSaved",
+      "document_source_text_token_count:persistCalls",
+      "empty_string_candidate_official_clears:clearedIds",
+      "empty_string_candidate_official_clears:placeholder[t0]",
+      "empty_string_candidate_official_clears:messages",
+      "empty_string_candidate_official_clears:toolsCleared",
+      "empty_string_candidate_official_clears:tokensSaved",
+      "duplicate_tool_result_ids:tokensSaved",
+      "duplicate_tool_result_ids:persistCalls",
+      "artifact_marker_tt_wrap:tokensSaved",
+      "tt_prefixed_literal_official_skips:clearedIds",
+      "tt_prefixed_literal_official_skips:placeholder[t0]",
+      "tt_prefixed_literal_official_skips:messages",
+      "tt_prefixed_literal_official_skips:toolsCleared",
+      "tt_prefixed_literal_official_skips:tokensSaved",
+      "tt_prefixed_literal_official_skips:persistCalls"
+    ],
+    "EDGE": [
+      "image_block_bare_literal:persistCalls"
+    ],
+    "LITERAL": [
+      "artifact_marker_tt_wrap:messages"
+    ]
+  },
+  "fixtureSelfcheckFailures": {},
+  "rows": [
+    {
+      "vector": "keep5_exact_no_clear",
+      "field": "declined",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "off_reason=no_clearable_candidates cch_reason=None",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "clearedIds",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "placeholder[t0]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49465,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49465 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 6,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "six_clear_oldest_persist_ok",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "non_whitelist_never_clear",
+      "field": "declined",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "off_reason=no_clearable_candidates cch_reason=None",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "below_threshold_abort_before_persist",
+      "field": "declined",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "off_reason=threshold:preview_below_mun cch_reason=gross_below_min",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "declined",
+      "official": false,
+      "cch": true,
+      "verdict": "SEMANTIC",
+      "note": "off_reason=None cch_reason=net_below_min",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 0,
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 0,
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "tokensSaved",
+      "official": 20000,
+      "cch": 0,
+      "verdict": "SEMANTIC",
+      "note": "导致结果分歧",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": null,
+      "verdict": "NAMING",
+      "note": "CCH 遥测无 trigger 字段",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": null,
+      "verdict": "NAMING",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~20000 tokens), kept last 5",
+      "cch": null,
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "boundary_exact_20000",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "clearedIds",
+      "official": [
+        "t1",
+        "t0"
+      ],
+      "cch": [
+        "t0",
+        "t1"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "placeholder[t0]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "placeholder[t1]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "toolsCleared",
+      "official": 2,
+      "cch": 2,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "tokensSaved",
+      "official": 100000,
+      "cch": 98930,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 2 tool results (~100000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 2 tool results (~98930 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "persistCalls",
+      "official": [
+        "t0",
+        "t1"
+      ],
+      "cch": [
+        "t0",
+        "t1"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 7,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 100000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "boundary_above_20000_aligned",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "clearedIds",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "placeholder[t0]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49465,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49465 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 10,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "mixed_whitelist_and_not",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "clearedIds",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "placeholder[t0]",
+      "official": "[Old tool result content cleared]",
+      "cch": "[Old tool result content cleared]",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49992,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49992 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 6,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "persist_failure_literal_fallback",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "clearedIds",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "placeholder[t0]",
+      "official": "[Old tool result content cleared]",
+      "cch": "[Old tool result content cleared]",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "tokensSaved",
+      "official": 52000,
+      "cch": 51992,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~52000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~51992 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [],
+      "verdict": "EDGE",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 6,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 52000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "image_block_bare_literal",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "declined",
+      "official": false,
+      "cch": true,
+      "verdict": "SEMANTIC",
+      "note": "off_reason=None cch_reason=gross_below_min",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 0,
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 0,
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "tokensSaved",
+      "official": 20000,
+      "cch": 0,
+      "verdict": "SEMANTIC",
+      "note": "导致结果分歧",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": null,
+      "verdict": "NAMING",
+      "note": "CCH 遥测无 trigger 字段",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": null,
+      "verdict": "NAMING",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~20000 tokens), kept last 5",
+      "cch": null,
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "document_source_text_token_count",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [],
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "clearedIds",
+      "official": [
+        "t1"
+      ],
+      "cch": [
+        "t1"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "placeholder[t1]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49465,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49465 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "persistCalls",
+      "official": [
+        "t1"
+      ],
+      "cch": [
+        "t1"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 7,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "already_persisted_skipped",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "clearedIds",
+      "official": [
+        "t1"
+      ],
+      "cch": [
+        "t1"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "placeholder[t1]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49465,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49465 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "persistCalls",
+      "official": [
+        "t1"
+      ],
+      "cch": [
+        "t1"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 7,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "already_literal_skipped",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "clearedIds",
+      "official": [
+        "t1",
+        "t0"
+      ],
+      "cch": [
+        "t1"
+      ],
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "placeholder[t0]",
+      "official": "[Old tool result content cleared]",
+      "cch": null,
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "placeholder[t1]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "messages",
+      "official": false,
+      "cch": true,
+      "verdict": "SEMANTIC",
+      "note": "投影消息 JSON 全量比对 (不一致)",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "toolsCleared",
+      "official": 2,
+      "cch": 1,
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49465,
+      "verdict": "SEMANTIC",
+      "note": "导致结果分歧",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 2 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49465 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "persistCalls",
+      "official": [
+        "t1"
+      ],
+      "cch": [
+        "t1"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 7,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "empty_string_candidate_official_clears",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "non_main_thread_source_declines",
+      "field": "declined",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "off_reason=controller:query_source cch_reason=None",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "clearedIds",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "placeholder[t0]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49465,
+      "verdict": "BASIS",
+      "note": "口径差: 官方=预览ΣHl(不减替换文本); CCH=净额(候选−替换文本), 且 837-844 有第二道净额门",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49465 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 6,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "output_style_source_variant_aligned",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "clearedIds",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "placeholder[t0]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "messages",
+      "official": true,
+      "cch": true,
+      "verdict": "ALIGNED",
+      "note": "投影消息 JSON 全量比对",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "tokensSaved",
+      "official": 100000,
+      "cch": 49465,
+      "verdict": "SEMANTIC",
+      "note": "导致结果分歧",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~100000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49465 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "persistCalls",
+      "official": [
+        "t0",
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 6,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50000,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "duplicate_tool_result_ids",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "clearedIds",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "placeholder[t0]",
+      "official": "<persisted-output>\nOutput too large (195.4KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\n<artifact-content-authored-by-others/>\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.4KB). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\n<artifact-content-authored-by-others/>\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "messages",
+      "official": false,
+      "cch": true,
+      "verdict": "LITERAL",
+      "note": "投影消息 JSON 全量比对 (不一致)",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 1,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "tokensSaved",
+      "official": 50010,
+      "cch": 49475,
+      "verdict": "SEMANTIC",
+      "note": "导致结果分歧",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50010 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 1 tool results (~49475 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "persistCalls",
+      "official": [
+        "t0"
+      ],
+      "cch": [
+        "t0"
+      ],
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 6,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50010,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "artifact_marker_tt_wrap",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "declined",
+      "official": false,
+      "cch": false,
+      "verdict": "ALIGNED",
+      "note": "off_reason=None cch_reason=cleared",
+      "evidence": "官方 :28781 G()(includeFirstPartyBetas/repl_main_thread/flag) + :4544 g<mun; CCH MC.ts:702/779-782/837-844"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "clearedIds",
+      "official": [
+        "t1"
+      ],
+      "cch": [
+        "t0",
+        "t1"
+      ],
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "placeholder[t0]",
+      "official": null,
+      "cch": "<persisted-output>\nOutput too large (72 bytes). Full output saved to: /tmp/tool-results/t0.txt\n\nPreview (first 2KB):\n<artifact-content-authored-by-others/>\n[Old tool result content cleared]\n</persisted-output>",
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "placeholder[t1]",
+      "official": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "cch": "<persisted-output>\nOutput too large (195.3KB). Full output saved to: /tmp/tool-results/t1.txt\n\nPreview (first 2KB):\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n...\n</persisted-output>",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": ""
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "messages",
+      "official": false,
+      "cch": true,
+      "verdict": "SEMANTIC",
+      "note": "投影消息 JSON 全量比对 (不一致)",
+      "evidence": "官方 :4544 EFt; CCH MC.ts:848-871"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "toolsCleared",
+      "official": 1,
+      "cch": 2,
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 S.size(候选ids, 零token不清除但入S); CCH MC.ts:878 len(clearedReplacements)(tokens===0 剔除 :768-769)"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "toolsKept",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 r.size; CCH MC.ts:879-882"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "keepRecent",
+      "official": 5,
+      "cch": 5,
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 En.keepToolUses=5; CCH MC.ts:606"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "tokensSaved",
+      "official": 50000,
+      "cch": 49431,
+      "verdict": "SEMANTIC",
+      "note": "导致结果分歧",
+      "evidence": "官方 :4544 g=PLr 预览ΣHl(不减替换文本); CCH MC.ts:825-829 净额 + :837-844 净额第二道门"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "trigger",
+      "official": "context_hint",
+      "cch": "context_hint",
+      "verdict": "ALIGNED",
+      "note": "",
+      "evidence": "官方 :4544 trigger:'context_hint'; CCH 遥测无此字段"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "telemetryEvent",
+      "official": "tengu_time_based_microcompact",
+      "cch": "tengu_memory_projection_clear",
+      "verdict": "ALIGNED",
+      "note": "事件名不同, 语义等价 (CCH 侧实为本地投影)",
+      "evidence": "官方 tengu_time_based_microcompact; CCH tengu_memory_projection_clear (仅命名)"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "log",
+      "official": "[KEEP-RECENT MC] context_hint trigger, cleared 1 tool results (~50000 tokens), kept last 5",
+      "cch": "[MEMORY_PROJECTION] cleared 2 tool results (~49431 tokens, idle=False), kept last 5",
+      "verdict": "NAMING",
+      "note": "日志串字面量不同 (官方 KEEP-RECENT MC)",
+      "evidence": "官方 [KEEP-RECENT MC] ...; CCH [MEMORY_PROJECTION] ... (仅命名)"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "persistCalls",
+      "official": [
+        "t1"
+      ],
+      "cch": [
+        "t0",
+        "t1"
+      ],
+      "verdict": "SEMANTIC",
+      "note": "",
+      "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "cchOnly.totalToolUses",
+      "official": null,
+      "cch": 7,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "cchOnly.grossTokens",
+      "official": null,
+      "cch": 50018,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "cchOnly.idleAdmitted",
+      "official": null,
+      "cch": false,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    },
+    {
+      "vector": "tt_prefixed_literal_official_skips",
+      "field": "cchOnly.gapMinutes",
+      "official": null,
+      "cch": 0,
+      "verdict": "NAMING",
+      "note": "CCH 遥测独有字段, 无行为影响",
+      "evidence": "CCH MC.ts:877-888"
+    }
+  ]
+}
