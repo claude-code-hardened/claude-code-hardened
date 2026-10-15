@@ -182,7 +182,12 @@ export function resolveMemoryEntryPath(
   const parentDir = resolve(realStoreDir, ...segments.slice(0, -1))
   mkdirSync(parentDir, { recursive: true })
   const realParent = realpathSync(parentDir)
-  if (!realParent.startsWith(realStoreDir + sep)) {
+  // 单段相对路径（无子目录）时 parentDir === realStoreDir：此时 parent 就是
+  // store 根本身，属于合法包容（原实现要求 realParent 必须带分隔符前缀，
+  // 导致 store 根直下的文档一律被误判为越界）。
+  const parentContained =
+    realParent === realStoreDir || realParent.startsWith(realStoreDir + sep)
+  if (!parentContained) {
     throw new Error(
       `Refusing to create directories outside memory store "${store}": ${relPath}`,
     )

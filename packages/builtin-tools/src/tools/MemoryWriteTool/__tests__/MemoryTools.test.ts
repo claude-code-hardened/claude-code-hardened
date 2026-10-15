@@ -140,9 +140,11 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
         ].join('\n'),
       )
       mkdirSync(join(storeDir, 'sub'), { recursive: true })
+      // frontmatter 不带 name / description / type → 断言（下方）默认
+      // name = stem，type = general，且 description 字段不输出。
       writeFileSync(
         join(storeDir, 'sub', 'b.md'),
-        ['---', 'type: feedback', '---', '', 'body b', ''].join('\n'),
+        ['---', 'tags: memory-test', '---', '', 'body b', ''].join('\n'),
       )
       // Junk that must be ignored: dotfile + non-md.
       writeFileSync(join(storeDir, '.hidden.md'), 'junk')

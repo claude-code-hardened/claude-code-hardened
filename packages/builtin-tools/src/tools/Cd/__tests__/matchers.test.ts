@@ -95,9 +95,10 @@ describe('pathMatchesRule', () => {
     expect(pathMatchesRule('docs/**', '/base/project/docs/a.md', base)).toBe(
       true,
     )
-    expect(pathMatchesRule('docs/*', '/base/project/docs/a.md', base)).toBe(
-      false,
-    )
+    // 单个 `*` 只匹配一段：不得跨目录层级命中嵌套路径。
+    expect(
+      pathMatchesRule('docs/*', '/base/project/docs/nested/a.md', base),
+    ).toBe(false)
     expect(pathMatchesRule('docs/*', '/base/project/docs/a', base)).toBe(true)
     expect(pathMatchesRule('other/**', '/base/project/docs/a.md', base)).toBe(
       false,

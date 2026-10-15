@@ -71,10 +71,20 @@ export function splitRootFromPattern(rawPattern: string): {
     return { root: '', relativePattern: pattern }
   }
   const globIdx = pattern.indexOf('*')
-  const staticPart = (
-    globIdx === -1 ? pattern : pattern.slice(0, globIdx)
-  ).replace(/\/+$/, '')
-  const root = staticPart === '' ? '/' : dirname(staticPart)
+  if (globIdx === -1) {
+    // 静态绝对路径（无 glob）：root 取父目录，最后一段留给相对 pattern
+    // （docstring 例：`/etc` → root `/`，relativePattern `etc`）。
+    const staticPart = pattern.replace(/\/+$/, '')
+    const root = staticPart === '' ? '/' : dirname(staticPart)
+    const rest = pattern.slice(root.length).replace(/^\//, '')
+    return { root, relativePattern: rest }
+  }
+  // 带 glob 的 pattern：glob 之前（截掉 glob 段本身）就是静态根目录——
+  // 如 `/repo/src/**` → root `/repo/src`，relativePattern `**`；
+  // `~/work/**` → root `<home>/work`。之前的实现无条件再 dirname 一次，
+  // 导致 root 少掉最后一段静态目录（CI 上 splitRootFromPattern 用例失败）。
+  const staticPart = pattern.slice(0, globIdx).replace(/\/+$/, '')
+  const root = staticPart === '' ? '/' : staticPart
   const rest = pattern.slice(root.length).replace(/^\//, '')
   return { root, relativePattern: rest }
 }

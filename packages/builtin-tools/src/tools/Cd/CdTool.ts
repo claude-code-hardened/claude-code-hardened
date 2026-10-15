@@ -10,9 +10,15 @@ import { onCwdChangedForHooks } from 'src/utils/hooks/fileChangedWatcher.js'
 import { invalidateSessionEnvCache } from 'src/utils/sessionEnvironment.js'
 import { setCwd } from 'src/utils/Shell.js'
 import { lazySchema } from 'src/utils/lazySchema.js'
-import { getRuleByContentsForToolName } from 'src/utils/permissions/permissions.js'
-import type { PermissionRule } from 'src/types/permissions.js'
-import { CD_TOOL_NAME } from './constants.js'
+import {
+  getAllowRules,
+  getDenyRules,
+  getRuleByContentsForToolName,
+} from 'src/utils/permissions/permissions.js'
+import type {
+  PermissionBehavior,
+  PermissionRule,
+} from 'src/types/permissions.js'import { CD_TOOL_NAME } from './constants.js'
 import { expandTilde, pathMatchesRule } from './matchers.js'
 import { DESCRIPTION, PROMPT } from './prompt.js'
 
@@ -139,6 +145,40 @@ function getPermissionContext(context: {
 }
 
 /**
+ * Rules for the tool including BARE ones. getRuleByContentsForToolName() 会
+ * 过滤掉 ruleContent === undefined 的裸规则（permissions.ts:389），而官方
+ * `x()` 依赖「裸 deny 规则 = 封锁一切目录变更」——这里补回裸规则，避免
+ * `Cd`（无参数 pattern）的 deny 规则被静默丢弃。
+ */
+function getRulesForTool(
+  permissionContext: CdPermissionContext,
+  toolName: string,
+  behavior: PermissionBehavior,
+): PermissionRule[] {
+  const mappedRules = getRuleByContentsForToolName(
+    permissionContext,
+    toolName,
+    behavior,
+  )
+  const rules = [...mappedRules.values()]
+  const rawRules =
+    behavior === 'allow'
+      ? getAllowRules(permissionContext)
+      : getDenyRules(permissionContext)
+  for (const rule of rawRules) {
+    if (
+      rule.ruleValue.toolName === toolName &&
+      rule.ruleValue.ruleContent === undefined &&
+      rule.ruleBehavior === behavior &&
+      !rules.includes(rule)
+    ) {
+      rules.push(rule)
+    }
+  }
+  return rules
+}
+
+/**
  * Port of the official `x()` permission evaluation for `Cd`:
  * - deny rules: bare rule (ruleContent undefined) blocks any target;
  *   patterned rules block when the requested or canonical realpath matches.
@@ -153,11 +193,11 @@ function evaluateCdRules(
   canonical: string,
   currentDir: string,
 ): CdEvaluation {
-  for (const rule of getRuleByContentsForToolName(
+  for (const rule of getRulesForTool(
     permissionContext,
     CD_TOOL_NAME,
     'deny',
-  ).values()) {
+  )) {
     const content = rule.ruleValue.ruleContent
     if (content === undefined) {
       return { result: 'blockedByRule', rule }
@@ -167,13 +207,13 @@ function evaluateCdRules(
       return { result: 'blockedByRule', rule }
     }
   }
-  const allowRules = getRuleByContentsForToolName(
+  const allowRules = getRulesForTool(
     permissionContext,
     CD_TOOL_NAME,
     'allow',
   )
-  if (allowRules.size === 0) return { result: 'allowed' }
-  for (const rule of allowRules.values()) {
+  if (allowRules.length === 0) return { result: 'allowed' }
+  for (const rule of allowRules) {
     const content = rule.ruleValue.ruleContent
     if (
       content === undefined ||
@@ -184,7 +224,7 @@ function evaluateCdRules(
   }
   return {
     result: 'outsideAllowedPatterns',
-    allowedPatterns: [...allowRules.values()]
+    allowedPatterns: allowRules
       .map(r => r.ruleValue.ruleContent)
       .filter((c): c is string => c !== undefined),
   }

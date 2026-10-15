@@ -36,7 +36,7 @@ function snapshotJson(nodes: MiniNode[], strings: string[], title: string) {
 
 // A: object Foo (100B) + native bar (50B) + string node (25B). Self-size
 // total 175. B: Foo ×2 (200B), bar unchanged, +300B toolUseId-cache object,
-// string node gone. Total 650.
+// string node gone. Self-size total = 100+100+50+300 = 550.
 const nodesA: MiniNode[] = [
   [2, 0, 1, 100],
   [1, 1, 2, 50],
@@ -47,7 +47,12 @@ const nodesB: MiniNode[] = [
   [2, 0, 1, 100],
   [2, 0, 4, 100],
   [1, 1, 2, 50],
-  [2, 3, 5, 300],
+  // Name index 2 = 'toolUseId-cache' in stringsB. It pointed at 3 before
+  // (CI log /tmp/test1c.log:342, 380): heapdiff.ts:276 maps an out-of-range
+  // name index to '' so the node aggregated under an empty name, the
+  // 'toolUseId-cache' by-name row never existed, and the reversed-direction
+  // test saw `topByNameDelta[0].name === ''`.
+  [2, 2, 5, 300],
 ]
 const stringsB = ['Foo', 'bar', 'toolUseId-cache']
 
@@ -107,7 +112,9 @@ describe('parseHeapSnapshot', () => {
     const path = writeFixture('b.heapsnapshot', nodesB, stringsB, 'snap-b')
     const parsed = await parseHeapSnapshot(path)
     expect(parsed.nodeCount).toBe(4)
-    expect(parsed.totalSelfSize).toBe(650)
+    // 100 + 100 + 50 + 300. (650 in the original draft was an arithmetic
+    // slip: 650 - 175 would be 475, contradicting the asserted 375 delta.)
+    expect(parsed.totalSelfSize).toBe(550)
     expect(parsed.title).toBe('snap-b')
   })
 
@@ -144,13 +151,14 @@ describe('buildHeapDiffReport', () => {
       top: 10,
       focusKeywords: ['toolUseId'],
     })
-    // Totals: 650 - 175 = 375 self-size growth, +1 node.
+    // Totals: 550 - 175 = 375 self-size growth, +1 node (4 in B vs 3 in A).
     expect(report.totals.deltaSize).toBe(375)
     expect(report.totals.deltaCount).toBe(1)
-    // Type-level: object +100, string -25 (gone), native 0.
+    // Type-level: objects are Foo(100)×1 in A vs Foo(100)×2 + toolUseId(300)
+    // in B → +400 size, +2 count; string -25 (gone); native 0.
     const objectRow = report.byTypeDelta.find(row => row.type === 'object')
-    expect(objectRow?.deltaSize).toBe(100)
-    expect(objectRow?.deltaCount).toBe(1)
+    expect(objectRow?.deltaSize).toBe(400)
+    expect(objectRow?.deltaCount).toBe(2)
     const stringRow = report.byTypeDelta.find(row => row.type === 'string')
     expect(stringRow?.deltaSize).toBe(-25)
     expect(stringRow?.countB).toBe(0)

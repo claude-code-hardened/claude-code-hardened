@@ -97,12 +97,14 @@ export const MemoryWriteTool = buildTool({
   },
   async call(input: Input) {
     try {
-      if (!isValidMemoryStoreName(input.store ?? '')) {
+      // 默认 store 必须先于校验解析：未显式传 store 时应落到
+      // project-scoped 默认 store，而不是拿 undefined/'' 去撞校验。
+      const store = input.store ?? getDefaultStoreName()
+      if (!isValidMemoryStoreName(store)) {
         return {
           data: { error: `Invalid store name: '${input.store}'` },
         }
       }
-      const store = input.store ?? getDefaultStoreName()
       if (Buffer.byteLength(input.content, 'utf8') > MAX_MEMORY_DOC_BYTES) {
         return {
           data: {
