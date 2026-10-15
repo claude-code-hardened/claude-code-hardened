@@ -10,8 +10,17 @@ import { McpToolCallError, McpAuthError } from './errors.js'
 // Constants
 // ============================================================================
 
-/** Default timeout for MCP tool calls (~27.8 hours — effectively infinite) */
-const DEFAULT_MCP_TOOL_TIMEOUT_MS = 100_000_000
+/**
+ * Default timeout for MCP tool calls (~27.8 hours).
+ *
+ * Kept at the upstream magnitude on purpose: the host side
+ * (src/services/mcp/client.ts, out of scope here) mirrors the same default and
+ * long-running MCP tools legitimately exceed any shorter fixed ceiling.
+ * Cancellation is provided by the optional external AbortSignal injected by
+ * the caller (see CallToolOptions.signal / manager.callTool options), and the
+ * value stays overridable via the MCP_TOOL_TIMEOUT env var.
+ */
+export const DEFAULT_MCP_TOOL_TIMEOUT_MS = 100_000_000
 
 // ============================================================================
 // Tool execution
@@ -71,6 +80,12 @@ export async function callMcpTool(
       deps.logger.debug(`[${serverName}] Tool '${tool}' still running`)
     }, 30_000)
 
+    const timeoutPromise = createTimeoutPromise(
+      serverName,
+      tool,
+      effectiveTimeout,
+    )
+
     const result = await Promise.race([
       mcpClient.callTool(
         {
@@ -85,9 +100,8 @@ export async function callMcpTool(
           onprogress: onProgress,
         },
       ),
-      createTimeoutPromise(serverName, tool, effectiveTimeout),
+      timeoutPromise,
     ])
-
     // Handle isError in result
     if ('isError' in result && result.isError) {
       let errorDetails = 'Unknown error'
@@ -138,6 +152,7 @@ export async function callMcpTool(
 
     throw e
   } finally {
+    timeoutPromise.clear()
     if (progressInterval !== undefined) {
       clearInterval(progressInterval)
     }
@@ -159,15 +174,22 @@ function createTimeoutPromise(
   serverName: string,
   tool: string,
   timeoutMs: number,
-): Promise<never> {
-  return new Promise((_, reject) => {
-    const timeoutId = setTimeout(() => {
+): Promise<never> & { clear: () => void } {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const promise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
       reject(
         new Error(
           `MCP server "${serverName}" tool "${tool}" timed out after ${Math.floor(timeoutMs / 1000)}s`,
         ),
       )
     }, timeoutMs)
-    timeoutId.unref?.()
-  })
+    timeoutId?.unref?.()
+  }) as Promise<never> & { clear: () => void }
+  // Cancel the pending timer once the race settles, so a 27.8h timeout
+  // doesn't linger (holding closures) after a fast, successful tool call.
+  promise.clear = () => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+  return promise
 }

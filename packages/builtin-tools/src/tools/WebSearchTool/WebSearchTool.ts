@@ -26,24 +26,26 @@ const inputSchema = lazySchema(() =>
     num_results: z
       .number()
       .optional()
-      .describe('Number of search results to return (default: 8)'),
+      .describe(
+        'Number of search results to return (default: 8). Honored by the exa and tavily adapters; the bing and brave adapters ignore it and return their adapter default result count',
+      ),
     livecrawl: z
       .enum(['fallback', 'preferred'])
       .optional()
       .describe(
-        "Live crawl mode - 'fallback': use live crawling as backup if cached content unavailable, 'preferred': prioritize live crawling (default: 'fallback')",
+        "Live crawl mode - 'fallback': use live crawling as backup if cached content unavailable, 'preferred': prioritize live crawling (default: 'fallback'). Only used by the exa adapter; other adapters handle freshness with their adapter default behavior",
       ),
     search_type: z
       .enum(['auto', 'fast', 'deep'])
       .optional()
       .describe(
-        "Search type - 'auto': balanced search (default), 'fast': quick results, 'deep': comprehensive search",
+        "Search type - 'auto': balanced search (default), 'fast': quick results, 'deep': comprehensive search. Only used by the exa adapter; other adapters ignore it and apply their adapter default search behavior",
       ),
     context_max_characters: z
       .number()
       .optional()
       .describe(
-        'Maximum characters for context string optimized for LLMs (default: 10000)',
+        'Maximum characters for context string optimized for LLMs (default: 10000). Only used by the exa adapter; other adapters ignore it and apply their adapter default context limit',
       ),
   }),
 )

@@ -9,6 +9,10 @@ import { AbortError } from 'src/utils/errors.js'
 import type { SearchResult, SearchOptions, WebSearchAdapter } from './types.js'
 
 const FETCH_TIMEOUT_MS = 30_000
+/** Hard cap on response body size (10MB) — oversized pages reject instead of buffering. */
+const MAX_CONTENT_LENGTH_BYTES = 10 * 1024 * 1024
+/** Follow up to 5 redirects (Bing sometimes chains ck/dx redirects). */
+const MAX_REDIRECTS = 5
 
 /**
  * Browser-like headers to avoid Bing's anti-bot JS-rendered response.
@@ -60,6 +64,8 @@ export class BingSearchAdapter implements WebSearchAdapter {
         timeout: FETCH_TIMEOUT_MS,
         responseType: 'text',
         headers: BROWSER_HEADERS,
+        maxContentLength: MAX_CONTENT_LENGTH_BYTES,
+        maxRedirects: MAX_REDIRECTS,
       })
       html = response.data
     } catch (e) {

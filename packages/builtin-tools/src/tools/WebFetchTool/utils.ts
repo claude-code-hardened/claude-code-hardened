@@ -498,6 +498,12 @@ export async function fetchContentWithTavily(
     {
       signal: abortSignal,
       timeout: getFetchTimeoutMs(),
+      // OUTBOUND FACT: the fetch target URL is POSTed to the third-party
+      // proxy tavily.claude-code-best.win (DEFAULT_TAVILY_EXTRACT_URL or the
+      // user-configured tavilyEndpointUrl) — the URL is transmitted
+      // off-device to that proxy for server-side extraction.
+      // Align with the direct-connect path above (MAX_HTTP_CONTENT_LENGTH).
+      maxContentLength: MAX_HTTP_CONTENT_LENGTH,
       headers: { 'Content-Type': 'application/json' },
     },
   )

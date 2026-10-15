@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'crypto'
 import { readFileSync } from 'fs'
-import { mkdir, writeFile } from 'fs/promises'
+import { mkdir, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import {
   addSessionCronTask,
@@ -174,11 +174,43 @@ export async function writeCronTasks(
   const body: CronFile = {
     tasks: tasks.map(({ durable: _durable, ...rest }) => rest),
   }
-  await writeFile(
-    getCronFilePath(root),
-    jsonStringify(body, null, 2) + '\n',
-    'utf-8',
-  )
+  // Atomic write: write to a same-directory temp file (same filesystem, so
+  // rename is atomic) then rename over the target. A concurrent reader either
+  // sees the previous complete file or the new complete file — never a torn
+  // / half-written JSON blob. The temp name is UUID-suffixed so two
+  // processes writing concurrently can't clobber each other's temp file.
+  const finalPath = getCronFilePath(root)
+  const tempPath = `${finalPath}.${randomUUID()}.tmp`
+  try {
+    await writeFile(tempPath, jsonStringify(body, null, 2) + '\n', 'utf-8')
+    await rename(tempPath, finalPath)
+  } catch (e) {
+    // Best-effort cleanup of the temp file on write/rename failure so failed
+    // writes don't leave droppings next to scheduled_tasks.json.
+    try {
+      await getFsImplementation().unlink(tempPath)
+    } catch {
+      // temp file already gone (or dir unwritable) — nothing to clean up
+    }
+    throw e
+  }
+}
+
+/**
+ * In-process serialization for durable read-modify-write cycles
+ * (addCronTask). There is no pre-existing cronTasksLock in this file, so
+ * concurrent callers are chained through this promise queue: each op's
+ * read→push→write runs to completion before the next one starts, so two
+ * simultaneous addCronTask() calls can't lose each other's task via a
+ * stale read. Cross-process interleavings are still possible; the atomic
+ * temp-file+rename write above is what keeps the file itself intact there.
+ */
+let cronFileOpQueue: Promise<unknown> = Promise.resolve()
+
+function runSerialized<T>(op: () => Promise<T>): Promise<T> {
+  const next = cronFileOpQueue.then(op, op)
+  cronFileOpQueue = next.catch(() => {})
+  return next
 }
 
 /**
@@ -212,9 +244,15 @@ export async function addCronTask(
     addSessionCronTask({ ...task, ...(agentId ? { agentId } : {}) })
     return id
   }
-  const tasks = await readCronTasks()
-  tasks.push(task)
-  await writeCronTasks(tasks)
+  // Serialize the read-modify-write cycle so concurrent addCronTask calls
+  // (e.g. CronCreate fired while an assistant scheduled-task is being
+  // installed) can't overwrite each other — the loser of a raw concurrent
+  // read→push→write would silently drop the winner's task.
+  await runSerialized(async () => {
+    const tasks = await readCronTasks()
+    tasks.push(task)
+    await writeCronTasks(tasks)
+  })
   return id
 }
 

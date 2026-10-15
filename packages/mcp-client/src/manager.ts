@@ -49,6 +49,7 @@ export interface McpManager {
     serverName: string,
     toolName: string,
     args: unknown,
+    options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<unknown>
   on<E extends keyof McpManagerEvents>(
     event: E,
@@ -105,6 +106,14 @@ class McpManagerImpl implements McpManager {
     }
 
     const scopedConfig: ScopedMcpServerConfig = { ...config, scope: 'dynamic' }
+
+    // Re-connecting with an existing name must tear down the previous
+    // connection first — otherwise the old transport/socket leaks: the Map
+    // set below silently replaces it without ever calling cleanup().
+    const existing = this.connections.get(name)
+    if (existing) {
+      await this.disconnect(name)
+    }
 
     try {
       const connection = await this.connectFn(name, scopedConfig)
@@ -168,6 +177,7 @@ class McpManagerImpl implements McpManager {
     serverName: string,
     toolName: string,
     args: unknown,
+    options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<unknown> {
     const conn = this.connections.get(serverName)
     if (!conn || conn.type !== 'connected') {
@@ -182,7 +192,10 @@ class McpManagerImpl implements McpManager {
         client: conn,
         tool: toolName,
         args: args as Record<string, unknown>,
-        signal: new AbortController().signal,
+        // Cancellable when the host injects a signal; without one the explicit
+        // request timeout remains the only cancellation path (same as before).
+        signal: options?.signal ?? new AbortController().signal,
+        timeoutMs: options?.timeoutMs,
       },
       this.deps,
     )

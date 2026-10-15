@@ -211,9 +211,23 @@ export function searchTools(
 let cachedIndex: ToolIndexEntry[] | null = null
 let cachedToolNames: string | null = null
 
+/**
+ * Cheap deterministic fingerprint of a tool's input JSON schema. Same-name
+ * tool sets with changed schemas must invalidate the index cache — fixed
+ * parameters (e.g. a tool learns a new argument) would otherwise serve
+ * stale `inputSchema` data for the lifetime of the process.
+ */
+function schemaFingerprint(schema: object | undefined): string {
+  if (!schema) return ''
+  const str = JSON.stringify(schema)
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+
 export async function getToolIndex(tools: Tools): Promise<ToolIndexEntry[]> {
   const currentKey = tools
-    .map(t => t.name)
+    .map(t => `${t.name}:${schemaFingerprint(t.inputJSONSchema)}`)
     .sort()
     .join(',')
 
