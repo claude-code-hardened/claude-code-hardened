@@ -32,6 +32,7 @@ export const TOOL_VALIDATION_CONFIG: ToolValidationConfig = {
     'Glob',
     'NotebookRead',
     'NotebookEdit',
+    'Cd',
   ],
 
   // Bash wildcard tools (accept * anywhere, and legacy command:* syntax)
