@@ -20,8 +20,7 @@ export function errorsMock() {
     ConfigParseError: class extends Error {},
     ShellError: class extends Error {},
     TeleportOperationError: class extends Error {},
-    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS:
-      class extends Error {},
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS: class extends Error {},
     isAbortError: () => false,
     hasExactErrorMessage: () => false,
     toError: (e: unknown) => (e instanceof Error ? e : new Error(String(e))),

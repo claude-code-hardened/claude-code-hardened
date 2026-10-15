@@ -18,7 +18,8 @@ import {
 import type {
   PermissionBehavior,
   PermissionRule,
-} from 'src/types/permissions.js'import { CD_TOOL_NAME } from './constants.js'
+} from 'src/types/permissions.js'
+import { CD_TOOL_NAME } from './constants.js'
 import { expandTilde, pathMatchesRule } from './matchers.js'
 import { DESCRIPTION, PROMPT } from './prompt.js'
 

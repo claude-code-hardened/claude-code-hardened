@@ -733,9 +733,7 @@ export function buildMainTurnGraceNotes({
     const historyHasGraceNote =
       priorNote === 'wrap_up' || priorNote === 'near_limit'
     const due =
-      isNewDepth0Question &&
-      !historyHasGraceNote &&
-      grace.subagentNoteDue(now)
+      isNewDepth0Question && !historyHasGraceNote && grace.subagentNoteDue(now)
     if (isNewDepth0Question && !due) {
       grace.onMainTurnStart()
     }

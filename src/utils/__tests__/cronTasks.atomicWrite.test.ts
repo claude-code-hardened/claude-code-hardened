@@ -17,12 +17,8 @@ const {
   setOriginalCwd,
   setProjectRoot,
 } = await import('../../bootstrap/state')
-const {
-  addCronTask,
-  getCronFilePath,
-  readCronTasks,
-  writeCronTasks,
-} = await import('../cronTasks')
+const { addCronTask, getCronFilePath, readCronTasks, writeCronTasks } =
+    await import('../cronTasks')
 
 let tempDir = ''
 

@@ -23,9 +23,7 @@ import {
   spawnRegistrationFailure,
 } from '../../../../../../tests/mocks/localAgentTask'
 import { logMock } from '../../../../../../tests/mocks/log'
-import {
-  functionalStateMock,
-} from '../../../../../../tests/mocks/state'
+import { functionalStateMock } from '../../../../../../tests/mocks/state'
 
 mock.module('src/utils/log.ts', logMock)
 mock.module('src/utils/debug.ts', debugMock)

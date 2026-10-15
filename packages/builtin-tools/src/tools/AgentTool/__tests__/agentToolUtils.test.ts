@@ -86,11 +86,8 @@ mock.module('src/utils/messages.ts', () => ({
 // disjoint mock for the same process-global module (Bun mock.module is
 // last-write-wins) and the group went red in CI
 // (CI log /tmp/test1c.log:2771, 2790, 2812, 2831, 2850).
-const {
-  getKillAsyncAgentCalls,
-  localAgentTaskMock,
-  resetKillAsyncAgentCalls,
-} = await import('../../../../../../tests/mocks/localAgentTask')
+const { getKillAsyncAgentCalls, localAgentTaskMock, resetKillAsyncAgentCalls } =
+  await import('../../../../../../tests/mocks/localAgentTask')
 
 mock.module('src/tasks/LocalAgentTask/LocalAgentTask.js', localAgentTaskMock)
 
