@@ -35,12 +35,26 @@ export function getMaxTimeoutMs(): number {
 /**
  * Clamp a model-supplied timeout: 0 / negative / undefined fall back to the
  * default; values above the max are capped at the max (parity with
- * PowerShellTool.tsx runPowerShellCommand's clamp).
+ * PowerShellTool.tsx runPowerShellCommand's clamp). 当用户显式配置了
+ * BASH_DEFAULT_TIMEOUT_MS 时，它同时充当最小预算——低于 default 的显式
+ * timeout 会被抬到 default（未配置 default 时不干预，模型值原样透传）。
  */
 export function clampTimeoutMs(timeout: number | undefined): number {
-  return timeout && timeout > 0
-    ? Math.min(timeout, getMaxTimeoutMs())
-    : getDefaultTimeoutMs()
+  if (!timeout || timeout <= 0) {
+    return getDefaultTimeoutMs()
+  }
+  const max = getMaxTimeoutMs()
+  if (timeout > max) {
+    return max
+  }
+  const defaultEnv = process.env.BASH_DEFAULT_TIMEOUT_MS
+  if (defaultEnv) {
+    const parsedDefault = parseInt(defaultEnv, 10)
+    if (!isNaN(parsedDefault) && parsedDefault > 0 && timeout < parsedDefault) {
+      return parsedDefault
+    }
+  }
+  return timeout
 }
 
 function getBackgroundUsageNote(): string | null {
