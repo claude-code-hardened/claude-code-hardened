@@ -53,9 +53,7 @@ describe('clampTimeoutMs', () => {
   test('value above the max is clamped to the max', () => {
     cleanEnv()
     expect(clampTimeoutMs(600_001)).toBe(getMaxTimeoutMs())
-    expect(clampTimeoutMs(Number.MAX_SAFE_INTEGER)).toBe(
-      getMaxTimeoutMs(),
-    )
+    expect(clampTimeoutMs(Number.MAX_SAFE_INTEGER)).toBe(getMaxTimeoutMs())
   })
 
   test('respects BASH_MAX_TIMEOUT_MS env override for the clamp ceiling', () => {

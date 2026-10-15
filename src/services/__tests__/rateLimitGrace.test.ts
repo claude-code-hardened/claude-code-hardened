@@ -403,13 +403,13 @@ describe('continueAfterWrapUpAt / synthetic rejection', () => {
 describe('injection copy', () => {
   test('wrap-up note matches the official text', () => {
     expect(USAGE_LIMIT_GRACE_WRAPUP_NOTE).toBe(
-      '[Usage limit reached — grace window active. Wrap up: finish or checkpoint; don\'t start subagents or long work.]',
+      "[Usage limit reached — grace window active. Wrap up: finish or checkpoint; don't start subagents or long work.]",
     )
   })
 
   test('near-limit note matches the official text', () => {
     expect(USAGE_LIMIT_NEAR_WRAPUP_NOTE).toBe(
-      '[Usage limit approaching. Checkpoint now: finish the current step, then list up to 3 short bullets of the most impactful remaining work. Don\'t start subagents or long-running work.]',
+      "[Usage limit approaching. Checkpoint now: finish the current step, then list up to 3 short bullets of the most impactful remaining work. Don't start subagents or long-running work.]",
     )
   })
 
@@ -445,7 +445,10 @@ describe('injection copy', () => {
 describe('findLastUsageLimitNote', () => {
   test('walks backward and skips non-user messages', () => {
     const wrap = createUsageLimitNoteMessage({ kind: 'wrap_up', now: NOW_MS })
-    const near = createUsageLimitNoteMessage({ kind: 'near_limit', now: NOW_MS })
+    const near = createUsageLimitNoteMessage({
+      kind: 'near_limit',
+      now: NOW_MS,
+    })
     const messages = [
       wrap,
       { type: 'assistant' },

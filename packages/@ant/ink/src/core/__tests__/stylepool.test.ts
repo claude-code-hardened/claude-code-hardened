@@ -124,9 +124,7 @@ describe('StylePool.reset() — generational rebuild', () => {
     const baselineRed = pool.get(redId).map(c => c.code)
     const baselineBold = pool.get(boldId).map(c => c.code)
     const baselineTransition = pool.transition(pool.none, redId)
-    const baselineInverse = pool
-      .get(pool.withInverse(redId))
-      .map(c => c.code)
+    const baselineInverse = pool.get(pool.withInverse(redId)).map(c => c.code)
 
     pool.reset(plainScreen)
 
@@ -148,13 +146,7 @@ describe('StylePool.reset() — generational rebuild', () => {
 
   test('epoch increments and size drops to the working set', () => {
     const pool = new StylePool()
-    const screen = createScreen(
-      4,
-      1,
-      pool,
-      new CharPool(),
-      new HyperlinkPool(),
-    )
+    const screen = createScreen(4, 1, pool, new CharPool(), new HyperlinkPool())
     const before = pool.epoch
 
     for (let i = 0; i < 64; i++) {
@@ -170,13 +162,7 @@ describe('StylePool.reset() — generational rebuild', () => {
 
   test('overlay caches (inverse/current-match/selection-bg) are rebuilt consistently', () => {
     const pool = new StylePool()
-    const screen = createScreen(
-      2,
-      1,
-      pool,
-      new CharPool(),
-      new HyperlinkPool(),
-    )
+    const screen = createScreen(2, 1, pool, new CharPool(), new HyperlinkPool())
 
     const baseId = pool.intern(RED_FG)
     const invertedPre = codesToString(pool.get(pool.withInverse(baseId)))
@@ -323,9 +309,7 @@ describe('cross-epoch double-buffer diff', () => {
     // Locate the 'r' of "red": "cached " is 7 chars, so 'r' is at x=7.
     const word1 = cells[((0 * WIDTH + 7) << 1) + 1]!
     const styleId = word1 >>> 17 // STYLE_SHIFT
-    expect(pool.get(styleId).map(c => c.code)).toEqual(
-      RED_FG.map(c => c.code),
-    )
+    expect(pool.get(styleId).map(c => c.code)).toEqual(RED_FG.map(c => c.code))
     expect(styleId).not.toBe(0)
   })
 })
@@ -341,13 +325,7 @@ describe('STYLE_POOL_RESET_SIZE threshold', () => {
 
   test('interning past the threshold marks the pool over budget; reset() recovers it', () => {
     const pool = new StylePool()
-    const screen = createScreen(
-      2,
-      1,
-      pool,
-      new CharPool(),
-      new HyperlinkPool(),
-    )
+    const screen = createScreen(2, 1, pool, new CharPool(), new HyperlinkPool())
 
     for (let i = 0; i < STYLE_POOL_RESET_SIZE + 100; i++) {
       pool.intern([

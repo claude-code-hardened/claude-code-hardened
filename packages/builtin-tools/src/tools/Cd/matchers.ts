@@ -6,13 +6,15 @@ import { dirname, isAbsolute, join, relative } from 'path'
  * permission semantics (docs/reverse-284/full-source/_ALL.js:42543):
  *
  * - `globToRegex`  — port of the official `E()`: filePattern glob → RegExp
- *   (`**/` prefix → `(?:.*/)?`, `/**` → `(/.*)?`, `*` → `[^/]+`, `**` → `.*`,
+ *   (a leading double-star followed by a slash yields an optional directory
+ *   tail, a slash followed by double-star yields an optional tail group, a
+ *   lone star matches one path segment, double-star matches everything;
  *   case-insensitive, everything else escaped).
  * - `pathMatchesRule` — port of the official `B()` boundary check: the target
  *   is relativized against the rule's root (or, for relative patterns, the
  *   current session dir) and a match is REFUSED when the relativized path is
- *   `..` or starts with `../` — i.e. a realpath that escapes the rule root
- *   never matches (blocked_by_rule / outsideAllowedPatterns upstream).
+ *   `..` or starts with dot-dot-slash — i.e. a realpath that escapes the rule
+ *   root never matches (blocked_by_rule / outsideAllowedPatterns upstream).
  */
 
 export function globToRegex(pattern: string): RegExp {

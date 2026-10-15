@@ -14,14 +14,7 @@
  * bun:bundle, auth, fastMode, analytics) BEFORE dynamically importing the
  * module under test; withRetry itself runs real code paths.
  */
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { APIError } from '@anthropic-ai/sdk'
 import type Anthropic from '@anthropic-ai/sdk'
 import type { SystemAPIErrorMessage } from 'src/types/message.js'
@@ -184,9 +177,9 @@ afterEach(() => {
 
 describe('fallback trigger predicates (official IUn/Wjt/aIe alignment)', () => {
   test('isModelNotFoundError matches 404 not_found_error naming the model', () => {
-    expect(
-      isModelNotFoundError(makeApiError(404, 'not_found_error')),
-    ).toBe(true)
+    expect(isModelNotFoundError(makeApiError(404, 'not_found_error'))).toBe(
+      true,
+    )
   })
 
   test('isModelNotFoundError rejects 404 without model segment or wrong type', () => {
@@ -203,9 +196,9 @@ describe('fallback trigger predicates (official IUn/Wjt/aIe alignment)', () => {
   })
 
   test('isPermissionDeniedError matches 403 permission_error naming the model', () => {
-    expect(
-      isPermissionDeniedError(makeApiError(403, 'permission_error')),
-    ).toBe(true)
+    expect(isPermissionDeniedError(makeApiError(403, 'permission_error'))).toBe(
+      true,
+    )
   })
 
   test('isPermissionDeniedError rejects 403 without model segment or wrong type', () => {
@@ -214,9 +207,9 @@ describe('fallback trigger predicates (official IUn/Wjt/aIe alignment)', () => {
         makeApiError(403, 'permission_error', 'operation not permitted'),
       ),
     ).toBe(false)
-    expect(
-      isPermissionDeniedError(makeApiError(403, 'not_found_error')),
-    ).toBe(false)
+    expect(isPermissionDeniedError(makeApiError(403, 'not_found_error'))).toBe(
+      false,
+    )
     expect(isPermissionDeniedError(new Error('plain'))).toBe(false)
   })
 
@@ -270,9 +263,7 @@ describe('withRetry fallbackModel trigger plane', () => {
     )
     const result = await runWithRetry(makeOptions(), serverError)
     expect(result.error).toBeInstanceOf(FallbackTriggeredError)
-    expect((result.error as FallbackTriggeredError).reason).toBe(
-      'server_error',
-    )
+    expect((result.error as FallbackTriggeredError).reason).toBe('server_error')
     expect((result.error as FallbackTriggeredError).originalApiError).toBe(
       serverError,
     )
@@ -353,7 +344,7 @@ describe('withRetry 529 fallback regression', () => {
     expect(fallback.originalModel).toBe('claude-opus-4-5')
     expect(result.calls).toBe(3)
     const fallbackEvent = logEvents.find(
-      (e) => e.name === 'tengu_api_opus_fallback_triggered',
+      e => e.name === 'tengu_api_opus_fallback_triggered',
     )
     expect(fallbackEvent).toBeDefined()
   })
@@ -369,7 +360,7 @@ describe('withRetry 529 fallback regression', () => {
     expect((result.error as CannotRetryError).originalError).toBe(overloaded)
     expect(result.calls).toBe(1)
     expect(
-      logEvents.find((e) => e.name === 'tengu_api_opus_fallback_triggered'),
+      logEvents.find(e => e.name === 'tengu_api_opus_fallback_triggered'),
     ).toBeUndefined()
   })
 })

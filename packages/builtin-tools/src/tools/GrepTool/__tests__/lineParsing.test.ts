@@ -81,8 +81,6 @@ describe('relativeContentLine', () => {
   })
 
   test('lines without a recognized separator pass through unchanged', () => {
-    expect(relativeContentLine('C:\\a.ts:no digits')).toBe(
-      'C:\\a.ts:no digits',
-    )
+    expect(relativeContentLine('C:\\a.ts:no digits')).toBe('C:\\a.ts:no digits')
   })
 })

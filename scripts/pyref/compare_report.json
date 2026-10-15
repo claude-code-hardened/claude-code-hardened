@@ -117,12 +117,8 @@
       "tt_prefixed_literal_official_skips:tokensSaved",
       "tt_prefixed_literal_official_skips:persistCalls"
     ],
-    "EDGE": [
-      "image_block_bare_literal:persistCalls"
-    ],
-    "LITERAL": [
-      "artifact_marker_tt_wrap:messages"
-    ]
+    "EDGE": ["image_block_bare_literal:persistCalls"],
+    "LITERAL": ["artifact_marker_tt_wrap:messages"]
   },
   "fixtureSelfcheckFailures": {},
   "rows": [
@@ -147,12 +143,8 @@
     {
       "vector": "six_clear_oldest_persist_ok",
       "field": "clearedIds",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -241,12 +233,8 @@
     {
       "vector": "six_clear_oldest_persist_ok",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -380,12 +368,8 @@
     {
       "vector": "boundary_exact_20000",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -402,14 +386,8 @@
     {
       "vector": "boundary_above_20000_aligned",
       "field": "clearedIds",
-      "official": [
-        "t1",
-        "t0"
-      ],
-      "cch": [
-        "t0",
-        "t1"
-      ],
+      "official": ["t1", "t0"],
+      "cch": ["t0", "t1"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -507,14 +485,8 @@
     {
       "vector": "boundary_above_20000_aligned",
       "field": "persistCalls",
-      "official": [
-        "t0",
-        "t1"
-      ],
-      "cch": [
-        "t0",
-        "t1"
-      ],
+      "official": ["t0", "t1"],
+      "cch": ["t0", "t1"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -567,12 +539,8 @@
     {
       "vector": "mixed_whitelist_and_not",
       "field": "clearedIds",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -661,12 +629,8 @@
     {
       "vector": "mixed_whitelist_and_not",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -719,12 +683,8 @@
     {
       "vector": "persist_failure_literal_fallback",
       "field": "clearedIds",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -813,12 +773,8 @@
     {
       "vector": "persist_failure_literal_fallback",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -871,12 +827,8 @@
     {
       "vector": "image_block_bare_literal",
       "field": "clearedIds",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -965,9 +917,7 @@
     {
       "vector": "image_block_bare_literal",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
+      "official": ["t0"],
       "cch": [],
       "verdict": "EDGE",
       "note": "",
@@ -1084,9 +1034,7 @@
     {
       "vector": "document_source_text_token_count",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
+      "official": ["t0"],
       "cch": [],
       "verdict": "SEMANTIC",
       "note": "",
@@ -1104,12 +1052,8 @@
     {
       "vector": "already_persisted_skipped",
       "field": "clearedIds",
-      "official": [
-        "t1"
-      ],
-      "cch": [
-        "t1"
-      ],
+      "official": ["t1"],
+      "cch": ["t1"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -1198,12 +1142,8 @@
     {
       "vector": "already_persisted_skipped",
       "field": "persistCalls",
-      "official": [
-        "t1"
-      ],
-      "cch": [
-        "t1"
-      ],
+      "official": ["t1"],
+      "cch": ["t1"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -1256,12 +1196,8 @@
     {
       "vector": "already_literal_skipped",
       "field": "clearedIds",
-      "official": [
-        "t1"
-      ],
-      "cch": [
-        "t1"
-      ],
+      "official": ["t1"],
+      "cch": ["t1"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -1350,12 +1286,8 @@
     {
       "vector": "already_literal_skipped",
       "field": "persistCalls",
-      "official": [
-        "t1"
-      ],
-      "cch": [
-        "t1"
-      ],
+      "official": ["t1"],
+      "cch": ["t1"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -1408,13 +1340,8 @@
     {
       "vector": "empty_string_candidate_official_clears",
       "field": "clearedIds",
-      "official": [
-        "t1",
-        "t0"
-      ],
-      "cch": [
-        "t1"
-      ],
+      "official": ["t1", "t0"],
+      "cch": ["t1"],
       "verdict": "SEMANTIC",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -1512,12 +1439,8 @@
     {
       "vector": "empty_string_candidate_official_clears",
       "field": "persistCalls",
-      "official": [
-        "t1"
-      ],
-      "cch": [
-        "t1"
-      ],
+      "official": ["t1"],
+      "cch": ["t1"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -1579,12 +1502,8 @@
     {
       "vector": "output_style_source_variant_aligned",
       "field": "clearedIds",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -1673,12 +1592,8 @@
     {
       "vector": "output_style_source_variant_aligned",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -1731,12 +1646,8 @@
     {
       "vector": "duplicate_tool_result_ids",
       "field": "clearedIds",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -1825,13 +1736,8 @@
     {
       "vector": "duplicate_tool_result_ids",
       "field": "persistCalls",
-      "official": [
-        "t0",
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0", "t0"],
+      "cch": ["t0"],
       "verdict": "SEMANTIC",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -1884,12 +1790,8 @@
     {
       "vector": "artifact_marker_tt_wrap",
       "field": "clearedIds",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -1978,12 +1880,8 @@
     {
       "vector": "artifact_marker_tt_wrap",
       "field": "persistCalls",
-      "official": [
-        "t0"
-      ],
-      "cch": [
-        "t0"
-      ],
+      "official": ["t0"],
+      "cch": ["t0"],
       "verdict": "ALIGNED",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"
@@ -2036,13 +1934,8 @@
     {
       "vector": "tt_prefixed_literal_official_skips",
       "field": "clearedIds",
-      "official": [
-        "t1"
-      ],
-      "cch": [
-        "t0",
-        "t1"
-      ],
+      "official": ["t1"],
+      "cch": ["t0", "t1"],
       "verdict": "SEMANTIC",
       "note": "",
       "evidence": "官方 :4544 PLr/slice(-5)/S=候选ids; CCH MC.ts:706-771"
@@ -2140,13 +2033,8 @@
     {
       "vector": "tt_prefixed_literal_official_skips",
       "field": "persistCalls",
-      "official": [
-        "t1"
-      ],
-      "cch": [
-        "t0",
-        "t1"
-      ],
+      "official": ["t1"],
+      "cch": ["t0", "t1"],
       "verdict": "SEMANTIC",
       "note": "",
       "evidence": "官方 :4544 content 真值即调persist(空串跳过/image数组恒真仍调); CCH MC.ts:806-823 visual 分流在 persist 之前"

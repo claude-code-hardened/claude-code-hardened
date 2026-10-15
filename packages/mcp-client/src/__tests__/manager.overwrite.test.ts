@@ -1,10 +1,7 @@
 import { describe, expect, test, mock } from 'bun:test'
 import { createMcpManager } from '../manager.js'
 import type { McpClientDependencies } from '../interfaces.js'
-import type {
-  ConnectedMCPServer,
-  ScopedMcpServerConfig,
-} from '../types.js'
+import type { ConnectedMCPServer, ScopedMcpServerConfig } from '../types.js'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 
 function createMockDeps(): McpClientDependencies {
@@ -103,9 +100,14 @@ describe('McpManager callTool cancellability', () => {
     await manager.connect('sig-server', { command: 'npx', args: [] })
 
     const externalController = new AbortController()
-    await manager.callTool('sig-server', 'echo', { msg: 'hi' }, {
-      signal: externalController.signal,
-    })
+    await manager.callTool(
+      'sig-server',
+      'echo',
+      { msg: 'hi' },
+      {
+        signal: externalController.signal,
+      },
+    )
 
     expect(connection.client.callTool).toHaveBeenCalled()
     const invokeOptions = (connection.client.callTool as any).mock

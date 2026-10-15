@@ -289,8 +289,9 @@ describe('clearToolResultProjection', () => {
     )
     expect(result).not.toBeNull()
     const projected = String(toolResultContent(result?.messages[1]))
-    expect(projected.startsWith(`${ARTIFACT_MARKER_PREFIX}<persisted-output>`))
-      .toBe(true)
+    expect(
+      projected.startsWith(`${ARTIFACT_MARKER_PREFIX}<persisted-output>`),
+    ).toBe(true)
     // clearedReplacements carries exactly the projected (wrapped) string so
     // the query.ts mutable-message sync stays byte-identical.
     expect(result?.clearedReplacements.get('t0')).toBe(projected)

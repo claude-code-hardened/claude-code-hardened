@@ -36,9 +36,7 @@ describe('createAndSaveSnapshot permissions', () => {
       const path = snapshotPath as string
       expect(existsSync(path)).toBe(true)
       // Random name untouched: timestamp + random id, still .sh.
-      expect(path.startsWith(join(snapshotsDir, 'snapshot-bash-'))).toBe(
-        true,
-      )
+      expect(path.startsWith(join(snapshotsDir, 'snapshot-bash-'))).toBe(true)
 
       // File must be owner-read/write only.
       const fileMode = statSync(path).mode & 0o777
