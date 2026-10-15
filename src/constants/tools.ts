@@ -40,6 +40,7 @@ import {
 } from '@claude-code-hardened/builtin-tools/tools/ScheduleCronTool/prompt.js'
 import { LOCAL_MEMORY_RECALL_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/LocalMemoryRecallTool/constants.js'
 import { VAULT_HTTP_FETCH_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/VaultHttpFetchTool/constants.js'
+import { CD_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/Cd/constants.js'
 
 export const ALL_AGENT_DISALLOWED_TOOLS = new Set([
   TASK_OUTPUT_TOOL_NAME,
@@ -59,6 +60,15 @@ export const ALL_AGENT_DISALLOWED_TOOLS = new Set([
   // LOCAL-WIRING PR-2: vault HTTP fetch is even more sensitive (touches
   // user secrets). Same two-layer gate applies — keep main thread only.
   VAULT_HTTP_FETCH_TOOL_NAME,
+  // Cd mutates the session-global cwd singleton (bootstrap/state.cwd + the
+  // persistent shell). A subagent changing it would race the main thread's
+  // directory, so keep it main-thread-only like the tools above.
+  CD_TOOL_NAME,
+  // NOTE: the memory store trio (memory_write / memory_list / memory_read) is
+  // intentionally NOT listed here — per official semantics the trio is
+  // available to subagents. Like LocalMemoryRecall it is deferred (not in
+  // CORE_TOOLS) and discoverable via SearchExtraTools; memory_write still goes
+  // through the normal per-call permission flow (it is not read-only).
 ])
 
 export const CUSTOM_AGENT_DISALLOWED_TOOLS = new Set([

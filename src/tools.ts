@@ -160,10 +160,28 @@ const getLocalMemoryRecallTool = () =>
   (
     require('@claude-code-hardened/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/LocalMemoryRecallTool/LocalMemoryRecallTool.js')
   ).LocalMemoryRecallTool
+const getCdTool = () =>
+  (
+    require('@claude-code-hardened/builtin-tools/tools/Cd/CdTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/Cd/CdTool.js')
+  ).CdTool
 const getVaultHttpFetchTool = () =>
   (
     require('@claude-code-hardened/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/VaultHttpFetchTool/VaultHttpFetchTool.js')
   ).VaultHttpFetchTool
+// Memory store trio (memory_write / memory_read / memory_list) — same
+// startup-lazy pattern as LocalMemoryRecall / VaultHttpFetch above.
+const getMemoryWriteTool = () =>
+  (
+    require('@claude-code-hardened/builtin-tools/tools/MemoryWriteTool/MemoryWriteTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/MemoryWriteTool/MemoryWriteTool.js')
+  ).MemoryWriteTool
+const getMemoryReadTool = () =>
+  (
+    require('@claude-code-hardened/builtin-tools/tools/MemoryWriteTool/MemoryReadTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/MemoryWriteTool/MemoryReadTool.js')
+  ).MemoryReadTool
+const getMemoryListTool = () =>
+  (
+    require('@claude-code-hardened/builtin-tools/tools/MemoryWriteTool/MemoryListTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/MemoryWriteTool/MemoryListTool.js')
+  ).MemoryListTool
 const getTaskCreateTool = () =>
   (
     require('@claude-code-hardened/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js') as typeof import('@claude-code-hardened/builtin-tools/tools/TaskCreateTool/TaskCreateTool.js')
@@ -408,7 +426,14 @@ export function getAllBaseTools(): Tools {
     getSkillTool(),
     getEnterPlanModeTool(),
     getLocalMemoryRecallTool(),
+    getCdTool(),
     getVaultHttpFetchTool(),
+    // Memory store trio — deferred like LocalMemoryRecall (not in CORE_TOOLS),
+    // discoverable via SearchExtraTools; available to subagents (official
+    // semantics, see src/constants/tools.ts note).
+    getMemoryWriteTool(),
+    getMemoryReadTool(),
+    getMemoryListTool(),
     ...(process.env.USER_TYPE === 'ant' ? [getConfigTool()] : []),
     ...(GoalToolLoader ? [GoalToolLoader()] : []),
     ...(process.env.USER_TYPE === 'ant' ? [getTungstenTool()] : []),
