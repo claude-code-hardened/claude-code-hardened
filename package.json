@@ -68,6 +68,7 @@
     "typecheck": "tsc --noEmit",
     "precheck": "bun run typecheck && bun run check:fix && bun test",
     "rcs": "bun run scripts/rcs.ts",
+    "memory:replay": "bun scripts/memory-replay.ts",
     "build:all": "node scripts/build-all.mjs"
   },
   "dependencies": {
