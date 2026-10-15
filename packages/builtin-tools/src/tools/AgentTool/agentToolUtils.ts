@@ -285,6 +285,14 @@ export function finalizeAgentTool(
     agentType: string
     isAsync: boolean
   },
+  // Whole-stream counts from a head-truncated message buffer (see
+  // BoundedAgentMessageBuffer). When provided they override counts recomputed
+  // from agentMessages, which may only be the recent tail. Sync call sites
+  // (unbounded by-turn arrays) omit it and keep the legacy in-place counting.
+  streamStats?: {
+    totalMessageCount: number
+    totalToolUseCount: number
+  },
 ): AgentToolResult {
   const {
     prompt,
@@ -324,7 +332,8 @@ export function finalizeAgentTool(
       typeof getTokenCountFromUsage
     >[0],
   )
-  const totalToolUseCount = countToolUses(agentMessages)
+  const totalToolUseCount =
+    streamStats?.totalToolUseCount ?? countToolUses(agentMessages)
 
   logEvent('tengu_agent_tool_completed', {
     agent_type:
@@ -333,7 +342,8 @@ export function finalizeAgentTool(
       resolvedAgentModel as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     prompt_char_count: prompt.length,
     response_char_count: content.length,
-    assistant_message_count: agentMessages.length,
+    assistant_message_count:
+      streamStats?.totalMessageCount ?? agentMessages.length,
     total_tool_uses: totalToolUseCount,
     duration_ms: Date.now() - startTime,
     total_tokens: totalTokens,
@@ -511,6 +521,85 @@ export function extractPartialResult(
   return undefined
 }
 
+/**
+ * Cap on messages kept in memory by a background agent's lifecycle buffer and
+ * its AppState retain-mirror.
+ *
+ * runAsyncAgentLifecycle streams one entry per API message for the task's
+ * entire lifetime and previously grew both the local agentMessages array and
+ * the states.tasks[id].messages mirror (written when the UI retains the task)
+ * without bound. The full transcript already lives on disk at the agent
+ * transcript path, so memory only needs the recent tail — the retained mirror
+ * exists purely for the zoomed transcript dialog. This is the same OOM class
+ * as TEAMMATE_MESSAGES_UI_CAP (src/tasks/InProcessTeammateTask/types.ts):
+ * whale session 9a990de8 launched 292 agents in 2 minutes and reached 36.8GB.
+ *
+ * 200 entries is ample for every tail consumer: finalizeAgentTool's
+ * last-assistant extraction, extractPartialResult on kill, the handoff
+ * classifier transcript, the bootstrap disk-merge (which only requires that
+ * live is a *suffix* of disk — head truncation preserves that), and the
+ * transcript view's recent-context rendering. Counts that must reflect the
+ * whole stream (tool-use totals, message counts in analytics) are tracked
+ * separately on eviction instead of being recomputed from the tail.
+ */
+export const MAX_AGENT_MESSAGES_IN_MEMORY = 200
+
+/**
+ * Head-truncating ("ring") replacement for a push-only agent transcript
+ * array. Once MAX_AGENT_MESSAGES_IN_MEMORY is reached, the oldest message is
+ * evicted from the head; evicted assistant messages are counted into
+ * evictedToolUses so whole-stream statistics stay exact after truncation.
+ */
+export class BoundedAgentMessageBuffer {
+  private readonly tail: MessageType[] = []
+  private evictedMessages = 0
+  private evictedToolUses = 0
+
+  push(message: MessageType): void {
+    this.tail.push(message)
+    if (this.tail.length > MAX_AGENT_MESSAGES_IN_MEMORY) {
+      const evicted = this.tail.shift()!
+      this.evictedMessages++
+      // countToolUses only reads assistant messages
+      if (evicted.type === 'assistant') {
+        this.evictedToolUses += countToolUses([evicted])
+      }
+    }
+  }
+
+  /** Most recent messages, oldest first — the read view of a plain array. */
+  asArray(): MessageType[] {
+    return this.tail
+  }
+
+  /** Exact number of messages streamed through the buffer. */
+  get totalMessages(): number {
+    return this.evictedMessages + this.tail.length
+  }
+
+  /** Exact tool_use total across the whole stream, evicted entries included. */
+  get totalToolUses(): number {
+    return this.evictedToolUses + countToolUses(this.tail)
+  }
+}
+
+/**
+ * Append to the AppState retain-mirror (tasks[id].messages) with the same cap
+ * as the lifecycle buffer, dropping from the head when the cap is exceeded.
+ * Consumers only read the recent tail: the bootstrap merge keeps the
+ * disk-is-superset invariant, and the zoomed transcript dialog renders recent
+ * context (see TEAMMATE_MESSAGES_UI_CAP for the teammates precedent).
+ */
+export function appendCappedAgentMessage(
+  base: MessageType[] | undefined,
+  message: MessageType,
+): MessageType[] {
+  const next = [...(base ?? []), message]
+  return next.length > MAX_AGENT_MESSAGES_IN_MEMORY
+    ? next.slice(next.length - MAX_AGENT_MESSAGES_IN_MEMORY)
+    : next
+}
+
 type SetAppState = (f: (prev: AppState) => AppState) => void
 
 /**
@@ -546,7 +635,7 @@ export async function runAsyncAgentLifecycle({
   }>
 }): Promise<void> {
   let stopSummarization: (() => void) | undefined
-  const agentMessages: MessageType[] = []
+  const agentMessages = new BoundedAgentMessageBuffer()
   try {
     const tracker = createProgressTracker()
     const resolveActivity = createActivityDescriptionResolver(
@@ -568,15 +657,19 @@ export async function runAsyncAgentLifecycle({
       // Append immediately when UI holds the task (retain). Bootstrap reads
       // disk in parallel and UUID-merges the prefix — disk-write-before-yield
       // means live is always a suffix of disk, so merge is order-correct.
+      // Head-capped like the local buffer above: the mirror's consumers
+      // (bootstrap suffix merge, zoomed transcript) only read recent context.
       rootSetAppState(prev => {
         const t = prev.tasks[taskId]
         if (!isLocalAgentTask(t) || !t.retain) return prev
-        const base = t.messages ?? []
         return {
           ...prev,
           tasks: {
             ...prev.tasks,
-            [taskId]: { ...t, messages: [...base, message] },
+            [taskId]: {
+              ...t,
+              messages: appendCappedAgentMessage(t.messages, message),
+            },
           },
         }
       })
@@ -606,7 +699,17 @@ export async function runAsyncAgentLifecycle({
 
     stopSummarization?.()
 
-    const agentResult = finalizeAgentTool(agentMessages, taskId, metadata)
+    const agentResult = finalizeAgentTool(
+      agentMessages.asArray(),
+      taskId,
+      metadata,
+      {
+        // The buffer keeps only the recent tail — pass exact whole-stream
+        // counts instead of letting finalize recompute them from the tail.
+        totalMessageCount: agentMessages.totalMessages,
+        totalToolUseCount: agentMessages.totalToolUses,
+      },
+    )
 
     // Mark task completed FIRST so TaskOutput(block=true) unblocks
     // immediately. classifyHandoffIfNeeded (API call) and getWorktreeResult
@@ -618,7 +721,7 @@ export async function runAsyncAgentLifecycle({
 
     if (feature('TRANSCRIPT_CLASSIFIER')) {
       const handoffWarning = await classifyHandoffIfNeeded({
-        agentMessages,
+        agentMessages: agentMessages.asArray(),
         tools: toolUseContext.options.tools,
         toolPermissionContext:
           toolUseContext.getAppState().toolPermissionContext,
@@ -667,7 +770,7 @@ export async function runAsyncAgentLifecycle({
           'user_kill_async' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       })
       const worktreeResult = await getWorktreeResult()
-      const partialResult = extractPartialResult(agentMessages)
+      const partialResult = extractPartialResult(agentMessages.asArray())
       enqueueAgentNotification({
         taskId,
         description,

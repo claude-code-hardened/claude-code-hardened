@@ -380,20 +380,39 @@ export const AgentTool = buildTool({
       if (agentDef?.color) {
         setAgentColor(subagent_type!, agentDef.color);
       }
-      const result = await spawnTeammate(
-        {
-          name,
-          prompt,
-          description,
-          team_name: teamName,
-          use_splitpane: true,
-          plan_mode_required: spawnMode === 'plan',
-          model: model ?? agentDef?.model,
-          agent_type: subagent_type,
-          invokingRequestId: assistantMessage?.requestId as string | undefined,
-        },
-        toolUseContext,
-      );
+      // spawnTeammate throws for pre-registration failures (bad team/name,
+      // backend setup) before any state is written, and its backend spawn
+      // paths swallow their own errors into a structured failure. The only
+      // failure window with partial state (post-spawn teamContext/roster
+      // writes) exposes no caller-reachable rollback handles (sanitized
+      // teammateId, executor), so log with spawn context and re-throw to
+      // keep the framework's structured error path. No teammate failure
+      // member exists in the Output union to return instead.
+      let result: Awaited<ReturnType<typeof spawnTeammate>>;
+      try {
+        result = await spawnTeammate(
+          {
+            name,
+            prompt,
+            description,
+            team_name: teamName,
+            use_splitpane: true,
+            plan_mode_required: spawnMode === 'plan',
+            model: model ?? agentDef?.model,
+            agent_type: subagent_type,
+            invokingRequestId: assistantMessage?.requestId as string | undefined,
+          },
+          toolUseContext,
+        );
+      } catch (error) {
+        if (error instanceof AbortError) {
+          throw error;
+        }
+        logForDebugging(`[AgentTool] Failed to spawn teammate ${name} in team ${teamName}: ${errorMessage(error)}`, {
+          level: 'error',
+        });
+        throw error;
+      }
 
       // Type assertion uses TeammateSpawnedOutput (defined above) instead of any.
       // This type is excluded from the exported outputSchema for dead code elimination.
@@ -828,28 +847,42 @@ export const AgentTool = buildTool({
 
     if (shouldRunAsync) {
       const asyncAgentId = earlyAgentId;
-      const agentBackgroundTask = registerAsyncAgent({
-        agentId: asyncAgentId,
-        description,
-        prompt,
-        selectedAgent,
-        setAppState: rootSetAppState,
-        // Don't link to parent's abort controller -- background agents should
-        // survive when the user presses ESC to cancel the main thread.
-        // They are killed explicitly via chat:killAgents.
-        toolUseId: toolUseContext.toolUseId,
-      });
+      // Spawn-window guard (audit 3.8 #3): createAgentWorktree above already
+      // created the worktree, but nothing up to the guarded execution sections
+      // below cleans it up on a synchronous throw. registerAsyncAgent is the
+      // throw-capable statement on this path (the rest are pure object
+      // assembly) — on failure remove the worktree with the same helper the
+      // completion/abort paths use, then propagate the original error.
+      const agentBackgroundTask = await (async () => {
+        try {
+          const task = registerAsyncAgent({
+            agentId: asyncAgentId,
+            description,
+            prompt,
+            selectedAgent,
+            setAppState: rootSetAppState,
+            // Don't link to parent's abort controller -- background agents should
+            // survive when the user presses ESC to cancel the main thread.
+            // They are killed explicitly via chat:killAgents.
+            toolUseId: toolUseContext.toolUseId,
+          });
 
-      // Register name → agentId for SendMessage routing. Post-registerAsyncAgent
-      // so we don't leave a stale entry if spawn fails. Sync agents skipped —
-      // coordinator is blocked, so SendMessage routing doesn't apply.
-      if (name) {
-        rootSetAppState(prev => {
-          const next = new Map(prev.agentNameRegistry);
-          next.set(name, asAgentId(asyncAgentId));
-          return { ...prev, agentNameRegistry: next };
-        });
-      }
+          // Register name → agentId for SendMessage routing. Post-registerAsyncAgent
+          // so we don't leave a stale entry if spawn fails. Sync agents skipped —
+          // coordinator is blocked, so SendMessage routing doesn't apply.
+          if (name) {
+            rootSetAppState(prev => {
+              const next = new Map(prev.agentNameRegistry);
+              next.set(name, asAgentId(asyncAgentId));
+              return { ...prev, agentNameRegistry: next };
+            });
+          }
+          return task;
+        } catch (error) {
+          await cleanupWorktreeIfNeeded();
+          throw error;
+        }
+      })();
 
       // Wrap async agent execution in agent context for analytics attribution
       const asyncAgentContext: SubagentContext = {
@@ -964,21 +997,32 @@ export const AgentTool = buildTool({
           // promise, accumulating callbacks for the lifetime of the agent.
           let backgroundPromise: Promise<{ type: 'background' }> | undefined;
           let cancelAutoBackground: (() => void) | undefined;
-          if (!isBackgroundTasksDisabled) {
-            const registration = registerAgentForeground({
-              agentId: syncAgentId,
-              description,
-              prompt,
-              selectedAgent,
-              setAppState: rootSetAppState,
-              toolUseId: toolUseContext.toolUseId,
-              autoBackgroundMs: getAutoBackgroundMs() || undefined,
-            });
-            foregroundTaskId = registration.taskId;
-            backgroundPromise = registration.backgroundSignal.then(() => ({
-              type: 'background' as const,
-            }));
-            cancelAutoBackground = registration.cancelAutoBackground;
+
+          // Spawn-window guard (audit 3.8 #3): foreground registration runs
+          // after the worktree has been created but before the try/finally
+          // below (which owns worktree cleanup) is entered — a throw here
+          // would leak the worktree. Clean it up with the same helper the
+          // normal completion/abort paths use, then propagate the error.
+          try {
+            if (!isBackgroundTasksDisabled) {
+              const registration = registerAgentForeground({
+                agentId: syncAgentId,
+                description,
+                prompt,
+                selectedAgent,
+                setAppState: rootSetAppState,
+                toolUseId: toolUseContext.toolUseId,
+                autoBackgroundMs: getAutoBackgroundMs() || undefined,
+              });
+              foregroundTaskId = registration.taskId;
+              backgroundPromise = registration.backgroundSignal.then(() => ({
+                type: 'background' as const,
+              }));
+              cancelAutoBackground = registration.cancelAutoBackground;
+            }
+          } catch (error) {
+            await cleanupWorktreeIfNeeded();
+            throw error;
           }
 
           // Track if we've shown the background hint UI
@@ -991,21 +1035,30 @@ export const AgentTool = buildTool({
           // const capture for sound type narrowing inside the callback below
           const summaryTaskId = foregroundTaskId;
 
-          // Get async iterator for the agent
-          const agentIterator = runAgent({
-            ...runAgentParams,
-            override: {
-              ...runAgentParams.override,
-              agentId: syncAgentId,
-            },
-            onCacheSafeParams:
-              summaryTaskId && getSdkAgentProgressSummariesEnabled()
-                ? (params: CacheSafeParams) => {
-                    const { stop } = startAgentSummarization(summaryTaskId, syncAgentId, params, rootSetAppState);
-                    stopForegroundSummarization = stop;
-                  }
-                : undefined,
-          })[Symbol.asyncIterator]();
+          // Get async iterator for the agent. Same spawn-window guard as the
+          // registration above: runAgent is throw-capable and the worktree is
+          // already on disk.
+          const agentIterator = await (async () => {
+            try {
+              return runAgent({
+                ...runAgentParams,
+                override: {
+                  ...runAgentParams.override,
+                  agentId: syncAgentId,
+                },
+                onCacheSafeParams:
+                  summaryTaskId && getSdkAgentProgressSummariesEnabled()
+                    ? (params: CacheSafeParams) => {
+                        const { stop } = startAgentSummarization(summaryTaskId, syncAgentId, params, rootSetAppState);
+                        stopForegroundSummarization = stop;
+                      }
+                    : undefined,
+              })[Symbol.asyncIterator]();
+            } catch (error) {
+              await cleanupWorktreeIfNeeded();
+              throw error;
+            }
+          })();
 
           // Track if an error occurred during iteration
           let syncAgentError: Error | undefined;

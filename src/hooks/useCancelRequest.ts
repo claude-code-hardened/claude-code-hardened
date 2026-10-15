@@ -4,7 +4,7 @@
  * Must be rendered inside KeybindingSetup to have access to the keybinding context.
  * This component renders nothing - it just registers the cancel keybinding handler.
  */
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { logEvent } from 'src/services/analytics/index.js'
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from 'src/services/analytics/metadata.js'
 import {
@@ -36,6 +36,28 @@ import { emitTaskTerminatedSdk } from '../utils/sdkEventQueue.js'
 
 /** Time window in ms during which a second press kills all background agents. */
 const KILL_AGENTS_CONFIRM_WINDOW_MS = 3000
+
+/**
+ * Kill every running background agent task and return how many were running.
+ *
+ * Quit teardown (audit 3.8 #2): this targets the user-initiated exit path
+ * (handleExit → /exit command → ExitFlow → gracefulShutdown → process.exit),
+ * NOT the natural turn-end path — background agents intentionally survive
+ * normal query completion. A natural end never reaches process teardown, so
+ * binding to process 'exit' gives exactly "user quit" semantics while
+ * covering every exit entrypoint (/exit, ctrl+d, ExitFlow) in one spot.
+ */
+export function teardownRunningAgentsOnQuit(
+  tasks: Parameters<typeof killAllRunningAgentTasks>[0],
+  setAppState: Parameters<typeof killAllRunningAgentTasks>[1],
+): number {
+  const running = Object.values(tasks).filter(
+    t => t.type === 'local_agent' && t.status === 'running',
+  )
+  if (running.length === 0) return 0
+  killAllRunningAgentTasks(tasks, setAppState)
+  return running.length
+}
 
 type CancelRequestHandlerProps = {
   setToolUseConfirmQueue: (
@@ -193,6 +215,24 @@ export function CancelRequestHandler(props: CancelRequestHandlerProps): null {
     onAgentsKilled()
     return true
   }, [store, setAppState, onAgentsKilled])
+
+  // User-quit teardown (audit 3.8 #2): when the process tears down, stop all
+  // running background agents so they don't outlive the UI, streaming into
+  // disk transcripts with no notification pipeline left to report them.
+  // killAllRunningAgentTasks only aborts controllers and flips task state, so
+  // it is synchronous-safe inside process 'exit' handlers. Deliberately NOT
+  // tied to component unmount: CancelRequestHandler is conditionally mounted
+  // (REPL renders it in two gated spots), where unmount would fire on
+  // ordinary screen transitions and kill live agents.
+  useEffect(() => {
+    const killRunningAgentsOnQuit = (): void => {
+      teardownRunningAgentsOnQuit(store.getState().tasks, setAppState)
+    }
+    process.on('exit', killRunningAgentsOnQuit)
+    return () => {
+      process.off('exit', killRunningAgentsOnQuit)
+    }
+  }, [store, setAppState])
 
   // Ctrl+C (app:interrupt). Scoped to teammate-view: killing agents from the
   // main prompt stays a deliberate gesture (chat:killAgents), not a
