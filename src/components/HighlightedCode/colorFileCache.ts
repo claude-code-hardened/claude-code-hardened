@@ -27,9 +27,7 @@ const COLOR_FILE_HANDLE_OVERHEAD_BYTES = 4096
  * which is what the code.length term models; the flat overhead keeps tiny
  * snippets from costing "zero" in the budget.
  */
-export function estimateColorFileEntrySize(
-  entry: ColorFileCacheEntry,
-): number {
+export function estimateColorFileEntrySize(entry: ColorFileCacheEntry): number {
   return (
     entry.code.length * CODE_BYTES_PER_CHAR + COLOR_FILE_HANDLE_OVERHEAD_BYTES
   )

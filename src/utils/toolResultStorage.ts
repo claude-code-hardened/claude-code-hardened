@@ -1065,9 +1065,7 @@ export function reconstructForSubagentResume(
  * Returns null when the artifact is missing/unreadable — callers must degrade
  * to the frozen (unreplaced) decision. Never throws.
  */
-function createDiskReplacementLoader(
-  toolUseId: string,
-): () => string | null {
+function createDiskReplacementLoader(toolUseId: string): () => string | null {
   return () => {
     try {
       const jsonPath = getToolResultPath(toolUseId, true)

@@ -6,10 +6,7 @@ import { isFullscreenEnvEnabled } from '../utils/fullscreen.js';
 import sliceAnsi from '../utils/sliceAnsi.js';
 import { countCharInString } from '../utils/stringUtils.js';
 import { HighlightedCodeFallback } from './HighlightedCode/Fallback.js';
-import {
-  createColorFileCache,
-  getCachedColorFileInstance,
-} from './HighlightedCode/colorFileCache.js';
+import { createColorFileCache, getCachedColorFileInstance } from './HighlightedCode/colorFileCache.js';
 import { expectColorFile } from './StructuredDiff/colorDiff.js';
 
 // Module-level byte-budgeted LRU cache for ColorFile instances to avoid

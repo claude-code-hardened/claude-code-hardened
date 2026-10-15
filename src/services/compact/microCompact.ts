@@ -958,17 +958,13 @@ export async function clearToolResultProjection(
     }
     let touched = false
     const newContent = message.message!.content.map(block => {
-      if (
-        block.type !== 'tool_result' ||
-        !contentById.has(block.tool_use_id)
-      ) {
+      if (block.type !== 'tool_result' || !contentById.has(block.tool_use_id)) {
         return block
       }
       const visual = hasImageOrDocumentBlock(block.content)
       let replacement = visual
         ? TIME_BASED_MC_CLEARED_MESSAGE
-        : (contentById.get(block.tool_use_id) ??
-          TIME_BASED_MC_CLEARED_MESSAGE)
+        : (contentById.get(block.tool_use_id) ?? TIME_BASED_MC_CLEARED_MESSAGE)
       if (
         !visual &&
         !replacement.startsWith(ARTIFACT_CONTENT_MARKER_PREFIX) &&

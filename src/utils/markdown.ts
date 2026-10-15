@@ -459,9 +459,7 @@ export type TokenCacheOptions = Pick<
  * lexer outputs, so the budget bounds the worst case of "many huge messages
  * retained at once" that an entry-count cap could not.
  */
-export function createTokenCache(
-  opts: TokenCacheOptions = {},
-): TokenCache {
+export function createTokenCache(opts: TokenCacheOptions = {}): TokenCache {
   return createByteBudgetCache<string, Token[]>({
     maxTotalBytes: opts.maxTotalBytes,
     maxItemBytes: opts.maxItemBytes,

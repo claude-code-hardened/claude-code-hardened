@@ -701,10 +701,7 @@ export default class Ink {
     // accumulated more than STYLE_POOL_RESET_SIZE entries (each new
     // syntax-highlight × theme-overlay combination interns an entry that is
     // rarely reused again).
-    if (
-      renderStart - this.lastPoolResetTime > 5 * 60 * 1000 ||
-      this.stylePool.size > STYLE_POOL_RESET_SIZE
-    ) {
+    if (renderStart - this.lastPoolResetTime > 5 * 60 * 1000 || this.stylePool.size > STYLE_POOL_RESET_SIZE) {
       this.resetPools();
       this.lastPoolResetTime = renderStart;
     }
