@@ -44,6 +44,28 @@ type OutputSchema = ReturnType<typeof outputSchema>
 
 export type Output = z.infer<OutputSchema>
 
+/**
+ * Rejection result for a delegated tool call, shaped identically to the
+ * target tool's own deny branch: `result: null` plus a user message carrying
+ * the denial reason back to the model.
+ */
+function deniedDelegation(
+  toolName: string,
+  reason: string,
+): ToolResult<Output> {
+  return {
+    data: {
+      result: null,
+      tool_name: toolName,
+    },
+    newMessages: [
+      createUserMessage({
+        content: `Permission denied for tool "${toolName}": ${reason}`,
+      }),
+    ],
+  }
+}
+
 export const ExecuteTool = buildTool({
   name: EXECUTE_TOOL_NAME,
   searchHint: 'execute run invoke call a deferred tool by name with parameters',
@@ -187,17 +209,50 @@ export const ExecuteTool = buildTool({
       context,
     )
     if (permResult && permResult.behavior === 'deny') {
-      return {
-        data: {
-          result: null,
-          tool_name: input.tool_name,
-        },
-        newMessages: [
-          createUserMessage({
-            content: `Permission denied for tool "${input.tool_name}": ${permResult.message ?? 'Permission denied'}`,
-          }),
-        ],
-      }
+      return deniedDelegation(
+        input.tool_name,
+        permResult.message ?? 'Permission denied',
+      )
+    }
+
+    // Authorization gate for the delegation path (permResult !== 'deny').
+    // A delegated call must NEVER execute on the strength of the target
+    // tool's checkPermissions alone: the pipeline's canUseTool also applies
+    // session-level deny/ask rules, permission mode (e.g. don'tAsk → deny,
+    // bypass → allow), defaults, and PermissionRequest hooks. Previously any
+    // 'ask'/'passthrough' result skipped the prompt entirely, so tools like
+    // WebFetch lost their `domain:` rule enforcement when invoked through
+    // ExecuteExtraTool (audit-confirmed authorization bypass).
+    //
+    // canUseTool resolves 'ask' interactively (REPL dialog / headless
+    // permission prompt tool) and always returns allow or deny, so this is
+    // safe to call on every execution path — including subagents and SDK
+    // consumers, which thread their own canUseTool down here.
+    if (!canUseTool) {
+      // No permission interface available: nothing can authorize a
+      // non-deny target. Fail closed rather than executing unapproved.
+      return deniedDelegation(input.tool_name, 'Permission denied')
+    }
+    const decision = await canUseTool(
+      targetTool,
+      input.params as Record<string, unknown>,
+      context,
+      parentMessage,
+      context.toolUseId ?? '',
+    )
+    if (decision.behavior !== 'allow') {
+      // 'deny' from rules/mode/hooks, or an unresolved 'ask' (fail-closed —
+      // full canUseTool implementations resolve ask before returning).
+      return deniedDelegation(
+        input.tool_name,
+        decision.message || 'Permission denied',
+      )
+    }
+
+    // The permission pipeline may rewrite the input (updatedInput) — the
+    // standard toolExecution path applies it the same way before tool.call.
+    if (decision.updatedInput !== undefined) {
+      input.params = decision.updatedInput
     }
 
     // Delegate execution to the target tool

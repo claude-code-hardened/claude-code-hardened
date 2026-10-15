@@ -46,6 +46,9 @@ mock.module('src/utils/searchExtraTools.js', () => ({
       'CronCreate',
       'WithDefaults',
       'McpTool',
+      // Delegated-permission tests use these names.
+      'WebFetchTool',
+      'DeferredTool',
     ]),
   isDeferredToolsDeltaEnabled: () => false,
   getDeferredToolsDelta: () => null,
@@ -346,6 +349,214 @@ describe('ExecuteTool', () => {
     expect(result.data).toEqual({
       result: { result: 'ok' },
       tool_name: 'McpTool',
+    })
+  })
+
+  describe('delegated permission enforcement', () => {
+    test('deny from target checkPermissions is unchanged and does not consult canUseTool', async () => {
+      const mockTarget = makeMockTool('SecretTool', 'secret')
+      mockTarget.checkPermissions = async () =>
+        ({
+          behavior: 'deny' as const,
+          message: 'Access denied',
+        }) as never
+      const ctx = makeContext([mockTarget])
+      let gateCalls = 0
+      const canUseTool = async () => {
+        gateCalls++
+        return { behavior: 'allow' } as never
+      }
+
+      const result = await ExecuteTool.call(
+        { tool_name: 'SecretTool', params: {} },
+        ctx,
+        canUseTool,
+        { type: 'assistant', content: [], uuid: 'msg1' } as never,
+        undefined,
+      )
+
+      expect(result.data).toEqual({
+        result: null,
+        tool_name: 'SecretTool',
+      })
+      expect(result.newMessages![0].content).toContain('Access denied')
+      // Deny is decided by the target's own checkPermissions; the pipeline
+      // gate is never reached.
+      expect(gateCalls).toBe(0)
+    })
+
+    test('ask + user rejects -> delegation returns denial without executing target', async () => {
+      const mockTarget = makeMockTool('WebFetchTool', 'fetched')
+      mockTarget.checkPermissions = async () =>
+        ({
+          behavior: 'ask' as const,
+          message: 'WebFetch requires approval for this domain',
+        }) as never
+      let targetCalls = 0
+      mockTarget.call = async () => {
+        targetCalls++
+        return { data: 'fetched' }
+      }
+      const ctx = makeContext([mockTarget])
+      const gateCalls: Array<{ tool: string; input: unknown }> = []
+      const canUseTool = async (
+        tool: { name: string },
+        input: Record<string, unknown>,
+      ) => {
+        gateCalls.push({ tool: tool.name, input })
+        return {
+          behavior: 'deny',
+          message: 'User rejected WebFetch',
+        } as never
+      }
+
+      const result = await ExecuteTool.call(
+        {
+          tool_name: 'WebFetchTool',
+          params: { url: 'https://example.com' },
+        },
+        ctx,
+        canUseTool,
+        { type: 'assistant', content: [], uuid: 'msg1' } as never,
+        undefined,
+      )
+
+      expect(result.data).toEqual({
+        result: null,
+        tool_name: 'WebFetchTool',
+      })
+      const message = result.newMessages![0].content as string
+      expect(message).toContain('Permission denied for tool "WebFetchTool"')
+      expect(message).toContain('User rejected WebFetch')
+      // The full pipeline (canUseTool) was consulted with the delegated
+      // params — this is the bypass regression test: pre-fix, an 'ask'
+      // target result skipped the gate entirely.
+      expect(gateCalls.length).toBe(1)
+      expect(gateCalls[0].tool).toBe('WebFetchTool')
+      expect(gateCalls[0].input).toEqual({ url: 'https://example.com' })
+      // Target tool never executed.
+      expect(targetCalls).toBe(0)
+    })
+
+    test('ask + user allows -> delegation executes and keeps success shape', async () => {
+      const mockTarget = makeMockTool('WebFetchTool', { page: 'content' })
+      mockTarget.checkPermissions = async () =>
+        ({
+          behavior: 'ask' as const,
+          message: 'WebFetch requires approval for this domain',
+        }) as never
+      const ctx = makeContext([mockTarget])
+      const canUseTool = async () => ({ behavior: 'allow' as const })
+
+      const result = await ExecuteTool.call(
+        { tool_name: 'WebFetchTool', params: {} },
+        ctx,
+        canUseTool,
+        { type: 'assistant', content: [], uuid: 'msg1' } as never,
+        undefined,
+      )
+
+      // Successful delegation shape is unchanged: result wrapped with
+      // tool_name, no denial message appended.
+      expect(result.data).toEqual({
+        result: { page: 'content' },
+        tool_name: 'WebFetchTool',
+      })
+      expect(result.newMessages).toBeUndefined()
+    })
+
+    test('passthrough from target checkPermissions is routed through canUseTool', async () => {
+      const mockTarget = makeMockTool('DeferredTool', { ok: 1 })
+      mockTarget.checkPermissions = async () =>
+        ({ behavior: 'passthrough' as const, message: '' }) as never
+      let targetCalls = 0
+      mockTarget.call = async () => {
+        targetCalls++
+        return { data: { ok: 1 } }
+      }
+      const ctx = makeContext([mockTarget])
+      let gateCalls = 0
+      const canUseTool = async () => {
+        gateCalls++
+        return { behavior: 'allow' as const }
+      }
+
+      const result = await ExecuteTool.call(
+        { tool_name: 'DeferredTool', params: {} },
+        ctx,
+        canUseTool,
+        { type: 'assistant', content: [], uuid: 'msg1' } as never,
+        undefined,
+      )
+
+      // The gate decided — passthrough alone must not authorize a delegated
+      // call constructed from model-provided params.
+      expect(gateCalls).toBe(1)
+      expect(targetCalls).toBe(1)
+      expect(result.data).toEqual({
+        result: { ok: 1 },
+        tool_name: 'DeferredTool',
+      })
+    })
+
+    test('applies updatedInput from the permission pipeline before delegating', async () => {
+      const { tool, calls } = makeMockToolWithSchema(
+        'WithDefaults',
+        z.strictObject({
+          cron: z.string(),
+          prompt: z.string(),
+        }),
+      )
+      tool.checkPermissions = async () =>
+        ({ behavior: 'ask' as const, message: 'needs approval' }) as never
+      const ctx = makeContext([tool])
+      const canUseTool = async () =>
+        ({
+          behavior: 'allow' as const,
+          updatedInput: { cron: '0 0 * * *', prompt: 'hi' },
+        }) as never
+
+      const result = await ExecuteTool.call(
+        {
+          tool_name: 'WithDefaults',
+          params: { cron: '0 0 * * *', prompt: 'hi' },
+        },
+        ctx,
+        canUseTool,
+        { type: 'assistant', content: [], uuid: 'msg1' } as never,
+        undefined,
+      )
+
+      // Parity with the standard pipeline: target receives the pipeline's
+      // rewritten input.
+      expect(calls[0]).toEqual({ cron: '0 0 * * *', prompt: 'hi' })
+      expect(result.data.tool_name).toBe('WithDefaults')
+    })
+
+    test('no canUseTool available -> fail closed with denial', async () => {
+      const mockTarget = makeMockTool('WebFetchTool', 'fetched')
+      mockTarget.checkPermissions = async () =>
+        ({ behavior: 'ask' as const, message: 'needs approval' }) as never
+      let targetCalls = 0
+      mockTarget.call = async () => {
+        targetCalls++
+        return { data: 'fetched' }
+      }
+      const ctx = makeContext([mockTarget])
+
+      const result = await ExecuteTool.call(
+        { tool_name: 'WebFetchTool', params: {} },
+        ctx,
+        undefined as never,
+        { type: 'assistant', content: [], uuid: 'msg1' } as never,
+        undefined,
+      )
+
+      expect(result.data).toEqual({
+        result: null,
+        tool_name: 'WebFetchTool',
+      })
+      expect(targetCalls).toBe(0)
     })
   })
 })
