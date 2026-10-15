@@ -79,6 +79,9 @@ import {
   getLastToolUseName,
   runAsyncAgentLifecycle,
 } from './agentToolUtils.js';
+import { consumeHandback, formatHandbackReport } from './handback.js';
+import { handbackTool } from './handbackTool.js';
+import { evaluateSubagentSpawnDepth, subagentDepthCapError } from './subagentDepth.js';
 import { GENERAL_PURPOSE_AGENT } from './built-in/generalPurposeAgent.js';
 import { AGENT_TOOL_NAME, LEGACY_AGENT_TOOL_NAME, ONE_SHOT_BUILTIN_AGENT_TYPES } from './constants.js';
 import {
@@ -346,6 +349,27 @@ export const AgentTool = buildTool({
     // In-process teammates get a no-op setAppState; setAppStateForTasks
     // reaches the root store so task registration/progress/kill stay visible.
     const rootSetAppState = toolUseContext.setAppStateForTasks ?? toolUseContext.setAppState;
+
+    // ── 4.1 subagent depth cap ──────────────────────────────────────────────
+    // Single entry point for ALL spawn kinds — regular subagents, forks and
+    // teammates (team_name && name) count toward the same depth. Placement
+    // mirrors the official check at the very top of the agent tool, ahead of
+    // every other guard and before agent resolution
+    // (0128-chunk-zrkp23rq/tools/agent.js: `if(Tt>=kt) throw ... "Subagent
+    // nesting limit reached (depth ${Tt} of ${kt})"`). agent_type comes from
+    // the raw input (agent resolution happens later, same as official);
+    // undefined falls back to 'unknown' in telemetry only.
+    const depthEvaluation = evaluateSubagentSpawnDepth({
+      agentId: toolUseContext.agentId,
+    });
+    if (!depthEvaluation.allowed) {
+      logEvent('subagent_depth_cap', {
+        depth: depthEvaluation.currentDepth,
+        max_depth: depthEvaluation.maxDepth,
+        agent_type: (subagent_type ?? 'unknown') as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+      });
+      throw subagentDepthCapError(depthEvaluation.currentDepth, depthEvaluation.maxDepth);
+    }
 
     // Check if user is trying to use agent teams without access
     if (team_name && !isAgentSwarmsEnabled()) {
@@ -743,6 +767,19 @@ export const AgentTool = buildTool({
       mode: selectedAgent.permissionMode ?? 'acceptEdits',
     };
     const workerTools = assembleToolPool(workerPermissionContext, appState.mcp.tools);
+
+    // ── 4.1 handback protocol: subagent-only tool injection ────────────────
+    // HANDOFF_PROTOCOL (default off — zero behavior change when disabled).
+    // The Handback tool is never registered in the main tool registry; it is
+    // injected here so ONLY spawned subagents can see/call it (mirror of the
+    // spawn-time pool filtering that filterParentToolsForFork does for fork
+    // children). Official pairing is `handbackOptIn: !X` (X = isFork,
+    // 0128-chunk-zrkp23rq/tools/agent.js) — fork workers are excluded.
+    if (feature('HANDOFF_PROTOCOL')) {
+      if (!isForkPath) {
+        workerTools.push(handbackTool);
+      }
+    }
 
     // Create a stable agent ID early so it can be used for worktree slug
     const earlyAgentId = createAgentId();
@@ -1200,6 +1237,14 @@ export const AgentTool = buildTool({
                         }
                       }
 
+                      // ── 4.1 handback: surface the structured report ─────
+                      const backgroundedHandback = feature('HANDOFF_PROTOCOL')
+                        ? consumeHandback(backgroundedTaskId)
+                        : undefined;
+                      if (backgroundedHandback) {
+                        finalMessage = `${formatHandbackReport(backgroundedHandback)}\n\n${finalMessage}`;
+                      }
+
                       // Clean up worktree before notification so we can include it
                       const worktreeResult = await cleanupWorktreeIfNeeded();
 
@@ -1494,6 +1539,20 @@ export const AgentTool = buildTool({
             if (handoffWarning) {
               agentResult.content = [{ type: 'text' as const, text: handoffWarning }, ...agentResult.content];
             }
+          }
+
+          // ── 4.1 handback: surface the structured report to the parent ────
+          // Mirrors the official finalize consumption (`Wet({handback,...})`
+          // merging the report into the task result): the handback payload
+          // recorded by the tool (registry keyed by syncAgentId) is prepended
+          // as its own text block so the parent receives the structured
+          // hand-back alongside the regular final text.
+          const handback = feature('HANDOFF_PROTOCOL') ? consumeHandback(syncAgentId) : undefined;
+          if (handback) {
+            agentResult.content = [
+              { type: 'text' as const, text: formatHandbackReport(handback) },
+              ...agentResult.content,
+            ];
           }
 
           return {

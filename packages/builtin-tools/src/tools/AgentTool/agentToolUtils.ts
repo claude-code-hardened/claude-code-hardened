@@ -58,6 +58,11 @@ import { isInProcessTeammate } from 'src/utils/teammateContext.js'
 import { getTokenCountFromUsage } from 'src/utils/tokens.js'
 import { EXIT_PLAN_MODE_V2_TOOL_NAME } from '../ExitPlanModeTool/constants.js'
 import { AGENT_TOOL_NAME, LEGACY_AGENT_TOOL_NAME } from './constants.js'
+import {
+  consumeHandback,
+  formatHandbackReport,
+  HANDBACK_TOOL_NAME,
+} from './handback.js'
 import type { AgentDefinition } from './loadAgentsDir.js'
 export type ResolvedAgentTools = {
   hasWildcard: boolean
@@ -89,6 +94,15 @@ export function filterToolsForAgent({
       toolMatchesName(tool, EXIT_PLAN_MODE_V2_TOOL_NAME) &&
       permissionMode === 'plan'
     ) {
+      return true
+    }
+    // Allow the Handback tool for subagents (4.1 handback protocol). The
+    // instance only exists in a pool when AgentTool injected it at spawn time
+    // under the HANDOFF_PROTOCOL flag, so this clause is inert (and the tool
+    // absent everywhere) when the protocol is off. Without this case the
+    // async allow-list below and ALL_AGENT_DISALLOWED_TOOLS would both strip
+    // it from subagent pools.
+    if (toolMatchesName(tool, HANDBACK_TOOL_NAME)) {
       return true
     }
     if (ALL_AGENT_DISALLOWED_TOOLS.has(tool.name)) {
@@ -732,6 +746,15 @@ export async function runAsyncAgentLifecycle({
       if (handoffWarning) {
         finalMessage = `${handoffWarning}\n\n${finalMessage}`
       }
+    }
+
+    // ── 4.1 handback: surface the structured report in the notification ────
+    // taskId === agentId for async agents (registerAsyncAgent overrides the
+    // runAgent agentId with asAgentId(taskId)), so the registry key written
+    // by the Handback tool inside the subagent matches here.
+    const handback = consumeHandback(taskId)
+    if (handback) {
+      finalMessage = `${formatHandbackReport(handback)}\n\n${finalMessage}`
     }
 
     const worktreeResult = await getWorktreeResult()

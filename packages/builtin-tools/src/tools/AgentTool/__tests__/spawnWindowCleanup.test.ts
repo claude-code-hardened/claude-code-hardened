@@ -13,14 +13,39 @@
  * side-effect chain + previously-registered UI/context stubs are mocked;
  * pure helpers load for real.
  */
-import { describe, expect, mock, test } from 'bun:test'
+import { afterAll, describe, expect, mock, test } from 'bun:test'
 import { join } from 'node:path'
 import { debugMock } from '../../../../../../tests/mocks/debug'
+import { errorsMock } from '../../../../../../tests/mocks/errors'
+import {
+  localAgentTaskMock,
+  resetSpawnRegistrationFailure,
+  spawnRegistrationFailure,
+} from '../../../../../../tests/mocks/localAgentTask'
 import { logMock } from '../../../../../../tests/mocks/log'
+import {
+  functionalStateMock,
+} from '../../../../../../tests/mocks/state'
 
 mock.module('src/utils/log.ts', logMock)
 mock.module('src/utils/debug.ts', debugMock)
 mock.module('bun:bundle', () => ({ feature: () => false }))
+// Functional state shim + shared errors/LocalAgentTask factories: Bun's
+// mock.module is process-global, and this file previously registered a
+// noop-setProjectRoot state mock and a 4-export errors.js mock that shrank
+// the module for every later test file in the worker (agentToolUtils.test.ts
+// needs 17 error exports) — part of why the whole AgentTool group went red
+// (CI log /tmp/test1c.log:2771, 2790, 2812, 2831, 2850).
+mock.module('src/bootstrap/state.js', functionalStateMock)
+mock.module('src/bootstrap/state.ts', functionalStateMock)
+mock.module('src/utils/errors.js', errorsMock)
+mock.module('src/utils/errors.ts', errorsMock)
+mock.module('src/tasks/LocalAgentTask/LocalAgentTask.js', localAgentTaskMock)
+
+// Do not leak the registration-failure toggles into later test files.
+afterAll(() => {
+  resetSpawnRegistrationFailure()
+})
 
 const noop = () => {}
 
@@ -48,44 +73,8 @@ mock.module('src/utils/sessionStorage.js', () => ({
   writeAgentMetadata: async () => {},
 }))
 
-// Registration failure toggles (set per test before calling AgentTool.call)
-const failMode = { async: false, sync: false }
-
-mock.module('src/tasks/LocalAgentTask/LocalAgentTask.js', () => ({
-  completeAgentTask: noop,
-  createActivityDescriptionResolver: () => () => undefined,
-  createProgressTracker: () => ({}),
-  enqueueAgentNotification: noop,
-  failAgentTask: noop,
-  getProgressUpdate: () => ({ tokenCount: 0, toolUseCount: 0 }),
-  getTokenCountFromTracker: () => 0,
-  isLocalAgentTask: () => false,
-  killAllRunningAgentTasks: noop,
-  markAgentsNotified: noop,
-  killAsyncAgent: noop,
-  updateAgentProgress: noop,
-  updateProgressFromMessage: noop,
-  registerAsyncAgent: () => {
-    if (failMode.async) {
-      throw new Error('register-async-failed')
-    }
-    return {
-      agentId: 'bg-agent-id',
-      abortController: new AbortController(),
-    }
-  },
-  registerAgentForeground: () => {
-    if (failMode.sync) {
-      throw new Error('register-foreground-failed')
-    }
-    return {
-      taskId: 'fg-agent-id',
-      backgroundSignal: new Promise(() => {}),
-      cancelAutoBackground: noop,
-    }
-  },
-  unregisterAgentForeground: noop,
-}))
+// Registration failure toggles come from the shared localAgentTask mock
+// (tests/mocks/localAgentTask.ts) — set per test before calling AgentTool.call.
 
 // Local runAgent is never reached in these failure scenarios, but its module
 // must resolve (relative specifier resolved against this __tests__ dir).
@@ -111,10 +100,8 @@ mock.module('src/services/AgentSummary/agentSummary.js', () => ({
 mock.module('src/services/api/dumpPrompts.js', () => ({
   clearDumpState: noop,
 }))
-mock.module('src/bootstrap/state.js', () => ({
-  clearInvokedSkillsForAgent: noop,
-  getSdkAgentProgressSummariesEnabled: () => false,
-}))
+// bootstrap/state is fully covered by the functional shim registered above —
+// this partial 2-export mock used to overwrite it for the whole process.
 mock.module('src/coordinator/coordinatorMode.js', () => ({
   isCoordinatorMode: () => false,
 }))
@@ -150,12 +137,6 @@ mock.module('src/utils/envUtils.js', () => ({
   isEnvTruthy: () => false,
   isInProtectedNamespace: () => false,
 }))
-mock.module('src/utils/errors.js', () => ({
-  ClaudeError: class extends Error {},
-  AbortError: class extends Error {},
-  toError: (e: any) => (e instanceof Error ? e : new Error(String(e))),
-  errorMessage: (e: any) => String(e),
-}))
 mock.module('src/utils/forkedAgent.js', () => ({}))
 mock.module('src/utils/messages.ts', () => ({
   createUserMessage: (args: any) => ({ type: 'user', ...args }),
@@ -175,7 +156,9 @@ mock.module('src/utils/permissions/PermissionMode.js', () => ({
   permissionModeSchema: { parse: (v: any) => v },
 }))
 mock.module('src/utils/permissions/permissions.js', () => ({
-  filterDeniedAgents: () => [],
+  // Pass-through: the shared paths under test need the discovered
+  // general-purpose definition to survive the deny-rule filter.
+  filterDeniedAgents: (agents: unknown[]) => agents,
   getDenyRuleForAgent: () => undefined,
 }))
 mock.module('src/utils/sdkEventQueue.js', () => ({
@@ -245,7 +228,10 @@ const stubParentMessage = {
 function makeContext(): any {
   return {
     getAppState: () => ({
-      toolPermissionContext: { mode: 'default' },
+      toolPermissionContext: {
+        mode: 'default',
+        additionalWorkingDirectories: new Map(),
+      },
       mcp: { tools: [] },
       agentDefinitions: { activeAgents: [], customAgents: [] },
       tasks: {},
@@ -254,17 +240,37 @@ function makeContext(): any {
     setAppState: noop,
     abortController: new AbortController(),
     messages: [],
-    options: { tools: [] },
+    // AgentTool.call resolves the spawn target through
+    // toolUseContext.options.agentDefinitions.activeAgents
+    // (AgentTool.tsx:477-478 — CI log /tmp/test1c.log:2763, 2782: the stub
+    // previously only carried { tools: [] }, so call() crashed with
+    // "undefined is not an object (evaluating
+    // 'toolUseContext.options.agentDefinitions.activeAgents')" before either
+    // registration path could fail).
+    options: {
+      tools: [],
+      agentDefinitions: {
+        activeAgents: [{ agentType: 'general-purpose' }],
+        customAgents: [],
+      },
+    },
   }
 }
 
 describe('AgentTool spawn-window worktree guard', () => {
   test('async path: registerAsyncAgent failure removes the created worktree', async () => {
-    failMode.sync = false
-    failMode.async = true
+    spawnRegistrationFailure.sync = false
+    spawnRegistrationFailure.async = true
     try {
       await AgentTool.call(
-        { prompt: 'do work', run_in_background: true } as any,
+        // isolation: 'worktree' — the guard under test only exists once
+        // createAgentWorktree has run (AgentTool.tsx:796-799); the stubbed
+        // worktree module in this file records the create/remove pair.
+        {
+          prompt: 'do work',
+          run_in_background: true,
+          isolation: 'worktree',
+        } as any,
         makeContext(),
         stubCanUseTool,
         stubParentMessage,
@@ -278,11 +284,11 @@ describe('AgentTool spawn-window worktree guard', () => {
   })
 
   test('sync path: foreground registration failure removes the worktree', async () => {
-    failMode.async = false
-    failMode.sync = true
+    spawnRegistrationFailure.async = false
+    spawnRegistrationFailure.sync = true
     try {
       await AgentTool.call(
-        { prompt: 'do work' } as any,
+        { prompt: 'do work', isolation: 'worktree' } as any,
         makeContext(),
         stubCanUseTool,
         stubParentMessage,

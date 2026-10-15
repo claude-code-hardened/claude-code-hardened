@@ -1,5 +1,6 @@
 import { mock, describe, expect, test } from 'bun:test'
 import { debugMock } from '../../../../../../tests/mocks/debug'
+import { errorsMock } from '../../../../../../tests/mocks/errors'
 
 // ─── Mocks for agentToolUtils.ts dependencies ───
 // Only mock modules that are truly unavailable or cause side effects.
@@ -80,36 +81,18 @@ mock.module('src/utils/messages.ts', () => ({
 }))
 
 // Quit teardown (3.8): spy recording for teardownRunningAgentsOnQuit tests.
-// Declared before mock registration so the factory closes over it safely.
-const killAsyncAgentCalls: string[] = []
-const killAsyncAgentSpy = (taskId: string): void => {
-  killAsyncAgentCalls.push(taskId)
-}
+// Shared factory (tests/mocks/localAgentTask.ts) so both AgentTool test files
+// register an identical module shape — previously each file registered a
+// disjoint mock for the same process-global module (Bun mock.module is
+// last-write-wins) and the group went red in CI
+// (CI log /tmp/test1c.log:2771, 2790, 2812, 2831, 2850).
+const {
+  getKillAsyncAgentCalls,
+  localAgentTaskMock,
+  resetKillAsyncAgentCalls,
+} = await import('../../../../../../tests/mocks/localAgentTask')
 
-mock.module('src/tasks/LocalAgentTask/LocalAgentTask.js', () => ({
-  completeAgentTask: noop,
-  createActivityDescriptionResolver: () => ({}),
-  createProgressTracker: () => ({}),
-  enqueueAgentNotification: noop,
-  failAgentTask: noop,
-  getProgressUpdate: () => ({ tokenCount: 0, toolUseCount: 0 }),
-  getTokenCountFromTracker: () => 0,
-  isLocalAgentTask: () => false,
-  killAllRunningAgentTasks: (
-    tasks: Record<string, any>,
-    _setAppState: (f: any) => void,
-  ) => {
-    for (const [taskId, task] of Object.entries(tasks)) {
-      if (task.type === 'local_agent' && task.status === 'running') {
-        killAsyncAgentSpy(taskId)
-      }
-    }
-  },
-  markAgentsNotified: noop,
-  killAsyncAgent: killAsyncAgentSpy,
-  updateAgentProgress: noop,
-  updateProgressFromMessage: noop,
-}))
+mock.module('src/tasks/LocalAgentTask/LocalAgentTask.js', localAgentTaskMock)
 
 // UI/context chain pulled in by src/hooks/useCancelRequest.ts
 // (only loaded for teardownRunningAgentsOnQuit coverage)
@@ -144,25 +127,10 @@ mock.module('src/utils/sdkEventQueue.js', () => ({
 
 mock.module('src/utils/debug.ts', debugMock)
 
-mock.module('src/utils/errors.js', () => ({
-  ClaudeError: class extends Error {},
-  MalformedCommandError: class extends Error {},
-  AbortError: class extends Error {},
-  ConfigParseError: class extends Error {},
-  ShellError: class extends Error {},
-  TeleportOperationError: class extends Error {},
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS: class extends Error {},
-  isAbortError: () => false,
-  hasExactErrorMessage: () => false,
-  toError: (e: any) => (e instanceof Error ? e : new Error(String(e))),
-  errorMessage: (e: any) => String(e),
-  getErrnoCode: () => undefined,
-  isENOENT: () => false,
-  getErrnoPath: () => undefined,
-  shortErrorStack: () => '',
-  isFsInaccessible: () => false,
-  classifyAxiosError: () => ({ category: 'unknown' }),
-}))
+// Shared 17-export factory — identical to spawnWindowCleanup.test.ts's
+// registration so the process-global mock shape is order-independent.
+mock.module('src/utils/errors.js', errorsMock)
+mock.module('src/utils/errors.ts', errorsMock)
 
 mock.module('src/utils/forkedAgent.js', () => ({}))
 
@@ -411,7 +379,7 @@ describe('finalizeAgentTool streamStats', () => {
 
 describe('teardownRunningAgentsOnQuit', () => {
   test('kills only running local_agent tasks and reports the count', () => {
-    killAsyncAgentCalls.length = 0
+    resetKillAsyncAgentCalls()
     const setAppStateCalls: number[] = []
     const tasks = {
       a: { type: 'local_agent', status: 'running' },
@@ -423,12 +391,16 @@ describe('teardownRunningAgentsOnQuit', () => {
       setAppStateCalls.push(1)
     })
     expect(killed).toBe(2)
-    expect([...killAsyncAgentCalls].sort()).toEqual(['a', 'd'])
+    expect([...getKillAsyncAgentCalls()].sort()).toEqual(['a', 'd'])
+    // Real killAsyncAgent runs one setAppState update per killed task
+    // (LocalAgentTask.tsx:338-360 → updateTaskState); the shared mock mirrors
+    // that (CI log /tmp/test1c.log:2850 — setAppStateCalls Expected 2,
+    // Received 0 with the old spy-only mock).
     expect(setAppStateCalls.length).toBe(2)
   })
 
   test('is a no-op when nothing is running (natural-end safety)', () => {
-    killAsyncAgentCalls.length = 0
+    resetKillAsyncAgentCalls()
     const tasks = {
       a: { type: 'local_agent', status: 'completed' },
       b: { type: 'local_shell', status: 'running' },
@@ -438,7 +410,7 @@ describe('teardownRunningAgentsOnQuit', () => {
       setAppStateCalled = true
     })
     expect(killed).toBe(0)
-    expect(killAsyncAgentCalls.length).toBe(0)
+    expect(getKillAsyncAgentCalls().length).toBe(0)
     expect(setAppStateCalled).toBe(false)
   })
 })

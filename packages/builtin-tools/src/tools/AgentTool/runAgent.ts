@@ -86,6 +86,12 @@ import {
 } from 'src/utils/telemetry/perfettoTracing.js'
 import type { ContentReplacementState } from 'src/utils/toolResultStorage.js'
 import { createAgentId } from 'src/utils/uuid.js'
+import { collectHandbackToolUseIds, isHandbackToolResult } from './handback.js'
+import {
+  getSubagentSpawnDepth,
+  registerSubagentSpawnDepth,
+  unregisterSubagentSpawnDepth,
+} from './subagentDepth.js'
 import { resolveAgentTools } from './agentToolUtils.js'
 import { filterIncompleteToolCalls } from './filterIncompleteToolCalls.js'
 import { type AgentDefinition, isBuiltInAgent } from './loadAgentsDir.js'
@@ -355,6 +361,17 @@ export async function* runAgent({
   )
 
   const agentId = override?.agentId ? override.agentId : createAgentId()
+
+  // ── 4.1 subagent depth cap: register this agent's spawn depth ───────────
+  // Mirror of the official xd(agentContext)+1 chain (0128-chunk-zrkp23rq/
+  // tools/agent.js): the child occupies spawner+1, and AgentTool.call reads
+  // toolUseContext.agentId through the registry to compute the spawner's
+  // current depth. Registration must happen before the query loop starts so
+  // any nested spawn this agent makes resolves a real depth. Unregistered
+  // callers (resumeAgent path) over-estimate the spawner as depth 1 — see
+  // getSubagentSpawnDepth.
+  const spawnDepth = getSubagentSpawnDepth(toolUseContext.agentId) + 1
+  registerSubagentSpawnDepth(agentId, spawnDepth)
 
   // Route this agent's transcript into a grouping subdirectory if requested
   // (e.g. workflow subagents write to subagents/workflows/<runId>/).
@@ -790,6 +807,14 @@ export async function* runAgent({
   }
 
   try {
+    // ── 4.1 handback: watch the stream for a Handback call ────────────────
+    // tool_use ids of Handback calls made by this agent. Once the matching
+    // tool_result has been yielded, the generator breaks BEFORE the next
+    // model turn — the agent's remaining turns are aborted (the official
+    // handback-then-stop behavior, 0128-chunk-zrkp23rq/tools/agent.js)
+    // without an AbortError, so sync/async teardown all see a normal end.
+    const handbackToolUseIds = new Set<string>()
+    let handbackResultSeen = false
     for await (const message of query({
       messages: initialMessages,
       systemPrompt: agentSystemPrompt,
@@ -831,6 +856,14 @@ export async function* runAgent({
           break
         }
         yield message as Message
+        // 4.1 handback: flush in-batch attachments (e.g. the structured_output
+        // carrying the handback payload) before cutting the turn.
+        if (handbackResultSeen) {
+          logForDebugging(
+            `[Agent: ${agentDefinition.agentType}] Handback returned — aborting remaining turns`,
+          )
+          break
+        }
         continue
       }
 
@@ -847,6 +880,24 @@ export async function* runAgent({
           lastRecordedUuid = message.uuid
         }
         yield message
+        // ── 4.1 handback turn stopping ─────────────────────────────────────
+        if (feature('HANDOFF_PROTOCOL')) {
+          if (message.type === 'assistant') {
+            collectHandbackToolUseIds(message, handbackToolUseIds)
+          } else if (message.type === 'user') {
+            if (isHandbackToolResult(message, handbackToolUseIds)) {
+              handbackResultSeen = true
+            }
+            // Sibling tool_results of a parallel batch must drain first; the
+            // break fires on the next non-user recordable message (or the
+            // attachment branch above).
+          } else if (handbackResultSeen) {
+            logForDebugging(
+              `[Agent: ${agentDefinition.agentType}] Handback returned — aborting remaining turns`,
+            )
+            break
+          }
+        }
       }
     }
 
@@ -859,6 +910,8 @@ export async function* runAgent({
       agentDefinition.callback()
     }
   } finally {
+    // Release this agent's spawn-depth registration (4.1 depth cap)
+    unregisterSubagentSpawnDepth(agentId)
     // End Langfuse sub-agent trace (no-op if not configured)
     endTrace(subTrace)
     // Clean up agent-specific MCP servers (runs on normal completion, abort, or error)
