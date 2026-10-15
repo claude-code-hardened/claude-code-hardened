@@ -6,6 +6,7 @@ import type {
 import type { CanUseToolFn } from './hooks/useCanUseTool.js'
 import { FallbackTriggeredError } from './services/api/withRetry.js'
 import {
+  AUTOCOMPACT_THRASHING_ERROR_MESSAGE,
   calculateTokenWarningState,
   estimateMaxTurnGrowth,
   getEffectiveContextWindowSize,
@@ -110,6 +111,7 @@ import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
 import { applyToolResultBudget } from './utils/toolResultStorage.js'
+import { syncProjectionToMutableMessages } from './services/compact/microCompact.js'
 import { recordContentReplacement } from './utils/sessionStorage.js'
 import { handleStopHooks } from './query/stopHooks.js'
 import { buildQueryConfig } from './query/config.js'
@@ -543,6 +545,9 @@ async function* queryLoop(
     // copy so mutableMessages keeps the original for the UI; downstream API
     // transformations (applyToolResultBudget, snip, microcompact) already
     // build new arrays via .map(), so they compose cleanly with this copy.
+    // (Under MEMORY_PROJECTION the projection path later releases the really
+    // big payload — tool_result block content in the REPL-shared messages —
+    // via syncProjectionToMutableMessages once the request is built.)
     messagesForQuery = messagesForQuery.map(msg => {
       if (
         msg.type !== 'user' ||
@@ -609,14 +614,38 @@ async function* queryLoop(
       querySource,
     )
     messagesForQuery = microcompactResult.messages
-    // Release original strings from contentReplacementState.replacements for
-    // tool results whose content was replaced with the cleared message.
-    if (microcompactResult.clearedToolUseIds?.length) {
-      const replacements = toolUseContext?.contentReplacementState?.replacements
-      if (replacements) {
-        for (const id of microcompactResult.clearedToolUseIds) {
-          replacements.delete(id)
+    // Single merged release point for both clearing mechanisms (legacy
+    // microcompact + MEMORY_PROJECTION): release the original strings held by
+    // contentReplacementState for tool results whose content was replaced
+    // with the cleared message — both eager (replacements) and lazily
+    // disk-handle-backed (lazyReplacements) entries.
+    const clearedForRelease = [...(microcompactResult.clearedToolUseIds ?? [])]
+    if (clearedForRelease.length > 0) {
+      const replacementState = toolUseContext?.contentReplacementState
+      if (replacementState) {
+        for (const id of clearedForRelease) {
+          replacementState.replacements.delete(id)
+          replacementState.lazyReplacements?.delete(id)
         }
+      }
+    }
+    if (
+      feature('MEMORY_PROJECTION') &&
+      microcompactResult.clearedReplacements
+    ) {
+      // Official 2.1.284 UI contract, applied client-side (see
+      // microCompact.ts clearToolResultProjection for the structural-deviation
+      // rationale): no inline hint is yielded — the local message list is
+      // sync-replaced in place and readFileState entries for cleared Read
+      // calls are dropped so the originals can be GC'd. UI stays stable
+      // (renders read message.toolUseResult) and the transcript is untouched
+      // (recordTranscript uuid-dedups already-recorded messages).
+      syncProjectionToMutableMessages(
+        messages,
+        microcompactResult.clearedReplacements,
+      )
+      for (const filePath of microcompactResult.readFileStatePaths ?? []) {
+        toolUseContext?.readFileState?.delete(filePath)
       }
     }
     // For cached microcompact (cache editing), defer boundary message until after
@@ -653,7 +682,16 @@ async function* queryLoop(
     )
 
     queryCheckpoint('query_autocompact_start')
-    const { compactionResult, consecutiveFailures } = await deps.autocompact(
+    const {
+      compactionResult,
+      consecutiveFailures,
+      // 2.9 refill-count threading (official byte 15517958:
+      // Ze=twr(A.uuid(),Qt.consecutiveRapidRefills)) and trip signal
+      // (official kind "rapid_refill_breaker_tripped"). Both only present
+      // under the AUTO_COMPACT_BREAKER feature flag.
+      consecutiveRapidRefills,
+      rapidRefillBreaker,
+    } = await deps.autocompact(
       messagesForQuery,
       toolUseContext,
       {
@@ -725,6 +763,17 @@ async function* queryLoop(
         turnId: deps.uuid(),
         turnCounter: 0,
         consecutiveFailures: 0,
+        // 2.9 (official 2.1.284, loop side byte 15517958:
+        // Ze=twr(A.uuid(),Qt.consecutiveRapidRefills) with twr
+        // {compacted:!0,turnId,turnCounter:0,consecutiveFailures:0,
+        // consecutiveRapidRefills:n}): a successful compact re-arms while
+        // PRESERVING the refill count computed pre-compact — the next
+        // refill within <3 iterations then increments it to the trip
+        // threshold. Flag off → undefined → key omitted → tracking
+        // identical to the pre-2.9 shape.
+        ...(consecutiveRapidRefills !== undefined && {
+          consecutiveRapidRefills,
+        }),
       }
 
       const postCompactMessages = buildPostCompactMessages(compactionResult)
@@ -735,6 +784,30 @@ async function* queryLoop(
 
       // Continue on with the current query call using the post compact messages
       messagesForQuery = postCompactMessages
+    } else if (rapidRefillBreaker) {
+      // 2.9 rapid-refill breaker, loop-side branch. Port of official
+      // 2.1.284 kind==="rapid_refill_breaker_tripped" (byte 15516528):
+      // telemetry → yield the official thrashing API error message
+      // (content=nwr, error "invalid_request", apiError
+      // "autocompact_thrashing") → end the loop with reason
+      // rapid_refill_breaker.
+      // Unreachable with the AUTO_COMPACT_BREAKER flag off (autoCompact
+      // never returns rapidRefillBreaker then). tracking is intentionally
+      // left as-is (official's lo(f,h,g) re-persist; the next user turn's
+      // queryLoop restarts with autoCompactTracking:undefined, so autocompact
+      // resumes once enough headroom-building turns pass).
+      logEvent('tengu_auto_compact_rapid_refill_breaker', {
+        consecutiveRapidRefills: rapidRefillBreaker.consecutiveRapidRefills,
+        turnsSincePreviousCompact: rapidRefillBreaker.turnsSincePreviousCompact,
+        queryChainId: queryChainIdForAnalytics,
+        queryDepth: queryTracking.depth,
+      })
+      yield createAssistantAPIErrorMessage({
+        content: AUTOCOMPACT_THRASHING_ERROR_MESSAGE,
+        error: 'invalid_request',
+        apiError: 'autocompact_thrashing',
+      })
+      return { reason: 'rapid_refill_breaker' }
     } else if (consecutiveFailures !== undefined) {
       // Autocompact failed — propagate failure count so the circuit breaker
       // can stop retrying on the next iteration.
@@ -875,6 +948,26 @@ async function* queryLoop(
           tracking,
           snipTokensFreed,
         )
+        if (predictiveResult.rapidRefillBreaker) {
+          // 2.9: identical trip semantics to the main call above (official
+          // kind "rapid_refill_breaker_tripped", byte 15516528). The
+          // predictive call passes the same tracking, so a refill chain that
+          // reaches the threshold late in the iteration trips here.
+          logEvent('tengu_auto_compact_rapid_refill_breaker', {
+            consecutiveRapidRefills:
+              predictiveResult.rapidRefillBreaker.consecutiveRapidRefills,
+            turnsSincePreviousCompact:
+              predictiveResult.rapidRefillBreaker.turnsSincePreviousCompact,
+            queryChainId: queryChainIdForAnalytics,
+            queryDepth: queryTracking.depth,
+          })
+          yield createAssistantAPIErrorMessage({
+            content: AUTOCOMPACT_THRASHING_ERROR_MESSAGE,
+            error: 'invalid_request',
+            apiError: 'autocompact_thrashing',
+          })
+          return { reason: 'rapid_refill_breaker' }
+        }
         if (predictiveResult.compactionResult) {
           messagesForQuery = buildPostCompactMessages(
             predictiveResult.compactionResult,
@@ -885,6 +978,12 @@ async function* queryLoop(
                 ...tracking,
                 compacted: true,
                 consecutiveFailures: predictiveResult.consecutiveFailures ?? 0,
+                // 2.9: refill-count re-arm, same twr semantics as the main
+                // reset site above.
+                ...(predictiveResult.consecutiveRapidRefills !== undefined && {
+                  consecutiveRapidRefills:
+                    predictiveResult.consecutiveRapidRefills,
+                }),
               }
             : tracking
         }

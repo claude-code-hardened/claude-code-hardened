@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle'
+import { logEvent } from '../analytics/index.js'
 import { markPostCompaction } from 'src/bootstrap/state.js'
 import { getSdkBetas } from '../../bootstrap/state.js'
 import type { QuerySource } from '../../constants/querySource.js'
@@ -11,10 +12,14 @@ import { isEnvTruthy } from '../../utils/envUtils.js'
 import { hasExactErrorMessage } from '../../utils/errors.js'
 import type { CacheSafeParams } from '../../utils/forkedAgent.js'
 import { logError } from '../../utils/log.js'
-import { tokenCountWithEstimation } from '../../utils/tokens.js'
+import {
+  getCurrentUsage,
+  tokenCountWithEstimation,
+} from '../../utils/tokens.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../analytics/growthbook.js'
 import { getMaxOutputTokensForModel } from '../api/claude.js'
 import { notifyCompaction } from '../api/promptCacheBreakDetection.js'
+import { roughTokenCountEstimationForMessages } from '../tokenEstimation.js'
 import { setLastSummarizedMessageId } from '../SessionMemory/sessionMemoryUtils.js'
 import {
   type CompactionResult,
@@ -57,6 +62,13 @@ export type AutoCompactTrackingState = {
   // Used as a circuit breaker to stop retrying when the context is
   // irrecoverably over the limit (e.g., prompt_too_long).
   consecutiveFailures?: number
+  // 2.9 (official 2.1.284): consecutive "refilled to the autocompact
+  // threshold within <RAPID_REFILL_TURN_WINDOW turns of the previous
+  // compact" count. Circuits open at MAX_CONSECUTIVE_RAPID_REFILLS.
+  // Independent of consecutiveFailures — that breaker counts FAILURES,
+  // this one counts successful compacts that immediately refill
+  // (thrashing). Officially threaded across a compact via twr.
+  consecutiveRapidRefills?: number
 }
 
 export const AUTOCOMPACT_BUFFER_TOKENS = 13_000
@@ -97,6 +109,196 @@ export function estimateMaxTurnGrowth(model: string): number {
 // BQ 2026-03-10: 1,279 sessions had 50+ consecutive failures (up to 3,272)
 // in a single session, wasting ~250K API calls/day globally.
 const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
+
+// ---------------------------------------------------------------------------
+// 2.9 — official 2.1.284 autocompact protections (both gated behind the
+// AUTO_COMPACT_BREAKER feature flag; flag off → behavior byte-identical to
+// pre-2.9). All constants below are extracted from the official bundle
+// (docs/reverse-284/full-source/_ALL.js), byte offsets cited inline.
+//
+// Coexistence with 2.1 MEMORY_PROJECTION (flags all on), per query-loop
+// iteration order in query.ts: snip → deps.microcompact (time-based tool
+// result clear + projection release — microCompactMessages is untouched by
+// 2.9) → context collapse → deps.autocompact → [prefix-overflow precheck →
+// rapid-refill breaker → session-memory probe → legacy compact]. The refill
+// evaluation sees the POST-microcompact array, so projection-cleared tool
+// results shrink the effective refill and keep the counter lower — the
+// mechanisms compose without reordering.
+// ---------------------------------------------------------------------------
+
+// Official 2.1.284 byte 8681495: `var qct=3` (rendered "<${qct} turns each"
+// in the trip log), and kNn's literal `e.turnCounter<3`. A compact whose
+// context returns to the autocompact threshold within this many loop
+// iterations counts as a refill.
+export const RAPID_REFILL_TURN_WINDOW = 3
+
+// Official 2.1.284 byte 8681595, lFn literal: `{action:n>=3?"trip":"proceed"}`.
+export const MAX_CONSECUTIVE_RAPID_REFILLS = 3
+
+// Official 2.1.284 byte 8681801, var nwr — yielded verbatim by the query
+// loop's kind==="rapid_refill_breaker_tripped" branch (byte 15516528).
+export const AUTOCOMPACT_THRASHING_ERROR_MESSAGE =
+  'Autocompact is thrashing: the context refilled to the limit within 3 turns of the previous compact, 3 times in a row. A file being read or a tool output is likely too large for the context window. Try reading in smaller chunks, or use /clear to start fresh.'
+
+export type PrefixOverflowCheck = {
+  // Estimated fixed-prefix tokens: usage-derived request total minus the
+  // message content estimate minus snipTokensFreed. This is the part of the
+  // request compaction cannot shrink (system prompt, tool defs, MCP tools).
+  prefixTokens: number
+  thresholdTokens: number
+  totalInputTokens: number
+  messagesEstimate: number
+  snipTokensFreed: number
+  documentBlockCount: number
+  imageBlockCount: number
+}
+
+/**
+ * 2.9 prefix-overflow precheck — port of official 2.1.284 Oko
+ * (byte 9533058): `let g=Pke(e);if(!g)return null;let
+ * h=g.input_tokens+g.cache_read_input_tokens+g.cache_creation_input_tokens,
+ * S=xm(e,n.bytesPerToken),w=Math.max(0,h-s-S),D=CKe(n,r);if(w<=D)return
+ * null;...return{prefixTokens:w,thresholdTokens:D,totalInputTokens:h,
+ * messagesEstimate:S,snipTokensFreed:s,documentBlockCount:U,imageBlockCount:W}`.
+ * Pure: null means "compaction can still help"; non-null means the fixed
+ * prefix alone already exceeds the autocompact threshold.
+ */
+export function detectPrefixOverflow(input: {
+  totalInputTokens: number
+  messagesEstimate: number
+  thresholdTokens: number
+  snipTokensFreed?: number
+  documentBlockCount?: number
+  imageBlockCount?: number
+}): PrefixOverflowCheck | null {
+  const prefixTokens = Math.max(
+    0,
+    input.totalInputTokens -
+      (input.snipTokensFreed ?? 0) -
+      input.messagesEstimate,
+  )
+  if (prefixTokens <= input.thresholdTokens) {
+    return null
+  }
+  return {
+    prefixTokens,
+    thresholdTokens: input.thresholdTokens,
+    totalInputTokens: input.totalInputTokens,
+    messagesEstimate: input.messagesEstimate,
+    snipTokensFreed: input.snipTokensFreed ?? 0,
+    documentBlockCount: input.documentBlockCount ?? 0,
+    imageBlockCount: input.imageBlockCount ?? 0,
+  }
+}
+
+// Official Oko's media counters (byte 9533058): documents whose source is
+// neither text nor content (PDFs etc.) and images, recursing into
+// tool_result content arrays. Telemetry payload only.
+function countOverflowMediaBlocks(
+  content: unknown,
+  counts: { documentBlockCount: number; imageBlockCount: number },
+): void {
+  if (!Array.isArray(content)) return
+  for (const raw of content) {
+    const block = raw as {
+      type?: string
+      source?: { type?: string }
+      content?: unknown
+    }
+    if (
+      block.type === 'document' &&
+      block.source?.type !== 'text' &&
+      block.source?.type !== 'content'
+    ) {
+      counts.documentBlockCount++
+    } else if (block.type === 'image') {
+      counts.imageBlockCount++
+    } else if (block.type === 'tool_result' && Array.isArray(block.content)) {
+      countOverflowMediaBlocks(block.content, counts)
+    }
+  }
+}
+
+function gatherPrefixOverflowMediaBlocks(messages: readonly Message[]): {
+  documentBlockCount: number
+  imageBlockCount: number
+} {
+  const counts = { documentBlockCount: 0, imageBlockCount: 0 }
+  for (const message of messages) {
+    countOverflowMediaBlocks(message.message?.content, counts)
+  }
+  return counts
+}
+
+/**
+ * 2.9: assemble the inputs for detectPrefixOverflow from live state.
+ * CCH's roughTokenCountEstimationForMessages stands in for official
+ * xm(e, n.bytesPerToken); getCurrentUsage for Pke(e) (skips zero-placeholder
+ * usage rows); getAutoCompactThreshold for CKe.
+ */
+function buildPrefixOverflowCheck(
+  messages: Message[],
+  model: string,
+  snipTokensFreed?: number,
+): PrefixOverflowCheck | null {
+  // Official Oko returns null when no usage-bearing message exists — no
+  // server-reported baseline means the estimate cannot separate the fixed
+  // prefix from the compactable tail.
+  const usage = getCurrentUsage(messages)
+  if (!usage) return null
+  const media = gatherPrefixOverflowMediaBlocks(messages)
+  return detectPrefixOverflow({
+    totalInputTokens:
+      usage.input_tokens +
+      usage.cache_creation_input_tokens +
+      usage.cache_read_input_tokens,
+    messagesEstimate: roughTokenCountEstimationForMessages(messages),
+    thresholdTokens: getAutoCompactThreshold(model),
+    snipTokensFreed: snipTokensFreed ?? 0,
+    documentBlockCount: media.documentBlockCount,
+    imageBlockCount: media.imageBlockCount,
+  })
+}
+
+/**
+ * 2.9 rapid-refill counter — port of official 2.1.284 kNn (byte 8681566):
+ * `return e?.compacted===!0&&e.turnCounter<3?(e?.consecutiveRapidRefills??0)+1:0`.
+ * tracking.compacted is the loop's "the previous compact succeeded" flag and
+ * turnCounter the completed iterations since it (query.ts increments it in
+ * the post-tools section), so "compacted and back at the threshold within
+ * <3 iterations" is exactly a refill.
+ */
+export function computeConsecutiveRapidRefills(
+  tracking?: AutoCompactTrackingState,
+): number {
+  return tracking?.compacted === true &&
+    tracking.turnCounter < RAPID_REFILL_TURN_WINDOW
+    ? (tracking.consecutiveRapidRefills ?? 0) + 1
+    : 0
+}
+
+/**
+ * 2.9 rapid-refill breaker — port of official 2.1.284 lFn (byte 8681595):
+ * `function lFn(e){let n=kNn(e);return{action:n>=3?"trip":"proceed",
+ * consecutiveRapidRefills:n}}`. Independent of the consecutiveFailures
+ * breaker: it opens on REPEATED SUCCESSFUL compacts that refill, not on
+ * compaction failures.
+ */
+export function evaluateRapidRefillBreaker(
+  tracking?: AutoCompactTrackingState,
+): {
+  action: 'proceed' | 'trip'
+  consecutiveRapidRefills: number
+} {
+  const consecutiveRapidRefills = computeConsecutiveRapidRefills(tracking)
+  return {
+    action:
+      consecutiveRapidRefills >= MAX_CONSECUTIVE_RAPID_REFILLS
+        ? 'trip'
+        : 'proceed',
+    consecutiveRapidRefills,
+  }
+}
 
 export function getAutoCompactThreshold(model: string): number {
   const effectiveContextWindow = getEffectiveContextWindowSize(model)
@@ -278,6 +480,17 @@ export async function autoCompactIfNeeded(
   wasCompacted: boolean
   compactionResult?: CompactionResult
   consecutiveFailures?: number
+  // 2.9: threaded on successful compacts under AUTO_COMPACT_BREAKER so the
+  // caller can re-arm tracking with the pre-compact refill count (official
+  // byte 15517958: Ze=twr(A.uuid(),Qt.consecutiveRapidRefills)).
+  consecutiveRapidRefills?: number
+  // 2.9: present when the rapid-refill breaker tripped — the caller yields
+  // the thrashing API error message and ends the loop (official kind
+  // "rapid_refill_breaker_tripped", byte 15516528).
+  rapidRefillBreaker?: {
+    consecutiveRapidRefills: number
+    turnsSincePreviousCompact: number
+  }
 }> {
   if (isEnvTruthy(process.env.DISABLE_COMPACT)) {
     return { wasCompacted: false }
@@ -303,6 +516,65 @@ export async function autoCompactIfNeeded(
 
   if (!shouldCompact) {
     return { wasCompacted: false }
+  }
+
+  // -- 2.9: official 2.1.284 autocompact protections (flag-gated) -----------
+  // Guard order mirrors the official autocompact generator (byte 9533695):
+  // consecutiveFailures breaker (above) → threshold check (shouldAutoCompact)
+  // → prefix-overflow precheck → rapid-refill breaker → compaction. Flag
+  // off → this block is skipped entirely and behavior is byte-identical to
+  // pre-2.9 (the new result keys are only ever present under the flag).
+  let consecutiveRapidRefills: number | undefined
+  if (feature('AUTO_COMPACT_BREAKER')) {
+    // (1) Prefix-overflow precheck. NOTE on official parity: 2.1.284 ships
+    // this as shadow telemetry only — it computes Oko, logs
+    // tengu_auto_compact_prefix_overflow with wouldHaveBlocked:!0 (byte
+    // 9534597) and then falls through into the compact anyway. CCH
+    // activates the behavior the shadow arm was measuring: when the fixed
+    // prefix (server-reported request total minus message estimate minus
+    // snipTokensFreed — i.e. system prompt + tool defs + non-compactable
+    // context) alone exceeds the threshold, no compaction can fit, so
+    // return without attempting one. The API call runs and surfaces
+    // prompt-too-long through the usual paths (reactiveCompact /
+    // blocking-limit preempt — both consult state downstream of this
+    // return, see query.ts).
+    const overflow = buildPrefixOverflowCheck(messages, model, snipTokensFreed)
+    if (overflow) {
+      logForDebugging(
+        `autocompact: fixed prefix ~${overflow.prefixTokens} > threshold ${overflow.thresholdTokens} — compaction cannot help`,
+        { level: 'warn' },
+      )
+      // Same event name + payload shape as official (byte 9534597);
+      // wouldHaveBlocked keeps the official field name for dashboard parity.
+      logEvent('tengu_auto_compact_prefix_overflow', {
+        ...overflow,
+        wouldHaveBlocked: true,
+      })
+      return { wasCompacted: false }
+    }
+
+    // (2) Rapid-refill breaker (official lFn, byte 8681595; trip log at
+    // byte 9534953 emits kind "rapid_refill_breaker_tripped"). Fires on
+    // consecutive compacts that refill within <3 iterations each — the
+    // "successful but worthless compact" dimension orthogonal to the
+    // consecutiveFailures breaker above. The session's threshold telemetry
+    // (tengu_auto_compact_rapid_refill_breaker) is emitted by query.ts on
+    // the same split official 2.1.284 uses (loop-side, byte 15516562).
+    const refill = evaluateRapidRefillBreaker(tracking)
+    consecutiveRapidRefills = refill.consecutiveRapidRefills
+    if (refill.action === 'trip') {
+      logForDebugging(
+        `autocompact: rapid-refill breaker tripped — ${refill.consecutiveRapidRefills} consecutive refills within <${RAPID_REFILL_TURN_WINDOW} turns each (last was ${tracking?.turnCounter} turns)`,
+        { level: 'warn' },
+      )
+      return {
+        wasCompacted: false,
+        rapidRefillBreaker: {
+          consecutiveRapidRefills: refill.consecutiveRapidRefills,
+          turnsSincePreviousCompact: tracking?.turnCounter ?? -1,
+        },
+      }
+    }
   }
 
   const recompactionInfo: RecompactionInfo = {
@@ -335,6 +607,11 @@ export async function autoCompactIfNeeded(
     return {
       wasCompacted: true,
       compactionResult: sessionMemoryResult,
+      // 2.9: official twr keeps the refill counter across a successful
+      // compact; the caller re-arms tracking with it. Flag off → undefined.
+      ...(consecutiveRapidRefills !== undefined && {
+        consecutiveRapidRefills,
+      }),
     }
   }
 
@@ -359,6 +636,10 @@ export async function autoCompactIfNeeded(
       compactionResult,
       // Reset failure count on success
       consecutiveFailures: 0,
+      // 2.9: same refill-count threading as the session-memory path above.
+      ...(consecutiveRapidRefills !== undefined && {
+        consecutiveRapidRefills,
+      }),
     }
   } catch (error) {
     if (!hasExactErrorMessage(error, ERROR_MESSAGE_USER_ABORT)) {

@@ -63,6 +63,8 @@ export const DEFAULT_BUILD_FEATURES = [
   'ACP', // ACP 代理协议，支持外部 agent 接入
   'WORKFLOW_SCRIPTS', // 工作流脚本（.claude/workflows/ 中的 YAML/MD）
   // 'HISTORY_SNIP', // 已禁用：snip 功能暂时关闭
+  // 'MEMORY_PROJECTION', // 灰度：官方 2.1.284 time-based microcompact（tool_result_clear）的本地内存投影释放。默认关闭（外部行为 100% 不变）；灰度时按环境以 FEATURE_MEMORY_PROJECTION=1 单独开启，观察 prompt cache 命中率与内存 RSS 曲线后再决定是否进默认列表。与 HISTORY_SNIP 无关联（官方无 snip，勿混同）。
+  // 'AUTO_COMPACT_BREAKER', // 灰度：官方 2.1.284 autocompact 双保护（2.9 工作包）。① prefix-overflow 预检（遥测 tengu_auto_compact_prefix_overflow，官方 chunk :9534597 "fixed prefix > threshold — compaction cannot help"）：请求构建前估算固定前缀（服务端 input+cache 读/建总量 − 消息内容估算 − snipTokensFreed，即 system prompt+tools+不可压缩部分）是否已单独超过 autocompact 阈值，超则跳过这次注定失败的压缩，走 API 报错/reactive 路径（官方 2.1.284 仅影子遥测 wouldHaveBlocked:true 不实际跳过，CCH flag 开启即实跳，字段名保留官方以对齐看板）。② rapid-refill 熔断（遥测 tengu_auto_compact_rapid_refill_breaker，官方 chunk :15516562）：compact 后 <3 轮（官方 qct=3）内再次回满、连续 3 次（官方 lFn n>=3）判定 thrashing，注入 apiError:'autocompact_thrashing' 终止消息并结束本次 query 的后续 autocompact，与既有 consecutiveFailures 失败熔断并存且互不干扰（守卫次序同官方 jvr：失败熔断在前）。flag 关闭时两条路径全部不可达，行为与现在逐字节等价；两 flag 全开时每轮次序为 snip → microcompact(MEMORY_PROJECTION 投影释放，2.9 不触碰) → autocompact(prefix 预检→rapid-refill 判定)，投影清掉的 tool_result 天然缩小回填量、降低 rapid-refill 计数。常量与消息文案均逐字取自官方 chunk（docs/reverse-284/full-source/_ALL.js :8681495/:8681566/:8681595/:8681801/:9533058）。
   // 'CONTEXT_COLLAPSE', // 已禁用：实现是空壳 stub，启用后会抑制 auto compact 导致上下文管理完全失效
   'MONITOR_TOOL', // Monitor 工具，流式监控后台进程输出
   // 'FORK_SUBAGENT',            // 已禁用：通过 Agent tool 的特殊方式实现了等效功能，无需再开

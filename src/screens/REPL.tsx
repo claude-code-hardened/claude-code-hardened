@@ -325,7 +325,9 @@ import { runPostCompactCleanup, registerCompactCleanup } from '../services/compa
 import {
   createContentReplacementState,
   provisionContentReplacementState,
+  provisionContentReplacementStateLazy,
   reconstructContentReplacementState,
+  reconstructContentReplacementStateLazy,
   type ContentReplacementRecord,
 } from '../utils/toolResultStorage.js';
 import { partialCompactConversation } from '../services/compact/compact.js';
@@ -1856,7 +1858,13 @@ export function REPL({
   // For large resumed sessions, reconstruction does O(messages × blocks)
   // work; we only want that once.
   const [contentReplacementStateRef] = useState(() => ({
-    current: provisionContentReplacementState(initialMessages, initialContentReplacements),
+    // MEMORY_PROJECTION: replacement preview strings are held as
+    // toolUseId→disk-handle lazy materializers instead of in-memory strings
+    // (resumed sessions otherwise keep every ~2KB preview for the session
+    // lifetime). Flag off → identical eager seeding as before.
+    current: feature('MEMORY_PROJECTION')
+      ? provisionContentReplacementStateLazy(initialMessages, initialContentReplacements)
+      : provisionContentReplacementState(initialMessages, initialContentReplacements),
   }));
   registerCompactCleanup(() => {
     contentReplacementStateRef.current = createContentReplacementState();
@@ -2353,10 +2361,12 @@ export function REPL({
         // createFork() does write content-replacement entries to the forked
         // JSONL with the fork's sessionId, so `claude -r {forkId}` also works.
         if (contentReplacementStateRef.current && entrypoint !== 'fork') {
-          contentReplacementStateRef.current = reconstructContentReplacementState(
-            messages,
-            log.contentReplacements ?? [],
-          );
+          // MEMORY_PROJECTION: same freeze semantics, replacement strings stay
+          // on disk (toolUseId→disk-handle lazy read-back) instead of being
+          // copied into the replacements Map eagerly.
+          contentReplacementStateRef.current = feature('MEMORY_PROJECTION')
+            ? reconstructContentReplacementStateLazy(messages, log.contentReplacements ?? [])
+            : reconstructContentReplacementState(messages, log.contentReplacements ?? []);
         }
 
         // Reset messages to the provided initial messages

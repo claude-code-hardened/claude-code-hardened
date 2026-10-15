@@ -3,6 +3,7 @@
  */
 
 import type { ToolResultBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { getOriginalCwd, getSessionId } from '../bootstrap/state.js'
@@ -390,6 +391,17 @@ export function isPersistError(
 export type ContentReplacementState = {
   seenIds: Set<string>
   replacements: Map<string, string>
+  /**
+   * MEMORY_PROJECTION: tool_use_id → materializer for replacement decisions
+   * whose exact preview string is NOT held in memory. Instead of keeping every
+   * ~2KB preview string in the replacements Map for the session lifetime
+   * (resumed sessions re-hydrate them all from the transcript), the state
+   * holds only the toolUseId→disk-handle mapping and reads the persisted
+   * tool-results file back lazily on first re-apply. On materialization the
+   * derived string is promoted into `replacements` so every later turn reuses
+   * the same instance (cache-prefix stability).
+   */
+  lazyReplacements?: Map<string, () => string | null>
 }
 
 export function createContentReplacementState(): ContentReplacementState {
@@ -405,10 +417,14 @@ export function createContentReplacementState(): ContentReplacementState {
 export function cloneContentReplacementState(
   source: ContentReplacementState,
 ): ContentReplacementState {
-  return {
+  const clone: ContentReplacementState = {
     seenIds: new Set(source.seenIds),
     replacements: new Map(source.replacements),
   }
+  if (source.lazyReplacements) {
+    clone.lazyReplacements = new Map(source.lazyReplacements)
+  }
+  return clone
 }
 
 /**
@@ -645,6 +661,13 @@ function collectCandidatesByMessage(
  *  - frozen: previously seen and left unreplaced → off-limits (replacing
  *    now would change a prefix that was already cached)
  *  - fresh: never seen → eligible for new replacement decisions
+ *
+ * MEMORY_PROJECTION: a lazy disk-handle decision is materialized on first
+ * re-apply and promoted into `replacements` (MUTATES state — every later turn
+ * must reuse the identical string, so the returned instance is shared). If
+ * the persisted file is gone (session dir pruned), the decision degrades to
+ * frozen: the original content is sent, matching the transcript; a one-time
+ * prompt-cache prefix drift vs the original session is accepted and logged.
  */
 function partitionByPriorDecision(
   candidates: ToolResultCandidate[],
@@ -652,6 +675,19 @@ function partitionByPriorDecision(
 ): CandidatePartition {
   return candidates.reduce<CandidatePartition>(
     (acc, c) => {
+      const lazyLoader = state.lazyReplacements?.get(c.toolUseId)
+      if (lazyLoader !== undefined) {
+        state.lazyReplacements?.delete(c.toolUseId)
+        const materialized = lazyLoader()
+        if (materialized !== null) {
+          state.replacements.set(c.toolUseId, materialized)
+          acc.mustReapply.push({ ...c, replacement: materialized })
+        } else {
+          state.seenIds.add(c.toolUseId)
+          acc.frozen.push(c)
+        }
+        return acc
+      }
       const replacement = state.replacements.get(c.toolUseId)
       if (replacement !== undefined) {
         acc.mustReapply.push({ ...c, replacement })
@@ -1010,6 +1046,123 @@ export function reconstructForSubagentResume(
     sidechainRecords,
     parentState.replacements,
   )
+}
+
+/**
+ * MEMORY_PROJECTION: build a lazily-materialized replacement loader for a
+ * tool_use_id. The "disk handle" is the session tool-results artifact that
+ * the original persist wrote (tool-results/<id>.json|.txt, written with 'wx'
+ * so it is never rewritten). Re-deriving the preview string from that file is
+ * deterministic and byte-identical: identical content, identical
+ * PREVIEW_SIZE_BYTES/template constants — a rebuilt preview equals the string
+ * the original session sent. The template-drift risk the ContentReplacementRecord
+ * design guards against ("stored rather than derived") is accepted here
+ * deliberately under the MEMORY_PROJECTION灰度: a template change between the
+ * persisting session and the resume costs a one-time prompt-cache prefix
+ * miss, never a correctness change (the record stays in the transcript as
+ * the authoritative fallback for non-lazy consumers).
+ *
+ * Returns null when the artifact is missing/unreadable — callers must degrade
+ * to the frozen (unreplaced) decision. Never throws.
+ */
+function createDiskReplacementLoader(
+  toolUseId: string,
+): () => string | null {
+  return () => {
+    try {
+      const jsonPath = getToolResultPath(toolUseId, true)
+      const isJson = existsSync(jsonPath)
+      const filepath = isJson ? jsonPath : getToolResultPath(toolUseId, false)
+      if (!isJson && !existsSync(filepath)) {
+        return null
+      }
+      const content = readFileSync(filepath, 'utf-8')
+      const { preview, hasMore } = generatePreview(content, PREVIEW_SIZE_BYTES)
+      return buildLargeToolResultMessage({
+        filepath,
+        originalSize: content.length,
+        isJson,
+        preview,
+        hasMore,
+      })
+    } catch (error) {
+      logForDebugging(
+        `MEMORY_PROJECTION: replacement disk handle for ${toolUseId} failed to materialize: ${toError(error).message}`,
+        { level: 'warn' },
+      )
+      return null
+    }
+  }
+}
+
+/**
+ * MEMORY_PROJECTION variant of provisionContentReplacementState: instead of
+ * seeding `replacements` with the full preview strings from the transcript
+ * records, seed lazily via disk handles (createDiskReplacementLoader) so a
+ * resumed session does not hold N × ~2KB preview strings for its lifetime.
+ * Decision freeze semantics (seenIds) are identical to the eager variant, so
+ * the budget makes the same fresh-decision choices either way.
+ *
+ * Honors the same aggregate-budget feature gate as the eager variant — when
+ * it is off, budget enforcement is skipped entirely and the lazy variant
+ * must not bring it back.
+ */
+export function provisionContentReplacementStateLazy(
+  initialMessages?: Message[],
+  initialContentReplacements?: ContentReplacementRecord[],
+): ContentReplacementState | undefined {
+  const enabled = getFeatureValue_CACHED_MAY_BE_STALE(
+    'tengu_hawthorn_steeple',
+    false,
+  )
+  if (!enabled) return undefined
+  if (initialMessages) {
+    return reconstructContentReplacementStateLazy(
+      initialMessages,
+      initialContentReplacements ?? [],
+    )
+  }
+  return createContentReplacementState()
+}
+
+/**
+ * MEMORY_PROJECTION variant of reconstructContentReplacementState: identical
+ * freeze semantics (every candidate id is marked seen), but replacement
+ * records become lazy disk handles instead of in-memory strings. Live-string
+ * gap-fill (inheritedReplacements) is kept as-is — it is bounded by the
+ * parent's live replacements, which are already in memory.
+ */
+export function reconstructContentReplacementStateLazy(
+  messages: Message[],
+  records: ContentReplacementRecord[],
+  inheritedReplacements?: ReadonlyMap<string, string>,
+): ContentReplacementState {
+  // Eager pass with EMPTY records: freezes seenIds exactly like the original,
+  // without populating the replacements Map from the transcript.
+  const state = reconstructContentReplacementState(
+    messages,
+    [],
+    inheritedReplacements,
+  )
+  const candidateIds = new Set(
+    collectCandidatesByMessage(messages)
+      .flat()
+      .map(c => c.toolUseId),
+  )
+  for (const r of records) {
+    if (r.kind !== 'tool-result' || !candidateIds.has(r.toolUseId)) continue
+    // Records for ids that the live parent state already carries as strings
+    // (fork-inherited gap-fill) must not be downgraded to lazy handles.
+    if (state.replacements.has(r.toolUseId)) continue
+    if (!state.lazyReplacements) {
+      state.lazyReplacements = new Map()
+    }
+    state.lazyReplacements.set(
+      r.toolUseId,
+      createDiskReplacementLoader(r.toolUseId),
+    )
+  }
+  return state
 }
 
 /**

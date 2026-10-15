@@ -9,6 +9,10 @@ export type Terminal =
   | { reason: 'stop_hook_prevented' }
   | { reason: 'hook_stopped' }
   | { reason: 'max_turns'; turnCount: number }
+  // 2.9: rapid-refill breaker tripped under the AUTO_COMPACT_BREAKER flag —
+  // official 2.1.284 kind "rapid_refill_breaker_tripped" ends the loop with
+  // reason "rapid_refill_breaker" after yielding the thrashing API error.
+  | { reason: 'rapid_refill_breaker' }
 
 export type Continue =
   | { reason: 'collapse_drain_retry'; committed: number }
