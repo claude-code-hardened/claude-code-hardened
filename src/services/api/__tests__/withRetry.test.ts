@@ -19,7 +19,10 @@ import { APIError } from '@anthropic-ai/sdk'
 import type Anthropic from '@anthropic-ai/sdk'
 // Instance types: the destructured `await import` bindings below only carry
 // the constructor shape (value), not the class's instance type as a type name.
-import type { CannotRetryError, FallbackTriggeredError } from '../withRetry.js'
+import type {
+  CannotRetryError as CannotRetryErrorType,
+  FallbackTriggeredError as FallbackTriggeredErrorType,
+} from '../withRetry.js'
 import type { SystemAPIErrorMessage } from 'src/types/message.js'
 import { debugMock } from '../../../../tests/mocks/debug.js'
 import { logMock } from '../../../../tests/mocks/log.js'
@@ -236,7 +239,7 @@ describe('withRetry fallbackModel trigger plane', () => {
       makeApiError(404, 'not_found_error'),
     )
     expect(result.error).toBeInstanceOf(FallbackTriggeredError)
-    const fallback = result.error as FallbackTriggeredError
+    const fallback = result.error as FallbackTriggeredErrorType
     expect(fallback.reason).toBe('model_not_found')
     expect(fallback.originalModel).toBe('claude-opus-4-5')
     expect(fallback.fallbackModel).toBe('claude-sonnet-4-5')
@@ -251,7 +254,7 @@ describe('withRetry fallbackModel trigger plane', () => {
       makeApiError(403, 'permission_error'),
     )
     expect(result.error).toBeInstanceOf(FallbackTriggeredError)
-    expect((result.error as FallbackTriggeredError).reason).toBe(
+    expect((result.error as FallbackTriggeredErrorType).reason).toBe(
       'permission_denied',
     )
     expect(result.calls).toBe(1)
@@ -266,8 +269,10 @@ describe('withRetry fallbackModel trigger plane', () => {
     )
     const result = await runWithRetry(makeOptions(), serverError)
     expect(result.error).toBeInstanceOf(FallbackTriggeredError)
-    expect((result.error as FallbackTriggeredError).reason).toBe('server_error')
-    expect((result.error as FallbackTriggeredError).originalApiError).toBe(
+    expect((result.error as FallbackTriggeredErrorType).reason).toBe(
+      'server_error',
+    )
+    expect((result.error as FallbackTriggeredErrorType).originalApiError).toBe(
       serverError,
     )
     expect(result.calls).toBe(1)
@@ -342,7 +347,7 @@ describe('withRetry 529 fallback regression', () => {
       overloaded,
     )
     expect(result.error).toBeInstanceOf(FallbackTriggeredError)
-    const fallback = result.error as FallbackTriggeredError
+    const fallback = result.error as FallbackTriggeredErrorType
     expect(fallback.reason).toBe('overloaded')
     expect(fallback.originalModel).toBe('claude-opus-4-5')
     expect(result.calls).toBe(3)

@@ -238,6 +238,6 @@ function useSyncExternalStoreShim2<T>(
     )
   }
   const [, force] = React.useReducer((n: number) => n + 1, 0)
-  React.useEffect(() => subscribe(), [subscribe])
+  React.useEffect(() => subscribe(() => {}), [subscribe])
   return getSnapshot()
 }

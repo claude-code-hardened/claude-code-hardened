@@ -52,7 +52,7 @@ export type ByteBudgetCache<K extends {}, V> = {
  * maxEntrySize accounting, which both evicts LRU entries on overflow and
  * skips insertion of oversized entries natively.
  */
-export function createByteBudgetCache<K extends {}, V>(
+export function createByteBudgetCache<K extends {}, V extends {}>(
   opts: ByteBudgetCacheOptions<K, V>,
 ): ByteBudgetCache<K, V> {
   const maxTotalBytes = opts.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES
