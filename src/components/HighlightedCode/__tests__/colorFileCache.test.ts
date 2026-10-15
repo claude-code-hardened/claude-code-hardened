@@ -115,10 +115,12 @@ describe('createColorFileCache / getCachedColorFileInstance', () => {
     }
     expect(cache.size).toBe(3)
     expect(cache.bytes).toBe(4104 * 3)
-    // Only the three most-recently-used keys survive.
-    expect(cache.has('file-6.ts')).toBe(false)
-    expect(cache.has('file-7.ts')).toBe(true)
-    expect(cache.has('file-9.ts')).toBe(true)
+    // Only the three most-recently-used keys survive. 注意 cache 的键是
+    // colorFileCacheKey(filePath, code)（path + '\0' + code length），
+    // 不能直接用裸 path 查询 has()。
+    expect(cache.has(colorFileCacheKey('file-6.ts', 'code'))).toBe(false)
+    expect(cache.has(colorFileCacheKey('file-7.ts', 'code'))).toBe(true)
+    expect(cache.has(colorFileCacheKey('file-9.ts', 'code'))).toBe(true)
   })
 
   test('code above the per-item budget is returned but never cached', () => {

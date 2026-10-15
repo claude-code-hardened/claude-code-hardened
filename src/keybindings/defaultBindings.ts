@@ -9,10 +9,16 @@ import type { KeybindingBlock } from './types.js'
  * These are loaded first, then user keybindings.json overrides them.
  */
 
-// Platform-specific image paste shortcut:
-// - Windows: alt+v (ctrl+v is system paste)
+// Platform-specific image paste shortcuts (official _ALL.js:7515):
+// - WSL: both alt+v and ctrl+v paste images (official D==="wsl" adds ctrl+v)
+// - Windows (non-WSL): alt+v (ctrl+v is system paste)
 // - Other platforms: ctrl+v
-const IMAGE_PASTE_KEY = getPlatform() === 'windows' ? 'alt+v' : 'ctrl+v'
+const IMAGE_PASTE_KEYS =
+  getPlatform() === 'windows'
+    ? (['alt+v'] as const)
+    : getPlatform() === 'wsl'
+      ? (['alt+v', 'ctrl+v'] as const)
+      : (['ctrl+v'] as const)
 
 // Modifier-only chords (like shift+tab) may fail on Windows Terminal without VT mode
 // See: https://github.com/microsoft/terminal/issues/879#issuecomment-618801651
@@ -83,8 +89,17 @@ export const DEFAULT_BINDINGS: KeybindingBlock[] = [
       'ctrl+x ctrl+e': 'chat:externalEditor',
       'ctrl+g': 'chat:externalEditor',
       'ctrl+s': 'chat:stash',
-      // Image paste shortcut (platform-specific key defined above)
-      [IMAGE_PASTE_KEY]: 'chat:imagePaste',
+      // ctrl+j = insert newline (official chat:newline, _ALL.js:7515) —
+      // enter already submits, so this is the explicit soft-wrap chord.
+      'ctrl+j': 'chat:newline',
+      // Image paste shortcuts (platform-specific keys defined above)
+      ...IMAGE_PASTE_KEYS.reduce<Record<string, 'chat:imagePaste'>>(
+        (acc, key) => {
+          acc[key] = 'chat:imagePaste'
+          return acc
+        },
+        {},
+      ),
       ...(feature('MESSAGE_ACTIONS')
         ? { 'shift+up': 'chat:messageActions' as const }
         : {}),

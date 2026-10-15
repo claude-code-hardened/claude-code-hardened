@@ -1,14 +1,28 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
+import { cleanupTempDir, createTempDir } from '../../../tests/mocks/file-system'
+import { functionalStateMock } from '../../../tests/mocks/state'
+
+// Bootstrap/state is process-global-mockable: an earlier test file in the
+// same `bun test` worker can replace setProjectRoot with a noop and
+// getProjectRoot with a '/mock/project' constant (tests/mocks/state.ts via
+// ShellCommand.test.ts), which makes every durable cron write fail with
+// `EACCES: permission denied, mkdir '/mock'` at cronTasks.ts:170
+// (CI log /tmp/test1c.log:551, 571, 591, 615, 639, 659). Re-register the
+// functional shim here so this file's tests run against real stateful// semantics regardless of file execution order, then resolve the module
+// under test AFTER the registration (static imports hoist above it).
+mock.module('src/bootstrap/state.ts', functionalStateMock)
+mock.module('src/bootstrap/state.js', functionalStateMock)
+
+const {
   getSessionCronTasks,
   resetStateForTests,
   setOriginalCwd,
   setProjectRoot,
-} from '../../bootstrap/state'
-import {
+} = await import('../../bootstrap/state')
+const {
   addCronTask,
   findMissedTasks,
   getCronFilePath,
@@ -20,8 +34,7 @@ import {
   readCronTasks,
   removeCronTasks,
   writeCronTasks,
-} from '../cronTasks'
-import { cleanupTempDir, createTempDir } from '../../../tests/mocks/file-system'
+} = await import('../cronTasks')
 
 let tempDir = ''
 

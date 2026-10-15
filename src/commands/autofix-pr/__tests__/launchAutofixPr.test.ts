@@ -1,4 +1,5 @@
 import {
+  afterAll,
   afterEach,
   beforeAll,
   beforeEach,
@@ -10,8 +11,21 @@ import {
 import type { LocalJSXCommandCall } from '../../../types/command.js'
 import { debugMock } from '../../../../tests/mocks/debug.js'
 import { logMock } from '../../../../tests/mocks/log.js'
+import * as bootstrapStateModule from 'src/bootstrap/state.js'
 
 // ── Mock module-level side effects before any imports ──
+// bootstrap/state 的 mock 是进程全局部分合并（同 utils/ShellCommand.test.ts）：
+// cwd/projectRoot getters 被钉死在 '/mock/*'、setters 变 noop，会让后续
+// 加载的 autonomy/cron/Cd/MemoryTools 等测试读到被污染的 cwd/projectRoot。
+// 先快照真实导出，本文件结束后整体还原。
+const bootstrapStateSnapshot: Record<string, unknown> = {
+  ...bootstrapStateModule,
+}
+
+afterAll(() => {
+  mock.module('src/bootstrap/state.js', () => bootstrapStateSnapshot)
+})
+
 mock.module('src/utils/log.ts', logMock)
 mock.module('src/utils/debug.ts', debugMock)
 mock.module('bun:bundle', () => ({

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import {
   handleControlRequest,
   type ControlServerDeps,
@@ -7,6 +7,40 @@ import {
 import type { Socket } from 'net'
 import type { ControlRequest, ControlResponse } from '../controlProtocol.js'
 
+// 层 1（官方语义）要求 SO_PEERCRED 可用：peerUid 精确比对 daemon uid 后才走
+// 明文 control key 校验（本文件的用例即按该 wire contract 编写）。真实
+// 实现经 peerCredentials（FFI SO_PEERCRED）；fakeSocket 不是真 socket，任何
+// 环境下都拿不到内核凭证，于是 handleControlRequest 会退化到层 2
+// （challenge-response HMAC）并全数拒绝明文 key 用例——CI 上表现为首轮
+// EAUTH、随后全局限速器锁定（ERATE）。这里在进程内临时提供
+// Bun.ant.getPeerUid（peerCredentials 的首选路径），让同 uid 假套接字模拟
+// "标准环境"，文件结束后立即移除，不泄漏给其他测试文件。
+beforeAll(() => {
+  const bun = Bun as unknown as {
+    ant?: { getPeerUid?: (fd: number) => number }
+  }
+  try {
+    previousAnt = bun.ant
+    bun.ant = {
+      ...previousAnt,
+      getPeerUid: (_fd: number) => process.getuid?.() ?? 0,
+    }
+    antStubbed = true
+  } catch {
+    // Bun 全局不可扩展时保持原状——用例会退化为层 2（与补充前一致）。
+    antStubbed = false
+  }
+})
+
+let previousAnt: unknown
+let antStubbed = false
+
+afterAll(() => {
+  if (antStubbed) {
+    ;(Bun as unknown as { ant?: unknown }).ant = previousAnt
+  }
+})
+
 /** 收集 sendReply 输出的假 socket（destroyed/end 语义同真 socket）。 */
 function fakeSocket(): Socket & { replies: ControlResponse[] } {
   const replies: ControlResponse[] = []
@@ -14,6 +48,9 @@ function fakeSocket(): Socket & { replies: ControlResponse[] } {
     replies,
     destroyed: false,
     readableEnded: false,
+    // controlProtocol.getPeerUid 先读 _handle.fd；正数 fd + 上面的
+    // Bun.ant.getPeerUid 桩 = 与 daemon 同 uid 的模拟本地套接字。
+    _handle: { fd: 4242 },
     end: (s: string) => {
       replies.push(JSON.parse(s.replace(/\n$/, '')) as ControlResponse)
     },

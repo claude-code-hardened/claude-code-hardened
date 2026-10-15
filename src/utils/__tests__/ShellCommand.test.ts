@@ -1,9 +1,20 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import type { ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { debugMock } from '../../../tests/mocks/debug'
 import { logMock } from '../../../tests/mocks/log'
 import { stateMock } from '../../../tests/mocks/state'
+import * as bootstrapStateModule from 'src/bootstrap/state.js'
+
+// Bun 的 mock.module 是进程全局、部分合并（同仓库 CLAUDE.md 已知坑）：
+// stateMock 会把 bootstrap/state 的 cwd/projectRoot getters 钉死在 '/mock/*'
+// 且 setters 变 noop，同进程里后续加载的测试文件（path.test、autonomyRuns、
+// /autonomy、CdTool、cronTasks……）全会读到被污染的 cwd/projectRoot。
+// 这里在注册 mock 之前先把真实命名空间快照下来，文件结束后整体还原。
+// 注意快照语句必须位于 mock.module 调用之前（语句顺序即取值时机）。
+const bootstrapStateSnapshot: Record<string, unknown> = {
+  ...bootstrapStateModule,
+}
 
 const treeKillCalls: Array<{ pid: number; signal: string }> = []
 
@@ -20,6 +31,10 @@ mock.module('tree-kill', () => ({
     callback?.(undefined)
   },
 }))
+
+afterAll(() => {
+  mock.module('src/bootstrap/state.js', () => bootstrapStateSnapshot)
+})
 
 // Import after mocks are registered.
 const { wrapSpawn } = await import('src/utils/ShellCommand.js')

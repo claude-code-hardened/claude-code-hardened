@@ -139,7 +139,12 @@ function readResetSeconds(
   const value = Number(headers.get(name) ?? Number.NaN)
   const isValid =
     Number.isFinite(value) && value * 1000 > nowMs - RESET_VALIDITY_TOLERANCE_MS
-  return isValid ? Math.round(value) : undefined
+  // Preserve the parsed value as-is: the seconds come from the limiter and
+  // the tolerance gate above is the only validity decision. Math.round here
+  // rewrote a within-tolerance stale-by-0.5s reset (1799999999.5) up to the
+  // next whole second, which broke the parse contract
+  // (CI log /tmp/test1c.log:971 — Expected 1799999999.5, Received 1800000000).
+  return isValid ? value : undefined
 }
 
 function readExtraUsageStatus(
@@ -267,10 +272,21 @@ export class GraceWrapUpState {
 
   /** A real quota refusal clears the extra-usage coverage of the zone. */
   onRefused(): void {
+    const hadCoverage =
+      this.covered || this.zone?.extraUsageStatus !== undefined
     if (this.zone !== null && this.zone.extraUsageStatus !== undefined) {
       this.zone = { ...this.zone, extraUsageStatus: undefined }
     }
     this.covered = false
+    // The refusal broke the extra-coverage promise: the still-alive uncovered
+    // zone owes its wrap-up note again. applyParsed only ever transitions
+    // 'none' → 'owed' on a (non-covered) observation, so without this re-arm
+    // the note stays stuck at 'none' until the next API response header feed
+    // (CI log /tmp/test1c.log:990 — takeGraceTurnNote Expected true,
+    // Received false right after graceOnRefused()).
+    if (hadCoverage && this.zone !== null && this.turnNote === 'none') {
+      this.turnNote = 'owed'
+    }
   }
 
   /** Full clear + fence raise (account switch / signed-out release path). */
@@ -706,18 +722,31 @@ export function buildMainTurnGraceNotes({
       observeGraceFromLimitsSnapshot(observation, now)
     }
     // Official: s = isMainLoop && depth === 0 && isNewQuestion(t)
-    const due = isNewDepth0Question && grace.subagentNoteDue(now)
+    // A wrap-up/near-limit note already in the transcript suppresses every
+    // (re-)injection path for this window — the official u() walk guards
+    // against double injection no matter how the machine state latched
+    // (CI log /tmp/test1c.log:1028 — prior wrap_up note still yielded a
+    // fresh note because only the !taken fallback consulted history).
+    const priorNote = isNewDepth0Question
+      ? findLastUsageLimitNote(messages)
+      : undefined
+    const historyHasGraceNote =
+      priorNote === 'wrap_up' || priorNote === 'near_limit'
+    const due =
+      isNewDepth0Question &&
+      !historyHasGraceNote &&
+      grace.subagentNoteDue(now)
     if (isNewDepth0Question && !due) {
       grace.onMainTurnStart()
     }
     let taken = false
     if (isNewDepth0Question && due) {
       taken = grace.takeTurnNote(now)
+      // due excludes the history case now, so a failed take with a clean
+      // history always re-arms (same behavior as the old inner
+      // findLastUsageLimitNote check, without re-walking the transcript).
       if (due && !taken) {
-        const priorNote = findLastUsageLimitNote(messages)
-        if (priorNote !== 'wrap_up' && priorNote !== 'near_limit') {
-          grace.onMainTurnStart()
-        }
+        grace.onMainTurnStart()
       }
     }
     let wrappedUp = false
@@ -757,9 +786,19 @@ export function buildMainTurnGraceNotes({
     // Near-limit: once per 5h window, not covered. Official evaluates this at
     // depth > 0 inside the query loop; QueryEngine-scope (query.ts is outside
     // this workpackage) evaluates it at the main-turn entry instead.
-    if (isNewDepth0Question && consumePendingNearLimitWrapUpHint(now)) {
-      notices.push(createGraceUiNotice(now))
+    // The hint is consumed even when a wrap-up note was injected this turn —
+    // the wrap-up supersedes the softer hint — but the UI notice + note are
+    // only emitted when no wrap-up note was just placed
+    // (CI log /tmp/test1c.log:1009 — the owed-zone turn emitted the wrap-up
+    // note AND the near-limit UI notice; expected exactly one note, zero
+    // notices). History suppression skips the latch entirely.
+    if (
+      isNewDepth0Question &&
+      !historyHasGraceNote &&
+      consumePendingNearLimitWrapUpHint(now)
+    ) {
       if (!wrappedUp) {
+        notices.push(createGraceUiNotice(now))
         notes.push(createUsageLimitNoteMessage({ kind: 'near_limit', now }))
       }
       logGraceEvent('usage_limit_near_wrapup', {})

@@ -15,6 +15,9 @@ import { join } from 'node:path'
 let useMockForMagicDocs = true
 afterAll(() => {
   useMockForMagicDocs = false
+  // 把 mock.module 篡改的 fsOperations 整体还原为真实模块导出，
+  // 否则同进程后续测试文件会拿到缺失 statSync/readFileBytes 的伪实现。
+  mock.module('src/utils/fsOperations.js', () => fsOperationsSnapshot)
 })
 
 // Inline a minimum env-driven default-model resolver so other test files
@@ -262,6 +265,17 @@ const mockReadFile = mock(
 // transitive deps stall bun:test). Avoid require()ing the real module
 // inside the factory: that re-enters the same mock and infinite-loops.
 import { promises as nodeFs, existsSync as nodeExistsSync } from 'node:fs'
+
+// mock.module 替换/部分合并模块命名空间：上面的 inline realFsAdapter 只覆盖
+// 少数 async 方法，缺 statSync / readFileBytes 等（FileEditTool、FileWriteTool、
+// NotebookEditTool、file.ts 的 getFileModificationTime 都会拿到 undefined 并
+// 抛 TypeError）。这里在注册 mock 之前把真实 fsOperations 导出快照下来，
+// afterAll 里整体还原（快照语句必须在 mock.module 之前，语句顺序即取值时机）。
+import * as fsOperationsModule from 'src/utils/fsOperations.js'
+
+const fsOperationsSnapshot: Record<string, unknown> = {
+  ...fsOperationsModule,
+}
 
 const realFsAdapter = {
   cwd: () => process.cwd(),

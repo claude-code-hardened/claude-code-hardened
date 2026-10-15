@@ -1,19 +1,28 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
+import { cleanupTempDir, createTempDir } from '../../../tests/mocks/file-system'
+import { functionalStateMock } from '../../../tests/mocks/state'
+
+// Re-register the functional bootstrap/state shim before importing the
+// module under test — same cross-file mock.module pollution defense as
+// cronTasks.baseline.test.ts (CI log /tmp/test1c.log:879, 899, 921:
+// `EACCES: permission denied, mkdir '/mock'` from a poisoned getProjectRoot).
+mock.module('src/bootstrap/state.ts', functionalStateMock)
+mock.module('src/bootstrap/state.js', functionalStateMock)
+
+const {
   getSessionCronTasks,
   resetStateForTests,
   setOriginalCwd,
   setProjectRoot,
-} from '../../bootstrap/state'
-import {
+} = await import('../../bootstrap/state')
+const {
   addCronTask,
   getCronFilePath,
   readCronTasks,
   writeCronTasks,
-} from '../cronTasks'
-import { cleanupTempDir, createTempDir } from '../../../tests/mocks/file-system'
+} = await import('../cronTasks')
 
 let tempDir = ''
 
