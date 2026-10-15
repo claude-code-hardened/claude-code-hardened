@@ -61,7 +61,8 @@ import {
 import { trackGitOperations } from '../shared/gitOperationTracking.js';
 import { interpretCommandResult } from './commandSemantics.js';
 import { powershellToolHasPermission } from './powershellPermissions.js';
-import { getDefaultTimeoutMs, getMaxTimeoutMs, getPrompt } from './prompt.js';
+import { clampTimeoutMs } from '../BashTool/prompt.js';
+import { getMaxTimeoutMs, getPrompt } from './prompt.js';
 import { hasSyncSecurityConcerns, isReadOnlyCommand, resolveToCanonical } from './readOnlyValidation.js';
 import { POWERSHELL_TOOL_NAME } from './toolName.js';
 import {
@@ -804,7 +805,9 @@ async function* runPowerShellCommand({
   void
 > {
   const { command, description, timeout, run_in_background, dangerouslyDisableSandbox } = input;
-  const timeoutMs = Math.min(timeout || getDefaultTimeoutMs(), getMaxTimeoutMs());
+  // Shared clamp (BashTool/prompt.clampTimeoutMs) so negative/0 timeouts fall
+  // back to the default exactly like Bash instead of firing tree-kill instantly.
+  const timeoutMs = clampTimeoutMs(timeout);
 
   let fullOutput = '';
   let lastProgressOutput = '';

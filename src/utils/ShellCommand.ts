@@ -3,6 +3,7 @@ import { stat } from 'fs/promises'
 import type { Readable } from 'stream'
 import treeKill from 'tree-kill'
 import { generateTaskId } from '../Task.js'
+import { logForDebugging } from './debug.js'
 import { formatDuration } from './format.js'
 import {
   MAX_TASK_OUTPUT_BYTES,
@@ -27,6 +28,13 @@ export type ExecResult = {
   outputTaskId?: string
   /** Error message when the command failed before spawning (e.g., deleted cwd). */
   preSpawnError?: string
+  /**
+   * Set when the timeout mechanism terminated the command:
+   * 'timed_out' — SIGTERM sufficed; 'timed_out_force' — escalation to
+   * SIGKILL was required. Replaces inferring timeouts from a coincidental
+   * 143/SIGTERM exit code.
+   */
+  timeoutLabel?: 'timed_out' | 'timed_out_force'
 }
 
 export type ShellCommand = {
@@ -48,6 +56,15 @@ export type ShellCommand = {
 
 const SIGKILL = 137
 const SIGTERM = 143
+
+// Grace window after the initial SIGTERM before escalating to SIGKILL.
+const KILL_ESCALATION_MS = 400
+
+function logTreeKillFailure(pid: number, signal: string, error?: Error): void {
+  if (error) {
+    logForDebugging(`tree-kill(${pid}, ${signal}) failed: ${error.message}`)
+  }
+}
 
 // Background tasks write stdout/stderr directly to a file fd (no JS involvement),
 // so a stuck append loop can fill the disk. Poll file size and kill when exceeded.
@@ -127,6 +144,13 @@ class ShellCommandImpl implements ShellCommand {
     | undefined
   #timeout: number
   #shouldAutoBackground: boolean
+  // True only for immediate force kills (user abort / output-size watchdog),
+  // never for timeout terminations.
+  #interrupted = false
+  // Pending SIGTERM→SIGKILL escalation timer (graceful timeout kill only).
+  #killEscalationTimer: NodeJS.Timeout | null = null
+  // Why the timeout mechanism terminated the command, if it did.
+  #timeoutLabel: 'timed_out' | 'timed_out_force' | undefined
   #resultResolver: ((result: ExecResult) => void) | null = null
   #exitCodeResolver: ((code: number) => void) | null = null
   #boundAbortHandler: (() => void) | null = null
@@ -136,7 +160,10 @@ class ShellCommandImpl implements ShellCommand {
     if (self.#shouldAutoBackground && self.#onTimeoutCallback) {
       self.#onTimeoutCallback(self.background.bind(self))
     } else {
-      self.#doKill(SIGTERM)
+      // Timeout kill is graceful first: SIGTERM, with SIGKILL escalation
+      // handled inside #doKill if the process is still alive after
+      // KILL_ESCALATION_MS.
+      self.#doKill(SIGTERM, { graceful: true })
     }
   }
 
@@ -198,7 +225,9 @@ class ShellCommandImpl implements ShellCommand {
         ? code
         : signal === 'SIGTERM'
           ? 144
-          : 1
+          : signal === 'SIGKILL'
+            ? SIGKILL
+            : 1
     this.#resolveExitCode(exitCode)
   }
 
@@ -260,6 +289,20 @@ class ShellCommandImpl implements ShellCommand {
     this.#sizeWatchdog.unref()
   }
 
+  /**
+   * Official auto-background cap semantics: when the command is eligible for
+   * auto-backgrounding and CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS is a
+   * positive number, deadline the foreground wait at that cap even when the
+   * tool-level timeout is longer. Unset/invalid values keep the full timeout.
+   */
+  #handleTimeoutDelay(): number {
+    const cap = Number(process.env.CLAUDE_CODE_AUTO_BACKGROUND_TIMEOUT_MS)
+    if (this.#shouldAutoBackground && Number.isFinite(cap) && cap > 0) {
+      return Math.min(this.#timeout, cap)
+    }
+    return this.#timeout
+  }
+
   #createResultPromise(): Promise<ExecResult> {
     this.#boundAbortHandler = this.#abortHandler.bind(this)
     this.#abortSignal.addEventListener('abort', this.#boundAbortHandler, {
@@ -274,7 +317,7 @@ class ShellCommandImpl implements ShellCommand {
 
     this.#timeoutId = setTimeout(
       ShellCommandImpl.#handleTimeout,
-      this.#timeout,
+      this.#handleTimeoutDelay(),
       this,
     ) as NodeJS.Timeout
 
@@ -290,6 +333,15 @@ class ShellCommandImpl implements ShellCommand {
 
   async #handleExit(code: number): Promise<void> {
     this.#cleanupListeners()
+    // Cancel any pending SIGTERM→SIGKILL escalation — the process is gone.
+    // Deliberately NOT in #cleanupListeners(): cleanup()/background() may run
+    // while an escalation is in flight, and canceling it there would leave
+    // the result promise unresolved.
+    const escalationTimer = this.#killEscalationTimer
+    if (escalationTimer) {
+      clearTimeout(escalationTimer)
+      this.#killEscalationTimer = null
+    }
     if (this.#status === 'running' || this.#status === 'backgrounded') {
       this.#status = 'completed'
     }
@@ -299,7 +351,9 @@ class ShellCommandImpl implements ShellCommand {
       code,
       stdout,
       stderr: this.taskOutput.getStderr(),
-      interrupted: code === SIGKILL,
+      // Tracked directly instead of sniffing the exit code — an escalated
+      // timeout force-kill also ends in SIGKILL but is not a user interrupt.
+      interrupted: this.#interrupted,
       backgroundTaskId: this.#backgroundTaskId,
     }
 
@@ -320,9 +374,16 @@ class ShellCommandImpl implements ShellCommand {
         `Background command killed: output file exceeded ${MAX_TASK_OUTPUT_BYTES_DISPLAY}`,
         result.stderr,
       )
-    } else if (code === SIGTERM) {
+    } else if (this.#timeoutLabel) {
+      // Timeout kills are labeled explicitly rather than inferred from a
+      // coincidental 143/SIGTERM exit code.
+      result.timeoutLabel = this.#timeoutLabel
+      const suffix =
+        this.#timeoutLabel === 'timed_out_force'
+          ? ' (escalated to SIGKILL)'
+          : ''
       result.stderr = prependStderr(
-        `Command timed out after ${formatDuration(this.#timeout)}`,
+        `Command timed out after ${formatDuration(this.#timeout)}${suffix}`,
         result.stderr,
       )
     }
@@ -334,11 +395,59 @@ class ShellCommandImpl implements ShellCommand {
     }
   }
 
-  #doKill(code?: number): void {
+  #doKill(code?: number, opts?: { graceful?: boolean }): void {
     this.#status = 'killed'
-    if (this.#childProcess.pid) {
-      treeKill(this.#childProcess.pid, 'SIGKILL')
+    if (opts?.graceful) {
+      // Timeout fired: record the label up front, upgraded to
+      // 'timed_out_force' below if SIGTERM turns out to be ignored.
+      this.#timeoutLabel = 'timed_out'
+    } else {
+      // Immediate force kill (user abort / output-size watchdog).
+      this.#interrupted = true
     }
+    const pid = this.#childProcess?.pid
+    if (!pid) {
+      // Nothing to signal (never spawned or already reaped).
+      this.#resolveExitCode(code ?? SIGKILL)
+      return
+    }
+    if (this.#killEscalationTimer) {
+      // A SIGTERM→SIGKILL escalation is already in flight — don't restart
+      // the clock or interleave a second signal storm.
+      return
+    }
+    if (opts?.graceful) {
+      // Stage 1: polite SIGTERM so the shell can run traps and flush
+      // children. `code` only feeds the already-exited branch above; a live
+      // process resolves its real exit code via the 'exit' event.
+      treeKill(pid, 'SIGTERM', (error?: Error) =>
+        logTreeKillFailure(pid, 'SIGTERM', error),
+      )
+      // Stage 2: escalate to SIGKILL only if the process ignored SIGTERM.
+      // unref() keeps the timer from holding the event loop open.
+      const escalationTimer = setTimeout(() => {
+        this.#killEscalationTimer = null
+        if (!this.#exitCodeResolver) {
+          // Exited for real after the SIGTERM — no escalation needed.
+          return
+        }
+        this.#timeoutLabel = 'timed_out_force'
+        treeKill(pid, 'SIGKILL', (error?: Error) =>
+          logTreeKillFailure(pid, 'SIGKILL', error),
+        )
+        // The SIGKILL escalation has happened — resolve now (128+9) instead
+        // of reporting a code the process was never allowed to produce;
+        // processes that swallow SIGTERM may never emit a clean 'exit'.
+        this.#resolveExitCode(SIGKILL)
+      }, KILL_ESCALATION_MS)
+      escalationTimer.unref()
+      this.#killEscalationTimer = escalationTimer
+      return
+    }
+    // Immediate force kill (user abort / output-size watchdog).
+    treeKill(pid, 'SIGKILL', (error?: Error) =>
+      logTreeKillFailure(pid, 'SIGKILL', error),
+    )
     this.#resolveExitCode(code ?? SIGKILL)
   }
 

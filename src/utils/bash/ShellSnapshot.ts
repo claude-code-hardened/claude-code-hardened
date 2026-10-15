@@ -1,5 +1,6 @@
 import { execFile } from 'child_process'
 import { execa } from 'execa'
+import { chmodSync } from 'fs'
 import { mkdir, stat } from 'fs/promises'
 import * as os from 'os'
 import { join } from 'path'
@@ -557,8 +558,9 @@ export const createAndSaveSnapshot = async (
         `snapshot-${shellType}-${timestamp}-${randomId}.sh`,
       )
 
-      // Ensure snapshots directory exists
-      await mkdir(snapshotsDir, { recursive: true })
+      // Ensure snapshots directory exists. Owner-only: snapshots may embed
+      // user environment data that gets sourced into every shell command.
+      await mkdir(snapshotsDir, { recursive: true, mode: 0o700 })
 
       const snapshotScript = await getSnapshotScript(
         binShell,
@@ -640,6 +642,17 @@ export const createAndSaveSnapshot = async (
             }
 
             if (snapshotSize !== undefined) {
+              // Owner-only permissions: the snapshot can embed user env and
+              // aliases. The CLI's own shells later `source` it as the same
+              // user (bashProvider.ts: `source <path> 2>/dev/null || true`),
+              // so 0600 keeps them readable where it matters.
+              try {
+                chmodSync(shellSnapshotPath, 0o600)
+              } catch (chmodError) {
+                logForDebugging(
+                  `Failed to chmod shell snapshot ${shellSnapshotPath} to 0600: ${chmodError}`,
+                )
+              }
               logForDebugging(
                 `Shell snapshot created successfully (${snapshotSize} bytes)`,
               )

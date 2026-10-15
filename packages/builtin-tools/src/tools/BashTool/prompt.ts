@@ -32,6 +32,17 @@ export function getMaxTimeoutMs(): number {
   return getMaxBashTimeoutMs()
 }
 
+/**
+ * Clamp a model-supplied timeout: 0 / negative / undefined fall back to the
+ * default; values above the max are capped at the max (parity with
+ * PowerShellTool.tsx runPowerShellCommand's clamp).
+ */
+export function clampTimeoutMs(timeout: number | undefined): number {
+  return timeout && timeout > 0
+    ? Math.min(timeout, getMaxTimeoutMs())
+    : getDefaultTimeoutMs()
+}
+
 function getBackgroundUsageNote(): string | null {
   if (isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)) {
     return null

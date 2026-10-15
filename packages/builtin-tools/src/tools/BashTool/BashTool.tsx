@@ -62,7 +62,7 @@ import {
   permissionRuleExtractPrefix,
 } from './bashPermissions.js';
 import { interpretCommandResult } from './commandSemantics.js';
-import { getDefaultTimeoutMs, getMaxTimeoutMs, getSimplePrompt } from './prompt.js';
+import { clampTimeoutMs, getMaxTimeoutMs, getSimplePrompt } from './prompt.js';
 import { checkReadOnlyConstraints } from './readOnlyValidation.js';
 import { parseSedEditCommand } from './sedEditParser.js';
 import { shouldUseSandbox } from './shouldUseSandbox.js';
@@ -1007,7 +1007,10 @@ async function* runShellCommand({
   void
 > {
   const { command, description, timeout, run_in_background } = input;
-  const timeoutMs = timeout || getDefaultTimeoutMs();
+  // 0/negative/undefined → default; above-max → clamped to max (parity with
+  // PowerShellTool.tsx:807; the raw `timeout` is still used for the no-op
+  // telemetry gate below).
+  const timeoutMs = clampTimeoutMs(timeout);
 
   let fullOutput = '';
   let lastProgressOutput = '';
