@@ -138,6 +138,47 @@ function formatLimitInfo(
   return parts.join(', ')
 }
 
+// Splits a ripgrep content-mode line into [file path, rest], where rest keeps
+// the separator colon and whatever follows (line number + content). Splitting
+// on the plain first colon breaks real-world paths:
+//   - Windows drive letters: `C:\a.ts:12:x` must split at ':12', not after 'C'
+//   - backslash-escaped colons: `a\:b.ts:12:x` must skip the `\:`
+// Primary rule per upstream format: the -n line-number separator is the first
+// colon immediately followed by a digit (escaped colons are skipped). Fall
+// back to the first unescaped, non-drive colon for line-number-less output
+// (`rg` without -n: `path:content`). Returns null when nothing plausible
+// matches, so callers pass the line through untouched. Exported for tests.
+export function splitContentLine(line: string): [string, string] | null {
+  // Zero-width lookarounds: skip colons escaped as `\:`; the match consumes
+  // only the colon itself, so index math stays trivial.
+  const lineNumColon = line.search(/(?<!\\):(?=\d)/)
+  if (lineNumColon > 0) {
+    return [line.substring(0, lineNumColon), line.substring(lineNumColon)]
+  }
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] !== ':') {
+      continue
+    }
+    if (i > 0 && line[i - 1] === '\\') {
+      continue
+    }
+    if (i === 1) {
+      break // drive-letter colon (`C:\...`) — no safe split point
+    }
+    return [line.substring(0, i), line.substring(i)]
+  }
+  return null
+}
+
+function relativeContentLine(line: string): string {
+  const split = splitContentLine(line)
+  if (split) {
+    const [filePath, rest] = split
+    return toRelativePath(filePath) + rest
+  }
+  return line
+}
+
 const outputSchema = lazySchema(() =>
   z.object({
     mode: z.enum(['content', 'files_with_matches', 'count']).optional(),
@@ -450,16 +491,7 @@ export const GrepTool = buildTool({
         offset,
       )
 
-      const finalLines = limitedResults.map(line => {
-        // Lines have format: /absolute/path:line_content or /absolute/path:num:content
-        const colonIndex = line.indexOf(':')
-        if (colonIndex > 0) {
-          const filePath = line.substring(0, colonIndex)
-          const rest = line.substring(colonIndex)
-          return toRelativePath(filePath) + rest
-        }
-        return line
-      })
+      const finalLines = limitedResults.map(relativeContentLine)
       const output = {
         mode: 'content' as const,
         numFiles: 0, // Not applicable for content mode

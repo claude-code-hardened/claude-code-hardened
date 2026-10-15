@@ -49,6 +49,7 @@ import { validateInputForSettingsFileEdit } from 'src/utils/settings/validateEdi
 import { NOTEBOOK_EDIT_TOOL_NAME } from '../NotebookEditTool/constants.js'
 import {
   FILE_EDIT_TOOL_NAME,
+  FILE_NOT_READ_ERROR,
   FILE_UNEXPECTEDLY_MODIFIED_ERROR,
 } from './constants.js'
 import { getEditToolDescription } from './prompt.js'
@@ -213,13 +214,31 @@ export const FileEditTool = buildTool({
     let fileContent: string | null
     try {
       const fileBuffer = await fs.readFileBytes(fullFilePath)
-      const encoding: BufferEncoding =
+      const isUtf16Le =
         fileBuffer.length >= 2 &&
         fileBuffer[0] === 0xff &&
         fileBuffer[1] === 0xfe
-          ? 'utf16le'
-          : 'utf8'
-      fileContent = fileBuffer.toString(encoding).replaceAll('\r\n', '\n')
+      const isUtf16Be =
+        fileBuffer.length >= 2 &&
+        fileBuffer[0] === 0xfe &&
+        fileBuffer[1] === 0xff
+      // UTF-16BE (FE FF) branch: Buffer has no native 'utf16be' decoder, so
+      // byte-swap an even-length copy into LE order and decode as utf16le.
+      // Without this, BE files decoded as utf8 mojibake and every old_string
+      // match failed (overwrites of BE files never validated).
+      const decoded = isUtf16Le
+        ? fileBuffer.toString('utf16le')
+        : isUtf16Be
+          ? Buffer.from(
+              fileBuffer.subarray(
+                0,
+                fileBuffer.length - (fileBuffer.length % 2),
+              ),
+            )
+              .swap16()
+              .toString('utf16le')
+          : fileBuffer.toString('utf8')
+      fileContent = decoded.replaceAll('\r\n', '\n')
     } catch (e) {
       if (isENOENT(e)) {
         fileContent = null
@@ -282,26 +301,36 @@ export const FileEditTool = buildTool({
 
     const readTimestamp = toolUseContext.readFileState.get(fullFilePath)
 
+    // Read-before-edit guard: the file exists (checked above) but was never
+    // read. Reject it here in validate instead of failing later in call()
+    // with the misleading "modified since read" message (same guard and
+    // errorCode style as NotebookEditTool).
+    if (!readTimestamp) {
+      return {
+        result: false,
+        behavior: 'ask',
+        message: FILE_NOT_READ_ERROR,
+        errorCode: 6,
+      }
+    }
+
     // Check if file exists and get its last modified time
-    if (readTimestamp) {
-      const lastWriteTime = getFileModificationTime(fullFilePath)
-      if (lastWriteTime > readTimestamp.timestamp) {
-        // Timestamp indicates modification, but on Windows timestamps can change
-        // without content changes (cloud sync, antivirus, etc.). For full reads,
-        // compare content as a fallback to avoid false positives.
-        const isFullRead =
-          readTimestamp.offset === undefined &&
-          readTimestamp.limit === undefined
-        if (isFullRead && fileContent === readTimestamp.content) {
-          // Content unchanged, safe to proceed
-        } else {
-          return {
-            result: false,
-            behavior: 'ask',
-            message:
-              'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
-            errorCode: 7,
-          }
+    const lastWriteTime = getFileModificationTime(fullFilePath)
+    if (lastWriteTime > readTimestamp.timestamp) {
+      // Timestamp indicates modification, but on Windows timestamps can change
+      // without content changes (cloud sync, antivirus, etc.). For full reads,
+      // compare content as a fallback to avoid false positives.
+      const isFullRead =
+        readTimestamp.offset === undefined && readTimestamp.limit === undefined
+      if (isFullRead && fileContent === readTimestamp.content) {
+        // Content unchanged, safe to proceed
+      } else {
+        return {
+          result: false,
+          behavior: 'ask',
+          message:
+            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+          errorCode: 7,
         }
       }
     }
@@ -447,14 +476,18 @@ export const FileEditTool = buildTool({
     if (fileExists) {
       const lastWriteTime = getFileModificationTime(absoluteFilePath)
       const lastRead = readFileState.get(absoluteFilePath)
-      if (!lastRead || lastWriteTime > lastRead.timestamp) {
+      if (!lastRead) {
+        // Mirror the validateInput read-before-edit guard (same errorCode).
+        // The old fallback here threw FILE_UNEXPECTEDLY_MODIFIED_ERROR, which
+        // claimed "modified since read" for a file that was never read.
+        throw Object.assign(new Error(FILE_NOT_READ_ERROR), { errorCode: 6 })
+      }
+      if (lastWriteTime > lastRead.timestamp) {
         // Timestamp indicates modification, but on Windows timestamps can change
         // without content changes (cloud sync, antivirus, etc.). For full reads,
         // compare content as a fallback to avoid false positives.
         const isFullRead =
-          lastRead &&
-          lastRead.offset === undefined &&
-          lastRead.limit === undefined
+          lastRead.offset === undefined && lastRead.limit === undefined
         const contentUnchanged =
           isFullRead && originalFileContents === lastRead.content
         if (!contentUnchanged) {

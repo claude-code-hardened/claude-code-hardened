@@ -1,5 +1,5 @@
 import { feature } from 'bun:bundle'
-import { extname, isAbsolute, resolve } from 'path'
+import { extname } from 'path'
 import {
   fileHistoryEnabled,
   fileHistoryTrackEdit,
@@ -7,13 +7,13 @@ import {
 import { z } from 'zod/v4'
 import { buildTool, type ToolDef, type ToolUseContext } from 'src/Tool.js'
 import type { NotebookCell, NotebookContent } from 'src/types/notebook.js'
-import { getCwd } from 'src/utils/cwd.js'
 import { isENOENT } from 'src/utils/errors.js'
 import { getFileModificationTime, writeTextContent } from 'src/utils/file.js'
 import { readFileSyncWithMetadata } from 'src/utils/fileRead.js'
 import { safeParseJSON } from 'src/utils/json.js'
 import { lazySchema } from 'src/utils/lazySchema.js'
 import { parseCellId } from 'src/utils/notebook.js'
+import { expandPath } from 'src/utils/path.js'
 import { checkWritePermissionForTool } from 'src/utils/permissions/filesystem.js'
 import type { PermissionDecision } from 'src/utils/permissions/PermissionResult.js'
 import { jsonParse, jsonStringify } from 'src/utils/slowOperations.js'
@@ -122,6 +122,13 @@ export const NotebookEditTool = buildTool({
   getPath(input): string {
     return input.notebook_path
   },
+  backfillObservableInput(input) {
+    // hooks.mdx documents notebook_path as absolute; expand so hook allowlists
+    // can't be bypassed via ~ or relative paths (matches FileEditTool).
+    if (typeof input.notebook_path === 'string') {
+      input.notebook_path = expandPath(input.notebook_path)
+    }
+  },
   async checkPermissions(input, context): Promise<PermissionDecision> {
     const appState = context.getAppState()
     return checkWritePermissionForTool(
@@ -177,9 +184,11 @@ export const NotebookEditTool = buildTool({
     { notebook_path, cell_type, cell_id, edit_mode = 'replace' },
     toolUseContext: ToolUseContext,
   ) {
-    const fullPath = isAbsolute(notebook_path)
-      ? notebook_path
-      : resolve(getCwd(), notebook_path)
+    // Use expandPath for consistent path normalization (resolves ~, converts
+    // POSIX-style paths on Windows) so readFileState lookups match what
+    // FileReadTool recorded — plain resolve() turned '~/x.ipynb' into a fake
+    // '<cwd>/~/x.ipynb' path (matches FileEditTool/FileWriteTool).
+    const fullPath = expandPath(notebook_path)
 
     // SECURITY: Skip filesystem operations for UNC paths to prevent NTLM credential leaks.
     if (fullPath.startsWith('\\\\') || fullPath.startsWith('//')) {
@@ -227,7 +236,23 @@ export const NotebookEditTool = buildTool({
         errorCode: 9,
       }
     }
-    if (getFileModificationTime(fullPath) > readTimestamp.timestamp) {
+    // statSync inside getFileModificationTime throws a bare ENOENT when the
+    // file was deleted after Read — surface it as the same structured
+    // "notebook does not exist" error as the read below instead.
+    let lastWriteTime: number
+    try {
+      lastWriteTime = getFileModificationTime(fullPath)
+    } catch (e) {
+      if (isENOENT(e)) {
+        return {
+          result: false,
+          message: 'Notebook file does not exist.',
+          errorCode: 1,
+        }
+      }
+      throw e
+    }
+    if (lastWriteTime > readTimestamp.timestamp) {
       return {
         result: false,
         message:
@@ -306,9 +331,7 @@ export const NotebookEditTool = buildTool({
     _,
     parentMessage,
   ) {
-    const fullPath = isAbsolute(notebook_path)
-      ? notebook_path
-      : resolve(getCwd(), notebook_path)
+    const fullPath = expandPath(notebook_path)
 
     if (fileHistoryEnabled()) {
       await fileHistoryTrackEdit(

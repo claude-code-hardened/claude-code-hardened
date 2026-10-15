@@ -37,7 +37,10 @@ import {
 } from 'src/utils/permissions/filesystem.js'
 import type { PermissionDecision } from 'src/utils/permissions/PermissionResult.js'
 import { matchWildcardPattern } from 'src/utils/permissions/shellRuleMatching.js'
-import { FILE_UNEXPECTEDLY_MODIFIED_ERROR } from '../FileEditTool/constants.js'
+import {
+  FILE_NOT_READ_ERROR,
+  FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+} from '../FileEditTool/constants.js'
 import { gitDiffSchema, hunkSchema } from '../FileEditTool/types.js'
 import { FILE_WRITE_TOOL_NAME, getWriteToolDescription } from './prompt.js'
 import {
@@ -205,17 +208,27 @@ export const FileWriteTool = buildTool({
 
     const readTimestamp = toolUseContext.readFileState.get(fullFilePath)
 
+    // Read-before-edit guard: the file exists (the stat above succeeded) but
+    // was never read. Reject it here in validate instead of failing later in
+    // call() with the misleading "modified since read" message (same guard
+    // and errorCode style as NotebookEditTool).
+    if (!readTimestamp) {
+      return {
+        result: false,
+        message: FILE_NOT_READ_ERROR,
+        errorCode: 2,
+      }
+    }
+
     // Reuse mtime from the stat above — avoids a redundant statSync via
     // getFileModificationTime.
-    if (readTimestamp) {
-      const lastWriteTime = Math.floor(fileMtimeMs)
-      if (lastWriteTime > readTimestamp.timestamp) {
-        return {
-          result: false,
-          message:
-            'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
-          errorCode: 3,
-        }
+    const lastWriteTime = Math.floor(fileMtimeMs)
+    if (lastWriteTime > readTimestamp.timestamp) {
+      return {
+        result: false,
+        message:
+          'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        errorCode: 3,
       }
     }
 
@@ -280,14 +293,18 @@ export const FileWriteTool = buildTool({
     if (meta !== null) {
       const lastWriteTime = getFileModificationTime(fullFilePath)
       const lastRead = readFileState.get(fullFilePath)
-      if (!lastRead || lastWriteTime > lastRead.timestamp) {
+      if (!lastRead) {
+        // Mirror the validateInput read-before-edit guard (same errorCode).
+        // The old fallback here threw FILE_UNEXPECTEDLY_MODIFIED_ERROR, which
+        // claimed "modified since read" for a file that was never read.
+        throw Object.assign(new Error(FILE_NOT_READ_ERROR), { errorCode: 2 })
+      }
+      if (lastWriteTime > lastRead.timestamp) {
         // Timestamp indicates modification, but on Windows timestamps can change
         // without content changes (cloud sync, antivirus, etc.). For full reads,
         // compare content as a fallback to avoid false positives.
         const isFullRead =
-          lastRead &&
-          lastRead.offset === undefined &&
-          lastRead.limit === undefined
+          lastRead.offset === undefined && lastRead.limit === undefined
         // meta.content is CRLF-normalized — matches readFileState's normalized form.
         if (!isFullRead || meta.content !== lastRead.content) {
           throw new Error(FILE_UNEXPECTEDLY_MODIFIED_ERROR)
