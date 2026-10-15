@@ -42,6 +42,7 @@ import {
   HyperlinkPool,
   isEmptyCellAt,
   migrateScreenPools,
+  STYLE_POOL_RESET_SIZE,
   StylePool,
 } from './screen.js';
 import { applySearchHighlight } from './searchHighlight.js';
@@ -696,7 +697,14 @@ export default class Ink {
     // Periodically reset char/hyperlink pools to prevent unbounded growth
     // during long sessions. 5 minutes is infrequent enough that the O(cells)
     // migration cost is negligible. Reuses renderStart to avoid extra clock call.
-    if (renderStart - this.lastPoolResetTime > 5 * 60 * 1000) {
+    // StylePool joins the same cycle, with an early trigger when it has
+    // accumulated more than STYLE_POOL_RESET_SIZE entries (each new
+    // syntax-highlight × theme-overlay combination interns an entry that is
+    // rarely reused again).
+    if (
+      renderStart - this.lastPoolResetTime > 5 * 60 * 1000 ||
+      this.stylePool.size > STYLE_POOL_RESET_SIZE
+    ) {
       this.resetPools();
       this.lastPoolResetTime = renderStart;
     }
@@ -1702,12 +1710,21 @@ export default class Ink {
    * the new pools so diffing remains correct. The back frame doesn't need
    * migration — resetScreen zeros it before any reads.
    *
+   * StylePool is reset in place (this.stylePool is captured by LogUpdate,
+   * the renderer closure, and overlay call sites) and generational: the
+   * front frame's packed styleIds are remapped into the new epoch so the
+   * next frame's diff stays byte-accurate. Output's charCache detects the
+   * epoch bump in its own reset() and drops cached styleIds from the dead
+   * epoch. backFrame needs no style remap — resetScreen zeros it before
+   * any reads.
+   *
    * Call between conversation turns or periodically.
    */
   resetPools(): void {
     this.charPool = new CharPool();
     this.hyperlinkPool = new HyperlinkPool();
     migrateScreenPools(this.frontFrame.screen, this.charPool, this.hyperlinkPool);
+    this.stylePool.reset(this.frontFrame.screen);
     // Back frame's data is zeroed by resetScreen before reads, but its pool
     // references are used by the renderer to intern new characters. Point
     // them at the new pools so the next frame's IDs are comparable.

@@ -33,9 +33,12 @@ import { widestLine } from './widest-line.js'
  * is just property reads + setCellAt — no stringWidth, no style interning,
  * no hyperlink extraction per frame.
  *
- * styleId is safe to cache: StylePool is session-lived (never reset).
- * hyperlink is stored as a string (not interned ID) since hyperlinkPool
- * resets every 5 min; setCellAt interns it per-frame (cheap Map.get).
+ * styleId is cacheable across frames within a StylePool epoch. When the pool
+ * is rebuilt (StylePool.reset, generational eviction), Output detects the
+ * epoch bump in reset() and clears charCache — otherwise cached ids from the
+ * dead epoch would be painted into the fresh buffer. hyperlink is stored as
+ * a string (not interned ID) since hyperlinkPool resets every 5 min;
+ * setCellAt interns it per-frame (cheap Map.get).
  */
 type ClusteredChar = {
   value: string
@@ -173,6 +176,9 @@ export default class Output {
   width: number
   height: number
   private readonly stylePool: StylePool
+  // StylePool epoch charCache was built against. A mismatch in reset()
+  // means the pool was rebuilt and every cached styleId is stale.
+  private styleEpoch: number
   private screen: Screen
 
   private readonly operations: Operation[] = []
@@ -185,6 +191,7 @@ export default class Output {
     this.width = width
     this.height = height
     this.stylePool = stylePool
+    this.styleEpoch = stylePool.epoch
     this.screen = screen
 
     resetScreen(screen, width, height)
@@ -203,6 +210,14 @@ export default class Output {
     this.screen = screen
     this.operations.length = 0
     resetScreen(screen, width, height)
+    // StylePool was rebuilt since the last frame (resetPools epoch reset):
+    // cached ClusteredChar.styleId values reference the dead epoch's index
+    // space. Drop them; the next frame re-tokenizes and re-interns into the
+    // new epoch. One integer compare per frame in steady state.
+    if (this.stylePool.epoch !== this.styleEpoch) {
+      this.styleEpoch = this.stylePool.epoch
+      this.charCache.clear()
+    }
     if (this.charCache.size > 16384) this.charCache.clear()
   }
 

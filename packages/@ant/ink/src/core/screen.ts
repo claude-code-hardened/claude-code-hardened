@@ -109,21 +109,55 @@ const YELLOW_FG_CODE: AnsiCode = {
   endCode: '\x1b[39m',
 }
 
+/**
+ * Style entries accumulated above this count trigger an early generational
+ * rebuild (resetPools), instead of waiting for the 5-minute timer. Long
+ * sessions intern one entry per style combination (syntax-highlight color ×
+ * theme overlay × selection/search variants) and never reuse most of them
+ * again. 8192 keeps raw ids well under the packed-word capacity: word1
+ * stores styleId in 15 bits (styleId = rawId << 1 | visibleOnSpace), so
+ * rawId must stay below 16384.
+ */
+export const STYLE_POOL_RESET_SIZE = 8192
+
 export class StylePool {
   private ids = new Map<string, number>()
   private styles: AnsiCode[][] = []
   private transitionCache = new Map<number, string>()
-  readonly none: number
+  // Bumped on every reset(). Cross-frame caches that store raw styleIds
+  // (Output.charCache) compare against this to detect the generational
+  // rebuild and invalidate themselves.
+  private epochCounter = 0
+  private noneId = 0
+
+  /** 'no style' id. Must be 0 — unwritten/zeroed cells (fresh ArrayBuffers,
+   *  resetScreen/clearRegion fills) all carry styleId 0. Guaranteed by
+   *  making intern([]) the first intern of every epoch. */
+  get none(): number {
+    return this.noneId
+  }
+
+  /** Number of distinct interned styles — drives the size-based
+   *  resetPools() trigger (see STYLE_POOL_RESET_SIZE). */
+  get size(): number {
+    return this.ids.size
+  }
+
+  /** Monotonic generation counter — incremented by reset(). */
+  get epoch(): number {
+    return this.epochCounter
+  }
 
   constructor() {
-    this.none = this.intern([])
+    this.noneId = this.intern([])
   }
 
   private static readonly CACHE_MAX = 1000
 
   /**
    * Evict oldest entries from derivative caches when they exceed the limit.
-   * ids/styles are never evicted (id is an array index).
+   * ids/styles were historically never evicted ("id is an array index") —
+   * they now are, wholesale, at generation boundaries via reset().
    */
   private evictCacheIfNeeded(): void {
     if (this.transitionCache.size > StylePool.CACHE_MAX) {
@@ -153,6 +187,63 @@ export class StylePool {
       ) {
         const k = keys.next().value
         if (k !== undefined) this.currentMatchCache.delete(k)
+      }
+    }
+  }
+
+  /**
+   * Generational reset: wipe the pool and re-intern every style still alive
+   * in `screen`'s packed cell buffer into the new (empty) epoch, in place.
+   *
+   * WHY in-place rebuild + buffer remap rather than epoch-tagged ids in the
+   * buffer: word1 packs styleId into exactly 15 bits (rawId << 1 must fit),
+   * so there are no spare bits for an epoch tag — tagging writes would
+   * require touching every producer (Output.charCache, setCellStyleId
+   * overlays, blitRegion raw copies) and repacking on every write. The
+   * remap confines the correctness cost to one O(width * height) pass, run
+   * at most once per resetPools() cycle (5 min or > STYLE_POOL_RESET_SIZE).
+   * After the remap, prev-buffer ids and any fresh intern of the same style
+   * resolve through ONE ids map, so diffEach's raw-int comparison stays
+   * valid: visually identical cells on both sides of the boundary compare
+   * bit-equal — no false-positive diffs, no flashing.
+   *
+   * `screen` is the buffer that remains the diff base after the frame
+   * boundary (frontFrame after swap; backFrame is zeroed by resetScreen
+   * before any read each frame, matching the char/hyperlink pool reset).
+   * Requires StylePool.none to be 0 in every epoch (unwritten cells are
+   * stylistically empty) — intern([]) is the first intern below.
+   */
+  reset(screen: Screen): void {
+    // Capture the old epoch's index → styles table before the wipe so the
+    // remap below can decode ids still packed in the cell buffer.
+    const oldStyles = this.styles
+
+    this.ids = new Map()
+    this.styles = []
+    this.transitionCache = new Map()
+    this.inverseCache = new Map()
+    this.currentMatchCache = new Map()
+    this.selectionBgCache = new Map()
+    // selectionBgCode survives — active theme state, not a cached id.
+    this.epochCounter++
+    this.noneId = this.intern([])
+
+    const cells = screen.cells
+    const size = screen.width * screen.height
+    for (let ci = 0; ci < size << 1; ci += 2) {
+      const word1 = cells[ci + 1]!
+      // Zero word1 = empty/unwritten cell (styleId 0, no hyperlink, narrow):
+      // id 0 is valid in every epoch, skip the decode+repack.
+      if (word1 === 0) continue
+      const oldId = word1 >>> STYLE_SHIFT
+      // `?? []` mirrors get()'s fallback for out-of-range ids.
+      const newId = this.intern(oldStyles[oldId >>> 1] ?? [])
+      if (newId !== oldId) {
+        cells[ci + 1] = packWord1(
+          newId,
+          (word1 >>> HYPERLINK_SHIFT) & HYPERLINK_MASK,
+          word1 & WIDTH_MASK,
+        )
       }
     }
   }
