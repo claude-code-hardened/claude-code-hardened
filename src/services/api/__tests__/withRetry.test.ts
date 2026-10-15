@@ -292,7 +292,9 @@ describe('withRetry fallbackModel trigger plane', () => {
       serverError,
     )
     expect(result.error).toBeInstanceOf(CannotRetryError)
-    expect((result.error as CannotRetryError).originalError).toBe(serverError)
+    expect((result.error as CannotRetryErrorType).originalError).toBe(
+      serverError,
+    )
     expect(result.calls).toBe(1)
     expect(result.yields).toBe(0)
   })
@@ -304,7 +306,7 @@ describe('withRetry fallbackModel trigger plane', () => {
       notFound,
     )
     expect(result.error).toBeInstanceOf(CannotRetryError)
-    expect((result.error as CannotRetryError).originalError).toBe(notFound)
+    expect((result.error as CannotRetryErrorType).originalError).toBe(notFound)
     expect(result.calls).toBe(1)
   })
 
@@ -365,7 +367,9 @@ describe('withRetry 529 fallback regression', () => {
       overloaded,
     )
     expect(result.error).toBeInstanceOf(CannotRetryError)
-    expect((result.error as CannotRetryError).originalError).toBe(overloaded)
+    expect((result.error as CannotRetryErrorType).originalError).toBe(
+      overloaded,
+    )
     expect(result.calls).toBe(1)
     expect(
       logEvents.find(e => e.name === 'tengu_api_opus_fallback_triggered'),
