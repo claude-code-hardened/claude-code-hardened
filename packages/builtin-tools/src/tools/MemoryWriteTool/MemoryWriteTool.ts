@@ -79,6 +79,7 @@ export const MemoryWriteTool = buildTool({
   name: MEMORY_WRITE_TOOL_NAME,
   searchHint: 'save a document to a memory store',
   userFacingName: () => 'Memory Write',
+  maxResultSizeChars: MAX_MEMORY_DOC_BYTES,
   async description() {
     return 'Save a markdown document (with name/description/type frontmatter) to the project memory store. Same-path writes overwrite.'
   },

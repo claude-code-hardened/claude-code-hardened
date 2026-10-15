@@ -5248,7 +5248,7 @@ async function run(): Promise<CommanderCommand> {
       if (process.stdout.isTTY) {
         const { wrappedRender: render } = await import('@anthropic/ink');
         const { FleetView } = await import('./components/FleetView.js');
-        const { waitUntilExit } = render(
+        const { waitUntilExit } = await render(
           <FleetView
             rows={rows}
             onAttach={row => {

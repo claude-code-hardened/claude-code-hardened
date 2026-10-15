@@ -7,9 +7,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { AppContext } from '../components/AppContext.js'
+import AppContext from '../components/AppContext.js'
 import { ClockContext } from '../components/ClockContext.js'
-import { ClockSizeFallback } from './clock-fallback.js'
 
 /**
  * 官方 ink hooks 逆向还原（2.1.283 binary @152713000-152720000 区段提取，
@@ -33,6 +32,8 @@ import { ClockSizeFallback } from './clock-fallback.js'
 
 type VoidFn = () => void
 const noop: VoidFn = () => {}
+/** subscribe 契约缺省兜底（VoidFn 返回形，避免与真实 subscribe 联合）。 */
+const noopSub: (cb: () => void) => VoidFn = () => noop
 
 // ── 焦点层（Pue / GV 原文）──
 
@@ -64,7 +65,7 @@ export function useFocus(): FocusManagerApi {
     () => focusManager?.activeElement ?? null,
     [focusManager],
   )
-  const subscribe = focusManager?.subscribe ?? noop
+  const subscribe = focusManager?.subscribe ?? noopSub
   const snap = useSyncExternalStoreShim(subscribe, activeElement)
   return useMemo(
     () => ({
@@ -96,7 +97,7 @@ export function useHasFocus(ref: { current: unknown }): boolean {
       subscribe: (cb: () => void) => VoidFn
     }
   }
-  const subscribe = focusManager?.subscribe ?? noop
+  const subscribe = focusManager?.subscribe ?? noopSub
   const getSnapshot = useCallback(() => {
     const el = ref.current
     const active = focusManager?.activeElement
@@ -163,7 +164,10 @@ export function useMeasured<T>(getSnapshot: () => T): T {
   const { subscribeLayout } = useContext(AppContext as never) as {
     subscribeLayout?: (cb: () => void) => VoidFn
   }
-  const stored = useSyncExternalStoreShim(subscribeLayout ?? noop, getSnapshot)
+  const stored = useSyncExternalStoreShim(
+    subscribeLayout ?? noopSub,
+    getSnapshot,
+  )
   const [, force] = useReducer((n: number) => n + 1, 0)
   useEffect(() => {
     if (!Object.is(getSnapshot(), stored)) force()
@@ -308,12 +312,13 @@ export const ThemeOverridesProvider = ThemeOverridesContext.Provider
 
 /** 官方 useActiveThemeOverrides：session 级覆盖层。 */
 export function useActiveThemeOverrides(): ThemeOverride[] {
-  return useContext(ThemeOverridesContext)?.active ?? []
+  return useContext(ThemeOverridesContext)?.activeThemeOverrides ?? []
 }
 
-/** 官方 useCustomThemes：用户自定义主题表。 */
+/** 官方 useCustomThemes：用户自定义主题表（数组契约 → name 键映射）。 */
 export function useCustomThemes(): Record<string, ThemeOverride> {
-  return useContext(ThemeOverridesContext)?.custom ?? {}
+  const themes = useContext(ThemeOverridesContext)?.customThemes
+  return themes ? Object.fromEntries(themes.map(t => [t.name, t])) : {}
 }
 
 /** 官方 fE：useResolvedTheme()——无参返回 resolvedTheme（fE 原文）。 */
@@ -368,7 +373,7 @@ export function topWithin(
 ): number {
   let offset = 0
   let cur = node
-  while (cur !== undefined && cur !== root) {
+  while (cur !== undefined && cur !== null && cur !== root) {
     offset += cur.yogaNode?.getComputedTop() ?? 0
     cur = (cur as { parentNode?: unknown }).parentNode as typeof cur
   }
@@ -408,7 +413,8 @@ export function useIsScreenReaderEnabled(): boolean {
 }
 
 function useMemoSafe<T>(): React.Context<T | undefined> {
-  return require('react').createContext<T | undefined>(undefined)
+  const react = require('react') as {
+    createContext: <U>(defaultValue: U) => React.Context<U>
+  }
+  return react.createContext<T | undefined>(undefined)
 }
-
-void ClockSizeFallback

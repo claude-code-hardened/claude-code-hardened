@@ -1,6 +1,8 @@
 import type { DOMElement } from './dom.js'
 import { FocusEvent } from './events/focus-event.js'
 
+type VoidFn = () => void
+
 const MAX_FOCUS_STACK = 32
 
 /**

@@ -928,20 +928,17 @@ export async function clearToolResultProjection(
   // ''/falsy content skips persist and lands on the bare literal directly.
   const contentById = new Map<string, string>()
   for (const candidate of candidates) {
-    const content = candidate.block.content
+    const content = candidate.content
     if (content) {
-      const persisted = await doPersist(content, candidate.block.tool_use_id)
+      const persisted = await doPersist(content, candidate.tool_use_id)
       contentById.set(
-        candidate.block.tool_use_id,
+        candidate.tool_use_id,
         isPersistError(persisted)
           ? TIME_BASED_MC_CLEARED_MESSAGE
           : buildLargeToolResultMessage(persisted),
       )
     } else {
-      contentById.set(
-        candidate.block.tool_use_id,
-        TIME_BASED_MC_CLEARED_MESSAGE,
-      )
+      contentById.set(candidate.tool_use_id, TIME_BASED_MC_CLEARED_MESSAGE)
     }
   }
 

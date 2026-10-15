@@ -5,9 +5,10 @@ import { debugMock } from '../../../../tests/mocks/debug'
 import { logMock } from '../../../../tests/mocks/log'
 
 // microCompact.ts transitively imports debug.ts / log.ts, both of which drag
-// in bootstrap/state.ts side effects at module init. Use the shared mocks.
-mock.module('src/utils/debug.ts', debugMock())
-mock.module('src/utils/log.ts', logMock())
+// in bootstrap/state.ts side effects at module init. Use the shared mocks
+// (factory fns — mock.module calls them to build the module export shape).
+mock.module('src/utils/debug.ts', debugMock)
+mock.module('src/utils/log.ts', logMock)
 
 // Import under test AFTER mocks are registered.
 const {
@@ -105,7 +106,9 @@ const ARTIFACT_MARKER = '<artifact-content-authored-by-others/>'
 function toolResultContent(message: Message | undefined): unknown {
   if (!message) return undefined
   const block = (
-    message as { message: { content: Array<Record<string, unknown>> } }
+    message as unknown as {
+      message: { content: Array<Record<string, unknown>> }
+    }
   ).message.content[0]
   return block.content
 }

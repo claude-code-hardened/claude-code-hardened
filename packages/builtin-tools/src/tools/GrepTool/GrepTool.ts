@@ -170,7 +170,8 @@ export function splitContentLine(line: string): [string, string] | null {
   return null
 }
 
-function relativeContentLine(line: string): string {
+/** Exported for unit tests (lineParsing.test.ts) — pure path-normalization. */
+export function relativeContentLine(line: string): string {
   const split = splitContentLine(line)
   if (split) {
     const [filePath, rest] = split

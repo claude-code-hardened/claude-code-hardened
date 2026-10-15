@@ -7,7 +7,7 @@ import { LRUCache } from 'lru-cache'
 export const DEFAULT_MAX_TOTAL_BYTES = 8 * 1024 * 1024
 export const DEFAULT_MAX_ITEM_BYTES = 1 * 1024 * 1024
 
-export type ByteBudgetCacheOptions<K, V> = {
+export type ByteBudgetCacheOptions<K extends {}, V> = {
   /**
    * Total estimated bytes retained across all values. Insertion of an entry
    * that pushes the total over this evicts least-recently-used entries until
@@ -36,7 +36,7 @@ export type ByteBudgetCacheOptions<K, V> = {
  * the caller usually wants the value regardless of caching. get() refreshes
  * LRU recency.
  */
-export type ByteBudgetCache<K, V> = {
+export type ByteBudgetCache<K extends {}, V> = {
   get: (key: K) => V | undefined
   set: (key: K, value: V) => boolean
   has: (key: K) => boolean
@@ -52,7 +52,7 @@ export type ByteBudgetCache<K, V> = {
  * maxEntrySize accounting, which both evicts LRU entries on overflow and
  * skips insertion of oversized entries natively.
  */
-export function createByteBudgetCache<K, V>(
+export function createByteBudgetCache<K extends {}, V>(
   opts: ByteBudgetCacheOptions<K, V>,
 ): ByteBudgetCache<K, V> {
   const maxTotalBytes = opts.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES

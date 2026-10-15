@@ -33,17 +33,14 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
   describe('memory_write', () => {
     test('writes markdown + frontmatter to the shared local-memory root', async () => {
       const { MemoryWriteTool } = await import('../MemoryWriteTool.js')
-      const result = await MemoryWriteTool.call(
-        {
-          store: 'notes',
-          path: 'retry-logic.md',
-          content: 'Payments retry twice, then park.',
-          name: 'payments-retry-logic',
-          description: 'How payment retries are scheduled',
-          type: 'project',
-        },
-        { toolUseId: 't1' } as never,
-      )
+      const result = await MemoryWriteTool.call({
+        store: 'notes',
+        path: 'retry-logic.md',
+        content: 'Payments retry twice, then park.',
+        name: 'payments-retry-logic',
+        description: 'How payment retries are scheduled',
+        type: 'project',
+      })
       expect(result.data.error).toBeUndefined()
       expect(result.data.created).toBe(true)
       expect(result.data.store).toBe('notes')
@@ -62,13 +59,11 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
     test('same path overwrite wins and reports created:false', async () => {
       const { MemoryWriteTool } = await import('../MemoryWriteTool.js')
       const base = { store: 'notes', path: 'over.md' }
-      await MemoryWriteTool.call({ ...base, content: 'first version' }, {
-        toolUseId: 't2a',
-      } as never)
-      const second = await MemoryWriteTool.call(
-        { ...base, content: 'second version' },
-        { toolUseId: 't2b' } as never,
-      )
+      await MemoryWriteTool.call({ ...base, content: 'first version' })
+      const second = await MemoryWriteTool.call({
+        ...base,
+        content: 'second version',
+      })
       expect(second.data.created).toBe(false)
       const target = join(tmpDir, 'local-memory', 'notes', 'over.md')
       expect(readFileSync(target, 'utf8')).toContain('second version')
@@ -78,10 +73,11 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
     test('rejects traversal and absolute paths, writes nothing outside root', async () => {
       const { MemoryWriteTool } = await import('../MemoryWriteTool.js')
       for (const path of ['../evil.md', '/tmp/evil.md', 'sub/../../x.md']) {
-        const result = await MemoryWriteTool.call(
-          { store: 'notes', path, content: 'nope' },
-          { toolUseId: `t3-${path}` } as never,
-        )
+        const result = await MemoryWriteTool.call({
+          store: 'notes',
+          path,
+          content: 'nope',
+        })
         expect(result.data.error).toBeTruthy()
       }
       expect(existsSync(join(tmpDir, 'evil.md'))).toBe(false)
@@ -97,10 +93,11 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
       symlinkSync(outside, join(storeDir, 'sub'))
 
       const { MemoryWriteTool } = await import('../MemoryWriteTool.js')
-      const result = await MemoryWriteTool.call(
-        { store: 'notes', path: 'sub/escape.md', content: 'escape' },
-        { toolUseId: 't4' } as never,
-      )
+      const result = await MemoryWriteTool.call({
+        store: 'notes',
+        path: 'sub/escape.md',
+        content: 'escape',
+      })
       expect(result.data.error).toMatch(/outside/i)
       expect(existsSync(join(outside, 'escape.md'))).toBe(false)
     })
@@ -111,10 +108,10 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
       process.env['CLAUDE_PROJECT_DIR'] = projectDir
 
       const { MemoryWriteTool } = await import('../MemoryWriteTool.js')
-      const result = await MemoryWriteTool.call(
-        { path: 'doc.md', content: 'project scoped' },
-        { toolUseId: 't5' } as never,
-      )
+      const result = await MemoryWriteTool.call({
+        path: 'doc.md',
+        content: 'project scoped',
+      })
       expect(result.data.error).toBeUndefined()
       expect(result.data.store).toBe('project-my_project')
       expect(
@@ -152,9 +149,7 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
       writeFileSync(join(storeDir, 'notes.txt'), 'junk')
 
       const { MemoryListTool } = await import('../MemoryListTool.js')
-      const result = await MemoryListTool.call({ store: 'notes' }, {
-        toolUseId: 't6',
-      } as never)
+      const result = await MemoryListTool.call({ store: 'notes' })
       expect(result.data.error).toBeUndefined()
       const docs = result.data.docs ?? []
       expect(docs.map(d => d.path)).toEqual(['a.md', 'sub/b.md'])
@@ -174,9 +169,7 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
 
     test('list returns empty docs for a missing store', async () => {
       const { MemoryListTool } = await import('../MemoryListTool.js')
-      const result = await MemoryListTool.call({ store: 'ghost' }, {
-        toolUseId: 't7',
-      } as never)
+      const result = await MemoryListTool.call({ store: 'ghost' })
       expect(result.data.docs).toEqual([])
       expect(result.data.error).toBeUndefined()
     })
@@ -186,20 +179,20 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
       const { MemoryListTool } = await import('../MemoryListTool.js')
       const { MemoryReadTool } = await import('../MemoryReadTool.js')
 
-      await MemoryWriteTool.call(
-        { store: 'notes', path: 'r.md', content: 'read me', type: 'user' },
-        { toolUseId: 't8a' } as never,
-      )
-      const listed = await MemoryListTool.call({ store: 'notes' }, {
-        toolUseId: 't8b',
-      } as never)
+      await MemoryWriteTool.call({
+        store: 'notes',
+        path: 'r.md',
+        content: 'read me',
+        type: 'user',
+      })
+      const listed = await MemoryListTool.call({ store: 'notes' })
       const listedPath = (listed.data.docs ?? [])[0]?.path
       expect(listedPath).toBe('r.md')
 
-      const read = await MemoryReadTool.call(
-        { store: 'notes', path: listedPath ?? 'r.md' },
-        { toolUseId: 't8c' } as never,
-      )
+      const read = await MemoryReadTool.call({
+        store: 'notes',
+        path: listedPath ?? 'r.md',
+      })
       expect(read.data.error).toBeUndefined()
       expect(read.data.content).toContain('read me')
       expect(read.data.content).toContain('type: user')
@@ -210,10 +203,10 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
       const storeDir = join(tmpDir, 'local-memory', 'notes')
       mkdirSync(storeDir, { recursive: true })
       const { MemoryReadTool } = await import('../MemoryReadTool.js')
-      const result = await MemoryReadTool.call(
-        { store: 'notes', path: 'missing.md' },
-        { toolUseId: 't9' } as never,
-      )
+      const result = await MemoryReadTool.call({
+        store: 'notes',
+        path: 'missing.md',
+      })
       expect(result.data.error).toMatch(/not found/i)
     })
   })
@@ -221,15 +214,12 @@ describe('MemoryTools (memory_write / memory_list / memory_read)', () => {
   describe('same-root interop with LocalMemoryRecall', () => {
     test('docs written by memory_write are fetchable via LocalMemoryRecall', async () => {
       const { MemoryWriteTool } = await import('../MemoryWriteTool.js')
-      await MemoryWriteTool.call(
-        {
-          store: 'notes',
-          path: 'hello.md',
-          content: 'recallable body text',
-          type: 'user',
-        },
-        { toolUseId: 't10a' } as never,
-      )
+      await MemoryWriteTool.call({
+        store: 'notes',
+        path: 'hello.md',
+        content: 'recallable body text',
+        type: 'user',
+      })
 
       const { LocalMemoryRecallTool } = await import(
         '../../LocalMemoryRecallTool/LocalMemoryRecallTool.js'

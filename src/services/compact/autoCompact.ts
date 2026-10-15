@@ -252,7 +252,11 @@ function buildPrefixOverflowCheck(
       usage.input_tokens +
       usage.cache_creation_input_tokens +
       usage.cache_read_input_tokens,
-    messagesEstimate: roughTokenCountEstimationForMessages(messages),
+    // Message's loose attachment record doesn't narrow to the token-estimator's
+    // Attachment union — same cast as src/utils/tokens.ts:280.
+    messagesEstimate: roughTokenCountEstimationForMessages(
+      messages as Parameters<typeof roughTokenCountEstimationForMessages>[0],
+    ),
     thresholdTokens: getAutoCompactThreshold(model),
     snipTokensFreed: snipTokensFreed ?? 0,
     documentBlockCount: media.documentBlockCount,

@@ -234,6 +234,14 @@ mock.module('./built-in/generalPurposeAgent.js', () => ({
 
 const { AgentTool } = await import('../AgentTool.js')
 
+// call() requires canUseTool + parent assistant message; both guarded paths
+// under test throw at registration before either stub is consumed.
+const stubCanUseTool = async () => ({ behavior: 'allow' }) as any
+const stubParentMessage = {
+  type: 'assistant',
+  message: { id: 'msg_parent', content: [] },
+} as any
+
 function makeContext(): any {
   return {
     getAppState: () => ({
@@ -258,6 +266,8 @@ describe('AgentTool spawn-window worktree guard', () => {
       await AgentTool.call(
         { prompt: 'do work', run_in_background: true } as any,
         makeContext(),
+        stubCanUseTool,
+        stubParentMessage,
       )
       throw new Error('expected AgentTool.call to reject')
     } catch (error) {
@@ -271,7 +281,12 @@ describe('AgentTool spawn-window worktree guard', () => {
     failMode.async = false
     failMode.sync = true
     try {
-      await AgentTool.call({ prompt: 'do work' } as any, makeContext())
+      await AgentTool.call(
+        { prompt: 'do work' } as any,
+        makeContext(),
+        stubCanUseTool,
+        stubParentMessage,
+      )
       throw new Error('expected AgentTool.call to reject')
     } catch (error) {
       expect((error as Error).message).toBe('register-foreground-failed')

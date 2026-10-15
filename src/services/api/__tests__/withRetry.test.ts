@@ -17,6 +17,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { APIError } from '@anthropic-ai/sdk'
 import type Anthropic from '@anthropic-ai/sdk'
+// Instance types: the destructured `await import` bindings below only carry
+// the constructor shape (value), not the class's instance type as a type name.
+import type { CannotRetryError, FallbackTriggeredError } from '../withRetry.js'
 import type { SystemAPIErrorMessage } from 'src/types/message.js'
 import { debugMock } from '../../../../tests/mocks/debug.js'
 import { logMock } from '../../../../tests/mocks/log.js'

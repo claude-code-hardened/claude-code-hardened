@@ -1,5 +1,6 @@
 import type { AnsiCode } from '@alcalzone/ansi-tokenize'
 import { describe, expect, test } from 'bun:test'
+import type { Frame } from '../frame.js'
 import { LogUpdate } from '../log-update.js'
 import {
   cellAt,
@@ -7,7 +8,6 @@ import {
   CharPool,
   createScreen,
   diff,
-  type Frame,
   HyperlinkPool,
   STYLE_POOL_RESET_SIZE,
   type Screen,
@@ -272,6 +272,7 @@ describe('cross-epoch double-buffer diff', () => {
       char: 'e',
       styleId: pool.intern(BLUE_BOLD),
       width: CellWidth.Narrow,
+      hyperlink: undefined,
     })
     const changes = diff(prevScreen, nextScreen)
     expect(changes.length).toBeGreaterThan(0)

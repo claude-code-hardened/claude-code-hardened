@@ -214,9 +214,14 @@ const {
   BoundedAgentMessageBuffer,
   appendCappedAgentMessage,
   finalizeAgentTool,
-  teardownRunningAgentsOnQuit,
   MAX_AGENT_MESSAGES_IN_MEMORY,
 } = await import('../agentToolUtils')
+
+// teardownRunningAgentsOnQuit lives in useCancelRequest (quit-path owner),
+// not agentToolUtils — its UI/context dep chain is mocked above.
+const { teardownRunningAgentsOnQuit } = await import(
+  'src/hooks/useCancelRequest.js'
+)
 
 function makeAssistantMessage(content: any[]): any {
   return { type: 'assistant', message: { content } }
@@ -328,8 +333,8 @@ describe('BoundedAgentMessageBuffer', () => {
     expect(MAX_AGENT_MESSAGES_IN_MEMORY).toBe(200)
     expect(tail.length).toBe(MAX_AGENT_MESSAGES_IN_MEMORY)
     // Oldest 50 evicted — first retained is index 50, newest kept verbatim.
-    expect(tail[0]!.uuid).toBe('u_50')
-    expect(tail[tail.length - 1]!.uuid).toBe('u_249')
+    expect(String(tail[0]!.uuid)).toBe('u_50')
+    expect(String(tail[tail.length - 1]!.uuid)).toBe('u_249')
   })
 
   test('tracks whole-stream counts across evicted head entries', () => {
@@ -361,8 +366,8 @@ describe('appendCappedAgentMessage', () => {
     }
     const next = appendCappedAgentMessage(base, makeSeqMessage(999, false))
     expect(next.length).toBe(MAX_AGENT_MESSAGES_IN_MEMORY)
-    expect(next[0]!.uuid).toBe('u_1')
-    expect(next[next.length - 1]!.uuid).toBe('u_999')
+    expect(String(next[0]!.uuid)).toBe('u_1')
+    expect(String(next[next.length - 1]!.uuid)).toBe('u_999')
   })
 
   test('appends under the cap and tolerates missing base', () => {

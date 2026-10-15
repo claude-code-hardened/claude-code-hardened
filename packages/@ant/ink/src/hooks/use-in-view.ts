@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { AppContext } from '../components/AppContext.js'
+import AppContext from '../components/AppContext.js'
 
 /**
  * 官方 D7：useInView()——元素是否落在终端可视窗口内。

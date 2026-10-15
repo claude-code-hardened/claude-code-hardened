@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef } from 'react'
-import { AppContext } from '../components/AppContext.js'
+import AppContext from '../components/AppContext.js'
 import { ClockContext } from '../components/ClockContext.js'
 
 /**
@@ -222,17 +222,20 @@ function useReducerShim(): [number, VoidFn] {
 }
 
 function useSyncExternalStoreShim2<T>(
-  subscribe: VoidFn,
+  subscribe: VoidFn | ((cb: () => void) => VoidFn),
   getSnapshot: () => T,
 ): T {
   const React = require('react') as {
     useSyncExternalStore?: (s: (cb: () => void) => VoidFn, g: () => T) => T
     useState: (i: T) => [T, (v: T) => void]
-    useEffect: (f: () => VoidFn, d?: unknown[]) => void
+    useEffect: (f: () => unknown, d?: unknown[]) => void
     useReducer: (r: (n: number) => number, i: number) => [number, VoidFn]
   }
   if (React.useSyncExternalStore) {
-    return React.useSyncExternalStore(subscribe, getSnapshot)
+    return React.useSyncExternalStore(
+      subscribe as (cb: () => void) => VoidFn,
+      getSnapshot,
+    )
   }
   const [, force] = React.useReducer((n: number) => n + 1, 0)
   React.useEffect(() => subscribe(), [subscribe])

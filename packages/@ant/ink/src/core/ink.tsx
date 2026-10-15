@@ -1119,6 +1119,15 @@ export default class Ink {
   }
 
   /**
+   * Read the currently selected text (no clipboard side-effect).
+   * Backs the useSelection() hook's getSelectedText accessor.
+   */
+  getSelectedText(): string {
+    if (!hasSelection(this.selection)) return '';
+    return getSelectedText(this.selection, this.frontFrame.screen);
+  }
+
+  /**
    * Copy the current selection to the clipboard without clearing the
    * highlight. Matches iTerm2's copy-on-select behavior where the selected
    * region stays visible after the automatic copy.

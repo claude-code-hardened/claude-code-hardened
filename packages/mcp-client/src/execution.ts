@@ -71,6 +71,9 @@ export async function callMcpTool(
   const effectiveTimeout = timeoutMs ?? getMcpToolTimeoutMs()
 
   let progressInterval: ReturnType<typeof setInterval> | undefined
+  // Declared out here so the finally block can clear it; created inside the
+  // try (undefined until then → finally's optional call).
+  let timeoutPromise: ReturnType<typeof createTimeoutPromise> | undefined
 
   try {
     deps.logger.debug(`[${serverName}] Calling MCP tool: ${tool}`)
@@ -80,11 +83,8 @@ export async function callMcpTool(
       deps.logger.debug(`[${serverName}] Tool '${tool}' still running`)
     }, 30_000)
 
-    const timeoutPromise = createTimeoutPromise(
-      serverName,
-      tool,
-      effectiveTimeout,
-    )
+    const timeout = createTimeoutPromise(serverName, tool, effectiveTimeout)
+    timeoutPromise = timeout
 
     const result = await Promise.race([
       mcpClient.callTool(
@@ -100,7 +100,7 @@ export async function callMcpTool(
           onprogress: onProgress,
         },
       ),
-      timeoutPromise,
+      timeout,
     ])
     // Handle isError in result
     if ('isError' in result && result.isError) {
@@ -152,7 +152,7 @@ export async function callMcpTool(
 
     throw e
   } finally {
-    timeoutPromise.clear()
+    timeoutPromise?.clear()
     if (progressInterval !== undefined) {
       clearInterval(progressInterval)
     }

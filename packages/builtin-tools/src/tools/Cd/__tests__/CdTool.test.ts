@@ -17,7 +17,11 @@ import { logMock } from '../../../../../../tests/mocks/log'
 // Cut them at the seams so the tests exercise CdTool's own logic.
 const setCwdMock = mock((_path: string) => {})
 const invalidateSessionEnvCacheMock = mock(() => {})
-const onCwdChangedForHooksMock = mock(async () => {})
+// Two-arg signature matches the real onCwdChangedForHooks(oldCwd, newCwd) —
+// needed so mock.calls tuples carry the newCwd assertion below.
+const onCwdChangedForHooksMock = mock(
+  async (_oldCwd: string, _newCwd: string) => {},
+)
 
 mock.module('src/utils/log.ts', logMock)
 mock.module('src/utils/debug.ts', debugMock)
@@ -135,10 +139,10 @@ describe('CdTool', () => {
     })
 
     test('expands ~/name for nonexistent targets in validateInput', async () => {
-      const validation = await CdTool.validateInput?.(
-        { path: '~/cd-tool-missing-dir-xyz' },
-        NO_RULES_CTX,
-      )
+      // CdTool.validateInput takes only the input (no context param).
+      const validation = await CdTool.validateInput?.({
+        path: '~/cd-tool-missing-dir-xyz',
+      })
 
       expect(validation).toMatchObject({ result: false })
       if (!validation.result) {
