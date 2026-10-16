@@ -31,6 +31,15 @@ pub struct GrepOptions {
 	pub context_before: Option<u32>,
 	pub context_after: Option<u32>,
 	pub max_columns: Option<u32>,
+	/// ugrep -o 对位：content 模式只输出匹配段而非整行。与 context 互斥——
+	/// 同传时仅 -o 生效（调用方设 0）。
+	pub only_matching: Option<bool>,
+	/// ugrep -L 对位：match_count==0 的文件进名单。与 files_with_matches
+	/// 模式互斥（同传报 "mutually exclusive" 错）。
+	pub files_without_match: Option<bool>,
+	/// ugrep -I 对位：默认 false（NUL 即 quit 的现状语义）；true 时探针
+	/// 前 8KiB 见 NUL（无 BOM）→ 整文件跳过继续下一文件。
+	pub binary_skip: Option<bool>,
 	pub mode: Option<GrepOutputMode>,
 	/// 默认 20_000ms；searchCancel(cancel_key) 或到时中止
 	pub timeout_ms: Option<u32>,
@@ -88,6 +97,9 @@ pub struct GlobOptions {
 	pub bfs_icase: Option<bool>,
 	/// bfs -mindepth（root=0 起算；depth < min 不出、照常下潜）。
 	pub min_depth: Option<u32>,
+	/// bfs -maxdepth 对位（root=0 起算；depth==max 的目录只输出不下潜）。
+	/// 与 include 面推导的深度界取交（min），缺省 = 不设界。
+	pub max_depth: Option<u32>,
 	/// 符号链策略："P"（默认，从不跟随，symlink 报 l）|"L"（全跟随+环防）|
 	/// "H"（仅根路径本身跟随）。非法值按 "P"。
 	pub follow: Option<String>,

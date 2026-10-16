@@ -79,10 +79,10 @@ impl SearchToken {
 	}
 
 	pub fn deactivate(&self) {
-		if let Some(key) = &self.key {
-			if let Some(map) = registry().as_mut() {
-				map.remove(key);
-			}
+		if let Some(key) = &self.key
+			&& let Some(map) = registry().as_mut()
+		{
+			map.remove(key);
 		}
 		ACTIVE.store(0, Ordering::SeqCst);
 	}

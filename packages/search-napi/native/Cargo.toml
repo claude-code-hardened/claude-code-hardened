@@ -18,6 +18,16 @@ grep-searcher = "0.1"
 globset = "0.4"
 ignore = "0.4"
 
+# rg --encoding auto 的 BOM 嗅探面（Encoding::for_bom；grep-searcher 已在
+# 传递树内——此显式声明仅为我们的 BOM 判定直取 API）。
+encoding_rs = "0.8"
+
+# PCRE2 降级引擎（omp build_matcher 次→主降级对位：Rust regex 无
+# lookaround/backreference 语法面）。regex 直取 = 字面量 fallback 的
+# regex::escape（grep-regex 传递树内已有，仅补直接声明）。
+grep-pcre2 = "0.1"
+regex = "1"
+
 # 已有 crate 验证过可交叉编译的辅助
 memchr = "2"
 rustc-hash = "2"

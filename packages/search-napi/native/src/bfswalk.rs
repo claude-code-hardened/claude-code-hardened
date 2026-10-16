@@ -266,10 +266,10 @@ fn run_tiers(
 				// bftw.c:1746 环防的全局化：-L 下目标目录身份已访问
 				// ⇒ 不再下潜（环/alias 同一由集吸收）。行进迭代中克隆键，
 				// 不动 row 的所有权。
-				if let Some(key) = row.dir_key.clone() {
-					if !visited.insert(key) {
-						continue;
-					}
+				if let Some(key) = row.dir_key.clone()
+					&& !visited.insert(key)
+				{
+					continue;
 				}
 				// 子目录本地 .gitignore 节点只在 git 链已激活（根 .git 探测
 				// 命中）时叠加——非 git 目录整树不走忽略面（require_git）。

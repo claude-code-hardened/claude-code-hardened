@@ -78,6 +78,7 @@
 			bfs_name: None,
 			bfs_icase: None,
 			min_depth: None,
+			max_depth: None,
 			follow: None,
 			order: None,
 		})
@@ -99,6 +100,9 @@
 			context_before: None,
 			context_after: None,
 			max_columns: None,
+			only_matching: None,
+			files_without_match: None,
+			binary_skip: None,
 			mode: Some(GrepOutputMode::Count),
 			timeout_ms: Some(60_000),
 			cancel_key: None,
@@ -217,6 +221,7 @@
 			bfs_name: None,
 			bfs_icase: None,
 			min_depth: None,
+			max_depth: None,
 			follow: None,
 			order: None,
 		});
@@ -265,6 +270,7 @@
 			bfs_name: None,
 			bfs_icase: None,
 			min_depth: None,
+			max_depth: None,
 			follow: Some("P".into()),
 			order: None,
 		})
@@ -287,6 +293,7 @@
 			bfs_name: None,
 			bfs_icase: None,
 			min_depth: None,
+			max_depth: None,
 			follow: Some("L".into()),
 			order: None,
 		})

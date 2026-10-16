@@ -99,6 +99,7 @@ fn base_opts() -> GlobOptions {
 		bfs_name: None,
 		bfs_icase: None,
 		min_depth: None,
+		max_depth: None,
 		follow: None,
 		order: None,
 	}

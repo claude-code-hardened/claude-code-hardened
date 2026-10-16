@@ -4,13 +4,18 @@
 //! 覆盖：context 行采集、offset+max_count 全局聚合、count/-l 语义、
 //! NUL 二进制 quit、multiline 块内逐行、gitignore 嵌套+取反+require_git、
 //! 序贯/窗口/并行三策略一致性、超限全量搜索（前缀窗废除）、超时取消、
-//! max_columns 字节阈值（命中/上下文独立占位）、fifo。
+//! max_columns 字节阈值（命中/上下文独立占位）、fifo、-o 逐段、-L 反选
+//! 名单（count 面互斥）、-I 二进制跳过（BOM 豁免）、UTF-16LE BOM 转码、
+//! matcher 降级链（PCRE2 lookaround / 括号修复 / 字面量 fallback / 大括号
+//! 净化）。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use grep_matcher::Matcher;
 
 use super::{ExecStrategy, grep_search_impl};
 use crate::types::{GrepMatch, GrepOptions, GrepOutputMode};
@@ -81,6 +86,10 @@ fn base_opts(pattern: &str, path: &Path) -> GrepOptions {
 		context_before: None,
 		context_after: None,
 		max_columns: None,
+		// v2 ugrep 对位三字段（-o / -L / -I；缺省 = 旧行为）。
+		only_matching: None,
+		files_without_match: None,
+		binary_skip: None,
 		mode: None,
 		timeout_ms: None,
 		cancel_key: Some(test_cancel_key()),
@@ -539,6 +548,257 @@ fn fifo_entries_are_skipped_without_blocking() {
 		.expect("fifo grep must not block");
 	assert_rows_equal(&result.matches, &[("ok.txt".to_owned(), 1, "needle")]);
 	assert_eq!(result.files_searched, 1, "fifo 非 regular file，不进候选");
+}
+
+// ---------------------------------------------------------------------------
+// 13. -o（only_matching）：content 只出匹配套段、count 按段计数、context 互斥
+// ---------------------------------------------------------------------------
+
+#[test]
+fn only_matching_prints_segments_per_line() {
+	let root = TempDirGuard::new();
+	write_file(root.path().join("seg.txt"), "foo bar foo\nplain foo\nno\n");
+	let opt = opts_with(base_opts("foo", root.path()), |o| {
+		o.only_matching = Some(true);
+		o.context_before = Some(2);
+		o.context_after = Some(2);
+	});
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("only_matching grep");
+	// rg -o 实证：每匹配套段一行输出，context 与 -o 互斥（context 强制置 0，
+	// before/after 不再携带）。
+	assert_rows_equal_msg(
+		&result.matches,
+		&[
+			("seg.txt".to_owned(), 1, "foo"),
+			("seg.txt".to_owned(), 1, "foo"),
+			("seg.txt".to_owned(), 2, "foo"),
+		],
+		"-o 逐段出行（同行两段都在；context 同传被置 0）",
+	);
+	assert!(result.matches[0].before.is_empty(), "-o + context 互斥 → before 不产出");
+	assert!(result.matches[0].after.is_empty(), "-o + context 互斥 → after 不产出");
+	assert_eq!(result.total_matches, 3, "total = 匹配套段数");
+}
+
+#[test]
+fn only_matching_counts_segments_not_lines() {
+	let root = TempDirGuard::new();
+	write_file(root.path().join("seg.txt"), "aa bb aa cc aa\n");
+	let opt = opts_with(base_opts("aa", root.path()), |o| {
+		o.only_matching = Some(true);
+		o.mode = Some(GrepOutputMode::Count);
+	});
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("only_matching count");
+	assert_eq!(result.matches.len(), 1);
+	assert_eq!(result.matches[0].line, "3", "rg `-c -o a` 计匹配段数而非行数");
+	assert_eq!(result.total_matches, 3);
+}
+
+// ---------------------------------------------------------------------------
+// 14. -L（files_without_match）：count 模式 0 命中文件进名单 + 与 -l 互斥
+// ---------------------------------------------------------------------------
+
+#[test]
+fn files_without_match_lists_zero_hit_files_in_count_mode() {
+	let root = TempDirGuard::new();
+	write_file(root.path().join("hit.txt"), "needle\n");
+	write_file(root.path().join("miss_a.txt"), "nothing\n");
+	write_file(root.path().join("miss_b.txt"), "nothing\n");
+	let opt = opts_with(base_opts("needle", root.path()), |o| {
+		o.files_without_match = Some(true);
+		o.mode = Some(GrepOutputMode::Count);
+	});
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("fswm grep");
+	// ugrep -L -c：名单只收 0 命中文件，计数行输出 0（路径序）。
+	assert_eq!(result.matches.len(), 2);
+	assert!(result.matches[0].path.ends_with("miss_a.txt"));
+	assert_eq!(result.matches[0].line, "0");
+	assert!(result.matches[1].path.ends_with("miss_b.txt"));
+	assert_eq!(result.matches[1].line, "0");
+	assert_eq!(result.files_with_matches, 2, "名单计 2 个 0 命中文件");
+	assert_eq!(result.files_searched, 3);
+
+	// offset=1 按名单文件序跳过（每文件 1 占位，-l 同基面）。
+	let opt = opts_with(base_opts("needle", root.path()), |o| {
+		o.files_without_match = Some(true);
+		o.mode = Some(GrepOutputMode::Count);
+		o.offset = Some(1);
+	});
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("fswm offset grep");
+	assert_eq!(result.matches.len(), 1);
+	assert!(result.matches[0].path.ends_with("miss_b.txt"));
+
+	// 单文件路径同面：0 命中出 count 0 名单行、有命中不在名单。
+	let single = root.path().join("hit.txt");
+	let opt = opts_with(base_opts("needle", &single), |o| {
+		o.files_without_match = Some(true);
+		o.mode = Some(GrepOutputMode::Count);
+	});
+	let result = grep_search_impl(opt, None).expect("fswm single hit grep");
+	assert!(result.matches.is_empty(), "有命中文件不在反选名单");
+	let miss = root.path().join("miss_a.txt");
+	let opt = opts_with(base_opts("needle", &miss), |o| {
+		o.files_without_match = Some(true);
+		o.mode = Some(GrepOutputMode::Count);
+	});
+	let result = grep_search_impl(opt, None).expect("fswm single miss grep");
+	assert_eq!(result.matches.len(), 1);
+	assert_eq!(result.matches[0].line, "0");
+}
+
+#[test]
+fn files_without_match_and_files_with_matches_are_mutually_exclusive() {
+	let root = TempDirGuard::new();
+	write_file(root.path().join("a.txt"), "needle\n");
+	let opt = opts_with(base_opts("needle", root.path()), |o| {
+		o.files_without_match = Some(true);
+		o.mode = Some(GrepOutputMode::FilesWithMatches);
+	});
+	let err = match grep_search_impl(opt, Some(ExecStrategy::Sequential)) {
+		Err(err) => err,
+		Ok(_) => panic!("-L 与 -l 同传必须报 mutually exclusive"),
+	};
+	assert!(err.contains("mutually exclusive"), "错误文案契约: {err}");
+}
+
+// ---------------------------------------------------------------------------
+// 15. ASCII 文本面的 UTF-16LE BOM（rg --encoding auto 回归：快路径豁免）
+// ---------------------------------------------------------------------------
+
+/// UTF-16LE+BOM 编码 helper（BOM 2 字节 + UTF-16LE body）。
+fn utf16le_bom(content: &str) -> Vec<u8> {
+	let mut bytes = b"\xff\xfe".to_vec();
+	for unit in content.encode_utf16() {
+		bytes.extend_from_slice(&unit.to_le_bytes());
+	}
+	bytes
+}
+
+#[test]
+fn utf16le_bom_files_match_in_default_and_fsw_modes() {
+	let root = TempDirGuard::new();
+	fs::write(root.path().join("u16.txt"), utf16le_bom("no\nneedle line\nok\n"))
+		.expect("write utf16 fixture");
+	fs::write(root.path().join("text.txt"), "no needle\n").expect("write text fixture");
+
+	// content 模式：searcher BOM 嗅探自动转码剥 BOM（rg --encoding auto 对位）。
+	let result = grep_search_impl(base_opts("needle", root.path()), Some(ExecStrategy::Sequential))
+		.expect("utf16 content grep");
+	assert_rows_equal_msg(
+		&result.matches,
+		&[
+			("text.txt".to_owned(), 1, "no needle"),
+			("u16.txt".to_owned(), 2, "needle line"),
+		],
+		"UTF-16LE BOM 转码后按解码文本命中、行号连续",
+	);
+
+	// filesWithMatches 模式：-l 快路径的裸字节 is_match 不转码会漏报——
+	// BOM 文件豁免快路径（slice_outcome/grep_single_file 两处同门）。
+	let opt = opts_with(base_opts("needle", root.path()), |o| {
+		o.mode = Some(GrepOutputMode::FilesWithMatches)
+	});
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("utf16 fsw grep");
+	assert_rows_equal(
+		&result.matches,
+		&[
+			("text.txt".to_owned(), 0, ""),
+			("u16.txt".to_owned(), 0, ""),
+		],
+	);
+	assert_eq!(result.files_with_matches, 2, "-l BOM 文件不得漏报");
+}
+
+// ---------------------------------------------------------------------------
+// 16. -I（binary_skip）：NUL 预读跳过 + BOM 文件豁免
+// ---------------------------------------------------------------------------
+
+#[test]
+fn binary_skip_skips_nul_files_but_spares_bom_text() {
+	let root = TempDirGuard::new();
+	write_file(root.path().join("bin.dat"), "needle\0needle\n");
+	write_file(root.path().join("text.txt"), "ok\nneedle\n");
+	// UTF-16LE BOM 文件：ASCII 文本每 2 字节一个 NUL（编码工件非二进制），
+	// 豁免后交回 searcher 转码搜索。
+	fs::write(root.path().join("utf16.txt"), utf16le_bom("needle line\n"))
+		.expect("write utf16 fixture");
+
+	let opt = opts_with(base_opts("needle", root.path()), |o| o.binary_skip = Some(true));
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("binary_skip grep");
+	assert_eq!(result.files_searched, 2, "NUL 文件跳过不计 searched（BOM 文件仍搜）");
+	assert_rows_equal_msg(
+		&result.matches,
+		&[
+			("text.txt".to_owned(), 2, "needle"),
+			("utf16.txt".to_owned(), 1, "needle line"),
+		],
+		"binary_skip：真二进制跳过、UTF-16 BOM 豁免命中",
+	);
+}
+
+// ---------------------------------------------------------------------------
+// 16. PCRE2 降级链（lookaround 类语法 → 第二引擎；字面量 fallback 兜底）
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pcre2_lookaround_pattern_falls_back_and_matches() {
+	let root = TempDirGuard::new();
+	// Rust regex 拒收 look-behind（"look-around ... is not supported"）；
+	// PCRE2 降级接住。'bbb' 行（b 前无 a）不得命中——命中即证真降级而非
+	// 字面量 fallback（字面 "(?<=a)b" 在文中不存在，会是 0 命中）。
+	write_file(root.path().join("lb.txt"), "ab x\nbbb\nab c\n");
+	let result = grep_search_impl(base_opts("(?<=a)b", root.path()), Some(ExecStrategy::Sequential))
+		.expect("look-behind pattern must go through the PCRE2 fallback leg");
+	assert_eq!(result.total_matches, 2);
+	assert_rows_equal(
+		&result.matches,
+		&[
+			("lb.txt".to_owned(), 1, "ab x"),
+			("lb.txt".to_owned(), 3, "ab c"),
+		],
+	);
+}
+
+#[test]
+fn brace_sanitize_matches_omp_reference_shapes() {
+	// omp sanitize_braces 单测原形（:2877-2905）。
+	let sanitize = |p: &str| super::sanitize_braces(p).into_owned();
+	assert_eq!(sanitize(r"\p{Greek}"), r"\p{Greek}", "unicode 属性转义大括号不动");
+	assert_eq!(sanitize(r"\x{41}"), r"\x{41}", "hex 大括号转义不动");
+	assert_eq!(sanitize(r"\p{Greek"), r"\p{Greek", "未闭合转义大括号透传");
+	assert_eq!(sanitize("${platform}"), r"$\{platform\}", "非量词大括号转字面义");
+	assert_eq!(sanitize("a{2,4}"), "a{2,4}", "合法量词原样保留");
+	let paren = |p: &str| super::escape_unescaped_parentheses(p).into_owned();
+	assert_eq!(paren(r"foo\(bar\)"), r"foo\(bar\)", "已转义括号不动");
+	assert_eq!(paren("fetchAnthropicProvider("), r"fetchAnthropicProvider\(");
+	assert_eq!(paren("fetchAnthropicProvider()"), r"fetchAnthropicProvider\(\)");
+}
+
+#[test]
+fn invalid_regex_falls_back_to_literal() {
+	// omp invalid_regex_falls_back_to_literal 原形：双引擎整体拒收的
+	// pattern 降解为字面搜索（括号修复面先行——unopened group 的 `)`），
+	// 而非报错废掉整搜。
+	for (pattern, hay, miss) in [
+		("foo[bar", &b"x foo[bar y"[..], &b"foobar"[..]),
+		("+++", &b"a+++b"[..], &b"ab"[..]),
+		("fail)", &b"(1 fail)"[..], &b"failure"[..]),
+	] {
+		let matcher = super::build_fallback_matcher(pattern, false, false)
+			.unwrap_or_else(|e| panic!("`{pattern}` should fall back to literal, got: {e}"));
+		assert!(matcher.is_match(hay).unwrap(), "`{pattern}` should match {hay:?}");
+		assert!(!matcher.is_match(miss).unwrap(), "`{pattern}` should not match {miss:?}");
+	}
+	// 括号修复面单测：unclosed group 的裸 `(` 转义后 regex 可编译（omp
+	// :2937-2942 原形）。
+	let matcher = super::build_fallback_matcher("foo.*(bar", false, false)
+		.expect("retry with escaped paren");
+	assert!(matcher.is_match(b"fooXYZ(bar").unwrap());
+	assert!(!matcher.is_match(b"foobar").unwrap());
+	// 合法 regex 不被字面化（omp valid_regex_is_not_escaped 原形）。
+	let matcher = super::build_fallback_matcher("fo+", false, false).expect("valid regex");
+	assert!(matcher.is_match(b"foooo").unwrap());
+	assert!(!matcher.is_match(b"bar").unwrap());
 }
 
 // ---------------------------------------------------------------------------

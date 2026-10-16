@@ -15,6 +15,9 @@
 //! - bfs_name/icase：eval.c:627 `eval_name` 的 basename fnmatch 对位
 //!   （root 尾斜杠经 `Path::file_name` 收口），与 GlobFilter 路径面正交；
 //! - min_depth：bfs -mindepth 对位（depth < min 不出、照常下潜）；
+//! - max_depth：bfs -maxdepth 对位（root=0 起算；depth==max 目录只输出
+//!   不下潜；与 include 面推导的 depth_bound 取交；dfs 通路同界走
+//!   WalkBuilder.max_depth）；
 //! - follow：bfs -P/-L/-H 对位（P 默认；详见 bfswalk.rs；仅 bfs 通路生效，
 //!   dfs 通路 WalkParallel follow_links=false 恒等 -P）；
 //! - hidden 默认 true、gitignore 默认 false（GlobTool --no-ignore 语义；
@@ -73,8 +76,12 @@ pub fn find_glob_sync(opts: GlobOptions) -> Result<Vec<String>, String> {
 	// 多模式 + `!` 取反 → include ∧ ¬exclude（type 面走 basename 等值，单独过滤）。
 	let filter = sanitize::build_glob_filter(opts.pattern.as_deref(), None)?;
 	let type_filter = sanitize::resolve_type_filter(opts.r#type.as_deref());
-	// -maxdepth 深度界：include 面各模式可达深度的 max（无 include = 不设界）。
+	// -maxdepth 深度界：include 面各模式可达深度的 max（无 include = 不设界）
+	// ∧ 用户显式 max_depth（root=0 起算）取交（min）。
 	let depth_bound = filter.as_ref().map_or(usize::MAX, GlobFilter::depth_bound);
+	let depth_bound = opts
+		.max_depth
+		.map_or(depth_bound, |d| u64::from(d).min(depth_bound as u64) as usize);
 	let max_depth = u64::try_from(depth_bound).unwrap_or(u64::MAX);
 
 	let max_results = opts.max_results.map_or(usize::MAX, |n| n as usize);
@@ -176,20 +183,21 @@ fn bfs_collect(
 		// rg 语义：glob/type 对 root 相对路径匹配（strip 失败召回整路径）。
 		let relative = path.strip_prefix(root).unwrap_or(path);
 		let relative_str = relative.to_string_lossy();
-		if let Some(filter) = filter {
-			if !filter.is_match(&relative_str) && !filter.is_match(&path.to_string_lossy()) {
-				return true;
-			}
+		if let Some(filter) = filter
+			&& !filter.is_match(&relative_str)
+			&& !filter.is_match(&path.to_string_lossy())
+		{
+			return true;
 		}
 		// emit 面 = 常规文件（rg --files 语义）：-P 下 symlink 报 l 不出；
 		// -L 解链为 f 才出（对位 bfs `-type f` eval.c:979）。
 		if entry.kind != bfswalk::BfsKind::File {
 			return true;
 		}
-		if let Some(type_filter) = type_filter {
-			if !sanitize::matches_type_filter(&relative_str, type_filter) {
-				return true;
-			}
+		if let Some(type_filter) = type_filter
+			&& !sanitize::matches_type_filter(&relative_str, type_filter)
+		{
+			return true;
 		}
 		// bfs -i?name：basename fnmatch（eval.c:627；root 尾斜杠由
 		// Path::file_name 收口）。
@@ -256,15 +264,16 @@ fn dfs_collect(
 			// rg 语义：glob/type 对 root 相对路径匹配（strip 失败召回整路径）。
 			let relative = path.strip_prefix(root).unwrap_or(path);
 			let relative_str = relative.to_string_lossy();
-			if let Some(filter) = filter {
-				if !filter.is_match(&relative_str) && !filter.is_match(&path.to_string_lossy()) {
-					return WalkState::Continue;
-				}
+			if let Some(filter) = filter
+				&& !filter.is_match(&relative_str)
+				&& !filter.is_match(&path.to_string_lossy())
+			{
+				return WalkState::Continue;
 			}
-			if let Some(type_filter) = type_filter {
-				if !sanitize::matches_type_filter(&relative_str, type_filter) {
-					return WalkState::Continue;
-				}
+			if let Some(type_filter) = type_filter
+				&& !sanitize::matches_type_filter(&relative_str, type_filter)
+			{
+				return WalkState::Continue;
 			}
 			if let Some(matcher) = name_matcher {
 				let base = path

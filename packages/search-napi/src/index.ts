@@ -56,6 +56,12 @@ export interface GrepOptionsLike {
   contextBefore?: number | null
   contextAfter?: number | null
   maxColumns?: number | null
+  /** ugrep -o: content mode prints matched segments, count counts segments. */
+  onlyMatching?: boolean | null
+  /** ugrep -L: zero-match files are listed; mutual exclusion with files_with_matches mode (native errors "mutually exclusive"). */
+  filesWithoutMatch?: boolean | null
+  /** ugrep -I: probe first 8KiB for NUL (no BOM) → skip the whole file and continue. */
+  binarySkip?: boolean | null
   mode?: GrepOutputModeValue | null
   timeoutMs?: number | null
   /** Per-session cancel key (CancelRegistry): searchCancel(key) kills only this call. */
@@ -79,6 +85,8 @@ export interface GlobOptionsLike {
   bfsIcase?: boolean | null
   /** bfs `-mindepth` (root = 0; shallower entries skipped, traversal continues). */
   minDepth?: number | null
+  /** bfs `-maxdepth` (root = 0; dirs at depth == max are emitted but not descended; intersected with the include-face derived bound). */
+  maxDepth?: number | null
   /** Symlink policy: `"P"` (default, never follow; symlinks report type `l`) | `"L"` (follow all + loop guard) | `"H"` (follow roots only). */
   follow?: string | null
   /** Emit order: `"bfs"` (default; (depth, parent seq, name) layer order) | `"dfs"` (legacy WalkParallel + lexicographic fallback). */

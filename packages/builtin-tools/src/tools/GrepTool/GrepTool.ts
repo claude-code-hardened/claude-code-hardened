@@ -92,6 +92,18 @@ const inputSchema = lazySchema(() =>
     multiline: semanticBoolean(z.boolean().optional()).describe(
       'Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false.',
     ),
+    only_matching: semanticBoolean(z.boolean().optional()).describe(
+      'Print only the matched (non-empty) parts of each line instead of the full line (rg -o). Requires output_mode: "content"; context options are ignored when set.',
+    ),
+    files_without_match: semanticBoolean(z.boolean().optional()).describe(
+      'Invert the file selection: list files that contain NO matches (ugrep -L). Requires output_mode: "count". Mutually exclusive with output_mode: "files_with_matches".',
+    ),
+    binary_skip: semanticBoolean(z.boolean().optional()).describe(
+      'Skip binary files entirely (probe first 8KiB for NUL bytes) instead of stopping at their first match (ugrep -I). Default: false.',
+    ),
+    max_columns: semanticNumber(z.number().optional()).describe(
+      'Truncate lines longer than N characters in output (rg --max-columns). Omitted lines are reported as "[Omitted long matching line]". Defaults to 500.',
+    ),
   }),
 )
 type InputSchema = ReturnType<typeof inputSchema>
@@ -238,6 +250,10 @@ type NativeGrepArgs = {
   multiline?: boolean | undefined
   head_limit?: number | undefined
   offset?: number | undefined
+  only_matching?: boolean | undefined
+  files_without_match?: boolean | undefined
+  binary_skip?: boolean | undefined
+  max_columns?: number | undefined
 }
 
 // rg-branch-shaped empty result (resolve([]) there — "No files found" /
@@ -292,6 +308,10 @@ async function nativeGrepOutput(
     multiline = false,
     head_limit,
     offset = 0,
+    only_matching = false,
+    files_without_match = false,
+    binary_skip = false,
+    max_columns,
   } = args
 
   const absolutePath = path ? expandPath(path) : getCwd()
@@ -360,7 +380,12 @@ async function nativeGrepOutput(
     multiline,
     hidden: true, // rg branch: --hidden
     gitignore: true, // rg path never passes --no-ignore → respect gitignore
-    maxColumns: 500, // rg branch: --max-columns 500
+    maxColumns: max_columns ?? 500, // rg branch: --max-columns 500
+    // ugrep 对位三面：-o 逐段出行 / -L 反选名单（与 fsw 互斥、native 抛
+    // "mutually exclusive"）/ -I 二进制预读跳过（BOM 豁免）。
+    onlyMatching: only_matching,
+    filesWithoutMatch: files_without_match,
+    binarySkip: binary_skip,
     mode:
       output_mode === 'files_with_matches'
         ? 'FilesWithMatches'
@@ -394,10 +419,19 @@ async function nativeGrepOutput(
       options.contextAfter = context_after
     }
   }
+  if (only_matching) {
+    // -o + context 互斥面（native 入口同门强制置 0）：同传仅 -o 生效。
+    options.contextBefore = 0
+    options.contextAfter = 0
+  }
   // rg only emits `--` group separators when context lines are involved at
   // all (zero-width context behaves like no context).
+  // -o prints segments, not lines — context without the lines it wraps is
+  // meaningless, so -o wins (native enforces the same zeroing; the guard
+  // keeps hadContext/renderer semantics aligned at the tool face).
   const hadContext =
-    (options.contextBefore ?? 0) > 0 || (options.contextAfter ?? 0) > 0
+    !only_matching &&
+    ((options.contextBefore ?? 0) > 0 || (options.contextAfter ?? 0) > 0)
 
   const cancel = attachSearchCancel(mod, abortController.signal, cancelKey)
   let result: GrepResultLike
@@ -723,6 +757,10 @@ export const GrepTool = buildTool({
       head_limit,
       offset = 0,
       multiline = false,
+      only_matching = false,
+      files_without_match = false,
+      binary_skip = false,
+      max_columns,
     },
     { abortController, getAppState },
   ) {
@@ -749,6 +787,10 @@ export const GrepTool = buildTool({
           head_limit,
           offset,
           multiline,
+          only_matching,
+          files_without_match,
+          binary_skip,
+          max_columns,
         },
         { abortController, getAppState },
       )
