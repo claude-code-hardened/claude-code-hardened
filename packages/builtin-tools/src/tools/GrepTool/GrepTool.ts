@@ -223,7 +223,7 @@ type NativeCallContext = {
 }
 
 async function nativeGrepOutput(
-  args: InputSchema,
+  args: z.infer<typeof inputSchema>,
   { abortController, getAppState }: NativeCallContext,
 ): Promise<Output | null> {
   const mod = loadSearchNative()
@@ -241,7 +241,7 @@ async function nativeGrepOutput(
     '-A': context_after,
     '-C': context_c,
     context,
-    '-n': show_line_numbers = true,
+    '-n': showLineNumbers = true,
     '-i': case_insensitive = false,
     multiline = false,
     head_limit,
@@ -390,15 +390,13 @@ async function nativeGrepOutput(
     // path — the parser passes `path-line-text` lines through untouched).
     const finalLines = limitedResults.map(relativeContentLine)
     return {
-      data: {
-        mode: 'content',
-        numFiles: 0, // Not applicable for content mode
-        filenames: [],
-        content: finalLines.join('\n'),
-        numLines: finalLines.length,
-        ...(appliedLimit !== undefined && { appliedLimit }),
-        ...(offset > 0 && { appliedOffset: offset }),
-      },
+      mode: 'content',
+      numFiles: 0, // Not applicable for content mode
+      filenames: [],
+      content: finalLines.join('\n'),
+      numLines: finalLines.length,
+      ...(appliedLimit !== undefined && { appliedLimit }),
+      ...(offset > 0 && { appliedOffset: offset }),
     }
   }
 
@@ -449,15 +447,13 @@ async function nativeGrepOutput(
     }
 
     return {
-      data: {
-        mode: 'count',
-        numFiles: fileCount,
-        filenames: [],
-        content: finalCountLines.join('\n'),
-        numMatches: totalMatches,
-        ...(appliedLimit !== undefined && { appliedLimit }),
-        ...(offset > 0 && { appliedOffset: offset }),
-      },
+      mode: 'count',
+      numFiles: fileCount,
+      filenames: [],
+      content: finalCountLines.join('\n'),
+      numMatches: totalMatches,
+      ...(appliedLimit !== undefined && { appliedLimit }),
+      ...(offset > 0 && { appliedOffset: offset }),
     }
   }
 
