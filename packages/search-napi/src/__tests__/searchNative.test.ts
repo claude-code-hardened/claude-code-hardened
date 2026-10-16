@@ -26,7 +26,6 @@ const searchNative = await import('../index')
 const { isValidSearchNativeModule, loadSearchNative, renderGrepMatches } =
   searchNative
 
-
 const stubCanUseTool = async () => ({ behavior: 'allow' }) as any
 const stubParentMessage = {
   type: 'assistant',
