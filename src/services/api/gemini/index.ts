@@ -27,10 +27,7 @@ import {
   convertOutputToLangfuse,
   convertToolsToLangfuse,
 } from '../../../services/langfuse/convert.js'
-import {
-  getGeminiStreamUrl,
-  streamGeminiGenerateContent,
-} from './client.js'
+import { getGeminiStreamUrl, streamGeminiGenerateContent } from './client.js'
 import { createStreamWatchdog } from './streamWatchdog.js'
 import {
   anthropicMessagesToGemini,

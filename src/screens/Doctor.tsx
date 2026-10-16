@@ -222,7 +222,9 @@ export function Doctor({ onDone }: Props): React.ReactNode {
         <Text>└ Path: {diagnostic.installationPath}</Text>
         <Text>└ Invoked: {diagnostic.invokedBinary}</Text>
         <Text>└ Config install method: {diagnostic.configInstallMethod}</Text>
-        <Text>└ Search: {diagnostic.searchStatus.working ? `OK (${diagnostic.searchStatus.mode})` : 'Not working'}</Text>
+        <Text>
+          └ Search: {diagnostic.searchStatus.working ? `OK (${diagnostic.searchStatus.mode})` : 'Not working'}
+        </Text>
         {diagnostic.searchStatus.note && <Text color="warning">└ Note: {diagnostic.searchStatus.note}</Text>}
 
         {/* Show recommendation if auto-updates are disabled */}

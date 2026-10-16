@@ -268,9 +268,7 @@ export async function* streamGeminiGenerateContent(params: {
   const toolConfig = sdkToolConfig(params.body.toolConfig)
   const bodyTools = params.body.tools
   const sdkTools =
-    bodyTools && bodyTools.length > 0
-      ? sdkToolsForBody(params.body)
-      : undefined
+    bodyTools && bodyTools.length > 0 ? sdkToolsForBody(params.body) : undefined
 
   let stream: AsyncGenerator<GenerateContentResponse>
   try {
@@ -307,9 +305,7 @@ export async function* streamGeminiGenerateContent(params: {
       },
     })
   } catch (error) {
-    throw new Error(
-      `Gemini API stream request failed: ${errorMessage(error)}`,
-    )
+    throw new Error(`Gemini API stream request failed: ${errorMessage(error)}`)
   }
 
   for await (const response of stream) {

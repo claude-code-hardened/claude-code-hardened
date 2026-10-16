@@ -494,9 +494,7 @@ describe('idle watchdog over the SDK stream', () => {
     fakeState.streamFactory = () =>
       (async function* () {
         yield makeSdkChunk({
-          candidates: [
-            { content: { role: 'model', parts: [{ text: 'a' }] } },
-          ],
+          candidates: [{ content: { role: 'model', parts: [{ text: 'a' }] } }],
         })
         yield makeSdkChunk({
           candidates: [{ finishReason: 'STOP' }],
