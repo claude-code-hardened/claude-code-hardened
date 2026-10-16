@@ -51,8 +51,10 @@ const stateHandle = functionalStateMock() as unknown as StateHandle
 const sessionRoot = realpathSync(process.cwd())
 stateHandle.setOriginalCwd(sessionRoot)
 stateHandle.setCwdState(sessionRoot)
-mock.module('src/bootstrap/state.ts', stateHandle)
-mock.module('src/bootstrap/state.js', stateHandle)
+// mock.module's signature expects a factory; returning the same handle keeps
+// runtime parity with the plain-object form used until now.
+mock.module('src/bootstrap/state.ts', () => stateHandle)
+mock.module('src/bootstrap/state.js', () => stateHandle)
 
 const cwdOverrideStorage = new AsyncLocalStorage<string>()
 const cwdMock = () => ({
