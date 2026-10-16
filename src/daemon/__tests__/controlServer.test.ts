@@ -32,7 +32,7 @@ beforeAll(() => {
   }
 })
 
-let previousAnt: unknown
+let previousAnt: { getPeerUid?: (fd: number) => number } | undefined
 let antStubbed = false
 
 afterAll(() => {

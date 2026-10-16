@@ -1,6 +1,6 @@
 import { feature } from 'bun:bundle';
 import * as React from 'react';
-import { buildTool, type ToolDef, toolMatchesName } from 'src/Tool.js';
+import { buildTool, type Tool, type ToolDef, toolMatchesName } from 'src/Tool.js';
 import type { AssistantMessage, Message as MessageType, NormalizedUserMessage } from 'src/types/message.js';
 import { getQuerySourceForAgent } from 'src/utils/promptCategory.js';
 import { z } from 'zod/v4';
@@ -777,7 +777,9 @@ export const AgentTool = buildTool({
     // 0128-chunk-zrkp23rq/tools/agent.js) — fork workers are excluded.
     if (feature('HANDOFF_PROTOCOL')) {
       if (!isForkPath) {
-        workerTools.push(handbackTool);
+        // assembleToolPool returns readonly Tools; mutation is confined to
+        // this agent's own copy (never the registry itself).
+        (workerTools as unknown as Tool[]).push(handbackTool);
       }
     }
 

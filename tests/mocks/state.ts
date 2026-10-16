@@ -152,7 +152,9 @@ export function functionalStateMock() {
     removeSessionCronTasks: (ids: readonly string[]): number => {
       if (ids.length === 0) return 0
       const idSet = new Set(ids)
-      const remaining = state.sessionCronTasks.filter(t => !idSet.has(t.id))
+      const remaining = state.sessionCronTasks.filter(
+        t => !idSet.has((t as { id: string }).id),
+      )
       const removed = state.sessionCronTasks.length - remaining.length
       if (removed > 0) {
         state.sessionCronTasks = remaining
