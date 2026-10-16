@@ -222,8 +222,25 @@ type NativeCallContext = {
   }
 }
 
+type NativeGrepArgs = {
+  pattern: string
+  path?: string | undefined
+  glob?: string | undefined
+  type?: string | undefined
+  output_mode?: string | undefined
+  context_before?: number | undefined
+  context_after?: number | undefined
+  context_c?: number | undefined
+  context?: number | undefined
+  showLineNumbers?: boolean | undefined
+  case_insensitive?: boolean | undefined
+  multiline?: boolean | undefined
+  head_limit?: number | undefined
+  offset?: number | undefined
+}
+
 async function nativeGrepOutput(
-  args: z.infer<typeof inputSchema>,
+  args: NativeGrepArgs,
   { abortController, getAppState }: NativeCallContext,
 ): Promise<Output | null> {
   const mod = loadSearchNative()
@@ -237,12 +254,12 @@ async function nativeGrepOutput(
     glob,
     type,
     output_mode = 'files_with_matches',
-    '-B': context_before,
-    '-A': context_after,
-    '-C': context_c,
+    context_before,
+    context_after,
+    context_c,
     context,
-    '-n': showLineNumbers = true,
-    '-i': case_insensitive = false,
+    showLineNumbers = true,
+    case_insensitive = false,
     multiline = false,
     head_limit,
     offset = 0,
@@ -681,12 +698,12 @@ export const GrepTool = buildTool({
           glob,
           type,
           output_mode,
-          '-B': context_before,
-          '-A': context_after,
-          '-C': context_c,
+          context_before,
+          context_after,
+          context_c,
           context,
-          '-n': show_line_numbers,
-          '-i': case_insensitive,
+          showLineNumbers: show_line_numbers,
+          case_insensitive,
           head_limit,
           offset,
           multiline,
