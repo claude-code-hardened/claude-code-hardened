@@ -10,6 +10,8 @@ mod heart;
 mod sanitize;
 mod types;
 mod walk;
+#[cfg(test)]
+mod platform_tests;
 
 pub use find::*;
 pub use grep::*;
