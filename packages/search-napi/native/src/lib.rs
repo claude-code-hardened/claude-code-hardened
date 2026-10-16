@@ -26,9 +26,10 @@ pub fn is_native_search() -> bool {
 }
 
 /// grepSearch 的 libuv 异步任务体：compute 在线程池跑 grep_search_sync，
-/// 取消语义在 heart（TS abortSignal → searchCancel() 推进 CANCEL_GEN，
-/// 管道每文件查 SearchToken::cancelled() 尽快返回；timeout_ms 双保险）。
-/// v1 冻结契约（文件头）：错误以 Err(String) 出面 → JS 侧 reject。
+/// 取消语义在 heart（TS abortSignal → searchCancel(cancel_key) 推专属取消位，
+/// 管道每文件查 SearchToken::cancelled() 尽快返回；timeout_ms 双保险；
+/// 结果 cancelled=true 回传 TS 转错误面）。v1 冻结契约（文件头）：
+/// 错误以 Err(String) 出面 → JS 侧 reject。
 pub struct GrepSearchTask(Option<GrepOptions>);
 
 impl Task for GrepSearchTask {

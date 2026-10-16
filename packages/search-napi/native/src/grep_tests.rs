@@ -2,8 +2,9 @@
 //! + 真实临时目录 fixtures）。
 //!
 //! 覆盖：context 行采集、offset+max_count 全局聚合、count/-l 语义、
-//! NUL 二进制 quit、multiline dotall 首行语义、gitignore 嵌套+取反+关闭、
-//! 序贯/窗口/并行三策略一致性、4MiB 前缀窗、超时取消、max_columns、fifo。
+//! NUL 二进制 quit、multiline 块内逐行、gitignore 嵌套+取反+require_git、
+//! 序贯/窗口/并行三策略一致性、超限全量搜索（前缀窗废除）、超时取消、
+//! max_columns 字节阈值（命中/上下文独立占位）、fifo。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -53,6 +54,18 @@ fn write_file(path: impl AsRef<Path>, content: &str) {
 	fs::write(path, content).expect("write test file");
 }
 
+/// 测试专属 cancel key（进程内唯一）：测试走生产契约面（TS 每调用发
+/// cancelKey = uuid）。锁住专属位后，heart 单测的全局代际 bump（探针语义
+/// 单测）不再误杀并发跑的管线测试。
+fn test_cancel_key() -> String {
+	static COUNTER: AtomicU64 = AtomicU64::new(0);
+	format!(
+		"grep-test-{}-{}",
+		std::process::id(),
+		COUNTER.fetch_add(1, Ordering::Relaxed)
+	)
+}
+
 fn base_opts(pattern: &str, path: &Path) -> GrepOptions {
 	GrepOptions {
 		pattern: pattern.to_owned(),
@@ -70,6 +83,7 @@ fn base_opts(pattern: &str, path: &Path) -> GrepOptions {
 		max_columns: None,
 		mode: None,
 		timeout_ms: None,
+		cancel_key: Some(test_cancel_key()),
 	}
 }
 
@@ -80,13 +94,17 @@ fn opts_with(opts: GrepOptions, mutate: impl FnOnce(&mut GrepOptions)) -> GrepOp
 	opts
 }
 
-/// GrepMatch 无 Debug/PartialEq：逐字段断言辅助。
+/// GrepMatch 无 Debug/PartialEq：逐字段断言辅助（附可选语境消息）。
 fn assert_rows_equal(got: &[GrepMatch], expected: &[(String, u32, &str)]) {
-	assert_eq!(got.len(), expected.len(), "row count mismatch");
+	assert_rows_equal_msg(got, expected, "row mismatch");
+}
+
+fn assert_rows_equal_msg(got: &[GrepMatch], expected: &[(String, u32, &str)], message: &str) {
+	assert_eq!(got.len(), expected.len(), "{message}: row count mismatch");
 	for (row, (path, line_number, line)) in got.iter().zip(expected) {
-		assert!(row.path.ends_with(path.as_str()), "path {:?} should end with {path:?}", row.path);
-		assert_eq!(row.line_number, *line_number, "line_number of {path}");
-		assert_eq!(row.line, *line, "line text of {path}");
+		assert!(row.path.ends_with(path.as_str()), "{message}: path {:?} should end with {path:?}", row.path);
+		assert_eq!(row.line_number, *line_number, "{message}: line_number of {path}");
+		assert_eq!(row.line, *line, "{message}: line text of {path}");
 	}
 }
 
@@ -184,6 +202,18 @@ fn count_mode_semantics_with_offset_and_limit() {
 	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("count limit grep");
 	assert_eq!(result.matches.len(), 1);
 	assert!(result.limit_reached);
+
+	// max_count=2（rg -c -m2）：每文件计数封顶——a.txt 3 命中计 2（收集满
+	// 即 Ok(false) 停读），全局预算随之耗尽截断 b.txt。
+	let opt = opts_with(base_opts("needle", root.path()), |o| {
+		o.mode = Some(GrepOutputMode::Count);
+		o.max_count = Some(2);
+	});
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("count cap grep");
+	assert_eq!(result.matches.len(), 1);
+	assert!(result.matches[0].path.ends_with("a.txt"));
+	assert_eq!(result.matches[0].line, "2", "per-file 计数封顶（旧语义计满全文件 3）");
+	assert!(result.limit_reached);
 }
 
 // ---------------------------------------------------------------------------
@@ -244,20 +274,25 @@ fn binary_file_with_nul_byte_is_skipped() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. multiline dotall：跨行 match 块首行 + 行号取首行
+// 6. multiline dotall：块内逐行输出（rg -U 打印面；行号 n..n+count 连续）
 // ---------------------------------------------------------------------------
 
 #[test]
-fn multiline_match_reports_first_line_of_block() {
+fn multiline_match_prints_block_line_by_line() {
 	let root = TempDirGuard::new();
 	write_file(root.path().join("ml.txt"), "foo\nmiddle\nbar\nbaz\n");
 	let opt = opts_with(base_opts("foo.*bar", root.path()), |o| o.multiline = Some(true));
 	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("multiline grep");
-	assert_eq!(result.total_matches, 1);
-	assert_eq!(result.matches.len(), 1);
-	let row = &result.matches[0];
-	assert_eq!(row.line_number, 1, "行号取匹配块首行");
-	assert_eq!(row.line, "foo", "line 文本取匹配块首行");
+	assert_eq!(result.total_matches, 1, "multiline 按 match 块计 1（rg -c 同口径）");
+	assert_rows_equal_msg(
+		&result.matches,
+		&[
+			("ml.txt".to_owned(), 1, "foo"),
+			("ml.txt".to_owned(), 2, "middle"),
+			("ml.txt".to_owned(), 3, "bar"),
+		],
+		"块内逐行（每行一个 match 行、行号连续；旧语义只取首行）",
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +302,8 @@ fn multiline_match_reports_first_line_of_block() {
 #[test]
 fn gitignore_nested_negation_and_disable() {
 	let root = TempDirGuard::new();
+	// require_git 语义：gitignore=true 只在 git 目录生效——fixture 造 .git。
+	fs::create_dir_all(root.path().join(".git")).expect("create fixture .git");
 	write_file(root.path().join(".gitignore"), "*.log\n");
 	write_file(root.path().join("keep/.gitignore"), "!keep.log\n");
 	write_file(root.path().join("keep/keep.log"), "needle\n");
@@ -289,6 +326,16 @@ fn gitignore_nested_negation_and_disable() {
 	assert_eq!(result.files_searched, 5);
 	assert_eq!(result.matches.len(), 2);
 	assert_eq!(result.files_with_matches, 2);
+
+	// 非 git 目录（无 .git）：gitignore=true 也不应用规则（rg require_git
+	// 语义——此前 require_git(false) 会让无 .git 目录误走忽略面）。
+	let bare = TempDirGuard::new();
+	write_file(bare.path().join(".gitignore"), "*.log\n");
+	write_file(bare.path().join("a.log"), "needle\n");
+	let result =
+		grep_search_impl(base_opts("needle", bare.path()), Some(ExecStrategy::Sequential))
+			.expect("non-git ignore grep");
+	assert_eq!(result.files_with_matches, 1, "非 git 目录不走 .gitignore");
 }
 
 // ---------------------------------------------------------------------------
@@ -340,14 +387,15 @@ fn sequential_windowed_parallel_agree_on_same_fixtures() {
 }
 
 // ---------------------------------------------------------------------------
-// 9. 4MiB 前缀窗：超限文件 pass2 只读前缀
+// 9. 超限文件全量搜索（4MiB 前缀窗废除：窗外命中不再丢失）
 // ---------------------------------------------------------------------------
 
 #[test]
-fn oversized_file_reads_prefix_window_only() {
+fn oversized_files_are_searched_in_full_beyond_prefix_window() {
 	let root = TempDirGuard::new();
 	let mut big = String::from("needle one\n");
-	// 前缀 4MiB 覆盖到 filler 内部；needle two 落在 4MiB 之后被窗口截断。
+	// 70×64KiB filler ≈ 4.62MiB：needle two（第 72 行）落在 4MiB 前缀窗
+	// 之外——旧两遍 pass2 从此截断丢失该命中。
 	for _ in 0..70 {
 		big.push_str(&"A".repeat(65_536));
 		big.push('\n');
@@ -359,18 +407,55 @@ fn oversized_file_reads_prefix_window_only() {
 
 	let result = grep_search_impl(base_opts("needle", root.path()), Some(ExecStrategy::Sequential))
 		.expect("oversized grep");
-	assert_eq!(result.matches.len(), 2, "needle small（normal 组先行）+ needle one（oversized 组前缀窗内）");
-	assert!(result.matches[0].path.ends_with("small.txt"));
-	assert!(result.matches[1].path.ends_with("big.bin"), "超限组缀尾：normal 结果先于 oversized");
-	assert_eq!(result.matches[1].line_number, 1);
-	assert_eq!(result.matches[1].line, "needle one");
-	assert_eq!(result.total_matches, 2);
-	assert_eq!(result.files_searched, 2, "超限文件 pass2 前缀搜索计入 searched");
-	assert_eq!(result.skipped_oversized, 0, "前缀读取成功不计 skipped_oversized");
+	assert_rows_equal_msg(
+		&result.matches,
+		&[
+			("big.bin".to_owned(), 1, "needle one"),
+			("big.bin".to_owned(), 72, "needle two"),
+			("small.txt".to_owned(), 1, "needle small"),
+		],
+		"超限文件全量搜索：窗外命中找回、行号原生连续（路径序）",
+	);
+	assert_eq!(result.total_matches, 3);
+	assert_eq!(result.files_searched, 2);
+	assert_eq!(result.skipped_oversized, 1, ">4MiB 旗标计数（新语义：仍全量搜索）");
+
+	// 融合 visitor 无界分支同效（探针/流式在 thread_local worker 内一致）。
+	let result =
+		grep_search_impl(base_opts("needle", root.path()), Some(ExecStrategy::ParallelUnbounded))
+			.expect("oversized parallel grep");
+	assert_eq!(result.matches.iter().filter(|m| m.line == "needle two").count(), 1);
+}
+
+#[test]
+fn single_file_oversized_target_is_searched_in_full() {
+	let root = TempDirGuard::new();
+	let mut big = String::from("needle one\n");
+	for _ in 0..70 {
+		big.push_str(&"A".repeat(65_536));
+		big.push('\n');
+	}
+	big.push_str("needle two\n");
+	let path = root.path().join("single.bin");
+	write_file(&path, &big);
+
+	// 单文件分支：整根 = 超限文件（旧实现只搜前 4MiB 前缀）。
+	let opt = base_opts("needle", &path);
+	let result = grep_search_impl(opt, None).expect("single-file oversized grep");
+	assert_eq!(result.total_matches, 2, "前缀窗内外命中都在");
+	assert_eq!(result.files_searched, 1);
+	assert_eq!(result.skipped_oversized, 1);
+	assert_rows_equal(
+		&result.matches,
+		&[
+			("single.bin".to_owned(), 1, "needle one"),
+			("single.bin".to_owned(), 72, "needle two"),
+		],
+	);
 }
 
 // ---------------------------------------------------------------------------
-// 10. 超时取消：中途停止（0ms deadline 即刻全局取消）
+// 10. 超时取消：中途停止（0ms deadline 即刻取消；cancelled 位回填）
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -384,25 +469,58 @@ fn timeout_cancels_search_immediately() {
 	assert!(result.matches.is_empty());
 	assert_eq!(result.files_searched, 0, "取消后不再搜索任何文件");
 	assert_eq!(result.total_matches, 0);
+	assert!(result.cancelled, "取消面回填 cancelled（TS 面据此报错而非静默残表）");
 }
 
 // ---------------------------------------------------------------------------
-// 11. max_columns 截断（字符边界安全）
+// 11. max_columns：rg 字节阈值 + 命中/上下文行独立占位
 // ---------------------------------------------------------------------------
 
 #[test]
-fn max_columns_truncates_long_lines() {
+fn max_columns_replaces_lines_above_byte_threshold() {
 	let root = TempDirGuard::new();
 	write_file(root.path().join("long.txt"), "abcdefghij\nabc\n");
 	let opt = opts_with(base_opts("abcdefghij|abc", root.path()), |o| o.max_columns = Some(5));
 	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("max_columns grep");
 	assert_eq!(result.matches.len(), 2);
 	let long_row = &result.matches[0];
-	assert_eq!(long_row.line, "ab...", "max-3 字符 + 省略号");
+	assert_eq!(
+		long_row.line, "abcdefghij",
+		"原文保留（10 字节 > 5 字节阈值）；TS 渲染层输出 [Omitted long matching line]"
+	);
 	assert_eq!(long_row.truncated, Some(true));
 	let short_row = &result.matches[1];
-	assert_eq!(short_row.line, "abc");
+	assert_eq!(short_row.line, "abc", "不超阈值行原样");
 	assert_eq!(short_row.truncated, None);
+}
+
+#[test]
+fn max_columns_judges_bytes_not_chars() {
+	let root = TempDirGuard::new();
+	// 4 个 3 字节汉字 = 12 字节 ≤ 12 阈值，但 chars 口径=4 会误判超限。
+	write_file(root.path().join("cjk.txt"), "中文中文\nok\n");
+	let opt = opts_with(base_opts("中文中文|ok", root.path()), |o| o.max_columns = Some(12));
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("cjk max_columns grep");
+	assert_eq!(result.matches[0].line, "中文中文", "字节长 ≤ max 不置位（rg :1562 line.len() > m）");
+	assert_eq!(result.matches[0].truncated, None);
+}
+
+#[test]
+fn long_context_lines_emit_rg_placeholder() {
+	let root = TempDirGuard::new();
+	write_file(root.path().join("ctx.txt"), "abcdefghij\nneedle here\n");
+	let opt = opts_with(base_opts("needle", root.path()), |o| {
+		o.max_columns = Some(5);
+		o.context_before = Some(1);
+	});
+	let result = grep_search_impl(opt, Some(ExecStrategy::Sequential)).expect("context overflow grep");
+	assert_eq!(result.matches.len(), 1);
+	let row = &result.matches[0];
+	assert_eq!(
+		row.before,
+		vec!["[Omitted long context line]".to_owned()],
+		"context 溢出独立占位（rg printer/standard.rs:1331）"
+	);
 }
 
 // ---------------------------------------------------------------------------

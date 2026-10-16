@@ -226,7 +226,8 @@ struct FilterPart {
 pub struct GlobFilter {
 	includes: Option<GlobSet>,
 	excludes: Option<GlobSet>,
-	/// include 面的遍历深度界（各模式界取 min；无 include = 不设界）。
+	/// include 面的遍历深度界（各模式界取 max——任一模式可达的最深可达处；
+	/// 无 include = 不设界）。
 	depth_bound: usize,
 }
 

@@ -30,7 +30,10 @@ pub fn build_walker_depth(
 		.git_global(gitignore)
 		.ignore(gitignore)
 		.parents(gitignore)
-		.require_git(false)
+		// rg 语义：非 git 目录不应用 .gitignore（require_git(true)；实证同
+		// `rg pattern` 在无 .git 的目录不读 gitignore）。gitignore=false 时
+		// 本位无作用。
+		.require_git(true)
 		.max_depth(max_depth)
 		.build()
 }
@@ -49,8 +52,36 @@ pub fn build_walk_parallel(
 		.git_global(gitignore)
 		.ignore(gitignore)
 		.parents(gitignore)
-		.require_git(false)
+		// rg 语义：非 git 目录不应用 .gitignore（同 build_walker_depth）。
+		.require_git(true)
 		.follow_links(false)
 		.threads(threads.max(1))
 		.build_parallel()
+}
+
+/// find 面专用的并行遍历器：WalkParallel + 可选 depth 剪枝（-maxdepth 等位）。
+/// threads 由调用方给 available_parallelism().min(16)。
+pub fn build_find_walker(
+	root: PathBuf,
+	hidden: bool,
+	gitignore: bool,
+	threads: usize,
+	max_depth: Option<usize>,
+) -> ignore::WalkParallel {
+	let mut builder = ignore::WalkBuilder::new(root);
+	builder
+		.hidden(!hidden)
+		.git_ignore(gitignore)
+		.git_global(gitignore)
+		.ignore(gitignore)
+		.parents(gitignore)
+		.follow_links(false)
+		// rg 语义：非 git 目录不应用 .gitignore（同两个 grep 侧 builder；
+		// find 通路 gitignore 默认 false 不受累，显式 true 时与 rg 对齐）。
+		.require_git(true)
+		.threads(threads.max(1));
+	if let Some(depth) = max_depth {
+		builder.max_depth(Some(depth));
+	}
+	builder.build_parallel()
 }

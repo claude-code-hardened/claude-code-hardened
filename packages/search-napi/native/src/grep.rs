@@ -1,8 +1,11 @@
 //! grep 模块 — rg 基座进程内管道（深水区完整版）。
 //!
-//! 移植母本 omp crates/pi-natives/src/grep.rs（对位语义注释保留）：
-//! - 两遍 4MiB 窗口：pass1 按候选整读，超限文件 pass2 只读前缀窗口
-//!   （read_file_bytes/read_file_prefix + process_candidates 的 size-hint 预分区）；
+//! 移植母本 omp crates/pi-natives/src/grep.rs（对位语义按 v2 收口注释保留）：
+//! - **单遍流式搜索**（v2：两遍 4MiB 前缀窗废除——前缀窗丢 4MiB 之后的
+//!   命中）：每文件 `Searcher::search_file` 流式搜索全文件；4MiB 阈值
+//!   仅作溢出旗标（`take(MAX+1)` 读数溢出判定，零 metadata stat，
+//!   probe buffer 即 ≤4MiB 文件的搜索数据——与旧 read_file_bytes 同一
+//!   读取量，超限文件丢弃探针后全文件流式）；
 //! - 序贯-并行自适应（omp grep_sync_with_matcher :2288 分派）：无全局预算 →
 //!   ignore::WalkParallel 融合 walk+search 全并行；带 max_count（content 模式）
 //!   → ≤64 或单核序贯（:1612）/ 否则 512 窗口分批并行（:1733）；
@@ -12,7 +15,7 @@
 
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,8 +30,13 @@ use crate::heart::SearchToken;
 use crate::sanitize::{GlobFilter, build_glob_filter};
 use crate::types::{GrepMatch, GrepOptions, GrepOutputMode, GrepResult};
 
-/// 超限文件只读前缀大小（对齐 omp MAX_FILE_BYTES=4MiB）。
+/// 超限旗标阈值（对齐 omp MAX_FILE_BYTES=4MiB；新语义仅计数，不再截窗）。
 pub const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
+
+/// rg 14.1.1 原文案（printer/standard.rs:1331）：max_columns 超限上下文行。
+/// （命中行的对应文案 `[Omitted long matching line]` 由 TS 渲染层按
+/// truncated 位输出 — search-napi/src/index.ts OMITTED_LONG_MATCHING_LINE。）
+const OMITTED_LONG_CONTEXT_LINE: &str = "[Omitted long context line]";
 
 /// 全局 max_count 序贯分支阈值（omp ORDERED_STREAMING_STOP_MAX_COUNT）。
 const SEQ_STOP_MAX_COUNT: u64 = 64;
@@ -75,19 +83,20 @@ struct SearchParams {
 }
 
 /// per-file 预算变换（omp per_file_params :1151）：content → 全局 max+offset
-/// 为单文件采集上限；count → 不限（计满整个文件）；filesWithMatches → 1
-/// （命中即短路，rg -l 语义）。offset 归零：全局裁剪只在聚合层应用。
+/// 为单文件采集上限；count → 全局 max（rg `-c -mN` 每文件计数封顶 N，计数满
+/// 即 Ok(false) 停读）；filesWithMatches → 1（命中即短路，rg -l 语义）。
+/// offset 归零：全局裁剪只在聚合层应用。
 fn per_file_params(params: SearchParams) -> SearchParams {
 	let file_limit = match params.mode {
 		Mode::Content => params.max_count.map(|max| max.saturating_add(params.offset)),
-		Mode::Count => None,
+		Mode::Count => params.max_count,
 		Mode::FilesWithMatches => Some(1),
 	};
 	SearchParams { max_count: file_limit, offset: 0, ..params }
 }
 
 /// 全局提前停止预算（omp streaming_stop_after :1168）：仅 content 模式且
-/// offset==0 时可按已采集命中数停止；offset>0 必须全量搜索+聚合裁剪。
+/// offset==0 时可按已采集命中行数停止；offset>0 必须全量搜索+聚合裁剪。
 fn stop_after_matches(params: SearchParams) -> Option<u64> {
 	if params.mode != Mode::Content || params.offset != 0 {
 		return None;
@@ -110,9 +119,10 @@ struct CollectedMatch {
 #[derive(Default)]
 struct SearchOutcome {
 	matches: Vec<CollectedMatch>,
-	/// 该文件全部命中数（rg -c 语义；含预算触发后的溢出 1 次，对位 omp）。
+	/// 该文件全部命中数（rg -c 语义；multiline -U 按 match 块计 1）。
 	match_count: u64,
-	/// 采集上限内的命中数（全局 emitted 预算累计用）。
+	/// 采集上限内的命中行数（content 模式 multiline 块按行数计；全局
+	/// emitted 预算累计用）。
 	collected: u64,
 	limit_reached: bool,
 }
@@ -135,8 +145,7 @@ fn clamp_u32(value: u64) -> u32 {
 	value.min(u32::MAX as u64) as u32
 }
 
-/// 匹配块首行提取 + 行尾归一（-U 多行 match 的 line 截断语义：取首行，
-/// 行号取首行——searcher 报告的即匹配起始行号）。
+/// 单行/上下文行文本提取 + 行尾归一（CRLF 尾部随 trim_end 收口）。
 fn sink_line_text(bytes: &[u8]) -> String {
 	let end = bytes.iter().position(|&b| b == b'\n').unwrap_or(bytes.len());
 	let text = std::str::from_utf8(&bytes[..end])
@@ -144,13 +153,22 @@ fn sink_line_text(bytes: &[u8]) -> String {
 	text.trim_end().to_owned()
 }
 
-/// max_columns 截断（字符边界安全；omp truncate_line 的 chars 语义面）。
+/// multiline 块逐行拆分（rg -U 打印面：searcher 的 multiline sink 以
+/// `lines::locate` 提供整行界（glue.rs:223），split \n + 尾换行丢弃 =
+/// 块内每行一个输出行，行号随首行行号连续加计；旧行为只取块首行）。
+fn sink_block_lines(bytes: &[u8]) -> Vec<String> {
+	let trimmed =
+		if bytes.last() == Some(&b'\n') { &bytes[..bytes.len() - 1] } else { bytes };
+	trimmed.split(|&b| b == b'\n').map(sink_line_text).collect()
+}
+
+/// max_columns 截断（rg 语义 printer/standard.rs:1562）：判定 = 字节长
+/// `line.len() > m`（ chars 口径废除），命中行整行替换为占位文案。命中行
+/// 保留原文并置 truncated 位（TS 渲染层输出 `[Omitted long matching line]`，
+/// 文案 byte 级等于 rg）；上下文行在此处直接替换为 rg 占位文案（返回值）。
 fn truncate_line(line: String, max_columns: Option<usize>) -> (String, bool) {
 	match max_columns {
-		Some(max) if line.chars().count() > max => {
-			let head: String = line.chars().take(max.saturating_sub(3)).collect();
-			(format!("{head}..."), true)
-		},
+		Some(max) if line.len() > max => (line, true),
 		_ => (line, false),
 	}
 }
@@ -189,7 +207,7 @@ fn to_row(path: String, m: CollectedMatch) -> GrepMatch {
 }
 
 // ---------------------------------------------------------------------------
-// Sink 采集器（对位 omp MatchCollector）
+// Sink 采集器（对位 omp MatchCollector；预算 Ok(false) 剪枝 = rg -m 语义）
 // ---------------------------------------------------------------------------
 
 struct FileCollector {
@@ -208,7 +226,7 @@ struct FileCollector {
 }
 
 impl FileCollector {
-	fn for_params(params: SearchParams, token: SearchToken) -> Self {
+	fn for_params(params: SearchParams, token: &SearchToken) -> Self {
 		Self {
 			max_count: params.max_count,
 			offset: params.offset,
@@ -219,7 +237,7 @@ impl FileCollector {
 			max_columns: params.max_columns,
 			matches: Vec::new(),
 			pending_before: Vec::new(),
-			token,
+			token: token.clone(),
 		}
 	}
 
@@ -237,31 +255,54 @@ impl Sink for FileCollector {
 	type Error = io::Error;
 
 	fn matched(&mut self, _searcher: &Searcher, mat: &SinkMatch<'_>) -> Result<bool, Self::Error> {
-		self.match_count += 1;
 		if self.limit_reached || self.token.cancelled() {
+			// 预算/取消剪枝：Ok(false) = searcher 停读（rg -m 自然语义；
+			// 超预算事件不计数——rg -c -m2 对 3 命中文件计 2）（count 模式
+			// 计数满即停，rg -c -mN 每文件计数封顶由此生效）。
 			return Ok(false);
 		}
-		// offset 窗口前的命中跳过且不占预算（对位 omp skipped 计数）。
+		self.match_count += 1;
+		// offset 窗口前的命中跳过（对位 omp skipped 计数）：预算按命中
+		// 推进——（旧实现零推进会让单文件 + offset 死跳丢光全部命中）。
 		if self.collected < self.offset {
 			self.pending_before.clear();
+			self.collected += 1;
 			return Ok(true);
 		}
 		if self.collect_content {
-			let (line, truncated) = truncate_line(sink_line_text(mat.bytes()), self.max_columns);
-			self.matches.push(CollectedMatch {
-				line_number: mat.line_number().unwrap_or(0),
-				line,
-				before: std::mem::take(&mut self.pending_before),
-				after: Vec::new(),
-				truncated,
-			});
+			// rg -U 打印面：块内逐行输出（每行一个 match 行、行号连续）。
+			// 行预算内逐行采集，预算耗尽置位（块可被截尾）。
+			let first_line_number = mat.line_number().unwrap_or(0);
+			for (i, text) in sink_block_lines(mat.bytes()).into_iter().enumerate() {
+				if self.max_count.is_some_and(|max| self.collected >= max) {
+					self.limit_reached = true;
+					break;
+				}
+				let (line, truncated) = truncate_line(text, self.max_columns);
+				let before = if i == 0 {
+					std::mem::take(&mut self.pending_before)
+				} else {
+					Vec::new()
+				};
+				self.matches.push(CollectedMatch {
+					line_number: first_line_number.saturating_add(i as u64),
+					line,
+					before,
+					after: Vec::new(),
+					truncated,
+				});
+				self.collected += 1;
+			}
+			if self.max_count.is_some_and(|max| self.collected >= max) {
+				self.limit_reached = true;
+			}
 		} else {
 			self.pending_before.clear();
-		}
-		self.collected += 1;
-		if let Some(max) = self.max_count {
-			if self.collected >= max {
-				self.limit_reached = true;
+			self.collected += 1;
+			if let Some(max) = self.max_count {
+				if self.collected >= max {
+					self.limit_reached = true;
+				}
 			}
 		}
 		Ok(true)
@@ -271,7 +312,10 @@ impl Sink for FileCollector {
 		if !self.collect_content {
 			return Ok(true);
 		}
-		let (line, _) = truncate_line(sink_line_text(ctx.bytes()), self.max_columns);
+		// 上下文行 max_columns 超限 → rg 占位文案（standard.rs:1331）：
+		// 文本由 TS 渲染层原样输出，byte 级等于 rg 的 context 溢出面。
+		let (line, overflow) = truncate_line(sink_line_text(ctx.bytes()), self.max_columns);
+		let line = if overflow { OMITTED_LONG_CONTEXT_LINE.to_owned() } else { line };
 		match ctx.kind() {
 			SinkContextKind::Before => self.pending_before.push(line),
 			SinkContextKind::After => {
@@ -307,6 +351,7 @@ fn build_searcher(params: SearchParams) -> Searcher {
 
 struct SearchWorker {
 	searcher: Searcher,
+	/// 探针预读缓冲（take(MAX+1)；≤4MiB 文件该缓冲即整文件搜索数据）。
 	buffer: Vec<u8>,
 }
 
@@ -336,57 +381,43 @@ fn worker_threads() -> usize {
 }
 
 // ---------------------------------------------------------------------------
-// 两遍 4MiB 窗口读取（omp read_file_bytes :767 / read_file_prefix :1366）
+// 单文件流式/切片搜索核（take(MAX+1) 探针 = 溢出判定 + ≤4MiB 文件数据源）
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Copy)]
-enum ReadPolicy {
-	/// pass1：整读；超限文件延迟到 pass2。
-	Full,
-	/// pass2：只读前 4MiB 前缀窗口。
-	Prefix,
+fn run_search_slice(
+	searcher: &mut Searcher,
+	matcher: &RegexMatcher,
+	bytes: &[u8],
+	params: SearchParams,
+	token: &SearchToken,
+) -> io::Result<SearchOutcome> {
+	let mut collector = FileCollector::for_params(params, token);
+	searcher.search_slice(matcher, bytes, &mut collector)?;
+	Ok(collector.into_result())
 }
 
-enum ReadFile {
-	Read,
-	Oversized,
-	Skipped,
-}
-
-/// pass1 整读（读前 stat 重核：超限 → Oversized，走 pass2 前缀窗）。
-fn read_file_bytes(path: &Path, buffer: &mut Vec<u8>) -> io::Result<ReadFile> {
-	let meta = std::fs::metadata(path)?;
-	if !meta.is_file() {
-		return Ok(ReadFile::Skipped);
+/// 命中采集 outcome：-l 快路径（is_match 短路，rg -l 语义），其余走
+/// searcher 切片搜索（collect_content 按模式面）。
+fn slice_outcome(
+	searcher: &mut Searcher,
+	matcher: &RegexMatcher,
+	bytes: &[u8],
+	file_params: SearchParams,
+	token: &SearchToken,
+) -> SearchOutcome {
+	// filesWithMatches：is_match 快路径（per-file offset 恒 0；整文件在手
+	// 才安全——超限文件的截断前缀不算整文件，必须走全文件流式）。
+	if file_params.mode == Mode::FilesWithMatches && file_params.offset == 0 {
+		let matched = matcher.is_match(bytes).unwrap_or(false);
+		return SearchOutcome {
+			matches: Vec::new(),
+			match_count: u64::from(matched),
+			collected: u64::from(matched),
+			limit_reached: false,
+		};
 	}
-	let len = meta.len();
-	if len > MAX_FILE_BYTES {
-		return Ok(ReadFile::Oversized);
-	}
-	let file = File::open(path)?;
-	buffer.clear();
-	buffer.reserve(len as usize + 1);
-	file.take(MAX_FILE_BYTES).read_to_end(buffer)?;
-	Ok(ReadFile::Read)
-}
-
-/// pass2：只读前 4MiB 前缀（超限文件窗口语义；NUL 二进制仍由 searcher quit）。
-fn read_file_prefix(path: &Path, buffer: &mut Vec<u8>) -> io::Result<ReadFile> {
-	let meta = std::fs::metadata(path)?;
-	if !meta.is_file() {
-		return Ok(ReadFile::Skipped);
-	}
-	let len = meta.len();
-	if len == 0 {
-		buffer.clear();
-		return Ok(ReadFile::Read);
-	}
-	let file = File::open(path)?;
-	let window = len.min(MAX_FILE_BYTES);
-	buffer.clear();
-	buffer.reserve(window as usize + 1);
-	file.take(window).read_to_end(buffer)?;
-	Ok(ReadFile::Read)
+	run_search_slice(searcher, matcher, bytes, file_params, token)
+		.unwrap_or_else(|_| SearchOutcome::zero())
 }
 
 // ---------------------------------------------------------------------------
@@ -396,8 +427,8 @@ fn read_file_prefix(path: &Path, buffer: &mut Vec<u8>) -> io::Result<ReadFile> {
 #[derive(Clone)]
 struct Candidate {
 	path: PathBuf,
-	/// walk 期 stat 的大小提示（None = 未知），供超限预分区。
-	size: Option<u64>,
+	// （v2：size-hint 预分区随两遍扫描废除——walk 期零 metadata stat，
+	// 超限分类收口在 search_one_file 的 take(MAX+1) 读数探针。）
 }
 
 /// rg 语义：glob 对 root 相对路径匹配（strip 失败则退化整路径）。
@@ -409,13 +440,13 @@ fn glob_accepts(globs: Option<&GlobFilter>, root: &Path, path: &Path) -> bool {
 		|| globs.is_match(path.to_string_lossy().as_ref())
 }
 
-/// 候选预采集（排序保证聚合确定性；token 取消即刻截断）。
+/// 候选预采集（排序保证聚合确定性；token 取消即刻截断；零 metadata stat）。
 fn collect_candidates(
 	root: &Path,
 	globs: Option<&GlobFilter>,
 	hidden: bool,
 	gitignore: bool,
-	token: SearchToken,
+	token: &SearchToken,
 ) -> Vec<Candidate> {
 	let walker = crate::walk::build_walker(root.to_path_buf(), hidden, gitignore);
 	let mut candidates = Vec::new();
@@ -431,70 +462,66 @@ fn collect_candidates(
 		if !glob_accepts(globs, root, path) {
 			continue;
 		}
-		let size = entry.metadata().ok().map(|meta| meta.len());
-		candidates.push(Candidate { path: path.to_path_buf(), size });
+		candidates.push(Candidate { path: path.to_path_buf() });
 	}
 	candidates.sort_unstable_by(|a, b| a.path.cmp(&b.path));
 	candidates
 }
 
 // ---------------------------------------------------------------------------
-// 两遍扫描（omp search_one_file :1393 / handle_file :1442 / run_pass :1500
-// / process_candidates :1550）
+// 单遍扫描（omp handle_file :1442 / run_pass :1500 / process_candidates :1550
+// 的流式收口）
 // ---------------------------------------------------------------------------
 
 enum FileOutcome {
-	Searched(SearchOutcome),
-	Defer,
-	SkippedOversized,
+	Searched {
+		outcome: SearchOutcome,
+		/// >4MiB 溢出旗标（仍全量搜索；计入 skipped_oversized）。
+		oversized: bool,
+	},
 	Skipped,
 }
 
+/// 单文件搜索：take(MAX+1) 探针读（溢出判定 + ≤4MiB 文件数据），
+/// 超限文件 seek 回 0 全文件流式（searcher.search_file）。
 fn search_one_file(
 	worker: &mut SearchWorker,
 	matcher: &RegexMatcher,
 	path: &Path,
 	file_params: SearchParams,
-	policy: ReadPolicy,
-	token: SearchToken,
+	token: &SearchToken,
 ) -> FileOutcome {
-	let read = match policy {
-		ReadPolicy::Full => read_file_bytes(path, &mut worker.buffer),
-		ReadPolicy::Prefix => read_file_prefix(path, &mut worker.buffer),
-	};
-	match read {
-		Ok(ReadFile::Read) => {},
-		Ok(ReadFile::Oversized) => return FileOutcome::Defer,
-		Ok(ReadFile::Skipped) => {
-			return match policy {
-				ReadPolicy::Prefix => FileOutcome::SkippedOversized,
-				ReadPolicy::Full => FileOutcome::Skipped,
-			};
-		},
+	let mut file = match File::open(path) {
+		Ok(file) => file,
 		Err(_) => return FileOutcome::Skipped,
-	}
-	// filesWithMatches：is_match 快路径（rg -l 短路；per-file offset 恒 0，
-	// 单文件路径不走本函数）。
-	let outcome = if file_params.mode == Mode::FilesWithMatches && file_params.offset == 0 {
-		let matched = matcher.is_match(&worker.buffer).unwrap_or(false);
-		SearchOutcome {
-			matches: Vec::new(),
-			match_count: u64::from(matched),
-			collected: u64::from(matched),
-			limit_reached: false,
-		}
-	} else {
-		run_search_slice(&mut worker.searcher, matcher, &worker.buffer, file_params, token)
-			.unwrap_or_else(|_| SearchOutcome::zero())
 	};
-	FileOutcome::Searched(outcome)
+	// 探针预读：读满 MAX+1 即 >4MiB（零 metadata stat）。
+	worker.buffer.clear();
+	let read = match (&file).take(MAX_FILE_BYTES + 1).read_to_end(&mut worker.buffer) {
+		Ok(read) => read,
+		Err(_) => return FileOutcome::Skipped,
+	};
+	if read as u64 > MAX_FILE_BYTES {
+		// 超限：探针丢弃，流式全文件（前缀窗丢命中面废除；行号原生连续；
+		// buffer 复用预算为后续 ≤4MiB 文件保留容量）。
+		worker.buffer.clear();
+		if file.seek(SeekFrom::Start(0)).is_err() {
+			return FileOutcome::Skipped;
+		}
+		let mut collector = FileCollector::for_params(file_params, token);
+		if worker.searcher.search_file(matcher, &file, &mut collector).is_err() {
+			return FileOutcome::Skipped;
+		}
+		return FileOutcome::Searched { outcome: collector.into_result(), oversized: true };
+	}
+	let (searcher, buffer) = (&mut worker.searcher, &worker.buffer);
+	let outcome = slice_outcome(searcher, matcher, buffer, file_params, token);
+	FileOutcome::Searched { outcome, oversized: false }
 }
 
-/// 共享两遍聚合状态：results 为已搜索文件，deferred 为超限延迟名单，
-/// 计数器跨两遍累加（对位 omp PassState）。
+/// 共享单遍聚合状态（对位 omp PassState 的单遍化）。
 struct PassState {
 	results: Mutex<Vec<FileSearchResult>>,
-	deferred: Mutex<Vec<Candidate>>,
 	files_searched: AtomicU64,
 	skipped_oversized: AtomicU64,
 	emitted: AtomicU64,
@@ -504,7 +531,6 @@ impl PassState {
 	fn new() -> Self {
 		Self {
 			results: Mutex::new(Vec::new()),
-			deferred: Mutex::new(Vec::new()),
 			files_searched: AtomicU64::new(0),
 			skipped_oversized: AtomicU64::new(0),
 			emitted: AtomicU64::new(0),
@@ -515,16 +541,8 @@ impl PassState {
 		self.results.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 	}
 
-	fn lock_deferred(&self) -> std::sync::MutexGuard<'_, Vec<Candidate>> {
-		self.deferred.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-	}
-
 	fn take_results(&self) -> Vec<FileSearchResult> {
 		std::mem::take(&mut *self.lock_results())
-	}
-
-	fn take_deferred(&self) -> Vec<Candidate> {
-		std::mem::take(&mut *self.lock_deferred())
 	}
 }
 
@@ -535,10 +553,9 @@ fn handle_file(
 	worker: &mut SearchWorker,
 	matcher: &RegexMatcher,
 	file_params: SearchParams,
-	policy: ReadPolicy,
 	emit_budget: Option<u64>,
 	state: &PassState,
-	token: SearchToken,
+	token: &SearchToken,
 ) {
 	if token.cancelled() {
 		return;
@@ -548,14 +565,13 @@ fn handle_file(
 			return;
 		}
 	}
-	match search_one_file(worker, matcher, &candidate.path, file_params, policy, token) {
-		FileOutcome::Defer => state.lock_deferred().push(candidate.clone()),
-		FileOutcome::SkippedOversized => {
-			state.skipped_oversized.fetch_add(1, Ordering::Relaxed);
-		},
+	match search_one_file(worker, matcher, &candidate.path, file_params, token) {
 		FileOutcome::Skipped => {},
-		FileOutcome::Searched(outcome) => {
+		FileOutcome::Searched { outcome, oversized } => {
 			state.files_searched.fetch_add(1, Ordering::Relaxed);
+			if oversized {
+				state.skipped_oversized.fetch_add(1, Ordering::Relaxed);
+			}
 			if outcome.match_count > 0 {
 				if emit_budget.is_some() {
 					state.emitted.fetch_add(outcome.collected, Ordering::Relaxed);
@@ -576,17 +592,16 @@ fn sort_results(results: &mut [FileSearchResult]) {
 	results.sort_unstable_by(|a, b| a.path.cmp(&b.path));
 }
 
-/// 一遍扫描：候选列表 → 并行分块或序贯循环 → 路径序结果。
+/// 一遍扫描：候选列表 → 并行分块（≥256 且多核）或序贯循环 → 路径序结果。
 #[allow(clippy::too_many_arguments)]
 fn run_pass(
 	candidates: &[Candidate],
 	matcher: &RegexMatcher,
 	file_params: SearchParams,
-	policy: ReadPolicy,
 	parallel_allowed: bool,
 	emit_budget: Option<u64>,
 	state: &PassState,
-	token: SearchToken,
+	token: &SearchToken,
 ) -> Vec<FileSearchResult> {
 	if parallel_allowed && worker_threads() > 1 && candidates.len() >= PARALLEL_FILES_THRESHOLD {
 		let chunk_size = candidates.len().div_ceil(worker_threads());
@@ -603,7 +618,6 @@ fn run_pass(
 							&mut worker,
 							matcher,
 							file_params,
-							policy,
 							emit_budget,
 							state,
 							token,
@@ -623,45 +637,11 @@ fn run_pass(
 					break;
 				}
 			}
-			handle_file(candidate, &mut worker, matcher, file_params, policy, emit_budget, state, token);
+			handle_file(candidate, &mut worker, matcher, file_params, emit_budget, state, token);
 		}
 	}
 	let mut results = state.take_results();
 	sort_results(&mut results);
-	results
-}
-
-/// 两遍扫描主体：size-hint 预分区超限文件，pass1 整读，pass2 只在预算未满足时
-/// 读前缀窗（超限结果组缀尾：normal 组先于 oversized 组，组内路径序）。
-fn process_candidates(
-	candidates: Vec<Candidate>,
-	matcher: &RegexMatcher,
-	params: SearchParams,
-	parallel_allowed: bool,
-	emit_budget: Option<u64>,
-	state: &PassState,
-	token: SearchToken,
-) -> Vec<FileSearchResult> {
-	let file_params = per_file_params(params);
-	let (normal, oversized_hinted): (Vec<Candidate>, Vec<Candidate>) = candidates
-		.into_iter()
-		.partition(|candidate| match candidate.size {
-			Some(size) => size <= MAX_FILE_BYTES,
-			None => true,
-		});
-	if !oversized_hinted.is_empty() {
-		state.lock_deferred().extend(oversized_hinted);
-	}
-	let mut results =
-		run_pass(&normal, matcher, file_params, ReadPolicy::Full, parallel_allowed, emit_budget, state, token);
-	let deferred = state.take_deferred();
-	let limit_satisfied =
-		emit_budget.is_some_and(|stop| state.emitted.load(Ordering::Relaxed) >= stop);
-	if !deferred.is_empty() && !limit_satisfied {
-		let oversized =
-			run_pass(&deferred, matcher, file_params, ReadPolicy::Prefix, parallel_allowed, emit_budget, state, token);
-		results.extend(oversized);
-	}
 	results
 }
 
@@ -691,7 +671,7 @@ fn choose_strategy(params: SearchParams, workers: usize) -> ExecStrategy {
 	}
 }
 
-/// 序贯分支：候选全量预采集后两遍扫描（单 Searcher，预算即停）。
+/// 序贯分支：候选全量预采集后单遍扫描（单 Searcher，预算即停）。
 #[allow(clippy::too_many_arguments)]
 fn run_sequential(
 	root: &Path,
@@ -701,15 +681,24 @@ fn run_sequential(
 	hidden: bool,
 	gitignore: bool,
 	state: &PassState,
-	token: SearchToken,
+	token: &SearchToken,
 ) -> Vec<FileSearchResult> {
 	let candidates = collect_candidates(root, globs, hidden, gitignore, token);
 	let emit_budget = stop_after_matches(params);
-	process_candidates(candidates, matcher, params, false, emit_budget, state, token)
+	run_pass(
+		&candidates,
+		matcher,
+		per_file_params(params),
+		false,
+		emit_budget,
+		state,
+		token,
+	)
 }
 
-/// 窗口分支：候选全量预采集（路径序），512 一窗并行搜索，预算满足即停；
-/// 超限文件最后序贯走前缀窗（对位 omp run_windowed_streaming_grep :1733）。
+/// 窗口分支：候选全量预采集（路径序），512 一窗并行搜索，预算满足即停
+/// （对位 omp run_windowed_streaming_grep :1733；超限文件在同窗内流式搜索，
+/// 不再延迟到 pass2 前缀窗）。
 #[allow(clippy::too_many_arguments)]
 fn run_windowed(
 	root: &Path,
@@ -720,7 +709,7 @@ fn run_windowed(
 	gitignore: bool,
 	emit_stop: u64,
 	state: &PassState,
-	token: SearchToken,
+	token: &SearchToken,
 ) -> Vec<FileSearchResult> {
 	let file_params = per_file_params(params);
 	let candidates = collect_candidates(root, globs, hidden, gitignore, token);
@@ -741,21 +730,6 @@ fn run_windowed(
 	if state.emitted.load(Ordering::Relaxed) < emit_stop {
 		flush_window(&mut window, &mut results, matcher, file_params, state, token);
 	}
-	let mut deferred = state.take_deferred();
-	if !deferred.is_empty() && state.emitted.load(Ordering::Relaxed) < emit_stop {
-		sort_candidates(&mut deferred);
-		let oversized = run_pass(
-			&deferred,
-			matcher,
-			file_params,
-			ReadPolicy::Prefix,
-			false,
-			Some(emit_stop),
-			state,
-			token,
-		);
-		results.extend(oversized);
-	}
 	results
 }
 
@@ -763,21 +737,21 @@ fn sort_candidates(candidates: &mut [Candidate]) {
 	candidates.sort_unstable_by(|a, b| a.path.cmp(&b.path));
 }
 
-/// 一窗冲刷：窗口按路径序并行整读搜索，采集计数累入全局 emitted。
+/// 一窗冲刷：窗口按路径序并行整搜，采集计数累入全局 emitted。
 fn flush_window(
 	window: &mut Vec<Candidate>,
 	results: &mut Vec<FileSearchResult>,
 	matcher: &RegexMatcher,
 	file_params: SearchParams,
 	state: &PassState,
-	token: SearchToken,
+	token: &SearchToken,
 ) {
 	if window.is_empty() {
 		return;
 	}
 	sort_candidates(window);
 	let window_results =
-		run_pass(window, matcher, file_params, ReadPolicy::Full, true, None, state, token);
+		run_pass(window, matcher, file_params, true, None, state, token);
 	let emitted =
 		window_results.iter().fold(0u64, |acc, result| acc.saturating_add(result.collected));
 	state.emitted.fetch_add(emitted, Ordering::Relaxed);
@@ -787,8 +761,8 @@ fn flush_window(
 
 type VisitEntry = Result<ignore::DirEntry, ignore::Error>;
 
-/// 融合 walk+search 的 per-thread visitor（thread_local Searcher 复用，
-/// 超限文件 defer 出去留给 pass2 前缀窗）。
+/// 融合 walk+search 的 per-thread visitor（thread_local Searcher 复用；
+/// 取消返回 Quit——与 find 通路收敛面一致，不再继续 walk）。
 #[allow(clippy::too_many_arguments)]
 fn fused_visitor<'s>(
 	root: &'s Path,
@@ -796,12 +770,15 @@ fn fused_visitor<'s>(
 	matcher: &'s RegexMatcher,
 	file_params: SearchParams,
 	state: &'s PassState,
-	token: SearchToken,
+	token: &'s SearchToken,
 ) -> Box<dyn FnMut(VisitEntry) -> ignore::WalkState + Send + 's> {
 	Box::new(move |entry: VisitEntry| -> ignore::WalkState {
 		let Ok(entry) = entry else { return ignore::WalkState::Continue };
-		if entry.depth() == 0 || token.cancelled() {
+		if entry.depth() == 0 {
 			return ignore::WalkState::Continue;
+		}
+		if token.cancelled() {
+			return ignore::WalkState::Quit;
 		}
 		if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
 			return ignore::WalkState::Continue;
@@ -810,16 +787,15 @@ fn fused_visitor<'s>(
 		if !glob_accepts(globs, root, path) {
 			return ignore::WalkState::Continue;
 		}
-		let candidate = Candidate { path: path.to_path_buf(), size: entry.metadata().ok().map(|meta| meta.len()) };
+		let candidate = Candidate { path: path.to_path_buf() };
 		with_parallel_worker(file_params, |worker| {
-			handle_file(&candidate, worker, matcher, file_params, ReadPolicy::Full, None, state, token);
+			handle_file(&candidate, worker, matcher, file_params, None, state, token);
 		});
 		ignore::WalkState::Continue
 	})
 }
 
-/// 无界分支：ignore::WalkParallel 全并行融合（omp run_parallel_streaming_grep），
-/// 结束后超限 defer 名单按路径序走 pass2 前缀窗。
+/// 无界分支：ignore::WalkParallel 全并行融合（omp run_parallel_streaming_grep）。
 #[allow(clippy::too_many_arguments)]
 fn run_unbounded_parallel(
 	root: &Path,
@@ -829,7 +805,7 @@ fn run_unbounded_parallel(
 	hidden: bool,
 	gitignore: bool,
 	state: &PassState,
-	token: SearchToken,
+	token: &SearchToken,
 ) -> Vec<FileSearchResult> {
 	let file_params = per_file_params(params);
 	let walker =
@@ -837,13 +813,6 @@ fn run_unbounded_parallel(
 	walker.run(|| fused_visitor(root, globs, matcher, file_params, state, token));
 	let mut results = state.take_results();
 	sort_results(&mut results);
-	let mut deferred = state.take_deferred();
-	if !deferred.is_empty() {
-		sort_candidates(&mut deferred);
-		let oversized =
-			run_pass(&deferred, matcher, file_params, ReadPolicy::Prefix, true, None, state, token);
-		results.extend(oversized);
-	}
 	results
 }
 
@@ -957,6 +926,7 @@ fn aggregate_results(
 		files_searched: clamp_u32(files_searched),
 		limit_reached,
 		skipped_oversized: clamp_u32(skipped_oversized),
+		cancelled: false,
 	}
 }
 
@@ -972,45 +942,41 @@ fn empty_result(files_searched: u32, skipped_oversized: u32) -> GrepResult {
 		files_searched,
 		limit_reached: false,
 		skipped_oversized,
+		cancelled: false,
 	}
 }
 
-fn grep_single_file(path: &Path, matcher: &RegexMatcher, params: SearchParams, token: SearchToken) -> GrepResult {
-	let meta = match std::fs::metadata(path) {
-		Ok(meta) => meta,
-		Err(_) => return empty_result(0, 0),
-	};
-	if !meta.is_file() {
-		return empty_result(0, 0);
-	}
-	let mut buffer = Vec::new();
-	match read_file_bytes(path, &mut buffer) {
-		Ok(ReadFile::Read) => {
-			let bytes = std::mem::take(&mut buffer);
-			grep_single_file_bytes(&bytes, path, matcher, params, token, 0)
-		},
-		Ok(ReadFile::Oversized) => match read_file_prefix(path, &mut buffer) {
-			Ok(ReadFile::Read) => {
-				let bytes = std::mem::take(&mut buffer);
-				grep_single_file_bytes(&bytes, path, matcher, params, token, 1)
-			},
-			_ => empty_result(0, 1),
-		},
-		_ => empty_result(0, 0),
-	}
-}
-
-fn grep_single_file_bytes(
-	bytes: &[u8],
+fn grep_single_file(
 	path: &Path,
 	matcher: &RegexMatcher,
 	params: SearchParams,
-	token: SearchToken,
-	skipped_oversized: u32,
+	token: &SearchToken,
 ) -> GrepResult {
-	// -l 快路径（无 offset/max 才安全；有则走 searcher 保留语义）。
-	if params.mode == Mode::FilesWithMatches && params.max_count.is_none() && params.offset == 0 {
-		if !matcher.is_match(bytes).unwrap_or(false) {
+	// 单文件入口保留一次 is_file 门（fifo/目录防阻面；流式管线本身零
+	// metadata stat）。
+	match std::fs::metadata(path) {
+		Ok(meta) if meta.is_file() => {},
+		_ => return empty_result(0, 0),
+	}
+	let mut file = match File::open(path) {
+		Ok(file) => file,
+		Err(_) => return empty_result(0, 0),
+	};
+	// take(MAX+1) 探针读（与目录路径同一溢出判定；不再经 4MiB 前缀窗丢命中）。
+	let mut buffer = Vec::new();
+	let read = match (&file).take(MAX_FILE_BYTES + 1).read_to_end(&mut buffer) {
+		Ok(read) => read,
+		Err(_) => return empty_result(0, 0),
+	};
+	let oversized = read as u64 > MAX_FILE_BYTES;
+	let skipped_oversized = u32::from(oversized);
+	// -l 快路径（无 offset/max 才安全且超限时 buffer 只是截断前缀 → 走流式）。
+	if params.mode == Mode::FilesWithMatches
+		&& params.offset == 0
+		&& params.max_count.is_none()
+		&& !oversized
+	{
+		if !matcher.is_match(&buffer).unwrap_or(false) {
 			return empty_result(1, skipped_oversized);
 		}
 		let path_str = path.to_string_lossy().into_owned();
@@ -1021,11 +987,25 @@ fn grep_single_file_bytes(
 			files_searched: 1,
 			limit_reached: false,
 			skipped_oversized,
+			cancelled: false,
 		};
 	}
-	let mut searcher = build_searcher(params);
-	let outcome = run_search_slice(&mut searcher, matcher, bytes, params, token)
-		.unwrap_or_else(|_| SearchOutcome::zero());
+	let outcome = if oversized {
+		// 超限：流式全文件（seek 回 0、探针丢弃；行号原生连续）。
+		let mut searcher = build_searcher(params);
+		if file.seek(SeekFrom::Start(0)).is_err() {
+			return empty_result(1, skipped_oversized);
+		}
+		let mut collector = FileCollector::for_params(params, token);
+		match searcher.search_file(matcher, &file, &mut collector) {
+			Ok(()) => collector.into_result(),
+			Err(_) => SearchOutcome::zero(),
+		}
+	} else {
+		let mut searcher = build_searcher(params);
+		run_search_slice(&mut searcher, matcher, &buffer, params, token)
+			.unwrap_or_else(|_| SearchOutcome::zero())
+	};
 	if outcome.match_count == 0 {
 		return empty_result(1, skipped_oversized);
 	}
@@ -1049,24 +1029,13 @@ fn grep_single_file_bytes(
 		files_searched: 1,
 		limit_reached,
 		skipped_oversized,
+		cancelled: false,
 	}
 }
 
 // ---------------------------------------------------------------------------
 // 入口
 // ---------------------------------------------------------------------------
-
-fn run_search_slice(
-	searcher: &mut Searcher,
-	matcher: &RegexMatcher,
-	bytes: &[u8],
-	params: SearchParams,
-	token: SearchToken,
-) -> io::Result<SearchOutcome> {
-	let mut collector = FileCollector::for_params(params, token);
-	searcher.search_slice(matcher, bytes, &mut collector)?;
-	Ok(collector.into_result())
-}
 
 fn build_matcher(opts: &GrepOptions) -> Result<RegexMatcher, String> {
 	let multiline = opts.multiline.unwrap_or(false);
@@ -1078,12 +1047,11 @@ fn build_matcher(opts: &GrepOptions) -> Result<RegexMatcher, String> {
 		.map_err(|err| format!("invalid pattern: {err}"))
 }
 
-/// 同步核（v1 聚合版；`#[napi(async_task)]` 转接由 lib.rs 迭代再加）。
+/// 同步核（测试钩子 forced 可强制执行策略以对比序贯/窗口/并行一致性）。
 pub fn grep_search_sync(opts: GrepOptions) -> Result<GrepResult, String> {
 	grep_search_impl(opts, None)
 }
 
-/// 测试钩子：forced 可强制执行策略以对比序贯/窗口/并行一致性。
 pub fn grep_search_impl(
 	opts: GrepOptions,
 	forced: Option<ExecStrategy>,
@@ -1102,30 +1070,33 @@ pub fn grep_search_impl(
 	};
 	let hidden = opts.hidden.unwrap_or(true);
 	let gitignore = opts.gitignore.unwrap_or(true);
-	let token = SearchToken::activate(opts.timeout_ms);
+	let token = SearchToken::activate(opts.cancel_key, opts.timeout_ms);
 
-	let result = if root.is_file() {
-		grep_single_file(&root, &matcher, params, token)
+	let mut result = if root.is_file() {
+		grep_single_file(&root, &matcher, params, &token)
 	} else {
 		let workers = worker_threads();
 		let strategy = forced.unwrap_or_else(|| choose_strategy(params, workers));
 		let state = PassState::new();
 		let results = match strategy {
 			ExecStrategy::Sequential => {
-				run_sequential(&root, globs.as_ref(), &matcher, params, hidden, gitignore, &state, token)
+				run_sequential(&root, globs.as_ref(), &matcher, params, hidden, gitignore, &state, &token)
 			},
 			ExecStrategy::Windowed => {
 				let stop = stop_after_matches(params).unwrap_or(u64::MAX);
-				run_windowed(&root, globs.as_ref(), &matcher, params, hidden, gitignore, stop, &state, token)
+				run_windowed(&root, globs.as_ref(), &matcher, params, hidden, gitignore, stop, &state, &token)
 			},
 			ExecStrategy::ParallelUnbounded => {
-				run_unbounded_parallel(&root, globs.as_ref(), &matcher, params, hidden, gitignore, &state, token)
+				run_unbounded_parallel(&root, globs.as_ref(), &matcher, params, hidden, gitignore, &state, &token)
 			},
 		};
 		let files_searched = state.files_searched.load(Ordering::Relaxed);
 		let skipped_oversized = state.skipped_oversized.load(Ordering::Relaxed);
 		aggregate_results(results, params, files_searched, skipped_oversized)
 	};
+	// 统一取消出口：管道任意取消点（searchCancel(key)/全局代际/timeout）
+	// 回填 cancelled —— TS 面据此转错误面，不静默回残表。
+	result.cancelled = token.cancelled();
 	token.deactivate();
 	Ok(result)
 }

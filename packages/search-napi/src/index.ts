@@ -12,8 +12,9 @@
  *     (grepSearch / findGlob / searchCancel). Any structural deviation makes
  *     calls return null so Callers fall back to rg instead of silently
  *     accepting a fake native module.
- *   - attachSearchCancel() — one-shot abortSignal → mod.searchCancel() hookup
- *     (Rust heart.rs bumps CANCEL_GEN; pipelines poll SearchToken).
+ *   - attachSearchCancel() — one-shot abortSignal → mod.searchCancel(key)
+ *     hookup (Rust heart.rs CancelRegistry flags the session's cancel slot;
+ *     pipelines poll SearchToken).
  *   - renderGrepMatches() — pure function, byte-aligned to vendored rg
  *     14.1.1 (probed format anchors, see comments at each branch):
  *       content match line   `path:line:text`      ( `-n` colon rule)
@@ -57,6 +58,8 @@ export interface GrepOptionsLike {
 	maxColumns?: number | null
 	mode?: GrepOutputModeValue | null
 	timeoutMs?: number | null
+	/** Per-session cancel key (CancelRegistry): searchCancel(key) kills only this call. */
+	cancelKey?: string | null
 }
 
 /** Mirror of napi `#[napi(object)] GlobOptions`. */
@@ -70,6 +73,18 @@ export interface GlobOptionsLike {
 	maxResults?: number | null
 	offset?: number | null
 	timeoutMs?: number | null
+	/** bfs `-name` face: basename fnmatch (orthogonal to `pattern` path glob). */
+	bfsName?: string | null
+	/** bfs `-iname`: case-insensitive `bfsName`. */
+	bfsIcase?: boolean | null
+	/** bfs `-mindepth` (root = 0; shallower entries skipped, traversal continues). */
+	minDepth?: number | null
+	/** Symlink policy: `"P"` (default, never follow; symlinks report type `l`) | `"L"` (follow all + loop guard) | `"H"` (follow roots only). */
+	follow?: string | null
+	/** Emit order: `"bfs"` (default; (depth, parent seq, name) layer order) | `"dfs"` (legacy WalkParallel + lexicographic fallback). */
+	order?: string | null
+	/** Per-session cancel key (CancelRegistry): searchCancel(key) kills only this call. */
+	cancelKey?: string | null
 }
 
 /** Mirror of napi `#[napi(object)] GrepMatch`. */
@@ -92,20 +107,24 @@ export interface GrepResultLike {
 	filesSearched: number
 	limitReached: boolean
 	skippedOversized: number
+	/** Pipeline was cancelled (searchCancel / timeout) — result is a truncated residual, not a clean empty set. */
+	cancelled?: boolean | null
 }
 
 /** Frozen v1 native surface (native/src/lib.rs + types.rs). */
 export interface SearchNativeModule {
 	grepSearch(options: GrepOptionsLike): Promise<GrepResultLike>
 	findGlob(options: GlobOptionsLike): Promise<string[]>
-	searchCancel(): void
+	searchCancel(key?: string | null): void
+	isNativeSearch(): boolean
 }
 
 /**
  * Structural validate probe for loadNativeModule. The frozen contract demands
- * all three functions — a module missing any of them is treated as "no
- * native" rather than accepted (guards against a mismatched .node payload
- * masquerading as search-napi).
+ * the full native surface (grepSearch / findGlob / searchCancel plus the
+ * isNativeSearch capability probe) — a module missing any of them is treated
+ * as "no native" rather than accepted (guards against a stale/mismatched
+ * .node payload masquerading as search-napi).
  */
 export function isValidSearchNativeModule(mod: unknown): boolean {
 	if (mod === null || typeof mod !== 'object') {
@@ -115,7 +134,8 @@ export function isValidSearchNativeModule(mod: unknown): boolean {
 	return (
 		typeof m.grepSearch === 'function' &&
 		typeof m.findGlob === 'function' &&
-		typeof m.searchCancel === 'function'
+		typeof m.searchCancel === 'function' &&
+		typeof m.isNativeSearch === 'function'
 	)
 }
 
@@ -142,20 +162,24 @@ export function loadSearchNative(): SearchNativeModule | null {
 }
 
 /**
- * One-shot hook: abortSignal → mod.searchCancel() (heart.rs payload).
- * Returns a cleanup that detaches the listener; the cancel side is
- * idempotent, so firing it early (already-aborted signal) is harmless.
+ * One-shot hook: abortSignal → mod.searchCancel(cancelKey) (heart.rs
+ * CancelRegistry payload). A per-call key scopes the kill to this session so
+ * concurrent native searches never cross-cancel; legacy no-key callers fall
+ * back to the process-wide generation counter. Returns a cleanup that
+ * detaches the listener; the cancel side is idempotent, so firing it early
+ * (already-aborted signal) is harmless.
  */
 export function attachSearchCancel(
 	mod: SearchNativeModule,
 	signal: AbortSignal | undefined,
+	cancelKey?: string | null,
 ): () => void {
 	if (!signal) {
 		return () => {}
 	}
 	const onCancel = () => {
 		try {
-			mod.searchCancel()
+			mod.searchCancel(cancelKey ?? null)
 		} catch {
 			// Engine already gone — nothing left to cancel.
 		}
