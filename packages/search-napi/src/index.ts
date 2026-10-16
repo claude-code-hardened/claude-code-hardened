@@ -152,8 +152,12 @@ export function loadSearchNative(): SearchNativeModule | null {
   }
   loadAttempted = true
 
+  // Module key 'search' matches the CI/vendor layout (vendor/search/<triple>/
+  // search.node, stage & Sync derive both dir and file name from 'search')
+  // and the compile.ts CRATES entry moduleName — EMBEDDED_NATIVES is keyed by
+  // a single name, so loader key and on-disk file name must coincide.
   const mod = loadNativeModule<SearchNativeModule>(
-    'search-napi',
+    'search',
     'search',
     isValidSearchNativeModule,
   )

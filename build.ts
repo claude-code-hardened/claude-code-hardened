@@ -84,19 +84,23 @@ console.log(
   `Bundled ${result.outputs.length} files to ${outdir}/ (patched ${patched} for import.meta.require, ${bunPatched} for Bun destructure)`,
 )
 
-// Step 4: Copy native .node addon files (audio-capture) and vendored binaries (ripgrep)
+// Step 4: Copy native .node addon files and vendored native search modules
 const audioCaptureDir = join(outdir, 'vendor', 'audio-capture')
 await cp('vendor/audio-capture', audioCaptureDir, { recursive: true })
 console.log(`Copied vendor/audio-capture/ → ${audioCaptureDir}/`)
 
-// Native NAPI binaries built by .github/workflows/build-native.yml.
+// Native NAPI binaries built by .github/workflows/ci.yml (native matrix).
 // Copied only when the CI-produced .node artifacts are present locally
 // (vendor/<name>/ is populated from workflow artifacts).
+// file-index: 存量漏登修正（搜索链此前只靠 compile 内嵌，bundle 面缺失）。
+// search: search-napi 转正的面（GrepTool/GlobTool 唯一搜索路径）。
 for (const name of [
   'token-counter',
   'transcript-parser',
   'color-diff',
   'clipboard',
+  'file-index',
+  'search',
 ]) {
   const src = `vendor/${name}`
   if (existsSync(src)) {
@@ -105,10 +109,6 @@ for (const name of [
     console.log(`Copied ${src}/ → ${dest}/`)
   }
 }
-
-const ripgrepDir = join(outdir, 'vendor', 'ripgrep')
-await cp('src/utils/vendor/ripgrep', ripgrepDir, { recursive: true })
-console.log(`Copied src/utils/vendor/ripgrep/ → ${ripgrepDir}/`)
 
 // Step 5: Generate cli-bun and cli-node executable entry points
 const cliBun = join(outdir, 'cli-bun.js')

@@ -11,7 +11,7 @@ import { truncatePathMiddle, truncateToWidth } from '../utils/format.js';
 import { highlightMatch } from '../utils/highlightMatch.js';
 import { relativePath } from '../utils/permissions/filesystem.js';
 import { readFileInRange } from '../utils/readFileInRange.js';
-import { ripGrepStream } from '../utils/ripgrep.js';
+import { attachSearchCancel, loadSearchNative } from '../../packages/search-napi/src/index';
 import { FuzzyPicker, LoadingState } from '@anthropic/ink';
 
 type Props = {
@@ -28,13 +28,13 @@ type Match = {
 const VISIBLE_RESULTS = 12;
 const DEBOUNCE_MS = 100;
 const PREVIEW_CONTEXT_LINES = 4;
-// rg -m is per-file; we also cap the parsed array to keep memory bounded.
-const MAX_MATCHES_PER_FILE = 10;
+// The native pipeline has no per-file match cap (the retired rg -m was
+// per-file); MAX_TOTAL_MATCHES bounds the parsed array instead.
 const MAX_TOTAL_MATCHES = 500;
 
 /**
  * Global Search dialog (ctrl+shift+f / cmd+shift+f).
- * Debounced ripgrep search across the workspace.
+ * Debounced native search across the workspace.
  */
 export function GlobalSearchDialog({ onDone, onInsert }: Props): React.ReactNode {
   useRegisterOverlay('global-search');
@@ -109,15 +109,12 @@ export function GlobalSearchDialog({ onDone, onInsert }: Props): React.ReactNode
     abortRef.current = controller;
     setIsSearching(true);
     setTruncated(false);
-    // Client-filter existing results while rg walks — keeps something on
-    // screen instead of flashing blank. rg results are merged in (deduped by
-    // file:line) rather than replaced, so the count is monotonic within a
-    // query: it only grows as rg streams, never dips to the first chunk's
-    // size. Narrowing (new query extends old): filter is exact — any line
-    // that matched the old -F -i literal contains the new one iff its text
-    // includes the new query lowered. Non-narrowing (broadening/different):
-    // filter is best-effort — may briefly show a subset until rg fills in
-    // the rest.
+    // Client-filter existing results while the native search runs — keeps
+    // something on screen instead of flashing blank. Fresh results are
+    // merged in (deduped by file:line) rather than replaced, so the count
+    // stays monotonic within a query. Narrowing (new query extends old):
+    // filter is exact — any line that matched the old fixed-string literal
+    // contains the new one iff its text includes the new query lowered.
     const queryLower = q.toLowerCase();
     setMatches(m => {
       const filtered = m.filter(match => match.text.toLowerCase().includes(queryLower));
@@ -126,57 +123,71 @@ export function GlobalSearchDialog({ onDone, onInsert }: Props): React.ReactNode
 
     timeoutRef.current = setTimeout(
       (query, controller, setMatches, setTruncated, setIsSearching) => {
-        // ripgrep outputs absolute paths when given an absolute target, so
-        // relativize against cwd to preserve directory context in the truncated
-        // display (otherwise the cwd prefix eats the width budget).
-        // relativePath() returns POSIX-normalized output so truncatePathMiddle
-        // (which uses lastIndexOf('/')) works on Windows too.
-        const cwd = getCwd();
-        let collected = 0;
-        void ripGrepStream(
-          // -e disambiguates pattern from options when the query starts with '-'
-          // (e.g. searching for "--verbose" or "-rf"). See GrepTool.ts for the
-          // same precaution.
-          ['-n', '--no-heading', '-i', '-m', String(MAX_MATCHES_PER_FILE), '-F', '-e', query],
-          cwd,
-          controller.signal,
-          lines => {
+        const runSearch = async (): Promise<void> => {
+          const mod = loadSearchNative();
+          if (!mod) {
+            setMatches([]);
+            setIsSearching(false);
+            return;
+          }
+          const cwd = getCwd();
+          let collected = 0;
+          // -F fixed-string semantics: escape regex metacharacters — the
+          // native engine compiles the pattern as a regex.
+          const pattern = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const cancelKey = `${Date.now()}-${Math.random()}`;
+          const cancel = attachSearchCancel(mod, controller.signal, cancelKey);
+          try {
+            const result = await mod.grepSearch({
+              pattern,
+              path: cwd,
+              ignoreCase: true, // retired rg path: -i
+              hidden: true,
+              gitignore: true,
+              maxColumns: 500, // retired rg path: --max-columns 500
+              mode: 'Content', // retired rg path: -n --no-heading
+              maxCount: MAX_TOTAL_MATCHES,
+              timeoutMs: 20_000,
+              cancelKey,
+            });
             if (controller.signal.aborted) return;
             const parsed: Match[] = [];
-            for (const line of lines) {
-              const m = parseRipgrepLine(line);
-              if (!m) continue;
-              const rel = relativePath(cwd, m.file);
-              parsed.push({ ...m, file: rel.startsWith('..') ? m.file : rel });
+            for (const match of result.matches) {
+              const rel = relativePath(cwd, match.path);
+              parsed.push({
+                file: rel.startsWith('..') ? match.path : rel,
+                line: match.lineNumber,
+                text: match.truncated === true ? '[Omitted long matching line]' : match.line,
+              });
+              if (parsed.length >= MAX_TOTAL_MATCHES) break;
             }
-            if (!parsed.length) return;
-            collected += parsed.length;
-            setMatches(prev => {
-              // Append+dedupe instead of replace: prev may hold client-
-              // filtered results that are valid matches for this query.
-              // Replacing would drop the count to this chunk's size then
-              // grow it back — visible as a flicker.
-              const seen = new Set(prev.map(matchKey));
-              const fresh = parsed.filter(p => !seen.has(matchKey(p)));
-              if (!fresh.length) return prev;
-              const next = prev.concat(fresh);
-              return next.length > MAX_TOTAL_MATCHES ? next.slice(0, MAX_TOTAL_MATCHES) : next;
-            });
-            if (collected >= MAX_TOTAL_MATCHES) {
-              controller.abort();
-              setTruncated(true);
-              setIsSearching(false);
+            collected = parsed.length;
+            if (collected > 0) {
+              setMatches(prev => {
+                // Merge+dedupe instead of replace: prev may hold client-
+                // filtered results that are valid matches for this query.
+                const seen = new Set(prev.map(matchKey));
+                const fresh = parsed.filter(p => !seen.has(matchKey(p)));
+                if (!fresh.length) return prev;
+                const next = prev.concat(fresh);
+                return next.length > MAX_TOTAL_MATCHES ? next.slice(0, MAX_TOTAL_MATCHES) : next;
+              });
             }
-          },
-        )
-          .catch(() => {})
-          // Stream closed with zero chunks — clear stale results so
-          // "No matches" renders instead of the previous query's list.
-          .finally(() => {
+            // cap flows through maxCount → limitReached (or our own slice)
+            setTruncated(result.limitReached === true || collected >= MAX_TOTAL_MATCHES);
+          } catch {
+            // Engine error (bad regex after escaping is impossible, aborted
+            // session, …) — treat as zero matches for this keystroke.
+          } finally {
+            cancel();
             if (controller.signal.aborted) return;
+            // Zero matches — clear stale results so "No matches" renders
+            // instead of the previous query's list.
             if (collected === 0) setMatches(m => (m.length ? [] : m));
             setIsSearching(false);
-          });
+          }
+        };
+        void runSearch();
       },
       DEBOUNCE_MS,
       q,
@@ -264,20 +275,4 @@ export function GlobalSearchDialog({ onDone, onInsert }: Props): React.ReactNode
 
 function matchKey(m: Match): string {
   return `${m.file}:${m.line}`;
-}
-
-/**
- * Parse a ripgrep -n --no-heading output line: "path:line:text".
- * Windows paths may contain a drive letter ("C:\..."), so a simple split on
- * the first colon would mangle the path — use a regex that captures up to
- * the first :<digits>: instead.
- * @internal exported for testing
- */
-export function parseRipgrepLine(line: string): Match | null {
-  const m = /^(.*?):(\d+):(.*)$/.exec(line);
-  if (!m) return null;
-  const [, file, lineStr, text] = m;
-  const lineNum = Number(lineStr);
-  if (!file || !Number.isFinite(lineNum)) return null;
-  return { file, line: lineNum, text: text ?? '' };
 }

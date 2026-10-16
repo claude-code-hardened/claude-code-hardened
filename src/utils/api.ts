@@ -70,7 +70,7 @@ import {
   persistFileSnapshotIfRemote,
 } from './plans.js'
 import { getPlatform } from './platform.js'
-import { countFilesRoundedRg } from './ripgrep.js'
+import { countFilesRounded } from './fileCount.js'
 import { jsonStringify } from './slowOperations.js'
 import type { SystemPrompt } from './systemPromptType.js'
 import { getToolSchemaCache } from './toolSchemaCache.js'
@@ -521,14 +521,15 @@ export async function logContextMetrics(
   // Calculate total context size
   const totalContextSize = gitStatusSize + claudeMdSize
 
-  // Get file count using ripgrep (rounded to nearest power of 10 for privacy)
+  // Get file count via the native search walk (rounded to the nearest
+  // power of 10 for privacy)
   const currentDir = getCwd()
   const ignorePatternsByRoot = getFileReadIgnorePatterns(toolPermissionContext)
   const normalizedIgnorePatterns = normalizePatternsToPath(
     ignorePatternsByRoot,
     currentDir,
   )
-  const fileCount = await countFilesRoundedRg(
+  const fileCount = await countFilesRounded(
     currentDir,
     AbortSignal.timeout(1000),
     normalizedIgnorePatterns,

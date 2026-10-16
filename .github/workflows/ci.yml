@@ -121,13 +121,18 @@ jobs:
         working-directory: packages/file-index-napi/native
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Build (search)
+        if: hashFiles('packages/search-napi/native/Cargo.toml') != ''
+        working-directory: packages/search-napi/native
+        run: cargo build --release --target ${{ matrix.target }}
+
       # 统一整理产物到 vendor 布局：vendor/<name>/<triple>/<name>.node
       - name: Stage artifacts (unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}" "stage/color-diff/${{ matrix.target }}" "stage/file-index/${{ matrix.target }}"
-          for name in token-counter transcript-parser color-diff file-index; do
+          mkdir -p "stage/token-counter/${{ matrix.target }}" "stage/transcript-parser/${{ matrix.target }}" "stage/color-diff/${{ matrix.target }}" "stage/file-index/${{ matrix.target }}" "stage/search/${{ matrix.target }}"
+          for name in token-counter transcript-parser color-diff file-index search; do
             crate="${name//-/_}_napi"
             src=""
             for ext in so dylib; do
@@ -148,8 +153,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path "stage/token-counter/${{ matrix.target }}", "stage/transcript-parser/${{ matrix.target }}", "stage/color-diff/${{ matrix.target }}", "stage/file-index/${{ matrix.target }}" | Out-Null
-          foreach ($name in @('token-counter', 'transcript-parser', 'color-diff', 'file-index')) {
+          New-Item -ItemType Directory -Force -Path "stage/token-counter/${{ matrix.target }}", "stage/transcript-parser/${{ matrix.target }}", "stage/color-diff/${{ matrix.target }}", "stage/file-index/${{ matrix.target }}", "stage/search/${{ matrix.target }}" | Out-Null
+          foreach ($name in @('token-counter', 'transcript-parser', 'color-diff', 'file-index', 'search')) {
             $crate = $name -replace '-', '_'
             $src = "packages/$name-napi/native/target/${{ matrix.target }}/release/${crate}_napi.dll"
             if (-not (Test-Path $src)) {
@@ -191,17 +196,17 @@ jobs:
           set -euo pipefail
           for dir in artifacts/native-*; do
             triple="${dir#artifacts/native-}"
-            for name in token-counter transcript-parser color-diff file-index; do
+            for name in token-counter transcript-parser color-diff file-index search; do
               if [ -d "$dir/$name/$triple" ]; then
                 mkdir -p "vendor/$name/$triple"
                 cp "$dir/$name/$triple/$name.node" "vendor/$name/$triple/"
               fi
             done
           done
-          find vendor/token-counter vendor/transcript-parser vendor/color-diff vendor/file-index -name '*.node' 2>/dev/null | sort
-          # 严格化断言：4 模块 × 6 triple，缺一即失败
+          find vendor/token-counter vendor/transcript-parser vendor/color-diff vendor/file-index vendor/search -name '*.node' 2>/dev/null | sort
+          # 严格化断言：5 模块 × 6 triple，缺一即失败
           MISSING=0
-          for name in token-counter transcript-parser color-diff file-index; do
+          for name in token-counter transcript-parser color-diff file-index search; do
             for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
               [ -f "vendor/$name/$triple/$name.node" ] || { echo "::error::vendor missing: $name/$triple"; MISSING=1; }
             done

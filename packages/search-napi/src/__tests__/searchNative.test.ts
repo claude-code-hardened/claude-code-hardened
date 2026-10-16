@@ -4,9 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 // Shared porcelain mocks per CLAUDE.md mock rules: log/debug cut the
-// bootstrap/state.ts side-effect chain; bun:bundle is pinned to feature() ===
-// false (the documented default under test) so GrepTool.call exercises the
-// untouched rg branch — the exact behavior when SEARCH_NAPI is disabled.
+// bootstrap/state.ts side-effect chain; bun:bundle pins SEARCH_NAPI to true
+// (the documented build default — the flag gate itself stays in call()) so
+// GrepTool.call exercises the native dispatch; loadNativeModule is pinned to
+// null so the "no native artifact" behavior is deterministic even on
+// machines where vendor/search/<triple>/search.node has been built (CI's
+// quality job runs bun test before any native artifacts land in vendor/).
+// There is no rg subprocess branch anymore: with the native module absent
+// (loadSearchNative() → null) the only observable behavior is the
+// rg-branch-shaped error tool_result, asserted below.
 import type * as searchNativeTypes from '../index'
 import { debugMock } from '../../../../tests/mocks/debug'
 import { logMock } from '../../../../tests/mocks/log'
@@ -14,8 +20,12 @@ import { mockToolContext } from '../../../../tests/mocks/toolContext'
 
 mock.module('src/utils/log.ts', logMock)
 mock.module('src/utils/debug.ts', debugMock)
+mock.module('src/utils/embeddedNative.ts', () => ({
+  loadNativeModule: () => null,
+  __esModule: true,
+}))
 mock.module('bun:bundle', () => ({
-  feature: (_name: string) => false,
+  feature: (name: string) => name === 'SEARCH_NAPI',
 }))
 
 // Dynamic imports AFTER the mocks (mock.module does not hoist).
@@ -241,34 +251,27 @@ describe('renderGrepMatches', () => {
   })
 })
 
-// ─── GrepTool (SEARCH_NAPI off → rg branch, unmocked) ───────────────────
+// ─── GrepTool (SEARCH_NAPI on, native module absent → error tool_result) ──
 
-describe('GrepTool with feature flag disabled', () => {
-  test('runs the rg branch: files_with_matches shape identical to today', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'search-napi-rg-'))
+describe('GrepTool with native module missing', () => {
+  test('files_with_matches: rejects with the search-unavailable error', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'search-napi-err-'))
     await writeFile(join(dir, 'aa.txt'), 'needle in aa\n')
-    await writeFile(join(dir, 'bb.txt'), 'needle in bb\n')
-    await writeFile(join(dir, 'cc.md'), 'nothing here\n')
 
-    const result = await GrepTool.call(
-      {
-        pattern: 'needle',
-        path: dir,
-        output_mode: 'files_with_matches',
-        head_limit: 1,
-      } as unknown as Parameters<typeof GrepTool.call>[0],
-      mockToolContext(),
-    )
-    expect(result.data.mode).toBe('files_with_matches')
-    // rg finds both files; applyHeadLimit keeps the first (test env sorts by
-    // filename → aa.txt) and reports the applied limit.
-    expect(result.data.numFiles).toBe(1)
-    expect(result.data.filenames[0]!.endsWith('aa.txt')).toBe(true)
-    expect(result.data.appliedLimit).toBe(1)
+    await expect(
+      GrepTool.call(
+        {
+          pattern: 'needle',
+          path: dir,
+          output_mode: 'files_with_matches',
+        } as unknown as Parameters<typeof GrepTool.call>[0],
+        mockToolContext(),
+      ),
+    ).rejects.toThrow('search unavailable: native module missing')
   })
 
-  test('runs the rg branch: content output keeps path:line:text', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'search-napi-rg-'))
+  test('content mode: rejects the same way (no silent empty results)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'search-napi-err-'))
     await writeFile(join(dir, 'aa.txt'), 'needle in aa\n')
 
     const callInput = {
@@ -277,21 +280,12 @@ describe('GrepTool with feature flag disabled', () => {
       output_mode: 'content',
     } as unknown as Parameters<typeof GrepTool.call>[0]
     // 联合 ToolResult 取窄面：bypasses overload union resolution（测试面合法 as any）。
-    const result = await (
-      GrepTool.call as unknown as (...args: unknown[]) => Promise<{
-        data: {
-          mode: string
-          numLines: number
-          content: string
-          appliedLimit?: number
-        }
-      }>
-    )(callInput, mockToolContext(), stubCanUseTool, stubParentMessage)
-    // tmpdir paths are outside cwd → toRelativePath keeps them absolute,
-    // exactly like the current rg subprocess output.
-    expect(result.data.mode).toBe('content')
-    expect(result.data.numLines).toBe(1)
-    expect(result.data.content).toContain('aa.txt:1:needle in aa')
-    expect(result.data.appliedLimit).toBeUndefined()
+    await expect(
+      (
+        GrepTool.call as unknown as (
+          ...args: unknown[]
+        ) => Promise<{ data: { mode: string; content: string } }>
+      )(callInput, mockToolContext(), stubCanUseTool, stubParentMessage),
+    ).rejects.toThrow('search unavailable: native module missing')
   })
 })

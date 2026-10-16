@@ -56,7 +56,6 @@ import { WEB_FETCH_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/W
 import { errorMessage } from '../errors.js'
 import { getClaudeTempDir } from '../permissions/filesystem.js'
 import type { PermissionRuleValue } from '../permissions/PermissionRule.js'
-import { ripgrepCommand } from '../ripgrep.js'
 
 // Local copies to avoid circular dependency
 // (permissions.ts imports SandboxManager, bashPermissions.ts imports permissions.ts)
@@ -347,13 +346,12 @@ export function convertToSandboxRuntimeConfig(
       }
     }
   }
-  // Ripgrep config for sandbox. User settings take priority; otherwise pass our rg.
-  // In embedded mode (argv0='rg' dispatch), sandbox-runtime spawns with argv0 set.
-  const { rgPath, rgArgs, argv0 } = ripgrepCommand()
+  // Ripgrep config for sandbox. User settings take priority; otherwise let
+  // sandbox-runtime resolve rg from PATH (the bundled rg chain was retired —
+  // CCH no longer ships a ripgrep binary).
   const ripgrepConfig = settings.sandbox?.ripgrep ?? {
-    command: rgPath,
-    args: rgArgs,
-    argv0,
+    command: 'rg',
+    args: [],
   }
 
   return {
@@ -448,13 +446,10 @@ async function detectWorktreeMainRepoPath(cwd: string): Promise<string | null> {
  * Check if dependencies are available (memoized)
  * Returns { errors, warnings } - errors mean sandbox cannot run
  */
-const checkDependencies = memoize((): SandboxDependencyCheck => {
-  const { rgPath, rgArgs } = ripgrepCommand()
-  return BaseSandboxManager.checkDependencies({
-    command: rgPath,
-    args: rgArgs,
-  })
-})
+const checkDependencies = memoize((): SandboxDependencyCheck =>
+  // No ripgrepConfig arg → sandbox-runtime probes its default ('rg' on PATH).
+  BaseSandboxManager.checkDependencies(),
+)
 
 function getSandboxEnabledSetting(): boolean {
   try {

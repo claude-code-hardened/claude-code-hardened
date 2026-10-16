@@ -37,16 +37,18 @@ describe('file-index native (rg listing + Rust index search)', () => {
     expect(indexSource).toContain("typeof m.NativeFileIndex === 'function'")
   })
 
-  test('non-git fallback goes straight to ripgrep (no ffi scan)', () => {
-    // rg 采列表（node_modules/.bun glob 排除防分钟级扫描），灌进 Rust 索引。
+  test('non-git fallback goes to the native search walk (no ffi scan)', () => {
+    // search-napi findGlob 采列表（node_modules/.bun 等 `!` 排除防分钟级
+    // 扫描），灌进 Rust 索引。原 rg --files 子进程链已整体退役。
     expect(hookSource).not.toContain('scanProjectFilesFfi')
     expect(hookSource).not.toContain('ffiFileScanner')
     expect(hookSource).not.toContain('FFI_SCAN_EXCLUDES')
-    const rgPos = hookSource.indexOf('await ripGrep(')
-    expect(rgPos).toBeGreaterThan(-1)
-    expect(hookSource).toContain("'!node_modules/'")
-    expect(hookSource).toContain("'!.bun/'")
-    // FEATURE_FILE_INDEX_NATIVE=0 必须恢复纯 TS/rg 路径（kill switch，
+    expect(hookSource).not.toContain('ripgrep.js')
+    const findGlobPos = hookSource.indexOf('mod.findGlob(')
+    expect(findGlobPos).toBeGreaterThan(-1)
+    expect(hookSource).toContain("'!node_modules'")
+    expect(hookSource).toContain("'!.bun'")
+    // FEATURE_FILE_INDEX_NATIVE=0 必须恢复纯 TS 路径（kill switch，
     // 门住 native 索引构造）。
     expect(hookSource).toContain("feature('FILE_INDEX_NATIVE')")
   })

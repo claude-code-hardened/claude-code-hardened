@@ -17,7 +17,10 @@ import type { FrontmatterData } from './frontmatterParser.js'
 import { parseFrontmatter } from './frontmatterParser.js'
 import { findCanonicalGitRoot, findGitRoot } from './git.js'
 import { parseToolListFromCLI } from './permissions/permissionSetup.js'
-import { ripGrep } from './ripgrep.js'
+import {
+  attachSearchCancel,
+  loadSearchNative,
+} from '../../../packages/search-napi/src/index'
 import {
   isSettingSourceEnabled,
   type SettingSource,
@@ -251,8 +254,8 @@ export function getProjectDirsUpToHome(
     }
 
     const claudeSubdir = join(current, '.claude', subdir)
-    // Filter to existing dirs. This is a perf filter (avoids spawning
-    // ripgrep on non-existent dirs downstream) and the worktree fallback
+    // Filter to existing dirs. This is a perf filter (avoids walking
+    // non-existent dirs downstream) and the worktree fallback
     // in loadMarkdownFilesForSubdir relies on it. statSync + explicit error
     // handling instead of existsSync — re-throws unexpected errors rather
     // than silently swallowing them. Downstream loadMarkdownFiles handles
@@ -432,9 +435,10 @@ export const loadMarkdownFilesForSubdir = memoize(
 /**
  * Native implementation to find markdown files using Node.js fs APIs
  *
- * This implementation exists alongside ripgrep for the following reasons:
- * 1. Ripgrep has poor startup performance in native builds (noticeable on app startup)
- * 2. Provides a fallback when ripgrep is unavailable
+ * This implementation serves as the non-native fallback for the following
+ * reasons:
+ * 1. Works in test environments without a compiled search-napi artifact
+ * 2. Provides a fallback when the native search module is unavailable
  * 3. Can be explicitly enabled via CLAUDE_CODE_USE_NATIVE_FILE_SEARCH env var
  *
  * Symlink handling:
@@ -551,25 +555,44 @@ async function loadMarkdownFiles(dir: string): Promise<
   }[]
 > {
   // File search strategy:
-  // - Default: ripgrep (faster, battle-tested)
-  // - Fallback: native Node.js (when CLAUDE_CODE_USE_NATIVE_FILE_SEARCH is set)
-  //
-  // Why both? Ripgrep has poor startup performance in native builds.
-  const useNative = isEnvTruthy(process.env.CLAUDE_CODE_USE_NATIVE_FILE_SEARCH)
+  // - Default: native search walk (search-napi findGlob; `*.md` gets the
+  //   `**/` basename-anywhere prefix, matching the retired rg --glob face)
+  // - Fallback: native Node.js fs walk (when the native module is missing,
+  //   unreadable target, or CLAUDE_CODE_USE_NATIVE_FILE_SEARCH is set)
+  const useNativeWalk = isEnvTruthy(
+    process.env.CLAUDE_CODE_USE_NATIVE_FILE_SEARCH,
+  )
   const signal = AbortSignal.timeout(3000)
   let files: string[]
   try {
-    files = useNative
-      ? await findMarkdownFilesNative(dir, signal)
-      : await ripGrep(
-          ['--files', '--hidden', '--follow', '--no-ignore', '--glob', '*.md'],
-          dir,
-          signal,
-        )
+    if (useNativeWalk) {
+      files = await findMarkdownFilesNative(dir, signal)
+    } else {
+      const mod = loadSearchNative()
+      if (mod === null) {
+        throw new Error('markdown listing unavailable: native module missing')
+      }
+      const cancelKey = 'markdown-config-loader'
+      const cancel = attachSearchCancel(mod, signal, cancelKey)
+      try {
+        files = await mod.findGlob({
+          pattern: '*.md',
+          path: dir,
+          hidden: true, // retired rg path: --hidden
+          gitignore: false, // retired rg path: --no-ignore
+          follow: 'L', // retired rg path: --follow (+ loop guard)
+          timeoutMs: 3_000,
+          cancelKey,
+        })
+      } finally {
+        cancel()
+      }
+    }
   } catch (e: unknown) {
     // Handle missing/inaccessible dir directly instead of pre-checking
     // existence (TOCTOU). findMarkdownFilesNative already catches internally;
-    // ripGrep rejects on inaccessible target paths.
+    // findGlob (and the retired ripgrep before it) rejects on inaccessible
+    // target paths.
     if (isFsInaccessible(e)) return []
     throw e
   }

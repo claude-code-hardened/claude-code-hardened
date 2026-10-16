@@ -43,6 +43,7 @@ const CRATES = [
   },
   { pkg: 'color-diff-napi', crate: 'color_diff_napi', name: 'color-diff' },
   { pkg: 'file-index-napi', crate: 'file_index_napi', name: 'file-index' },
+  { pkg: 'search-napi', crate: 'search_napi', name: 'search' },
 ]
 
 function artifactName(crate, platform) {
@@ -116,19 +117,6 @@ if (!SKIP_NATIVE) {
 // compile（Step 2）与 bundle 互不依赖，但 bundle 必须先于 Step 4 pack。
 console.log('\n=== Step 1.5: Bundle (splitting + dual entry points) ===')
 run('bun', ['run', 'build'])
-
-// ── Step 1.7: 确保每个 compile target 的 ripgrep 就位（compile.ts 内嵌）──
-// CI package job 在单台 runner 上循环编译 5 平台，postinstall 只装本平台；
-// 其余平台在这里按 target 预取（幂等，失败仅告警不阻塞——运行时回退链仍在）。
-console.log('\n=== Step 1.7: Fetch ripgrep for all targets ===')
-const rgFetch = spawnSync('node', ['scripts/fetch-rg.mjs'], {
-  stdio: 'inherit',
-})
-if (rgFetch.status !== 0) {
-  console.warn(
-    `[build-all] fetch-rg exited ${rgFetch.status}; compile proceeds without some embedded rg`,
-  )
-}
 
 // ── Step 2: 为每个 target 编译单文件二进制（内嵌对应平台的 .node）──
 console.log('\n=== Step 2: Compile single-file binaries ===')

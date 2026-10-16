@@ -31,7 +31,7 @@ import {
   getPackageManager,
 } from './nativeInstaller/packageManagers.js'
 import { getPlatform } from './platform.js'
-import { getRipgrepStatus } from './ripgrep.js'
+import { loadSearchNative } from '../../../packages/search-napi/src/index'
 import { SandboxManager } from './sandbox/sandbox-adapter.js'
 import { getManagedFilePath } from './settings/managedPath.js'
 import { CUSTOMIZATION_SURFACES } from './settings/types.js'
@@ -63,10 +63,10 @@ export type DiagnosticInfo = {
   warnings: Array<{ issue: string; fix: string }>
   recommendation?: string
   packageManager?: string
-  ripgrepStatus: {
+  searchStatus: {
     working: boolean
-    mode: 'system' | 'builtin' | 'embedded'
-    systemPath: string | null
+    /** 'native' = in-process search-napi engine; 'unavailable' = module missing/degraded. */
+    mode: 'native' | 'unavailable'
     note: string | null
   }
 }
@@ -613,16 +613,17 @@ export async function getDoctorDiagnostic(): Promise<DiagnosticInfo> {
     }
   }
 
-  // Get ripgrep status and configuration
-  const ripgrepStatusRaw = getRipgrepStatus()
-
-  // Provide simple ripgrep status info
-  const ripgrepStatus = {
-    working: ripgrepStatusRaw.working ?? true, // Assume working if not yet tested
-    mode: ripgrepStatusRaw.mode,
-    systemPath:
-      ripgrepStatusRaw.mode === 'system' ? ripgrepStatusRaw.path : null,
-    note: ripgrepStatusRaw.note ?? null,
+  // Search engine status (in-process native module; the rg subprocess chain
+  // was retired — there is no external binary to probe anymore).
+  const searchNative = loadSearchNative()
+  const searchStatus = {
+    working: searchNative !== null,
+    mode:
+      searchNative !== null ? ('native' as const) : ('unavailable' as const),
+    note:
+      searchNative !== null
+        ? null
+        : 'native search module unavailable; search tools are degraded',
   }
 
   // Get package manager info if running from package manager
@@ -647,7 +648,7 @@ export async function getDoctorDiagnostic(): Promise<DiagnosticInfo> {
     multipleInstallations,
     warnings,
     packageManager,
-    ripgrepStatus,
+    searchStatus,
   }
 
   return diagnostic

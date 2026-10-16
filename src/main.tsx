@@ -221,10 +221,10 @@ import {
 } from './utils/permissions/permissionSetup.js';
 import { cleanupOrphanedPluginVersionsInBackground } from './utils/plugins/cacheUtils.js';
 import { initializeVersionedPlugins } from './utils/plugins/installedPluginsManager.js';
+import { countFilesRounded } from './utils/fileCount.js';
 import { getManagedPluginNames } from './utils/plugins/managedPlugins.js';
 import { getGlobExclusionsForPluginCache } from './utils/plugins/orphanedPluginFilter.js';
 import { getPluginSeedDirs } from './utils/plugins/pluginDirectories.js';
-import { countFilesRoundedRg } from './utils/ripgrep.js';
 import { processSessionStartHooks, processSetupHooks } from './utils/sessionStart.js';
 import {
   cacheSessionTitle,
@@ -563,7 +563,7 @@ export function startDeferredPrefetches(): void {
   if (isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX) && !isEnvTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH)) {
     void prefetchGcpCredentialsIfSafe();
   }
-  void countFilesRoundedRg(getCwd(), AbortSignal.timeout(3000), []);
+  void countFilesRounded(getCwd(), AbortSignal.timeout(3000), []);
 
   // Analytics and feature flag initialization
   void initializeAnalyticsGates();

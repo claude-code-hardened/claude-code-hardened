@@ -5,7 +5,8 @@
  * 编译单文件二进制时，plugin 在打包阶段用目标平台的 base64 内容替换本模块，
  * 运行时通过 process.dlopen(mod, buffer) 从内存直接加载，不落盘。
  *
- * key   = 模块名（token-counter / transcript-parser / color-diff）
+ * key   = 模块名（token-counter / transcript-parser / color-diff /
+ * file-index / search——加载器键与 vendor/<dir>/<triple>/<key>.node 文件名一致）
  * value = .node 文件内容的 base64
  */
 export const EMBEDDED_NATIVES: Record<string, string> = {}

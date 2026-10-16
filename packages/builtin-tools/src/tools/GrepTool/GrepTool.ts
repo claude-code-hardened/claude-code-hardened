@@ -16,8 +16,8 @@ import {
 } from 'src/utils/permissions/filesystem.js'
 import type { PermissionDecision } from 'src/utils/permissions/PermissionResult.js'
 import { matchWildcardPattern } from 'src/utils/permissions/shellRuleMatching.js'
+import { expandTopLevelBraces } from 'src/utils/glob.js'
 import { getGlobExclusionsForPluginCache } from 'src/utils/plugins/orphanedPluginFilter.js'
-import { ripGrep } from 'src/utils/ripgrep.js'
 import { semanticBoolean } from 'src/utils/semanticBoolean.js'
 import { semanticNumber } from 'src/utils/semanticNumber.js'
 import { plural } from 'src/utils/stringUtils.js'
@@ -205,16 +205,17 @@ type OutputSchema = ReturnType<typeof outputSchema>
 
 type Output = z.infer<OutputSchema>
 
-// SEARCH_NAPI native-first branch (flag-gated — zero impact while off).
-// Loads the in-process Rust search engine (packages/search-napi), renders its
-// matches into byte-identical rg subprocess output (see renderGrepMatches in
-// packages/search-napi/src/index.ts for the format anchors), then reuses
-// applyHeadLimit + relativeContentLine + the exact Output assembly of the rg
-// branch below. head_limit/offset stay post-hoc on rendered lines, like the
-// rg path which never passes them to the rg process. Any native absence or
-// failure returns null so the untouched rg path runs — the renderer contract
-// is that splitContentLine/relativeContentLine/count parsing round-trip every
-// emitted line.
+// SEARCH_NAPI native dispatch（rg 子进程外挂链已整体退役，本分支是唯一路径）。
+// Runs the in-process Rust search engine (packages/search-napi) and renders
+// its matches into rg-14.1.1 byte-identical subprocess output (see
+// renderGrepMatches in packages/search-napi/src/index.ts for the format
+// anchors), then reuses applyHeadLimit + relativeContentLine + the exact
+// Output assembly the former rg branch used. head_limit/offset stay post-hoc
+// on rendered lines. The renderer contract is that splitContentLine/
+// relativeContentLine/count parsing round-trip every emitted line. When the
+// native module is missing the call fails with an rg-branch-shaped error
+// tool_result ('search unavailable: native module missing') — never a silent
+// empty result.
 type NativeCallContext = {
   abortController: AbortController
   getAppState: () => {
@@ -239,13 +240,41 @@ type NativeGrepArgs = {
   offset?: number | undefined
 }
 
+// rg-branch-shaped empty result (resolve([]) there — "No files found" /
+// blank content lines). Used for pre-started aborts, which the rg subprocess
+// path treated as a clean cancellation, never an error.
+function emptyOutput(outputMode: string): Output {
+  if (outputMode === 'content') {
+    return {
+      mode: 'content',
+      numFiles: 0,
+      filenames: [],
+      content: '',
+      numLines: 0,
+    }
+  }
+  if (outputMode === 'count') {
+    return {
+      mode: 'count',
+      numFiles: 0,
+      filenames: [],
+      content: '',
+      numMatches: 0,
+    }
+  }
+  return { mode: 'files_with_matches', numFiles: 0, filenames: [] }
+}
+
 async function nativeGrepOutput(
   args: NativeGrepArgs,
   { abortController, getAppState }: NativeCallContext,
 ): Promise<Output | null> {
   const mod = loadSearchNative()
-  if (mod === null || abortController.signal.aborted) {
+  if (mod === null) {
     return null
+  }
+  if (abortController.signal.aborted) {
+    return emptyOutput(args.output_mode ?? 'files_with_matches')
   }
 
   const {
@@ -269,20 +298,25 @@ async function nativeGrepOutput(
 
   // Compose the single glob expression the native pipeline accepts
   // (comma/space separated, `!`-negated). The user glob is split exactly like
-  // the rg branch; pieces are space-joined so comma-bearing brace patterns
-  // keep their commas — but a piece that itself contains a comma or any
-  // whitespace cannot round-trip the native comma/space split (e.g.
-  // "*.{ts,tsx}" or an ignore rule with spaces) → bail out to rg, which
-  // passes those as separate --glob args with byte-perfect semantics.
+  // the former rg branch — but the native side splits its glob expression on
+  // commas/whitespace too, so brace unions would shatter mid-alternative.
+  // They are therefore brace-expanded on our side first ("*.{ts,tsx}" →
+  // "*.ts" "*.tsx", identical include-union semantics); a piece that still
+  // contains a comma or whitespace after expansion cannot round-trip the
+  // native split at all (e.g. an ignore rule with spaces), and with the rg
+  // subprocess chain retired there is no fallback — surface a precise error
+  // instead of a misleading one.
   const globParts: string[] = []
   if (glob) {
     const rawPatterns = glob.split(/\s+/)
     for (const rawPattern of rawPatterns) {
-      if (rawPattern.includes('{') && rawPattern.includes('}')) {
-        globParts.push(rawPattern)
-      } else {
-        globParts.push(...rawPattern.split(',').filter(Boolean))
+      const expanded = expandTopLevelBraces(rawPattern)
+      if (expanded === null) {
+        throw new Error(
+          `unsupported glob pattern for native search: ${glob} (nested/unbalanced braces)`,
+        )
       }
+      globParts.push(...expanded.flatMap(p => p.split(',').filter(Boolean)))
     }
   }
   for (const dir of VCS_DIRECTORIES_TO_EXCLUDE) {
@@ -293,8 +327,8 @@ async function nativeGrepOutput(
     getCwd(),
   )
   for (const ignorePattern of ignorePatterns) {
-    // Same positive→negative rewrite as the rg branch below (ripgrep applies
-    // gitignore-style globs relative to the search root).
+    // Same positive→negative rewrite as the retired rg branch (the engine
+    // applies gitignore-style globs relative to the search root).
     globParts.push(
       ignorePattern.startsWith('/')
         ? `!${ignorePattern}`
@@ -308,7 +342,9 @@ async function nativeGrepOutput(
     part => part.includes(',') || /\s/.test(part),
   )
   if (nativeUnsafeGlob) {
-    return null
+    throw new Error(
+      `unsupported glob pattern for native search: ${glob} (cannot contain commas or whitespace)`,
+    )
   }
   const globExpr = globParts.length > 0 ? globParts.join(' ') : undefined
 
@@ -367,14 +403,19 @@ async function nativeGrepOutput(
   let result: GrepResultLike
   try {
     result = await mod.grepSearch(options)
-  } catch {
-    // Native engine failure (bad regex, aborted session, …) → rg path below.
-    return null
+  } catch (e) {
+    // Engine failure (bad regex, ...) propagates as the rg-branch-shaped
+    // error tool_result; an aborted session degrades to the clean empty
+    // result the rg path produced on SIGKILL/abort.
+    if (abortController.signal.aborted) {
+      return emptyOutput(output_mode)
+    }
+    throw e
   } finally {
     cancel()
   }
   // Structural shape probe (validate-probe defense in depth): a payload that
-  // doesn't look like GrepResult bails to the rg path instead of rendering
+  // doesn't look like GrepResult fails the call instead of rendering
   // garbage. (med: Array.isArray defenses.)
   if (
     result === null ||
@@ -383,12 +424,13 @@ async function nativeGrepOutput(
   ) {
     return null
   }
-  // Cancelled pipeline (searchCancel / native timeout) → hand the call to the
-  // rg branch, whose own timeout/abort surfaces the exact same error class
-  // users see from the subprocess path today — never a silently truncated
-  // residual table.
+  // Cancelled pipeline (searchCancel / native timeout) — the rg branch
+  // surfaced its timeout error class here, never a silently truncated
+  // residual table; mirror that.
   if (result.cancelled === true) {
-    return null
+    throw new Error(
+      'Search timed out after 20 seconds. The search may have matched files but did not complete in time. Try searching a more specific path or pattern.',
+    )
   }
 
   if (output_mode === 'content') {
@@ -684,10 +726,12 @@ export const GrepTool = buildTool({
     },
     { abortController, getAppState },
   ) {
-    // SEARCH_NAPI native-first dispatch — runs the in-process Rust engine
-    // when the flag is on AND the native module is loadable/structurally
-    // valid; otherwise (or on any native failure) falls through to the
-    // byte-identical rg subprocess branch below, untouched.
+    // SEARCH_NAPI native dispatch — the ONLY search path (the rg subprocess
+    // chain was retired wholesale). When the flag is on but the native module
+    // is missing/structurally invalid, fail with an rg-branch-shaped error
+    // tool_result instead of silently claiming "no matches". Engine-side
+    // failures (bad regex, timeout) throw out of nativeGrepOutput with their
+    // real messages, exactly like the former rg branch did.
     if (feature('SEARCH_NAPI')) {
       const native = await nativeGrepOutput(
         {
@@ -713,243 +757,6 @@ export const GrepTool = buildTool({
       }
     }
 
-    const absolutePath = path ? expandPath(path) : getCwd()
-    const args = ['--hidden']
-
-    // Exclude VCS directories to avoid noise from version control metadata
-    for (const dir of VCS_DIRECTORIES_TO_EXCLUDE) {
-      args.push('--glob', `!${dir}`)
-    }
-
-    // Limit line length to prevent base64/minified content from cluttering output
-    args.push('--max-columns', '500')
-
-    // Only apply multiline flags when explicitly requested
-    if (multiline) {
-      args.push('-U', '--multiline-dotall')
-    }
-
-    // Add optional flags
-    if (case_insensitive) {
-      args.push('-i')
-    }
-
-    // Add output mode flags
-    if (output_mode === 'files_with_matches') {
-      args.push('-l')
-    } else if (output_mode === 'count') {
-      args.push('-c')
-    }
-
-    // Add line numbers if requested
-    if (show_line_numbers && output_mode === 'content') {
-      args.push('-n')
-    }
-
-    // Add context flags (-C/context takes precedence over context_before/context_after)
-    if (output_mode === 'content') {
-      if (context !== undefined) {
-        args.push('-C', context.toString())
-      } else if (context_c !== undefined) {
-        args.push('-C', context_c.toString())
-      } else {
-        if (context_before !== undefined) {
-          args.push('-B', context_before.toString())
-        }
-        if (context_after !== undefined) {
-          args.push('-A', context_after.toString())
-        }
-      }
-    }
-
-    // If pattern starts with dash, use -e flag to specify it as a pattern
-    // This prevents ripgrep from interpreting it as a command-line option
-    if (pattern.startsWith('-')) {
-      args.push('-e', pattern)
-    } else {
-      args.push(pattern)
-    }
-
-    // Add type filter if specified
-    if (type) {
-      args.push('--type', type)
-    }
-
-    if (glob) {
-      // Split on commas and spaces, but preserve patterns with braces
-      const globPatterns: string[] = []
-      const rawPatterns = glob.split(/\s+/)
-
-      for (const rawPattern of rawPatterns) {
-        // If pattern contains braces, don't split further
-        if (rawPattern.includes('{') && rawPattern.includes('}')) {
-          globPatterns.push(rawPattern)
-        } else {
-          // Split on commas for patterns without braces
-          globPatterns.push(...rawPattern.split(',').filter(Boolean))
-        }
-      }
-
-      for (const globPattern of globPatterns.filter(Boolean)) {
-        args.push('--glob', globPattern)
-      }
-    }
-
-    // Add ignore patterns
-    const appState = getAppState()
-    const ignorePatterns = normalizePatternsToPath(
-      getFileReadIgnorePatterns(appState.toolPermissionContext),
-      getCwd(),
-    )
-    for (const ignorePattern of ignorePatterns) {
-      // Note: ripgrep only applies gitignore patterns relative to the working directory
-      // So for non-absolute paths, we need to prefix them with '**'
-      // See: https://github.com/BurntSushi/ripgrep/discussions/2156#discussioncomment-2316335
-      //
-      // We also need to negate the pattern with `!` to exclude it
-      const rgIgnorePattern = ignorePattern.startsWith('/')
-        ? `!${ignorePattern}`
-        : `!**/${ignorePattern}`
-      args.push('--glob', rgIgnorePattern)
-    }
-
-    // Exclude orphaned plugin version directories
-    for (const exclusion of await getGlobExclusionsForPluginCache(
-      absolutePath,
-    )) {
-      args.push('--glob', exclusion)
-    }
-
-    // WSL has severe performance penalty for file reads (3-5x slower on WSL2)
-    // The timeout is handled by ripgrep itself via execFile timeout option
-    // We don't use AbortController for timeout to avoid interrupting the agent loop
-    // If ripgrep times out, it throws RipgrepTimeoutError which propagates up
-    // so Claude knows the search didn't complete (rather than thinking there were no matches)
-    const results = await ripGrep(args, absolutePath, abortController.signal)
-
-    if (output_mode === 'content') {
-      // For content mode, results are the actual content lines
-      // Convert absolute paths to relative paths to save tokens
-
-      // Apply head_limit first — relativize is per-line work, so
-      // avoid processing lines that will be discarded (broad patterns can
-      // return 10k+ lines with head_limit keeping only ~30-100).
-      const { items: limitedResults, appliedLimit } = applyHeadLimit(
-        results,
-        head_limit,
-        offset,
-      )
-
-      const finalLines = limitedResults.map(relativeContentLine)
-      const output = {
-        mode: 'content' as const,
-        numFiles: 0, // Not applicable for content mode
-        filenames: [],
-        content: finalLines.join('\n'),
-        numLines: finalLines.length,
-        ...(appliedLimit !== undefined && { appliedLimit }),
-        ...(offset > 0 && { appliedOffset: offset }),
-      }
-      return { data: output }
-    }
-
-    if (output_mode === 'count') {
-      // For count mode, pass through raw ripgrep output (filename:count format)
-      // Apply head_limit first to avoid relativizing entries that will be discarded.
-      const { items: limitedResults, appliedLimit } = applyHeadLimit(
-        results,
-        head_limit,
-        offset,
-      )
-
-      // Convert absolute paths to relative paths to save tokens
-      const finalCountLines = limitedResults.map(line => {
-        // Lines have format: /absolute/path:count
-        const colonIndex = line.lastIndexOf(':')
-        if (colonIndex > 0) {
-          const filePath = line.substring(0, colonIndex)
-          const count = line.substring(colonIndex)
-          return toRelativePath(filePath) + count
-        }
-        return line
-      })
-
-      // Parse count output to extract total matches and file count
-      let totalMatches = 0
-      let fileCount = 0
-      for (const line of finalCountLines) {
-        const colonIndex = line.lastIndexOf(':')
-        if (colonIndex > 0) {
-          const countStr = line.substring(colonIndex + 1)
-          const count = parseInt(countStr, 10)
-          if (!isNaN(count)) {
-            totalMatches += count
-            fileCount += 1
-          }
-        }
-      }
-
-      const output = {
-        mode: 'count' as const,
-        numFiles: fileCount,
-        filenames: [],
-        content: finalCountLines.join('\n'),
-        numMatches: totalMatches,
-        ...(appliedLimit !== undefined && { appliedLimit }),
-        ...(offset > 0 && { appliedOffset: offset }),
-      }
-      return { data: output }
-    }
-
-    // For files_with_matches mode (default)
-    // Use allSettled so a single ENOENT (file deleted between ripgrep's scan
-    // and this stat) does not reject the whole batch. Failed stats sort as mtime 0.
-    const stats = await Promise.allSettled(
-      results.map(_ => getFsImplementation().stat(_)),
-    )
-    const sortedMatches = results
-      // Sort by modification time
-      .map((_, i) => {
-        const r = stats[i]!
-        return [
-          _,
-          r.status === 'fulfilled' ? (r.value.mtimeMs ?? 0) : 0,
-        ] as const
-      })
-      .sort((a, b) => {
-        if (process.env.NODE_ENV === 'test') {
-          // In tests, we always want to sort by filename, so that results are deterministic
-          return a[0].localeCompare(b[0])
-        }
-        const timeComparison = b[1] - a[1]
-        if (timeComparison === 0) {
-          // Sort by filename as a tiebreaker
-          return a[0].localeCompare(b[0])
-        }
-        return timeComparison
-      })
-      .map(_ => _[0])
-
-    // Apply head_limit to sorted file list (like "| head -N")
-    const { items: finalMatches, appliedLimit } = applyHeadLimit(
-      sortedMatches,
-      head_limit,
-      offset,
-    )
-
-    // Convert absolute paths to relative paths to save tokens
-    const relativeMatches = finalMatches.map(toRelativePath)
-
-    const output = {
-      mode: 'files_with_matches' as const,
-      filenames: relativeMatches,
-      numFiles: relativeMatches.length,
-      ...(appliedLimit !== undefined && { appliedLimit }),
-      ...(offset > 0 && { appliedOffset: offset }),
-    }
-
-    return {
-      data: output,
-    }
+    throw new Error('search unavailable: native module missing')
   },
 } satisfies ToolDef<InputSchema, Output>)

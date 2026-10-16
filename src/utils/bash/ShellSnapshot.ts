@@ -13,7 +13,6 @@ import { pathExists } from '../file.js'
 import { getFsImplementation } from '../fsOperations.js'
 import { logError } from '../log.js'
 import { getPlatform } from '../platform.js'
-import { ripgrepCommand } from '../ripgrep.js'
 import { subprocessEnv } from '../subprocessEnv.js'
 import { quote } from './shellQuote.js'
 
@@ -56,74 +55,6 @@ function createPkillShadow(): string {
   ].join('\n')
 }
 const SNAPSHOT_CREATION_TIMEOUT = 10000 // 10 seconds
-
-/**
- * Creates a shell function that invokes `binaryPath` with a specific argv[0].
- * This uses the bun-internal ARGV0 dispatch trick: the bun binary checks its
- * argv[0] and runs the embedded tool (rg) that matches.
- *
- * @param prependArgs - Arguments to inject before the user's args (e.g.,
- *   default flags). Injected literally; each element must be a valid shell
- *   word (no spaces/special chars).
- */
-function createArgv0ShellFunction(
-  funcName: string,
-  argv0: string,
-  binaryPath: string,
-  prependArgs: string[] = [],
-): string {
-  const quotedPath = quote([binaryPath])
-  const argSuffix =
-    prependArgs.length > 0 ? `${prependArgs.join(' ')} "$@"` : '"$@"'
-  return [
-    `function ${funcName} {`,
-    '  if [[ -n $ZSH_VERSION ]]; then',
-    `    ARGV0=${argv0} ${quotedPath} ${argSuffix}`,
-    '  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then',
-    // On Windows (git bash), exec -a does not work, so use ARGV0 env var instead
-    // The bun binary reads from ARGV0 natively to set argv[0]
-    `    ARGV0=${argv0} ${quotedPath} ${argSuffix}`,
-    '  elif [[ $BASHPID != $$ ]]; then',
-    `    exec -a ${argv0} ${quotedPath} ${argSuffix}`,
-    '  else',
-    `    (exec -a ${argv0} ${quotedPath} ${argSuffix})`,
-    '  fi',
-    '}',
-  ].join('\n')
-}
-
-/**
- * Creates ripgrep shell integration (alias or function)
- * @returns Object with type and the shell snippet to use
- */
-export function createRipgrepShellIntegration(): {
-  type: 'alias' | 'function'
-  snippet: string
-} {
-  const rgCommand = ripgrepCommand()
-
-  // For embedded ripgrep (bun-internal), we need a shell function that sets argv0
-  if (rgCommand.argv0) {
-    return {
-      type: 'function',
-      snippet: createArgv0ShellFunction(
-        'rg',
-        rgCommand.argv0,
-        rgCommand.rgPath,
-      ),
-    }
-  }
-
-  // For regular ripgrep, use a simple alias target
-  const quotedPath = quote([rgCommand.rgPath])
-  const quotedArgs = rgCommand.rgArgs.map(arg => quote([arg]))
-  const aliasTarget =
-    rgCommand.rgArgs.length > 0
-      ? `${quotedPath} ${quotedArgs.join(' ')}`
-      : quotedPath
-
-  return { type: 'alias', snippet: aliasTarget }
-}
 
 function getConfigFile(shellPath: string): string {
   const fileName = shellPath.includes('zsh')
@@ -228,38 +159,11 @@ async function getClaudeCodeSnapshotContent(): Promise<string> {
     // Fall back to process.env.PATH if we can't get Cygwin PATH
   }
 
-  const rgIntegration = createRipgrepShellIntegration()
+  // (rg alias/function 注入已随 rg 外挂链整体退役拆除：CCH 不再自带
+  // ripgrep 二进制，也不再替用户 shadow 系统 rg——与 find/grep shadow 的
+  // 拆除裁定一致。)
 
   let content = ''
-
-  // Check if rg is available, if not create an alias/function to bundled ripgrep
-  // We use a subshell to unalias rg before checking, so that user aliases like
-  // `alias rg='rg --smart-case'` don't shadow the real binary check. The subshell
-  // ensures we don't modify the user's aliases in the parent shell.
-  content += `
-      # Check for rg availability
-      echo "# Check for rg availability" >> "$SNAPSHOT_FILE"
-      echo "if ! (unalias rg 2>/dev/null; command -v rg) >/dev/null 2>&1; then" >> "$SNAPSHOT_FILE"
-  `
-
-  if (rgIntegration.type === 'function') {
-    // For embedded ripgrep, write the function definition using heredoc
-    content += `
-      cat >> "$SNAPSHOT_FILE" << 'RIPGREP_FUNC_END'
-  ${rgIntegration.snippet}
-RIPGREP_FUNC_END
-    `
-  } else {
-    // For regular ripgrep, write a simple alias
-    const escapedSnippet = rgIntegration.snippet.replace(/'/g, "'\\''")
-    content += `
-      echo '  alias rg='"'${escapedSnippet}'" >> "$SNAPSHOT_FILE"
-    `
-  }
-
-  content += `
-      echo "fi" >> "$SNAPSHOT_FILE"
-  `
 
   // pkill shadow（官方 snapshot 同款安全特性，非人性化项）：防止用户
   // pkill 误杀 CLI 自身进程。原 find/grep→bfs/ugrep shadow 已拆除，此

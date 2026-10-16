@@ -1,4 +1,3 @@
-import { feature } from 'bun:bundle'
 import { randomUUID } from 'crypto'
 import { basename, dirname, isAbsolute, join, sep } from 'path'
 import {
@@ -7,13 +6,53 @@ import {
 } from '../../packages/search-napi/src/index'
 import type { ToolPermissionContext } from '../Tool.js'
 import { isEnvTruthy } from './envUtils.js'
+import { getPlatform } from './platform.js'
 import {
   getFileReadIgnorePatterns,
   normalizePatternsToPath,
 } from './permissions/filesystem.js'
-import { getPlatform } from './platform.js'
 import { getGlobExclusionsForPluginCache } from './plugins/orphanedPluginFilter.js'
-import { ripGrep } from './ripgrep.js'
+
+/**
+ * Expand a single top-level brace union into plain glob alternatives
+ * ("*.{ts,tsx}" → ["*.ts", "*.tsx"]). The native pipeline's glob expression
+ * grammar splits on commas/whitespace, so brace unions must be flattened
+ * client-side (include-union semantics are identical). Returns null for
+ * nested or unbalanced braces — those cannot be represented.
+ */
+export function expandTopLevelBraces(pattern: string): string[] | null {
+  const openIndex = pattern.indexOf('{')
+  if (openIndex === -1) {
+    return pattern.includes(',') ? null : [pattern]
+  }
+  // Find the matching close brace, tracking nested opens.
+  let depth = 0
+  let closeIndex = -1
+  for (let i = openIndex; i < pattern.length; i++) {
+    if (pattern[i] === '{') depth++
+    else if (pattern[i] === '}') {
+      depth--
+      if (depth === 0) {
+        closeIndex = i
+        break
+      }
+    }
+  }
+  if (closeIndex === -1) return null
+  const prefix = pattern.slice(0, openIndex)
+  const body = pattern.slice(openIndex + 1, closeIndex)
+  const suffix = pattern.slice(closeIndex + 1)
+  const alternatives = body.split(',').filter(Boolean)
+  if (alternatives.length === 0) return null
+  const expanded: string[] = []
+  for (const alternative of alternatives) {
+    const piece = prefix + alternative + suffix
+    const subExpanded = expandTopLevelBraces(piece)
+    if (subExpanded === null) return null
+    expanded.push(...subExpanded)
+  }
+  return expanded
+}
 
 /**
  * Extracts the static base directory from a glob pattern.
@@ -80,7 +119,7 @@ export async function glob(
   let searchPattern = filePattern
 
   // Handle absolute paths by extracting the base directory and converting to relative pattern
-  // ripgrep's --glob flag only works with relative patterns
+  // The native globs only work with relative patterns
   if (isAbsolute(filePattern)) {
     const { baseDir, relativePattern } = extractGlobBaseDirectory(filePattern)
     if (baseDir) {
@@ -89,100 +128,89 @@ export async function glob(
     }
   }
 
+  // SEARCH_NAPI native dispatch — the ONLY file-listing path (the rg --files
+  // subprocess chain was retired wholesale). Semantics carried over from the
+  // former rg invocation:
+  //   include: the (brace-expanded) user pattern
+  //   exclude: permission ignore rules + orphaned-plugin-cache dirs, as
+  //            `!`-negated glob parts (native GlobFilter: exclude a dir =
+  //            exclude its subtree, gitignore semantics)
+  //   hidden / gitignore env knobs, mtime sort, offset+limit windowing.
+  const mod = loadSearchNative()
+  if (mod === null) {
+    throw new Error('glob unavailable: native module missing')
+  }
+  if (abortSignal.aborted) {
+    // rg treated a pre-started abort as a clean cancellation (empty set).
+    return { files: [], truncated: false }
+  }
+
   const ignorePatterns = normalizePatternsToPath(
     getFileReadIgnorePatterns(toolPermissionContext),
     searchDir,
   )
+  const pluginExclusions = await getGlobExclusionsForPluginCache(searchDir)
 
-  // Use ripgrep for better memory performance
-  // --files: list files instead of searching content
-  // --glob: filter by pattern
-  // --sort=modified: sort by modification time (oldest first)
-  // --no-ignore: don't respect .gitignore (default true, set CLAUDE_CODE_GLOB_NO_IGNORE=false to respect .gitignore)
-  // --hidden: include hidden files (default true, set CLAUDE_CODE_GLOB_HIDDEN=false to exclude)
+  // Compose the single glob expression the native side parses (comma/space
+  // separated, `!`-negated). Brace unions are expanded client-side (see
+  // expandTopLevelBraces) because the native split would shatter them
+  // mid-alternative. A pattern that still contains a comma or whitespace
+  // after expansion cannot round-trip and there is no subprocess fallback —
+  // surface a precise error instead of a misleading one.
+  const globParts = expandTopLevelBraces(searchPattern)
+  if (globParts === null) {
+    throw new Error(
+      `unsupported glob pattern for native search: ${filePattern} (nested/unbalanced braces)`,
+    )
+  }
+  for (const pattern of ignorePatterns) {
+    globParts.push(pattern.startsWith('/') ? `!${pattern}` : `!**/${pattern}`)
+  }
+  for (const exclusion of pluginExclusions) {
+    globParts.push(exclusion)
+  }
+  if (globParts.some(part => part.includes(',') || /\s/.test(part))) {
+    throw new Error(
+      `unsupported glob pattern for native search: ${filePattern} (cannot contain commas or whitespace)`,
+    )
+  }
+  const globExpr = globParts.join(' ')
+
   // Note: use || instead of ?? to treat empty string as unset (defaulting to true)
   const noIgnore = isEnvTruthy(process.env.CLAUDE_CODE_GLOB_NO_IGNORE || 'true')
   const hidden = isEnvTruthy(process.env.CLAUDE_CODE_GLOB_HIDDEN || 'true')
-  const args = [
-    '--files',
-    '--glob',
-    searchPattern,
-    '--sort=modified',
-    ...(noIgnore ? ['--no-ignore'] : []),
-    ...(hidden ? ['--hidden'] : []),
-  ]
 
-  // Add ignore patterns
-  for (const pattern of ignorePatterns) {
-    args.push('--glob', `!${pattern}`)
-  }
-
-  // Exclude orphaned plugin version directories
-  const pluginExclusions = await getGlobExclusionsForPluginCache(searchDir)
-  for (const exclusion of pluginExclusions) {
-    args.push('--glob', exclusion)
-  }
-
-  // SEARCH_NAPI native-first dispatch (flag-gated — zero impact while off).
-  // The frozen GlobOptions carries a single include pattern and no negative
-  // glob list, so only dispatch when nothing needs excluding (permission
-  // ignore rules / orphaned plugin cache) — otherwise the rg branch below
-  // keeps byte-perfect fidelity. Any native failure also falls through.
-  if (feature('SEARCH_NAPI')) {
-    const mod = loadSearchNative()
-    if (
-      mod !== null &&
-      ignorePatterns.length === 0 &&
-      pluginExclusions.length === 0 &&
-      !abortSignal.aborted
-    ) {
-      const cancelKey = crypto.randomUUID()
-      const cancel = attachSearchCancel(mod, abortSignal, cancelKey)
-      try {
-        // maxResults carries a +1 sentinel: the native side applies the
-        // offset itself, so `returned.length > limit` is exactly today's
-        // `all.length > offset + limit` truncation predicate without
-        // materializing the full (unbounded) file list.
-        const found = await mod.findGlob({
-          pattern: searchPattern,
-          path: searchDir,
-          hidden, // rg path: --hidden (env CLAUDE_CODE_GLOB_HIDDEN)
-          gitignore: !noIgnore, // rg path: --no-ignore when noIgnore
-          sortByMtime: true, // rg path: --sort=modified
-          maxResults: limit + 1,
-          offset,
-          timeoutMs: 20_000,
-          // Per-call cancel key: abortSignal → searchCancel(key) kills ONLY
-          // this session (heart.rs CancelRegistry — concurrent searches never
-          // cross-cancel).
-          cancelKey,
-        })
-        // Native walks absolute roots → absolute paths; keep the same
-        // absolutization guard as the rg branch for relative cwd roots.
-        const absolutePaths = found.map(p =>
-          isAbsolute(p) ? p : join(searchDir, p),
-        )
-        return {
-          files: absolutePaths.slice(0, limit),
-          truncated: absolutePaths.length > limit,
-        }
-      } catch {
-        // Native engine failure (missing artifact, bad glob) → rg path below.
-      } finally {
-        cancel()
-      }
+  const cancelKey = randomUUID()
+  const cancel = attachSearchCancel(mod, abortSignal, cancelKey)
+  try {
+    // maxResults carries a +1 sentinel: the native side applies the offset
+    // itself, so `returned.length > limit` is exactly the old
+    // `all.length > offset + limit` truncation predicate without
+    // materializing the full (unbounded) file list.
+    const found = await mod.findGlob({
+      pattern: globExpr,
+      path: searchDir,
+      hidden, // retired rg path: --hidden (env CLAUDE_CODE_GLOB_HIDDEN)
+      gitignore: !noIgnore, // retired rg path: --no-ignore when noIgnore
+      sortByMtime: true, // retired rg path: --sort=modified
+      maxResults: limit + 1,
+      offset,
+      timeoutMs: 20_000,
+      // Per-call cancel key: abortSignal → searchCancel(key) kills ONLY
+      // this session (heart.rs CancelRegistry — concurrent searches never
+      // cross-cancel).
+      cancelKey,
+    })
+    // Native walks absolute roots → absolute paths; keep the same
+    // absolutization guard for relative cwd roots.
+    const absolutePaths = found.map(p =>
+      isAbsolute(p) ? p : join(searchDir, p),
+    )
+    return {
+      files: absolutePaths.slice(0, limit),
+      truncated: absolutePaths.length > limit,
     }
+  } finally {
+    cancel()
   }
-
-  const allPaths = await ripGrep(args, searchDir, abortSignal)
-
-  // ripgrep returns relative paths, convert to absolute
-  const absolutePaths = allPaths.map(p =>
-    isAbsolute(p) ? p : join(searchDir, p),
-  )
-
-  const truncated = absolutePaths.length > offset + limit
-  const files = absolutePaths.slice(offset, offset + limit)
-
-  return { files, truncated }
 }

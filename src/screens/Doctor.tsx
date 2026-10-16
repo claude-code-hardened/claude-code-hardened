@@ -223,15 +223,12 @@ export function Doctor({ onDone }: Props): React.ReactNode {
         <Text>└ Invoked: {diagnostic.invokedBinary}</Text>
         <Text>└ Config install method: {diagnostic.configInstallMethod}</Text>
         <Text>
-          └ Search: {diagnostic.ripgrepStatus.working ? 'OK' : 'Not working'} (
-          {diagnostic.ripgrepStatus.mode === 'embedded'
-            ? 'bundled'
-            : diagnostic.ripgrepStatus.mode === 'builtin'
-              ? 'vendor'
-              : diagnostic.ripgrepStatus.systemPath || 'system'}
-          )
+          └ Search:{' '}
+          {diagnostic.searchStatus.working
+            ? `OK (${diagnostic.searchStatus.mode})`
+            : 'Not working'}
         </Text>
-        {diagnostic.ripgrepStatus.note && <Text color="warning">└ Note: {diagnostic.ripgrepStatus.note}</Text>}
+        {diagnostic.searchStatus.note && <Text color="warning">└ Note: {diagnostic.searchStatus.note}</Text>}
 
         {/* Show recommendation if auto-updates are disabled */}
         {diagnostic.recommendation && (

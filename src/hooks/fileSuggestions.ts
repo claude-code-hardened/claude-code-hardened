@@ -28,7 +28,10 @@ import {
 } from '../utils/hooks.js'
 import { logError } from '../utils/log.js'
 import { expandPath } from '../utils/path.js'
-import { ripGrep } from '../utils/ripgrep.js'
+import {
+  attachSearchCancel,
+  loadSearchNative,
+} from '../../packages/search-napi/src/index'
 import { getInitialSettings } from '../utils/settings/settings.js'
 import { createSignal } from '../utils/signal.js'
 
@@ -290,7 +293,7 @@ async function getFilesUsingGit(
 
     if (trackedResult.code !== 0) {
       logForDebugging(
-        `[FileIndex] git ls-files failed (code=${trackedResult.code}, stderr=${trackedResult.stderr}), falling back to ripgrep`,
+        `[FileIndex] git ls-files failed (code=${trackedResult.code}, stderr=${trackedResult.stderr}), falling back to native walk`,
       )
       return null
     }
@@ -462,7 +465,8 @@ async function getClaudeConfigFiles(cwd: string): Promise<string[]> {
 }
 
 /**
- * Gets project files using git ls-files (fast) or ripgrep (fallback)
+ * Gets project files using git ls-files (fast) or the native search walk
+ * (search-napi findGlob) as fallback
  */
 async function getProjectFiles(
   abortSignal: AbortSignal,
@@ -481,53 +485,60 @@ async function getProjectFiles(
     return gitFiles
   }
 
-  // Non-git fallback: ripgrep subprocess collects the file list, which is
-  // then fed into the native (Rust) index — rg owns listing, Rust owns
-  // search. The previous pure-FFI jwalk scan was removed (2026-09-15):
-  // unstable under proot (symlink-loop blowup, then a Bun runtime quirk
-  // where setTimeout never fires while awaiting thread-pool FFI promises),
-  // while rg with node_modules/.bun globs is reliably seconds.
+  // Non-git fallback: the native search walk (search-napi findGlob) collects
+  // the file list, which is then fed into the native (Rust) index. The
+  // previous pure-FFI jwalk scan was removed (2026-09-15): unstable under
+  // proot (symlink-loop blowup, then a Bun runtime quirk where setTimeout
+  // never fires while awaiting thread-pool FFI promises). The rg subprocess
+  // that owned listing here was retired wholesale.
   logForDebugging(
-    `[FileIndex] git ls-files returned null, falling back to ripgrep`,
+    `[FileIndex] git ls-files returned null, falling back to native walk`,
   )
   const startTime = Date.now()
-  const rgArgs = [
-    '--files',
-    '--follow',
-    '--hidden',
-    '--glob',
-    '!.git/',
-    '--glob',
-    '!.svn/',
-    '--glob',
-    '!.hg/',
-    '--glob',
-    '!.bzr/',
-    '--glob',
-    '!.jj/',
-    '--glob',
-    '!.sl/',
-    // 非 git 目录下没有 .gitignore 生效，依赖目录（node_modules 的符号链接
-    // store + 几十万文件）会把 --files 扫描拖到分钟级（实测 /root 143970 文件
-    // 61.7s，proot 慢 I/O 放大）——@-mention 不会引用依赖内部文件，排除。
-    '--glob',
-    '!node_modules/',
-    '--glob',
-    '!.bun/',
-  ]
-  if (!respectGitignore) {
-    rgArgs.push('--no-ignore-vcs')
+  const mod = loadSearchNative()
+  if (mod === null) {
+    throw new Error('file listing unavailable: native module missing')
   }
+  // VCS dirs + dependency dirs excluded via `!`-negated glob parts (native
+  // GlobFilter: directory exclude implies its subtree, gitignore semantics).
+  // 非 git 目录下没有 .gitignore 生效，依赖目录（node_modules 的符号链接
+  // store + 几十万文件）会把全量扫描拖到分钟级（实测 /root 143970 文件
+  // 61.7s，proot 慢 I/O 放大）——@-mention 不会引用依赖内部文件，排除。
+  const globParts = [
+    '!.git',
+    '!.svn',
+    '!.hg',
+    '!.bzr',
+    '!.jj',
+    '!.sl',
+    '!node_modules',
+    '!.bun',
+  ]
 
-  const files = await ripGrep(rgArgs, '.', abortSignal)
+  // abortSignal → searchCancel kills ONLY this walk (heart.rs CancelRegistry).
+  const cancel = attachSearchCancel(mod, abortSignal, 'file-suggestions')
+  let files: string[]
+  try {
+    files = await mod.findGlob({
+      pattern: globParts.join(' '),
+      path: getCwd(),
+      hidden: true, // retired rg path: --hidden
+      gitignore: respectGitignore, // retired rg path: --no-ignore-vcs when false
+      follow: 'L', // retired rg path: --follow (+ loop guard)
+      timeoutMs: 10_000,
+      cancelKey: 'file-suggestions',
+    })
+  } finally {
+    cancel()
+  }
   const relativePaths = files.map(f => path.relative(getCwd(), f))
 
   const duration = Date.now() - startTime
   logForDebugging(
-    `[FileIndex] ripgrep: ${relativePaths.length} files in ${duration}ms`,
+    `[FileIndex] native walk: ${relativePaths.length} files in ${duration}ms`,
   )
 
-  logEvent('tengu_file_suggestions_ripgrep', {
+  logEvent('tengu_file_suggestions_walk', {
     file_count: relativePaths.length,
     duration_ms: duration,
   })
@@ -537,7 +548,7 @@ async function getProjectFiles(
 
 /**
  * Gets both files and their directory paths for providing path suggestions
- * Uses git ls-files for git repos (fast) or ripgrep as fallback
+ * Uses git ls-files for git repos (fast) or the native search walk as fallback
  * Returns a FileIndex populated for fast fuzzy search
  */
 export async function getPathsForSuggestions(): Promise<FileIndexLike> {
