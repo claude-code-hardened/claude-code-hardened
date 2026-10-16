@@ -63,7 +63,7 @@ const RUNS_REL = join(AUTONOMY_DIR, 'runs.json')
 // state 通道，被测的「默认 currentDir = 活动工作目录」契约因此可测。
 const cwdOverrideStorage = new AsyncLocalStorage<string>()
 const stateBackedCwdMock = () => ({
-  runWithCwdOverride: <T,>(cwd: string, fn: () => T): T =>
+  runWithCwdOverride: <T>(cwd: string, fn: () => T): T =>
     cwdOverrideStorage.run(cwd, fn),
   pwd: () => cwdOverrideStorage.getStore() ?? getCwdState(),
   getCwd: () => cwdOverrideStorage.getStore() ?? getCwdState(),

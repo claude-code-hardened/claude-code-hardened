@@ -180,9 +180,7 @@ describe('StylePool.reset() — generational rebuild', () => {
     const currentMatchPre = codesToString(
       pool.get(pool.withCurrentMatch(baseId)),
     )
-    const selectionBgPre = codesToString(
-      pool.get(pool.withSelectionBg(baseId)),
-    )
+    const selectionBgPre = codesToString(pool.get(pool.withSelectionBg(baseId)))
 
     pool.reset(screen)
 
