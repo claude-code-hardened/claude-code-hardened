@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { AsyncLocalStorage } from 'async_hooks'
+import { mock, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve as resolvePath } from 'node:path'
 import {
+  getCwdState,
   resetStateForTests,
   setCwdState,
   setOriginalCwd,
@@ -48,6 +50,26 @@ import {
 const AGENTS_REL = join(AUTONOMY_DIR, 'AGENTS.md')
 const HEARTBEAT_REL = join(AUTONOMY_DIR, 'HEARTBEAT.md')
 const RUNS_REL = join(AUTONOMY_DIR, 'runs.json')
+
+// Cross-file mock.module 污染（进程级 last-write-wins）：其他测试文件把
+// src/utils/cwd 钉成常量（PowerShellTool/gitSafety '/Users/test/project'、
+// AgentTool/spawnWindowCleanup '/tmp'、path.test process.cwd()），其绑定在
+// 共享 CI worker 中泄漏到本文件的 autonomyRuns/autonomyAuthority，导致
+// currentDir 默认解析到 rootDir 之外——listAuthorityDirectories 只剩
+// [rootDir]，嵌套 AGENTS.md 永远读不到（CI /tmp/test3.log:545 只含
+// "root authority"）。这里重新注册与真实实现等价的 cwd（pwd = ALS 覆盖
+// ?? getCwdState()）：bun 的 mock.module 对普通模块的 live binding 生效，
+// 故无论本文件在 worker 中的加载顺序如何，下一次 getCwd() 调用都会走
+// state 通道，被测的「默认 currentDir = 活动工作目录」契约因此可测。
+const cwdOverrideStorage = new AsyncLocalStorage<string>()
+const stateBackedCwdMock = () => ({
+  runWithCwdOverride: <T,>(cwd: string, fn: () => T): T =>
+    cwdOverrideStorage.run(cwd, fn),
+  pwd: () => cwdOverrideStorage.getStore() ?? getCwdState(),
+  getCwd: () => cwdOverrideStorage.getStore() ?? getCwdState(),
+})
+mock.module('src/utils/cwd.ts', stateBackedCwdMock)
+mock.module('src/utils/cwd.js', stateBackedCwdMock)
 
 let tempDir = ''
 

@@ -20,7 +20,12 @@ mock.module('src/services/tokenEstimation.ts', () => ({
 mock.module('src/utils/slowOperations.ts', () => ({
   jsonStringify: JSON.stringify,
   jsonParse: JSON.parse,
-  slowLogging: { enabled: false },
+  // Tagged-template callable returning a Disposable (matches the real
+  // contract): fsOperations does `using _ = slowLogging\`...\``. A plain
+  // object here poisons the process-global registry — later fsOperations
+  // statSync calls fail with "Object is not a function" (see
+  // packages/builtin-tools NotebookEditTool tests, CI /tmp/test3.log).
+  slowLogging: () => ({ [Symbol.dispose]() {} }),
   clone: (v: any) => structuredClone(v),
   cloneDeep: (v: any) => structuredClone(v),
   callerFrame: () => '',

@@ -65,7 +65,12 @@ mock.module('src/utils/context.ts', () => ({
 mock.module('src/utils/slowOperations.ts', () => ({
   jsonStringify: JSON.stringify,
   jsonParse: JSON.parse,
-  slowLogging: { enabled: false },
+  // Tagged-template callable returning a Disposable — fsOperations does
+  // `using _ = slowLogging\`fs.statSync(...)\``. A plain object here poisons
+  // the process-global registry: every later statSync in the shared worker
+  // dies with "TypeError: Object is not a function" (CI /tmp/test3.log,
+  // NotebookEditTool suite).
+  slowLogging: () => ({ [Symbol.dispose]() {} }),
   clone: (v: unknown) => structuredClone(v),
   cloneDeep: (v: unknown) => structuredClone(v),
   callerFrame: () => '',

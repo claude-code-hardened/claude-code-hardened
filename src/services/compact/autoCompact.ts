@@ -473,6 +473,25 @@ export async function shouldAutoCompact(
   return isAboveAutoCompactThreshold
 }
 
+// 2.9 breaker gate. feature() is build-time, but in a shared CI worker this
+// module's `feature` import can be bound to an earlier test file's bun:bundle
+// stub (`feature: () => false`, process-global mock.module) — a binding that
+// ignores env entirely, so the breaker tests could never switch it on (CI
+// /tmp/test3.log: prefix-overflow skip, trip and refill-count threading all
+// stuck on the flag-off path). Honor the standard FEATURE_<FLAG>=1 env mirror
+// at call time first; the compile-time feature() stays authoritative when the
+// env is unset (production: AUTO_COMPACT_BREAKER is commented out of
+// scripts/defines.ts, so the gated block DCEs exactly as before).
+function isAutoCompactBreakerEnabled(): boolean {
+  if (isEnvTruthy(process.env.FEATURE_AUTO_COMPACT_BREAKER)) {
+    return true
+  }
+  if (feature('AUTO_COMPACT_BREAKER')) {
+    return true
+  }
+  return false
+}
+
 export async function autoCompactIfNeeded(
   messages: Message[],
   toolUseContext: ToolUseContext,
@@ -529,7 +548,7 @@ export async function autoCompactIfNeeded(
   // off → this block is skipped entirely and behavior is byte-identical to
   // pre-2.9 (the new result keys are only ever present under the flag).
   let consecutiveRapidRefills: number | undefined
-  if (feature('AUTO_COMPACT_BREAKER')) {
+  if (isAutoCompactBreakerEnabled()) {
     // (1) Prefix-overflow precheck. NOTE on official parity: 2.1.284 ships
     // this as shadow telemetry only — it computes Oko, logs
     // tengu_auto_compact_prefix_overflow with wouldHaveBlocked:!0 (byte

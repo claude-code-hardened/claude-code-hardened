@@ -165,12 +165,37 @@ describe('StylePool.reset() — generational rebuild', () => {
     const screen = createScreen(2, 1, pool, new CharPool(), new HyperlinkPool())
 
     const baseId = pool.intern(RED_FG)
+    // Paint the base style so it is alive in the buffer: reset() re-interns
+    // exactly the styles present on the screen (see reset() docstring) — an
+    // interned-but-never-painted style is dead by contract, and overlay
+    // composites recomputed from a dead base would lose the base codes.
+    setCellAt(screen, 0, 0, {
+      char: 'x',
+      styleId: baseId,
+      width: CellWidth.Narrow,
+      hyperlink: undefined,
+    })
+
     const invertedPre = codesToString(pool.get(pool.withInverse(baseId)))
+    const currentMatchPre = codesToString(
+      pool.get(pool.withCurrentMatch(baseId)),
+    )
+    const selectionBgPre = codesToString(
+      pool.get(pool.withSelectionBg(baseId)),
+    )
 
     pool.reset(screen)
 
     const invertedPost = codesToString(pool.get(pool.withInverse(baseId)))
+    const currentMatchPost = codesToString(
+      pool.get(pool.withCurrentMatch(baseId)),
+    )
+    const selectionBgPost = codesToString(
+      pool.get(pool.withSelectionBg(baseId)),
+    )
     expect(invertedPost).toBe(invertedPre)
+    expect(currentMatchPost).toBe(currentMatchPre)
+    expect(selectionBgPost).toBe(selectionBgPre)
     // GREY_BG has a background → odd id (visible on space) in both epochs.
     const bgId = pool.intern(GREY_BG)
     expect(bgId % 2).toBe(1)
