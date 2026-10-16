@@ -19,9 +19,20 @@ if (process.env.CLAUDE_CODE_SKIP_CHROME_MCP_SETUP === '1') {
 }
 
 const require = createRequire(import.meta.url)
-const cliPath = require.resolve(
-  '@claude-code-hardened/mcp-chrome-bridge/dist/cli.js',
-)
+// The bridge dist is an optional workspace build product — packaging jobs
+// (npm tarball / one-shot build) run installs without it. Chrome MCP host
+// registration is a local-machine concern, never a packaging prerequisite.
+let cliPath
+try {
+  cliPath = require.resolve(
+    '@claude-code-hardened/mcp-chrome-bridge/dist/cli.js',
+  )
+} catch {
+  console.warn(
+    '[setup-chrome-mcp] mcp-chrome-bridge dist not built — skipping host registration',
+  )
+  process.exit(0)
+}
 
 const userArgs = process.argv.slice(2)
 
