@@ -1,6 +1,14 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'bun:test'
 import {
   handleControlRequest,
+  resetControlRateLimiterForTests,
   type ControlServerDeps,
   type JobHandle,
 } from '../controlServer.js'
@@ -88,6 +96,12 @@ function makeJob(short: string, overrides: Partial<JobHandle> = {}): JobHandle {
 }
 
 describe('handleControlRequest (upstream yn)', () => {
+  beforeEach(() => {
+    // 限速单例跨测试共享失败计数：本文件前序用例（EAUTH 等）的 recordFailure
+    // 会耗尽滑窗预算，尾部两例收到 ERATE / 走不到 shutdown。每个用例重置。
+    resetControlRateLimiterForTests()
+  })
+
   test('bad json shape → EUNKNOWN', async () => {
     const socket = fakeSocket()
     await handleControlRequest(makeDeps(), socket, null as never)

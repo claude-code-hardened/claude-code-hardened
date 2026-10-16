@@ -37,7 +37,7 @@ mock.module('src/services/SessionMemory/sessionMemoryUtils.ts', () => ({
 mock.module('src/utils/slowOperations.ts', () => ({
   jsonStringify: JSON.stringify,
   jsonParse: JSON.parse,
-  slowLogging: { enabled: false },
+  slowLogging: () => ({ [Symbol.dispose]() {} }),
   clone: (value: unknown) => structuredClone(value),
   cloneDeep: (value: unknown) => structuredClone(value),
   callerFrame: () => '',

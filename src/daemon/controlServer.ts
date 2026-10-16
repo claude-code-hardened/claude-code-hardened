@@ -258,6 +258,17 @@ function getRateLimiter(): PeerRateLimiter {
   return rateLimiter
 }
 
+/**
+ * 测试钩子：限速单例是模块级、跨连接（也跨测试文件进程）共享的失败计数。
+ * 同一 bun test 进程中，任何文件里的 EAUTH/recordFailure 都会消耗同一滑窗
+ * 预算并最终锁定（ERATE），殃及后加载文件的全部用例（controlServer.test.ts
+ * 尾部 bad-short-id/shutdown 两例收到 ERATE 即此因）。仅在测试 beforeEach
+ * 中调用，生产代码不得使用。
+ */
+export function resetControlRateLimiterForTests(): void {
+  rateLimiter = null
+}
+
 /** 连接建立时下发 challenge（客户端据此算 HMAC）。 */
 export function issueChallenge(): string {
   return createChallenge()

@@ -200,7 +200,14 @@ export const FileWriteTool = buildTool({
       }
       fileMtimeMs = fileStat.mtimeMs
     } catch (e) {
-      if (isENOENT(e)) {
+      // Inline errno check instead of isENOENT(): unrelated test files mock
+      // src/utils/errors.js process-globally, so the imported helper can be a
+      // stub in CI runs and would misclassify real ENOENT rejections here.
+      const code =
+        e && typeof e === 'object' && 'code' in e
+          ? String((e as { code: unknown }).code)
+          : ''
+      if (code === 'ENOENT') {
         return { result: true }
       }
       throw e

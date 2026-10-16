@@ -243,7 +243,15 @@ export const NotebookEditTool = buildTool({
     try {
       lastWriteTime = getFileModificationTime(fullPath)
     } catch (e) {
-      if (isENOENT(e)) {
+      // Inline errno check instead of isENOENT(): unrelated test files mock
+      // src/utils/errors.js process-globally, so the imported helper can be a
+      // stub in CI runs and would leak a bare ENOENT instead of the targeted
+      // structured does-not-exist error (errorCode 1).
+      const code =
+        e && typeof e === 'object' && 'code' in e
+          ? String((e as { code: unknown }).code)
+          : ''
+      if (code === 'ENOENT') {
         return {
           result: false,
           message: 'Notebook file does not exist.',

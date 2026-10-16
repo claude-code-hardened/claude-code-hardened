@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import {
   mkdirSync,
@@ -11,6 +12,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { debugMock } from '../../../../../../tests/mocks/debug'
 import { logMock } from '../../../../../../tests/mocks/log'
+import { functionalStateMock } from '../../../../../../tests/mocks/state'
 
 // Shell.js / sessionEnvironment / fileChangedWatcher pull the analytics +
 // settings chains; the Cd flow only consumes their three sync entry points.
@@ -32,6 +34,35 @@ mock.module('src/utils/sessionEnvironment.ts', () => ({
 mock.module('src/utils/hooks/fileChangedWatcher.ts', () => ({
   onCwdChangedForHooks: onCwdChangedForHooksMock,
 }))
+
+// Cross-file mock.module pollution（进程级 last-write-wins）：其他测试文件对
+// src/bootstrap/state 注册的 stateMock（getOriginalCwd → '/mock/cwd'，目录在
+// 磁盘上不存在）与对 src/utils/cwd 的桩会泄漏进本文件，使 Cd 的 no-op
+// （"same"）判定与相对路径锚定 stat 到不存在的路径——CI 报
+// `cd: not_found — Path "/mock/cwd" does not exist`。这里重新注册带真实
+// 状态的 mock，锚定到真实存在的目录（realpathSync(process.cwd())）。
+type StateHandle = {
+  setOriginalCwd: (cwd: string) => void
+  setCwdState: (cwd: string) => void
+  getCwdState: () => string
+  getOriginalCwd: () => string
+}
+const stateHandle = functionalStateMock() as unknown as StateHandle
+const sessionRoot = realpathSync(process.cwd())
+stateHandle.setOriginalCwd(sessionRoot)
+stateHandle.setCwdState(sessionRoot)
+mock.module('src/bootstrap/state.ts', stateHandle)
+mock.module('src/bootstrap/state.js', stateHandle)
+
+const cwdOverrideStorage = new AsyncLocalStorage<string>()
+const cwdMock = () => ({
+  runWithCwdOverride: (cwd: string, fn: () => unknown) =>
+    cwdOverrideStorage.run(cwd, fn as () => never),
+  pwd: () => cwdOverrideStorage.getStore() ?? stateHandle.getCwdState(),
+  getCwd: () => cwdOverrideStorage.getStore() ?? stateHandle.getCwdState(),
+})
+mock.module('src/utils/cwd.ts', cwdMock)
+mock.module('src/utils/cwd.js', cwdMock)
 
 const { CdTool } = await import('../CdTool.js')
 const { CD_TOOL_NAME } = await import('../constants.js')

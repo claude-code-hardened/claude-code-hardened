@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test'
+import { AsyncLocalStorage } from 'async_hooks'
+import { describe, expect, mock, test } from 'bun:test'
 import { tmpdir } from 'os'
 import { resolve } from 'path'
 import {
@@ -14,6 +15,22 @@ import {
   toRelativePath,
   getDirectoryForPath,
 } from '../path'
+
+// Cross-file mock.module 污染（进程级 last-write-wins）：其他测试文件
+// （PowerShellTool/gitSafety、AgentTool/spawnWindowCleanup）对 src/utils/cwd
+// 的进程全局桩会泄漏到本文件，使 getCwd() 与 process.cwd() 不一致——CI 中
+// toRelativePath(cwd) 收到绝对路径而非 ''（relative 落入 '..' 分支保留原样）。
+// 这里重新注册与真实实现等价的 getCwd，钉定到真实 process.cwd()。
+const cwdOverrideStorage = new AsyncLocalStorage<string>()
+const pinnedCwd = process.cwd()
+const cwdMock = () => ({
+  runWithCwdOverride: (cwd: string, fn: () => unknown) =>
+    cwdOverrideStorage.run(cwd, fn as () => never),
+  pwd: () => cwdOverrideStorage.getStore() ?? pinnedCwd,
+  getCwd: () => cwdOverrideStorage.getStore() ?? pinnedCwd,
+})
+mock.module('src/utils/cwd.ts', cwdMock)
+mock.module('src/utils/cwd.js', cwdMock)
 
 // ─── containsPathTraversal ──────────────────────────────────────────────
 
