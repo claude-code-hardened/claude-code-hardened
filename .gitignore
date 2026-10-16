@@ -70,3 +70,4 @@ vendor/file-index/**/*.node
 # 官方 Claude Code 逆向参考源码（~550MB）——本地参考用，永不入库
 docs/reverse/
 docs/reverse-284/
+vendor/search-kit/upstream/
