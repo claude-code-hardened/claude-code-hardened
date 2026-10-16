@@ -297,6 +297,24 @@
 		);
 	}
 
+
+	#[test]
+	fn case_gate_semantics_on_probe_result() {
+		let root = TempDirGuard::new();
+		fs::write(root.path().join("Only.txt"), b"x").expect("write case probe");
+		let base = root.path().to_str().unwrap();
+		if case_sensitive_fs(root.path()) {
+			// 敏感面：仅精确大小写命中
+			assert_eq!(glob("**/Only.txt", base).len(), 1);
+			assert_eq!(glob("**/only.txt", base).len(), 0);
+			eprintln!("[platform_tests] 大小写敏感文件系——精确门断言通过");
+		} else {
+			// 不敏感面：小写写法命中同一文件（库不得自作聪明去重报 2）
+			assert!(!glob("**/only.txt", base).is_empty());
+			eprintln!("[platform_tests] 大小写不敏感文件系——等值门断言通过");
+		}
+	}
+
 	// ── 速度护栏（宽上界 = 契约；实测打 stderr） ───────────────────
 
 	#[test]
