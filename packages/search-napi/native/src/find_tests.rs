@@ -62,7 +62,10 @@ fn write_file(path: impl AsRef<Path>, content: &str) {
 }
 
 fn symlink(target: &Path, link: &Path) {
+	#[cfg(target_family = "unix")]
 	std::os::unix::fs::symlink(target, link).expect("create test symlink");
+	#[cfg(target_family = "windows")]
+	std::os::windows::fs::symlink_file(target, link).expect("create test symlink");
 }
 
 /// 显式钉死 mtime（utimensat 级精度，保证 mtime 排序断言的确定性/并列可造）。

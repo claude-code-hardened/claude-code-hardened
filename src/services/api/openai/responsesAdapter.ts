@@ -503,6 +503,15 @@ export async function createChatGPTResponsesStream(params: {
     // The wrapped stream was never handed out — nothing will settle the
     // in-flight registry entry on our behalf.
     watchdog.settle()
-    throw error
+    // Fail-closed classifiers key off the wrapped message shape — the SDK's
+    // raw APIError reads like "401 unauthorized" with no route context.
+    const status =
+      typeof error === 'object' && error !== null && 'status' in error
+        ? (error as { status?: unknown }).status
+        : undefined
+    throw new Error(
+      `ChatGPT Responses API request failed (${status ?? 'unknown'})`,
+      error instanceof Error ? { cause: error } : undefined,
+    )
   }
 }

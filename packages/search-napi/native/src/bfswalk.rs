@@ -23,7 +23,10 @@
 
 use std::collections::HashSet;
 use std::fs;
+#[cfg(target_family = "unix")]
 use std::os::unix::fs::MetadataExt;
+#[cfg(target_family = "windows")]
+use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -31,6 +34,24 @@ use std::time::SystemTime;
 use ignore::gitignore::Gitignore;
 
 use crate::heart::SearchToken;
+
+/// (设备, 索引节点) 键：-L 环防护 / alias 去重的真实身份对。
+/// unix 走 dev/ino；windows 用 volume_serial+file_index 同语义对位；
+/// 其余平台无此 API——返回 None（环防护降级为不设防，仅 bfs 侧容差面）。
+#[cfg(target_family = "unix")]
+fn inode_pair(meta: &fs::Metadata) -> Option<(u64, u64)> {
+	Some((meta.dev(), meta.ino()))
+}
+
+#[cfg(target_family = "windows")]
+fn inode_pair(meta: &fs::Metadata) -> Option<(u64, u64)> {
+	Some((meta.volume_serial_number(), meta.file_index()))
+}
+
+#[cfg(not(any(target_family = "unix", target_family = "windows")))]
+fn inode_pair(_meta: &fs::Metadata) -> Option<(u64, u64)> {
+	None
+}
 
 /// 并行 worker 上限（与 find/grep 同钳制口径）。
 pub(crate) const BFS_MAX_WORKERS: usize = 16;
@@ -169,7 +190,9 @@ pub fn bfs_walk(root: &Path, config: &WalkConfig, visit: &mut dyn FnMut(&BfsEntr
 	let mut visited: HashSet<(u64, u64)> = HashSet::new();
 	if kind == BfsKind::Dir && config.follow == SymlinkPolicy::L {
 		// -L 环防起手：根（解链后的真实 inode）先入访问集。
-		visited.insert((root_meta.dev(), root_meta.ino()));
+		if let Some(key) = inode_pair(root_meta) {
+			visited.insert(key);
+		}
 	}
 	if depth_in_range(0, config) && !visit(&BfsEntry { path: root, depth: 0, kind, mtime }) {
 		return;
@@ -335,7 +358,7 @@ fn expand_dir(dir: &Dir, config: &WalkConfig, out: &mut TierOut) {
 		let dir_key = followed
 			.as_ref()
 			.filter(|_| kind == BfsKind::Dir)
-			.map(|meta| (meta.dev(), meta.ino()));
+			.and_then(|meta| inode_pair(&meta));
 		out.rows.push(Row {
 			parent_seq: dir.seq,
 			name: name.into_owned(),
