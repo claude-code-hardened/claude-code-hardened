@@ -277,9 +277,18 @@ describe('GrepTool with feature flag disabled', () => {
       output_mode: 'content',
     } as unknown as Parameters<typeof GrepTool.call>[0]
     // 联合 ToolResult 取窄面：bypasses overload union resolution（测试面合法 as any）。
-    const result = await (GrepTool.call as unknown as (
-      ...args: unknown[]
-    ) => Promise<{ data: { mode: string; numLines: number; content: string; appliedLimit?: number } }>)(
+    const result = await (
+      GrepTool.call as unknown as (
+        ...args: unknown[]
+      ) => Promise<{
+        data: {
+          mode: string
+          numLines: number
+          content: string
+          appliedLimit?: number
+        }
+      }>
+    )(
       callInput,
       mockToolContext(),
       stubCanUseTool,
