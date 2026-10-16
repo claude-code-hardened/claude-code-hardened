@@ -407,13 +407,15 @@ async function nativeGrepOutput(
     // path — the parser passes `path-line-text` lines through untouched).
     const finalLines = limitedResults.map(relativeContentLine)
     return {
-      mode: 'content',
-      numFiles: 0, // Not applicable for content mode
-      filenames: [],
-      content: finalLines.join('\n'),
-      numLines: finalLines.length,
-      ...(appliedLimit !== undefined && { appliedLimit }),
-      ...(offset > 0 && { appliedOffset: offset }),
+      data: {
+        mode: 'content',
+        numFiles: 0, // Not applicable for content mode
+        filenames: [],
+        content: finalLines.join('\n'),
+        numLines: finalLines.length,
+        ...(appliedLimit !== undefined && { appliedLimit }),
+        ...(offset > 0 && { appliedOffset: offset }),
+      },
     }
   }
 
@@ -464,13 +466,15 @@ async function nativeGrepOutput(
     }
 
     return {
-      mode: 'count',
-      numFiles: fileCount,
-      filenames: [],
-      content: finalCountLines.join('\n'),
-      numMatches: totalMatches,
-      ...(appliedLimit !== undefined && { appliedLimit }),
-      ...(offset > 0 && { appliedOffset: offset }),
+      data: {
+        mode: 'count',
+        numFiles: fileCount,
+        filenames: [],
+        content: finalCountLines.join('\n'),
+        numMatches: totalMatches,
+        ...(appliedLimit !== undefined && { appliedLimit }),
+        ...(offset > 0 && { appliedOffset: offset }),
+      },
     }
   }
 
@@ -507,13 +511,11 @@ async function nativeGrepOutput(
   )
   const relativeMatches = finalMatches.map(toRelativePath)
   return {
-    data: {
-      mode: 'files_with_matches',
-      filenames: relativeMatches,
-      numFiles: relativeMatches.length,
-      ...(appliedLimit !== undefined && { appliedLimit }),
-      ...(offset > 0 && { appliedOffset: offset }),
-    },
+    mode: 'files_with_matches',
+    filenames: relativeMatches,
+    numFiles: relativeMatches.length,
+    ...(appliedLimit !== undefined && { appliedLimit }),
+    ...(offset > 0 && { appliedOffset: offset }),
   }
 }
 

@@ -7,6 +7,7 @@ import { join } from 'node:path'
 // bootstrap/state.ts side-effect chain; bun:bundle is pinned to feature() ===
 // false (the documented default under test) so GrepTool.call exercises the
 // untouched rg branch — the exact behavior when SEARCH_NAPI is disabled.
+import type * as searchNative from '../index'
 import { debugMock } from '../../../../tests/mocks/debug'
 import { logMock } from '../../../../tests/mocks/log'
 import { mockToolContext } from '../../../../tests/mocks/toolContext'
@@ -24,6 +25,13 @@ const { GrepTool, splitContentLine } = await import(
 const searchNative = await import('../index')
 const { isValidSearchNativeModule, loadSearchNative, renderGrepMatches } =
   searchNative
+
+
+const stubCanUseTool = async () => ({ behavior: 'allow' }) as any
+const stubParentMessage = {
+  type: 'assistant',
+  message: { id: 'msg_parent', content: [] },
+} as any
 
 // ─── loadSearchNative (structural gate) ─────────────────────────────────
 
@@ -269,7 +277,12 @@ describe('GrepTool with feature flag disabled', () => {
       path: dir,
       output_mode: 'content',
     } as unknown as Parameters<typeof GrepTool.call>[0]
-    const result = await GrepTool.call(callInput, mockToolContext())
+    const result = await GrepTool.call(
+      callInput,
+      mockToolContext(),
+      stubCanUseTool,
+      stubParentMessage,
+    )
     // tmpdir paths are outside cwd → toRelativePath keeps them absolute,
     // exactly like the current rg subprocess output.
     expect(result.data.mode).toBe('content')
