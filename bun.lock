@@ -344,6 +344,10 @@
         "vite": "^6.4.2",
       },
     },
+    "packages/search-napi": {
+      "name": "search-napi",
+      "version": "0.1.0",
+    },
     "packages/token-counter-napi": {
       "name": "token-counter-napi",
       "version": "0.1.0",
@@ -2380,6 +2384,7 @@
 
     "toidentifier": ["toidentifier@1.0.1", "https://registry.npmmirror.com/toidentifier/-/toidentifier-1.0.1.tgz", {}, "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="],
 
+    "search-napi": ["search-napi@workspace:packages/search-napi"],
     "token-counter-napi": ["token-counter-napi@workspace:packages/token-counter-napi"],
 
     "transcript-parser-napi": ["transcript-parser-napi@workspace:packages/transcript-parser-napi"],
