@@ -7,7 +7,7 @@ import { join } from 'node:path'
 // bootstrap/state.ts side-effect chain; bun:bundle is pinned to feature() ===
 // false (the documented default under test) so GrepTool.call exercises the
 // untouched rg branch — the exact behavior when SEARCH_NAPI is disabled.
-import type * as searchNative from '../index'
+import type * as searchNativeTypes from '../index'
 import { debugMock } from '../../../../tests/mocks/debug'
 import { logMock } from '../../../../tests/mocks/log'
 import { mockToolContext } from '../../../../tests/mocks/toolContext'
@@ -82,11 +82,11 @@ describe('loadSearchNative', () => {
 
 describe('renderGrepMatches', () => {
   function buildMatch(
-    partial: Partial<searchNative.RenderableGrepMatch> & {
+    partial: Partial<searchNativeTypes.RenderableGrepMatch> & {
       path: string
       line: string
     },
-  ): searchNative.RenderableGrepMatch {
+  ): searchNativeTypes.RenderableGrepMatch {
     return {
       lineNumber: 0,
       before: [],
@@ -276,7 +276,10 @@ describe('GrepTool with feature flag disabled', () => {
       path: dir,
       output_mode: 'content',
     } as unknown as Parameters<typeof GrepTool.call>[0]
-    const result = await GrepTool.call(
+    // 联合 ToolResult 取窄面：bypasses overload union resolution（测试面合法 as any）。
+    const result = await (GrepTool.call as unknown as (
+      ...args: unknown[]
+    ) => Promise<{ data: { mode: string; numLines: number; content: string; appliedLimit?: number } }>)(
       callInput,
       mockToolContext(),
       stubCanUseTool,
