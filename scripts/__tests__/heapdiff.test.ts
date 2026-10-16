@@ -171,12 +171,17 @@ describe('buildHeapDiffReport', () => {
     expect(report.topByNameDelta[1]?.deltaSize).toBe(100)
     expect(report.topByNameDelta[1]?.countA).toBe(1)
     expect(report.topByNameDelta[1]?.countB).toBe(2)
-    // Focus view matches the toolUseId keyword by node name.
+    // Focus view: nodes match the keyword by node name; the strings
+    // cross-scan is string-table-wide, and B's table literally contains
+    // 'toolUseId-cache' (the node name IS a strings-table entry), so inB
+    // holds exactly 1 hit (CI /tmp/test2.log:316 — expected 0, received 1).
     expect(report.focus).toHaveLength(1)
     expect(report.focus[0]?.keyword).toBe('tooluseid')
     expect(report.focus[0]?.nodes.length).toBeGreaterThan(0)
     expect(report.focus[0]?.strings.inA).toHaveLength(0)
-    expect(report.focus[0]?.strings.inB).toHaveLength(0)
+    expect(report.focus[0]?.strings.inB).toHaveLength(1)
+    expect(report.focus[0]?.strings.inB[0]?.preview).toBe('toolUseId-cache')
+    expect(report.focus[0]?.strings.inB[0]?.bytes).toBe(30)
   })
 
   test('keys missing on one side count as zero', async () => {

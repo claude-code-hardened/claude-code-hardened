@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, mock, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test'
 import type { Message } from '../../../types/message.js'
 import type { AutoCompactTrackingState } from '../autoCompact.js'
 import { debugMock } from '../../../../tests/mocks/debug'
@@ -12,11 +12,31 @@ mock.module('src/utils/log.ts', logMock)
 mock.module('src/utils/debug.ts', debugMock)
 
 // Controllable feature() (default off — bun-test baseline). Set
-// flags.AUTO_COMPACT_BREAKER = true to exercise the 2.9 paths.
+// setBreakerEnabled(true) to exercise the 2.9 paths.
 const flags: Record<string, boolean> = {}
 mock.module('bun:bundle', () => ({
   feature: (name: string) => flags[name] ?? false,
 }))
+
+// The flags record above only reaches autoCompact.js when this file's
+// bun:bundle mock is the live binding of its `feature` import. In a shared
+// CI worker, an earlier test file can load autoCompact.js (via the
+// query.ts/config.ts/compact.ts import chains) against the REAL bun:bundle
+// builtin — a virtual builtin's already-resolved import is not rebound by a
+// later mock.module — and then feature() reads the process env directly, so
+// every breaker test saw the flag-off path (CI /tmp/test2.log:1140, 1159,
+// 1178: prefix-overflow skip never returned, the trip never fired and
+// consecutiveRapidRefills came back undefined). Mirror each toggle into the
+// real FEATURE_AUTO_COMPACT_BREAKER env var so the gate honors the switch
+// under either binding.
+function setBreakerEnabled(on: boolean) {
+  flags.AUTO_COMPACT_BREAKER = on
+  if (on) {
+    process.env.FEATURE_AUTO_COMPACT_BREAKER = '1'
+  } else {
+    delete process.env.FEATURE_AUTO_COMPACT_BREAKER
+  }
+}
 
 // Telemetry capture for the prefix-overflow / breaker events.
 const loggedEvents: Array<{ name: string; data: Record<string, unknown> }> = []
@@ -52,9 +72,15 @@ mock.module('src/utils/slowOperations.ts', () => ({
   SLOW_OPERATION_THRESHOLD_MS: 100,
   writeFileSync_DEPRECATED: () => {},
 }))
-// Deterministic content estimate: len/4 (mirrors the real rough estimator).
+// Deterministic content estimate: len/bytesPerToken (mirrors the real rough
+// estimator). The divisor parameter is load-bearing: sibling compact tests
+// (memoryProjection) exercise document blocks through the title-extension
+// divisor (json → 2), and a divisor-ignoring len/4 mock here leaks into them
+// process-globally (CI /tmp/test2.log:1085 — 40_000/2 became 40_000/4 → the
+// 20k floor rejected a boundary-exact case → clearToolResultProjection null).
 mock.module('src/services/tokenEstimation.ts', () => ({
-  roughTokenCountEstimation: (text: string) => Math.ceil(text.length / 4),
+  roughTokenCountEstimation: (text: string, bytesPerToken = 4) =>
+    Math.round(text.length / bytesPerToken),
   roughTokenCountEstimationForMessages: (
     msgs: readonly { message?: { content?: unknown } }[],
   ) =>
@@ -62,7 +88,7 @@ mock.module('src/services/tokenEstimation.ts', () => ({
       const content = m.message?.content
       const text =
         typeof content === 'string' ? content : JSON.stringify(content ?? '')
-      return n + Math.ceil(text.length / 4)
+      return n + Math.round(text.length / 4)
     }, 0),
   roughTokenCountEstimationForMessage: () => 0,
   roughTokenCountEstimationForFileType: () => 0,
@@ -177,6 +203,12 @@ beforeAll(() => {
   delete process.env.DISABLE_AUTO_COMPACT
   delete process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE
   delete process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW
+})
+
+afterAll(() => {
+  // The real-feature fallback binding reads this env var per call — never
+  // leak the ON state into later test files in the same worker.
+  delete process.env.FEATURE_AUTO_COMPACT_BREAKER
 })
 
 // ---------------------------------------------------------------------------
@@ -366,7 +398,7 @@ describe('evaluateRapidRefillBreaker', () => {
 
 describe('autoCompactIfNeeded (flag off — pre-2.9 regression)', () => {
   test('trip-state tracking is ignored, compact still proceeds', async () => {
-    flags.AUTO_COMPACT_BREAKER = false
+    setBreakerEnabled(false)
     compactCalls = 0
     const messages = [
       assistantWithUsage({ inputTokens: 940_000, cacheReadTokens: 10_000 }),
@@ -386,7 +418,7 @@ describe('autoCompactIfNeeded (flag off — pre-2.9 regression)', () => {
   })
 
   test('failure circuit still opens on consecutiveFailures alone', async () => {
-    flags.AUTO_COMPACT_BREAKER = false
+    setBreakerEnabled(false)
     compactCalls = 0
     const messages = [
       assistantWithUsage({ inputTokens: 940_000, cacheReadTokens: 10_000 }),
@@ -405,7 +437,7 @@ describe('autoCompactIfNeeded (flag off — pre-2.9 regression)', () => {
 
 describe('autoCompactIfNeeded (AUTO_COMPACT_BREAKER on)', () => {
   test('skips when the fixed prefix alone exceeds the threshold', async () => {
-    flags.AUTO_COMPACT_BREAKER = true
+    setBreakerEnabled(true)
     loggedEvents.length = 0
     compactCalls = 0
     // usage input+cache = 1_000_000, message content tiny (100 chars → 25
@@ -430,7 +462,7 @@ describe('autoCompactIfNeeded (AUTO_COMPACT_BREAKER on)', () => {
   })
 
   test('prefix fitting the threshold still allows the compact', async () => {
-    flags.AUTO_COMPACT_BREAKER = true
+    setBreakerEnabled(true)
     loggedEvents.length = 0
     compactCalls = 0
     // usage total 1_000_000, content estimate 200k → prefix 800k <= 930k;
@@ -449,7 +481,7 @@ describe('autoCompactIfNeeded (AUTO_COMPACT_BREAKER on)', () => {
   })
 
   test('third consecutive refill within <3 turns trips the breaker', async () => {
-    flags.AUTO_COMPACT_BREAKER = true
+    setBreakerEnabled(true)
     loggedEvents.length = 0
     compactCalls = 0
     const messages = [
@@ -473,7 +505,7 @@ describe('autoCompactIfNeeded (AUTO_COMPACT_BREAKER on)', () => {
   })
 
   test('fast refill proceeds and threads the count for re-arm', async () => {
-    flags.AUTO_COMPACT_BREAKER = true
+    setBreakerEnabled(true)
     compactCalls = 0
     const messages = [
       assistantWithUsage({ inputTokens: 990_000 }),
@@ -491,7 +523,7 @@ describe('autoCompactIfNeeded (AUTO_COMPACT_BREAKER on)', () => {
   })
 
   test('failure breaker wins over the refill breaker', async () => {
-    flags.AUTO_COMPACT_BREAKER = true
+    setBreakerEnabled(true)
     loggedEvents.length = 0
     compactCalls = 0
     const messages = [

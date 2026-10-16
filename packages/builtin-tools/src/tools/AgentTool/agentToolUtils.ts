@@ -387,6 +387,15 @@ export function finalizeAgentTool(
   }
 }
 
+// Cross-file mock-module defense: src/workflow/__tests__/claudeCodeBackend
+// .test.ts merge-patches this module's `finalizeAgentTool` export
+// process-globally with a fixed stub (totalToolUseCount: 3), which poisons
+// agentToolUtils.test.ts's streamStats tests in workers where that patch
+// registered first (CI /tmp/test2.log:1696, 1715 — both received 3). The
+// merge-patch only overrides the patched export name, never this alias, so
+// tests reach the real implementation through it regardless of load order.
+export const finalizeAgentToolUnpatched = finalizeAgentTool
+
 /**
  * Returns the name of the last tool_use block in an assistant message,
  * or undefined if the message is not an assistant message with tool_use.

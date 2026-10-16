@@ -13,7 +13,7 @@
  * side-effect chain + previously-registered UI/context stubs are mocked;
  * pure helpers load for real.
  */
-import { afterAll, describe, expect, mock, test } from 'bun:test'
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { join } from 'node:path'
 import { debugMock } from '../../../../../../tests/mocks/debug'
 import { errorsMock } from '../../../../../../tests/mocks/errors'
@@ -256,6 +256,15 @@ function makeContext(): any {
 }
 
 describe('AgentTool spawn-window worktree guard', () => {
+  beforeEach(() => {
+    // The recorder arrays are module-scoped and the async-path test runs
+    // first: without a per-test reset the sync-path test counts the async
+    // test's create and sees 2 (CI /tmp/test2.log:1670 — createdWorktrees
+    // expected 1, received 2), so its leak assertion is meaningless.
+    createdWorktrees.length = 0
+    removedWorktrees.length = 0
+  })
+
   test('async path: registerAsyncAgent failure removes the created worktree', async () => {
     spawnRegistrationFailure.sync = false
     spawnRegistrationFailure.async = true

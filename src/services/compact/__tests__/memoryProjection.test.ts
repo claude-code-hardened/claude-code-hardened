@@ -10,6 +10,42 @@ import { logMock } from '../../../../tests/mocks/log'
 mock.module('src/utils/debug.ts', debugMock)
 mock.module('src/utils/log.ts', logMock)
 
+// Cross-worker mock.module pollution shield for the estimator: several test
+// files register a len/4-only roughTokenCountEstimation stub
+// (autoCompact / tokens.test / CtxInspectTool / SessionMemory prompts), and
+// Bun's mock.module is process-global last-write-wins, so whichever ran last
+// before this file wins. A divisor-ignoring stub breaks exactly the
+// title-extension-divisor document case below: 40_000 text-source chars at
+// divisor 2 must count 20_000 (official mun floor boundary), while /4 yields
+// 10_000 < 20_000 and the clear bails null (CI /tmp/test2.log:1085 —
+// received null). Re-register here with the real runtime semantics
+// (feature flags off in CI → len/bytesPerToken rough estimator everywhere)
+// so this file's expectations hold regardless of load order.
+const estimatorMock = () => ({
+  roughTokenCountEstimation: (text: string, bytesPerToken = 4) =>
+    Math.round(text.length / bytesPerToken),
+  // CI runs with FEATURE_TOKEN_COUNT_NATIVE unset → the real
+  // countTokensPrecise falls back to the rough len/4 estimator anyway.
+  countTokensPrecise: (text: string) => Math.round(text.length / 4),
+  roughTokenCountEstimationForMessages: (
+    msgs: readonly { message?: { content?: unknown } }[],
+  ) =>
+    msgs.reduce((n, m) => {
+      const content = m.message?.content
+      const text =
+        typeof content === 'string' ? content : JSON.stringify(content ?? '')
+      return n + Math.round(text.length / 4)
+    }, 0),
+  roughTokenCountEstimationForMessage: () => 0,
+  roughTokenCountEstimationForFileType: () => 0,
+  bytesPerTokenForFileType: () => 4,
+  countTokensWithAPI: async () => 0,
+  countMessagesTokensWithAPI: async () => 0,
+  countTokensViaHaikuFallback: async () => 0,
+})
+mock.module('src/services/tokenEstimation.ts', estimatorMock)
+mock.module('src/services/tokenEstimation.js', estimatorMock)
+
 // Import under test AFTER mocks are registered.
 const {
   clearToolResultProjection,
