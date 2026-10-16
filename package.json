@@ -179,7 +179,7 @@
     "lru-cache": "^11.3.5",
     "marked": "^18.0.0",
     "modifiers-napi": "workspace:*",
-    "openai": "^7.0.0",
+    "openai": "7.34.0",
     "p-map": "^7.0.4",
     "picomatch": "^4.0.4",
     "plist": "^5.0.0",
