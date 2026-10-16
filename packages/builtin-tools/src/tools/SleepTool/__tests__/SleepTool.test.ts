@@ -19,7 +19,8 @@ const removeMatching = (pred: (c: QCmd) => boolean): QCmd[] => {
   queue.push(...kept)
   return removed
 }
-const isEditable = (c: QCmd): boolean => c.mode === 'prompt' || c.mode === 'bash'
+const isEditable = (c: QCmd): boolean =>
+  c.mode === 'prompt' || c.mode === 'bash'
 
 const queueMock = {
   subscribeToCommandQueue: (_fn: unknown) => () => {},
@@ -85,12 +86,9 @@ describe('SleepTool', () => {
   })
 
   test('wakes early when queued work arrives', async () => {
-    const sleepPromise = SleepTool.call(
-      { duration_seconds: 10 },
-      {
-        abortController: new AbortController(),
-      } as any,
-    )
+    const sleepPromise = SleepTool.call({ duration_seconds: 10 }, {
+      abortController: new AbortController(),
+    } as any)
 
     setTimeout(() => {
       queueMock.enqueue({

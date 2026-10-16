@@ -178,7 +178,7 @@ const {
   getLastToolUseName,
   BoundedAgentMessageBuffer,
   appendCappedAgentMessage,
-  finalizeAgentToolUnpatched as finalizeAgentTool,
+  finalizeAgentToolUnpatched: finalizeAgentTool,
   MAX_AGENT_MESSAGES_IN_MEMORY,
 } = await import('../agentToolUtils')
 
