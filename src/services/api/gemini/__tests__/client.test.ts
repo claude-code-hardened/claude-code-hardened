@@ -180,8 +180,13 @@ describe('getGeminiClient', () => {
     const { getGeminiClient } = await loadClient()
     setEnv('GEMINI_API_KEY', 'test-key')
 
-    const a = getGeminiClient({ fetchOverride: async () => new Response() })
-    const b = getGeminiClient({ fetchOverride: async () => new Response() })
+    const fetchLike = async () => new Response()
+    // typeof fetch requires preconnect on Bun's DOM lib
+    const withHooks = Object.assign(fetchLike, { preconnect: async () => {} })
+    const a = getGeminiClient({ fetchOverride: withHooks })
+    const b = getGeminiClient({
+      fetchOverride: Object.assign(fetchLike, { preconnect: async () => {} }),
+    })
     expect(a).not.toBe(b)
   })
 })

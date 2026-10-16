@@ -17,10 +17,7 @@ import type { FrontmatterData } from './frontmatterParser.js'
 import { parseFrontmatter } from './frontmatterParser.js'
 import { findCanonicalGitRoot, findGitRoot } from './git.js'
 import { parseToolListFromCLI } from './permissions/permissionSetup.js'
-import {
-  attachSearchCancel,
-  loadSearchNative,
-} from '../../../packages/search-napi/src/index'
+import { attachSearchCancel, loadSearchNative } from 'search-napi'
 import {
   isSettingSourceEnabled,
   type SettingSource,
