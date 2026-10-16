@@ -75,6 +75,7 @@
     "@google/genai": "^2.30.0",
     "highlight.js": "^11.11.1",
     "i18next": "^26.4.2",
+    "search-napi": "workspace:*",
     "ws": "^8.20.0"
   },
   "devDependencies": {
