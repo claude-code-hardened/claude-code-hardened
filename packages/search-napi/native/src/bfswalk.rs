@@ -25,8 +25,6 @@ use std::collections::HashSet;
 use std::fs;
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::MetadataExt;
-#[cfg(target_family = "windows")]
-use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -35,21 +33,27 @@ use ignore::gitignore::Gitignore;
 
 use crate::heart::SearchToken;
 
-/// (设备, 索引节点) 键：-L 环防护 / alias 去重的真实身份对。
-/// unix 走 dev/ino；windows 用 volume_serial+file_index 同语义对位；
-/// 其余平台无此 API——返回 None（环防护降级为不设防，仅 bfs 侧容差面）。
+/// 目录身份键：-L 环防护 / alias 去重的真实身份（字符串化以跨平台）。
+/// unix 走 (dev, ino)——MetadataExt 稳定且零成本；windows 的
+/// volume_serial/file_index 在 stable 上仍属 unstable（windows_by_handle），
+/// 改走 fs::canonicalize（GetFinalPathNameByHandle，junction/symlink 解到
+/// 底），规范路径相同即同一真实目录——环防护语义等值；其余平台 None
+/// （环防护降级为不设防，仅 bfs 侧容差面）。
 #[cfg(target_family = "unix")]
-fn inode_pair(meta: &fs::Metadata) -> Option<(u64, u64)> {
-	Some((meta.dev(), meta.ino()))
+fn dir_identity_key(meta: &fs::Metadata, _path: &Path) -> Option<String> {
+	Some(format!("{}:{}", meta.dev(), meta.ino()))
 }
 
 #[cfg(target_family = "windows")]
-fn inode_pair(meta: &fs::Metadata) -> Option<(u64, u64)> {
-	Some((meta.volume_serial_number(), meta.file_index()))
+fn dir_identity_key(_meta: &fs::Metadata, path: &Path) -> Option<String> {
+	fs::canonicalize(path)
+		.ok()
+		.map(|p| p.to_string_lossy().into_owned())
 }
 
-#[cfg(not(any(target_family = "unix", target_family = "windows")))]
-fn inode_pair(_meta: &fs::Metadata) -> Option<(u64, u64)> {
+#[cfg(not(target_family = "unix"))]
+#[cfg(not(target_family = "windows"))]
+fn dir_identity_key(_meta: &fs::Metadata, _path: &Path) -> Option<String> {
 	None
 }
 
@@ -149,7 +153,7 @@ struct Row {
 	kind: BfsKind,
 	mtime: SystemTime,
 	/// -L 下 Dir 的目标 (dev, ino)：环防 / alias 去重键。
-	dir_key: Option<(u64, u64)>,
+	dir_key: Option<String>,
 	/// 父目录链（排阶段给子目录叠本地节点用）。
 	chain: Option<Arc<GiLink>>,
 }
@@ -187,10 +191,10 @@ pub fn bfs_walk(root: &Path, config: &WalkConfig, visit: &mut dyn FnMut(&BfsEntr
 	};
 
 	let mtime = root_meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-	let mut visited: HashSet<(u64, u64)> = HashSet::new();
+	let mut visited: HashSet<String> = HashSet::new();
 	if kind == BfsKind::Dir && config.follow == SymlinkPolicy::L {
 		// -L 环防起手：根（解链后的真实 inode）先入访问集。
-		if let Some(key) = inode_pair(root_meta) {
+		if let Some(key) = dir_identity_key(root_meta, root) {
 			visited.insert(key);
 		}
 	}
@@ -224,7 +228,7 @@ fn depth_in_range(depth: u64, config: &WalkConfig) -> bool {
 fn run_tiers(
 	mut tier: Vec<Dir>,
 	config: &WalkConfig,
-	mut visited: HashSet<(u64, u64)>,
+	mut visited: HashSet<String>,
 	mut parent_depth: u64,
 	visit: &mut dyn FnMut(&BfsEntry<'_>) -> bool,
 ) {
@@ -259,9 +263,10 @@ fn run_tiers(
 			// 下潜门：目录且 depth < max（eval.c:1512——边界层目录只输出
 			// 不下潜；>max 的行不可能出现：父层入队时已剪）。
 			if row.kind == BfsKind::Dir && config.max_depth.is_none_or(|max| depth < max) {
-				// bftw.c:1746 环防的全局化：-L 下目标目录 inode 已访问
-				// ⇒ 不再下潜（环/alias 同一由集吸收）。
-				if let Some(key) = row.dir_key {
+				// bftw.c:1746 环防的全局化：-L 下目标目录身份已访问
+				// ⇒ 不再下潜（环/alias 同一由集吸收）。行进迭代中克隆键，
+				// 不动 row 的所有权。
+				if let Some(key) = row.dir_key.clone() {
 					if !visited.insert(key) {
 						continue;
 					}
@@ -358,7 +363,7 @@ fn expand_dir(dir: &Dir, config: &WalkConfig, out: &mut TierOut) {
 		let dir_key = followed
 			.as_ref()
 			.filter(|_| kind == BfsKind::Dir)
-			.and_then(|meta| inode_pair(&meta));
+			.and_then(|meta| dir_identity_key(meta, &path));
 		out.rows.push(Row {
 			parent_seq: dir.seq,
 			name: name.into_owned(),
