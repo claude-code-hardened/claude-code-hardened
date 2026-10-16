@@ -278,9 +278,7 @@ describe('GrepTool with feature flag disabled', () => {
     } as unknown as Parameters<typeof GrepTool.call>[0]
     // 联合 ToolResult 取窄面：bypasses overload union resolution（测试面合法 as any）。
     const result = await (
-      GrepTool.call as unknown as (
-        ...args: unknown[]
-      ) => Promise<{
+      GrepTool.call as unknown as (...args: unknown[]) => Promise<{
         data: {
           mode: string
           numLines: number
@@ -288,12 +286,7 @@ describe('GrepTool with feature flag disabled', () => {
           appliedLimit?: number
         }
       }>
-    )(
-      callInput,
-      mockToolContext(),
-      stubCanUseTool,
-      stubParentMessage,
-    )
+    )(callInput, mockToolContext(), stubCanUseTool, stubParentMessage)
     // tmpdir paths are outside cwd → toRelativePath keeps them absolute,
     // exactly like the current rg subprocess output.
     expect(result.data.mode).toBe('content')
