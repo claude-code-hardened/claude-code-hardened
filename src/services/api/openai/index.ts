@@ -375,8 +375,9 @@ export async function* queryModelOpenAI(
     // existing Chat Completions adapter.
     //
     // Both paths are served by the official OpenAI SDK (no hand-rolled
-    // fetch/SSE lives in this layer). The client runs with timeout: 0 (no
-    // total-duration cap — it would kill long healthy streams) and
+    // fetch/SSE lives in this layer). The client runs with a 600s
+    // total-duration timeout (covers headers only — the SDK never caps a
+    // streaming body) and
     // maxRetries: 0 (retry ownership belongs to QueryEngine's fallback state
     // machine). Stalled streams are guarded by the silence-based idle
     // watchdog: its signal replaces the raw one in create() and the upstream
