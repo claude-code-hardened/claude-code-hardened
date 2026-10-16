@@ -1,7 +1,10 @@
 import { randomUUID } from 'crypto'
+import OpenAI from 'openai'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { normalizeOpenAIUsage, type AnthropicUsage } from '@ant/model-provider'
+import { getProxyFetchOptions } from '../../../utils/proxy.js'
 import { getValidChatGPTAuth } from './chatgptAuth.js'
+import { createStreamWatchdog } from './streamWatchdog.js'
 
 type ResponsesInputItem = Record<string, unknown>
 type ResponsesTool = Record<string, unknown>
@@ -193,37 +196,6 @@ export function buildResponsesRequest(params: {
     // Same OAuth session → same key so OpenAI can sticky-route to a cache node.
     // Must not hash the full message list (would change every turn).
     prompt_cache_key: params.promptCacheKey,
-  }
-}
-
-async function* parseSSE(
-  response: Response,
-): AsyncGenerator<Record<string, unknown>, void> {
-  if (!response.body) throw new Error('ChatGPT response did not include a body')
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let splitAt = buffer.indexOf('\n\n')
-    while (splitAt >= 0) {
-      const frame = buffer.slice(0, splitAt)
-      buffer = buffer.slice(splitAt + 2)
-      const data = frame
-        .split(/\r?\n/)
-        .filter(line => line.startsWith('data:'))
-        .map(line => line.slice(5).trimStart())
-        .join('\n')
-      if (data && data !== '[DONE]') {
-        const parsed = JSON.parse(data) as unknown
-        if (parsed && typeof parsed === 'object') {
-          yield parsed as Record<string, unknown>
-        }
-      }
-      splitAt = buffer.indexOf('\n\n')
-    }
   }
 }
 
@@ -468,39 +440,69 @@ export async function* adaptResponsesStreamToAnthropic(
   }
 }
 
+const CHATGPT_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
+
+/**
+ * Stream the ChatGPT Codex Responses API through the official OpenAI SDK.
+ *
+ * The SDK client is built per request: the ChatGPT access token rotates and
+ * the backend lives under a non-OpenAI base URL that cannot be shared with
+ * the Chat Completions client. The SDK carries transport concerns (auth
+ * header, abort, proxy fetch options); response frames are still raw
+ * Responses events consumed by adaptResponsesStreamToAnthropic — chunk shape
+ * is identical to what the retired hand-rolled SSE frame parser produced.
+ *
+ * The idle watchdog wraps the returned stream: silence beyond
+ * CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS aborts the request through the watchdog
+ * signal (passed to the SDK create() call) and lands the same structured
+ * error as the Chat Completions path. The upstream abort signal stays linked
+ * through the watchdog.
+ */
 export async function createChatGPTResponsesStream(params: {
   request: ResponsesRequest
   signal: AbortSignal
   fetchOverride?: typeof fetch
 }): Promise<AsyncIterable<Record<string, unknown>>> {
   const auth = await getValidChatGPTAuth()
-  const fetchFn = params.fetchOverride ?? (globalThis.fetch as typeof fetch)
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${auth.accessToken}`,
-    'Content-Type': 'application/json',
-    Accept: 'text/event-stream',
-    'OpenAI-Beta': 'responses=experimental',
-    Origin: 'https://chatgpt.com',
-    Referer: 'https://chatgpt.com/',
-    originator: 'claude-code-hardened',
-  }
-  if (auth.accountId) {
-    headers['ChatGPT-Account-Id'] = auth.accountId
-  }
-  const response = await fetchFn(
-    'https://chatgpt.com/backend-api/codex/responses',
-    {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(params.request),
-      signal: params.signal,
-    },
-  )
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(
-      `ChatGPT Responses API request failed (${response.status})${text ? `: ${text.slice(0, 500)}` : ''}`,
+  const watchdog = createStreamWatchdog({
+    url: CHATGPT_RESPONSES_URL,
+    model: params.request.model,
+    externalSignal: params.signal,
+  })
+  try {
+    const client = new OpenAI({
+      apiKey: auth.accessToken,
+      baseURL: 'https://chatgpt.com/backend-api/codex',
+      // Large finite timeout (0 would arm a 0ms abort in the SDK's
+      // fetchWithTimeout); it covers headers only and never caps a streaming
+      // body — stalls are guarded by the idle watchdog. Retries belong to
+      // QueryEngine.
+      timeout: 600_000,
+      maxRetries: 0,
+      dangerouslyAllowBrowser: true,
+      defaultHeaders: {
+        'OpenAI-Beta': 'responses=experimental',
+        Origin: 'https://chatgpt.com',
+        Referer: 'https://chatgpt.com/',
+        originator: 'claude-code-hardened',
+        ...(auth.accountId ? { 'ChatGPT-Account-Id': auth.accountId } : {}),
+      },
+      fetchOptions: getProxyFetchOptions({ forAnthropicAPI: false }),
+      ...(params.fetchOverride ? { fetch: params.fetchOverride } : {}),
+    })
+    const created = await client.responses.create(
+      params.request as unknown as Parameters<
+        typeof client.responses.create
+      >[0],
+      { signal: watchdog.signal },
     )
+    return watchdog.wrap(
+      created as unknown as AsyncIterable<Record<string, unknown>>,
+    )
+  } catch (error) {
+    // The wrapped stream was never handed out — nothing will settle the
+    // in-flight registry entry on our behalf.
+    watchdog.settle()
+    throw error
   }
-  return parseSSE(response)
 }

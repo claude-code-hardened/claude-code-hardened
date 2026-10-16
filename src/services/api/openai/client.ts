@@ -52,8 +52,17 @@ export function getOpenAIClient(options?: {
   const client = new OpenAI({
     apiKey,
     ...(baseURL && { baseURL }),
+    // Large finite total-duration timeout (headers only — the SDK releases
+    // the timer once the response returns and never caps a streaming body).
+    // A literal 0 is hazardous: buildRequest treats it as a real value and
+    // fetchWithTimeout arms a 0ms abort. Stalled streams are instead guarded
+    // by the silence-based idle watchdog (CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS
+    // — see streamWatchdog.ts).
+    timeout: 600_000,
+    // Retries are owned by QueryEngine's fallback state machine — stacked
+    // client retries would double-bill relay endpoints. (Non-streaming
+    // side queries may still opt in explicitly.)
     maxRetries: options?.maxRetries ?? 0,
-    timeout: parseInt(process.env.API_TIMEOUT_MS || String(600 * 1000), 10),
     dangerouslyAllowBrowser: true,
     ...(process.env.OPENAI_ORG_ID && {
       organization: process.env.OPENAI_ORG_ID,

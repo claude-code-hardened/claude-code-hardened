@@ -15,6 +15,7 @@ import {
 } from 'v8'
 import { getSessionId } from '../bootstrap/state.js'
 import { logEvent } from '../services/analytics/index.js'
+import { getInFlightApiRequests } from '../services/api/openai/streamWatchdog.js'
 import { logForDebugging } from './debug.js'
 import { toError } from './errors.js'
 import { getDesktopPath } from './file.js'
@@ -79,6 +80,12 @@ export type MemoryDiagnostics = {
   platform: string
   nodeVersion: string
   ccVersion: string
+  inFlightApiRequests?: Array<{
+    requestId: string
+    model?: string
+    url?: string
+    startedAt: number
+  }>
 }
 
 /**
@@ -197,6 +204,9 @@ export async function captureMemoryDiagnostics(
     activeHandles,
     activeRequests,
     openFileDescriptors,
+    // In-flight streaming requests — a suspended frame here that never
+    // settles is the「第 31 号泄漏案」的实形态（悬挂帧驻留整份请求体）。
+    inFlightApiRequests: getInFlightApiRequests(),
     analysis: {
       potentialLeaks,
       recommendation:

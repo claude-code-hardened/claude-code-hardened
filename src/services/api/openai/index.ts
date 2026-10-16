@@ -2,7 +2,9 @@ import type {
   BetaToolUnion,
   BetaMessage,
   BetaUsage,
+  BetaRawMessageStreamEvent,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+import type { ChatCompletionChunk } from 'openai/resources/chat/completions/completions.mjs'
 import type { SystemPrompt } from '../../../utils/systemPromptType.js'
 import type {
   Message,
@@ -15,6 +17,7 @@ import type { AgentId } from '../../../types/ids.js'
 import type { Tools } from '../../../Tool.js'
 import { getSessionId } from '../../../bootstrap/state.js'
 import { getOpenAIClient } from './client.js'
+import { createStreamWatchdog } from './streamWatchdog.js'
 import {
   formatOpenAIPromptCacheKey,
   getOfficialOpenAIPromptCacheKey,
@@ -370,43 +373,72 @@ export async function* queryModelOpenAI(
     // 11. Call OpenAI API with streaming. ChatGPT subscription auth uses the
     // Codex Responses backend; API-key/OpenAI-compatible auth keeps the
     // existing Chat Completions adapter.
-    const adaptedStream = useChatGPTResponses
-      ? adaptResponsesStreamToAnthropic(
-          await createChatGPTResponsesStream({
-            request: buildResponsesRequest({
-              model: openaiModel,
-              messages: openaiMessages,
-              tools: openaiTools,
-              toolChoice: openaiToolChoice,
-              reasoningEffort,
-              promptCacheKey: sessionPromptCacheKey,
-            }),
-            signal,
-            fetchOverride: options.fetchOverride as unknown as typeof fetch,
+    //
+    // Both paths are served by the official OpenAI SDK (no hand-rolled
+    // fetch/SSE lives in this layer). The client runs with timeout: 0 (no
+    // total-duration cap — it would kill long healthy streams) and
+    // maxRetries: 0 (retry ownership belongs to QueryEngine's fallback state
+    // machine). Stalled streams are guarded by the silence-based idle
+    // watchdog: its signal replaces the raw one in create() and the upstream
+    // abort signal stays linked through it.
+    let adaptedStream: AsyncGenerator<BetaRawMessageStreamEvent, void>
+    if (useChatGPTResponses) {
+      adaptedStream = adaptResponsesStreamToAnthropic(
+        await createChatGPTResponsesStream({
+          request: buildResponsesRequest({
+            model: openaiModel,
+            messages: openaiMessages,
+            tools: openaiTools,
+            toolChoice: openaiToolChoice,
+            reasoningEffort,
+            promptCacheKey: sessionPromptCacheKey,
           }),
-          openaiModel,
+          signal,
+          fetchOverride: options.fetchOverride as unknown as typeof fetch,
+        }),
+        openaiModel,
+      )
+    } else {
+      const client = getOpenAIClient({
+        maxRetries: 0,
+        fetchOverride: options.fetchOverride as unknown as typeof fetch,
+        source: options.querySource,
+      })
+      const watchdog = createStreamWatchdog({
+        url: `${(client.baseURL ?? 'https://api.openai.com/v1').replace(
+          /\/+$/,
+          '',
+        )}/chat/completions`,
+        model: openaiModel,
+        externalSignal: signal,
+      })
+      let rawStream: AsyncIterable<ChatCompletionChunk>
+      try {
+        rawStream = await client.chat.completions.create(
+          buildOpenAIRequestBody({
+            model: openaiModel,
+            messages: openaiMessages,
+            tools: openaiTools,
+            toolChoice: openaiToolChoice,
+            enableThinking,
+            maxTokens,
+            temperatureOverride: options.temperatureOverride,
+            promptCacheKey,
+          }),
+          { signal: watchdog.signal },
         )
-      : adaptOpenAIStreamToAnthropic(
-          await getOpenAIClient({
-            maxRetries: 0,
-            fetchOverride: options.fetchOverride as unknown as typeof fetch,
-            source: options.querySource,
-          }).chat.completions.create(
-            buildOpenAIRequestBody({
-              model: openaiModel,
-              messages: openaiMessages,
-              tools: openaiTools,
-              toolChoice: openaiToolChoice,
-              enableThinking,
-              maxTokens,
-              temperatureOverride: options.temperatureOverride,
-              promptCacheKey,
-            }),
-            { signal },
-          ),
-          openaiModel,
-          { includeCacheWriteTokens: useOfficialOpenAICache },
-        )
+      } catch (error) {
+        // The stream was never handed out — the wrap cannot settle the
+        // in-flight registry on our behalf.
+        watchdog.settle()
+        throw error
+      }
+      adaptedStream = adaptOpenAIStreamToAnthropic(
+        watchdog.wrap(rawStream),
+        openaiModel,
+        { includeCacheWriteTokens: useOfficialOpenAICache },
+      )
+    }
 
     // 12. Convert OpenAI stream to Anthropic events, then process into
     //     AssistantMessage + StreamEvent (matching the Anthropic path behavior)

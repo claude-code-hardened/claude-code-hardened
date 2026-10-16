@@ -201,6 +201,12 @@ let _searchExtraToolsEnabled = false
 /** Captured arguments from the last chat.completions.create() call */
 let _lastCreateArgs: Record<string, any> | null = null
 
+/** Captured request options (2nd create() arg — the watchdog signal) */
+let _lastCreateOptions: Record<string, any> | null = null
+
+/** In-flight registry snapshot captured inside the mocked create() */
+let _inFlightAtCreate: Array<Record<string, any>> = []
+
 mock.module('@ant/model-provider', () => ({
   resolveOpenAIModel: (m: string) => m,
   adaptOpenAIStreamToAnthropic: (_stream: any, _model: string) =>
@@ -266,10 +272,21 @@ mock.module('bun:bundle', () => ({
 
 mock.module('../client.js', () => ({
   getOpenAIClient: () => ({
+    baseURL: 'https://relay.test/v1',
     chat: {
       completions: {
-        create: async (args: Record<string, any>) => {
+        create: async (
+          args: Record<string, any>,
+          options?: Record<string, any>,
+        ) => {
           _lastCreateArgs = args
+          _lastCreateOptions = options ?? null
+          const { getInFlightApiRequests } = await import(
+            '../streamWatchdog.js'
+          )
+          _inFlightAtCreate = getInFlightApiRequests().map(entry => ({
+            ...entry,
+          }))
           return { [Symbol.asyncIterator]: async function* () {} }
         },
       },
@@ -642,6 +659,47 @@ describe('queryModelOpenAI — max_tokens forwarded to request', () => {
 
     expect(_lastCreateArgs).not.toBeNull()
     expect('prompt_cache_key' in _lastCreateArgs!).toBe(false)
+  })
+})
+
+describe('queryModelOpenAI — stream watchdog wiring', () => {
+  test('passes the watchdog abort signal to chat.completions.create', async () => {
+    _nextEvents = [
+      makeMessageStart(),
+      makeMessageDelta('end_turn', 3),
+      makeMessageStop(),
+    ]
+
+    await runQueryModel(_nextEvents)
+
+    expect(_lastCreateOptions).not.toBeNull()
+    const passedSignal = _lastCreateOptions!.signal
+    expect(passedSignal).toBeInstanceOf(AbortSignal)
+    expect((passedSignal as AbortSignal).aborted).toBe(false)
+  })
+
+  test('registers the in-flight request before create() and settles it after the stream ends', async () => {
+    const { getInFlightApiRequests } = await import('../streamWatchdog.js')
+    const before = getInFlightApiRequests().length
+
+    _nextEvents = [
+      makeMessageStart(),
+      makeMessageDelta('end_turn', 3),
+      makeMessageStop(),
+    ]
+    await runQueryModel(_nextEvents)
+
+    // Registered at "started": the entry already exists when create() fires.
+    expect(_inFlightAtCreate).toHaveLength(1)
+    expect(_inFlightAtCreate[0]!.model).toBe('test-model')
+    expect(_inFlightAtCreate[0]!.url).toBe(
+      'https://relay.test/v1/chat/completions',
+    )
+    expect(_inFlightAtCreate[0]!.startedAt).toBeGreaterThan(0)
+
+    // Consumed to completion — the wrapped stream's finally must have
+    // settled the entry (registry returns to its pre-run size).
+    expect(getInFlightApiRequests().length).toBe(before)
   })
 })
 
