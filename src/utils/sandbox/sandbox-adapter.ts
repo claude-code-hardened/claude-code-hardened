@@ -446,9 +446,10 @@ async function detectWorktreeMainRepoPath(cwd: string): Promise<string | null> {
  * Check if dependencies are available (memoized)
  * Returns { errors, warnings } - errors mean sandbox cannot run
  */
-const checkDependencies = memoize((): SandboxDependencyCheck =>
-  // No ripgrepConfig arg → sandbox-runtime probes its default ('rg' on PATH).
-  BaseSandboxManager.checkDependencies(),
+const checkDependencies = memoize(
+  (): SandboxDependencyCheck =>
+    // No ripgrepConfig arg → sandbox-runtime probes its default ('rg' on PATH).
+    BaseSandboxManager.checkDependencies(),
 )
 
 function getSandboxEnabledSetting(): boolean {

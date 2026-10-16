@@ -179,7 +179,7 @@ export function createStreamWatchdog(params: {
   }
 
   function armTimer(): void {
-    if (idleFired || settled) return
+    if (idleFired || settled || controller.signal.aborted) return
     if (idleTimer !== null) clearTimeout(idleTimer)
     const timer: ReturnType<typeof setTimeout> = setTimeout(
       fireIdle,

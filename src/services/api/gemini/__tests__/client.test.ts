@@ -2,8 +2,8 @@
  * Tests for the Gemini client's SDK wiring.
  *
  * The hand-rolled fetch/SSE client is gone: these tests pin the
- * @google/genai SDK fake surface — constructor options (timeout: 0, SDK
- * retries off, endpoint mapping of GEMINI_BASE_URL), the body→config
+ * @google/genai SDK fake surface — constructor options (no total timeout,
+ * SDK retries off, endpoint mapping of GEMINI_BASE_URL), the body→config
  * translation performed by streamGeminiGenerateContent, the
  * GenerateContentResponse → GeminiStreamChunk projection, and the
  * idle-watchdog integration at the client seam.

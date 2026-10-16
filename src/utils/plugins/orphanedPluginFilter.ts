@@ -8,7 +8,8 @@
  * outdated plugin code.
  *
  * We find `.orphaned_at` markers with a bounded (max-depth 4) fs walk and
- * generate `!**/<dir>/**` glob parts for their parent directories. The
+ * generate a directory-exclusion glob (negated recursive prefix, one per
+ * marker's parent directory). The
  * cache is warmed in main.tsx AFTER cleanupOrphanedPluginVersionsInBackground
  * settles disk state. Once populated, the exclusion list is frozen for
  * the session unless /reload-plugins is called; subsequent disk mutations
