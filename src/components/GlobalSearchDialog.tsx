@@ -180,12 +180,15 @@ export function GlobalSearchDialog({ onDone, onInsert }: Props): React.ReactNode
             // session, …) — treat as zero matches for this keystroke.
           } finally {
             cancel();
-            if (controller.signal.aborted) return;
-            // Zero matches — clear stale results so "No matches" renders
-            // instead of the previous query's list.
-            if (collected === 0) setMatches(m => (m.length ? [] : m));
-            setIsSearching(false);
           }
+          // Abort for a newer keystroke: leave all state as-is (a superseded
+          // result set must not clobber the latest). Side effects that DO run
+          // for settled searches happen below, outside the finally.
+          if (controller.signal.aborted) return
+          // Zero matches — clear stale results so "No matches" renders
+          // instead of the previous query's list.
+          if (collected === 0) setMatches(m => (m.length ? [] : m))
+          setIsSearching(false)
         };
         void runSearch();
       },
