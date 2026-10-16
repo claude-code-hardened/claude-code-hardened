@@ -43,80 +43,80 @@ export type GrepOutputModeValue = 'Content' | 'FilesWithMatches' | 'Count'
 
 /** Mirror of napi `#[napi(object)] GrepOptions` (snake_case → camelCase). */
 export interface GrepOptionsLike {
-	pattern: string
-	path?: string | null
-	glob?: string | null
-	type?: string | null
-	ignoreCase?: boolean | null
-	multiline?: boolean | null
-	hidden?: boolean | null
-	gitignore?: boolean | null
-	maxCount?: number | null
-	offset?: number | null
-	contextBefore?: number | null
-	contextAfter?: number | null
-	maxColumns?: number | null
-	mode?: GrepOutputModeValue | null
-	timeoutMs?: number | null
-	/** Per-session cancel key (CancelRegistry): searchCancel(key) kills only this call. */
-	cancelKey?: string | null
+  pattern: string
+  path?: string | null
+  glob?: string | null
+  type?: string | null
+  ignoreCase?: boolean | null
+  multiline?: boolean | null
+  hidden?: boolean | null
+  gitignore?: boolean | null
+  maxCount?: number | null
+  offset?: number | null
+  contextBefore?: number | null
+  contextAfter?: number | null
+  maxColumns?: number | null
+  mode?: GrepOutputModeValue | null
+  timeoutMs?: number | null
+  /** Per-session cancel key (CancelRegistry): searchCancel(key) kills only this call. */
+  cancelKey?: string | null
 }
 
 /** Mirror of napi `#[napi(object)] GlobOptions`. */
 export interface GlobOptionsLike {
-	pattern?: string | null
-	path?: string | null
-	type?: string | null
-	hidden?: boolean | null
-	gitignore?: boolean | null
-	sortByMtime?: boolean | null
-	maxResults?: number | null
-	offset?: number | null
-	timeoutMs?: number | null
-	/** bfs `-name` face: basename fnmatch (orthogonal to `pattern` path glob). */
-	bfsName?: string | null
-	/** bfs `-iname`: case-insensitive `bfsName`. */
-	bfsIcase?: boolean | null
-	/** bfs `-mindepth` (root = 0; shallower entries skipped, traversal continues). */
-	minDepth?: number | null
-	/** Symlink policy: `"P"` (default, never follow; symlinks report type `l`) | `"L"` (follow all + loop guard) | `"H"` (follow roots only). */
-	follow?: string | null
-	/** Emit order: `"bfs"` (default; (depth, parent seq, name) layer order) | `"dfs"` (legacy WalkParallel + lexicographic fallback). */
-	order?: string | null
-	/** Per-session cancel key (CancelRegistry): searchCancel(key) kills only this call. */
-	cancelKey?: string | null
+  pattern?: string | null
+  path?: string | null
+  type?: string | null
+  hidden?: boolean | null
+  gitignore?: boolean | null
+  sortByMtime?: boolean | null
+  maxResults?: number | null
+  offset?: number | null
+  timeoutMs?: number | null
+  /** bfs `-name` face: basename fnmatch (orthogonal to `pattern` path glob). */
+  bfsName?: string | null
+  /** bfs `-iname`: case-insensitive `bfsName`. */
+  bfsIcase?: boolean | null
+  /** bfs `-mindepth` (root = 0; shallower entries skipped, traversal continues). */
+  minDepth?: number | null
+  /** Symlink policy: `"P"` (default, never follow; symlinks report type `l`) | `"L"` (follow all + loop guard) | `"H"` (follow roots only). */
+  follow?: string | null
+  /** Emit order: `"bfs"` (default; (depth, parent seq, name) layer order) | `"dfs"` (legacy WalkParallel + lexicographic fallback). */
+  order?: string | null
+  /** Per-session cancel key (CancelRegistry): searchCancel(key) kills only this call. */
+  cancelKey?: string | null
 }
 
 /** Mirror of napi `#[napi(object)] GrepMatch`. */
 export interface RenderableGrepMatch {
-	path: string
-	lineNumber: number
-	/** Count mode: per-file match count; other modes: shared line content. */
-	line: string
-	before: string[]
-	after: string[]
-	/** The line hit the max_columns cap (native truncates it). */
-	truncated?: boolean | null
+  path: string
+  lineNumber: number
+  /** Count mode: per-file match count; other modes: shared line content. */
+  line: string
+  before: string[]
+  after: string[]
+  /** The line hit the max_columns cap (native truncates it). */
+  truncated?: boolean | null
 }
 
 /** Mirror of napi `#[napi(object)] GrepResult`. */
 export interface GrepResultLike {
-	matches: RenderableGrepMatch[]
-	totalMatches: number
-	filesWithMatches: number
-	filesSearched: number
-	limitReached: boolean
-	skippedOversized: number
-	/** Pipeline was cancelled (searchCancel / timeout) — result is a truncated residual, not a clean empty set. */
-	cancelled?: boolean | null
+  matches: RenderableGrepMatch[]
+  totalMatches: number
+  filesWithMatches: number
+  filesSearched: number
+  limitReached: boolean
+  skippedOversized: number
+  /** Pipeline was cancelled (searchCancel / timeout) — result is a truncated residual, not a clean empty set. */
+  cancelled?: boolean | null
 }
 
 /** Frozen v1 native surface (native/src/lib.rs + types.rs). */
 export interface SearchNativeModule {
-	grepSearch(options: GrepOptionsLike): Promise<GrepResultLike>
-	findGlob(options: GlobOptionsLike): Promise<string[]>
-	searchCancel(key?: string | null): void
-	isNativeSearch(): boolean
+  grepSearch(options: GrepOptionsLike): Promise<GrepResultLike>
+  findGlob(options: GlobOptionsLike): Promise<string[]>
+  searchCancel(key?: string | null): void
+  isNativeSearch(): boolean
 }
 
 /**
@@ -127,16 +127,16 @@ export interface SearchNativeModule {
  * .node payload masquerading as search-napi).
  */
 export function isValidSearchNativeModule(mod: unknown): boolean {
-	if (mod === null || typeof mod !== 'object') {
-		return false
-	}
-	const m = mod as Record<string, unknown>
-	return (
-		typeof m.grepSearch === 'function' &&
-		typeof m.findGlob === 'function' &&
-		typeof m.searchCancel === 'function' &&
-		typeof m.isNativeSearch === 'function'
-	)
+  if (mod === null || typeof mod !== 'object') {
+    return false
+  }
+  const m = mod as Record<string, unknown>
+  return (
+    typeof m.grepSearch === 'function' &&
+    typeof m.findGlob === 'function' &&
+    typeof m.searchCancel === 'function' &&
+    typeof m.isNativeSearch === 'function'
+  )
 }
 
 let cachedModule: SearchNativeModule | null = null
@@ -147,18 +147,18 @@ let loadAttempted = false
  * structurally invalid — callers degrade to the rg subprocess path.
  */
 export function loadSearchNative(): SearchNativeModule | null {
-	if (loadAttempted) {
-		return cachedModule
-	}
-	loadAttempted = true
+  if (loadAttempted) {
+    return cachedModule
+  }
+  loadAttempted = true
 
-	const mod = loadNativeModule<SearchNativeModule>(
-		'search-napi',
-		'search',
-		isValidSearchNativeModule,
-	)
-	cachedModule = mod
-	return cachedModule
+  const mod = loadNativeModule<SearchNativeModule>(
+    'search-napi',
+    'search',
+    isValidSearchNativeModule,
+  )
+  cachedModule = mod
+  return cachedModule
 }
 
 /**
@@ -170,57 +170,57 @@ export function loadSearchNative(): SearchNativeModule | null {
  * (already-aborted signal) is harmless.
  */
 export function attachSearchCancel(
-	mod: SearchNativeModule,
-	signal: AbortSignal | undefined,
-	cancelKey?: string | null,
+  mod: SearchNativeModule,
+  signal: AbortSignal | undefined,
+  cancelKey?: string | null,
 ): () => void {
-	if (!signal) {
-		return () => {}
-	}
-	const onCancel = () => {
-		try {
-			mod.searchCancel(cancelKey ?? null)
-		} catch {
-			// Engine already gone — nothing left to cancel.
-		}
-	}
-	if (signal.aborted) {
-		onCancel()
-		return () => {}
-	}
-	signal.addEventListener('abort', onCancel, { once: true })
-	return () => signal.removeEventListener('abort', onCancel)
+  if (!signal) {
+    return () => {}
+  }
+  const onCancel = () => {
+    try {
+      mod.searchCancel(cancelKey ?? null)
+    } catch {
+      // Engine already gone — nothing left to cancel.
+    }
+  }
+  if (signal.aborted) {
+    onCancel()
+    return () => {}
+  }
+  signal.addEventListener('abort', onCancel, { once: true })
+  return () => signal.removeEventListener('abort', onCancel)
 }
 
 export interface RenderGrepMatchesOptions {
-	mode?: GrepOutputModeValue
-	/** Show line numbers in content mode (rg -n). Default true. */
-	showLineNumbers?: boolean
-	/**
-	 * rg context semantics: `--` group separators are only emitted when
-	 * context lines were requested at all (rg ignores --context-separator
-	 * when printing matches without context).
-	 */
-	context?: boolean
-	/**
-	 * Count mode without the path prefix — `rg -c FILE` (single-file target)
-	 * prints a bare count, while a directory target prints `path:count`.
-	 */
-	bareCount?: boolean
+  mode?: GrepOutputModeValue
+  /** Show line numbers in content mode (rg -n). Default true. */
+  showLineNumbers?: boolean
+  /**
+   * rg context semantics: `--` group separators are only emitted when
+   * context lines were requested at all (rg ignores --context-separator
+   * when printing matches without context).
+   */
+  context?: boolean
+  /**
+   * Count mode without the path prefix — `rg -c FILE` (single-file target)
+   * prints a bare count, while a directory target prints `path:count`.
+   */
+  bareCount?: boolean
 }
 
 /** Verbatim vendored rg 14.1.1 placeholder for max-columns-capped lines. */
 const OMITTED_LONG_MATCHING_LINE = '[Omitted long matching line]'
 
 function contextLine(
-	path: string,
-	lineNumber: number,
-	text: string,
-	withNumbers: boolean,
+  path: string,
+  lineNumber: number,
+  text: string,
+  withNumbers: boolean,
 ): string {
-	return withNumbers
-		? `${path}-${lineNumber}-${text}`
-		: `${path}-${text}`
+  return withNumbers
+    ? `${path}-${lineNumber}-${text}`
+    : `${path}-${text}`
 }
 
 /**
@@ -233,69 +233,69 @@ function contextLine(
  * relativization map no-ops on them).
  */
 export function renderGrepMatches(
-	matches: readonly RenderableGrepMatch[],
-	options: RenderGrepMatchesOptions = {},
+  matches: readonly RenderableGrepMatch[],
+  options: RenderGrepMatchesOptions = {},
 ): string {
-	const mode = options.mode ?? 'Content'
-	if (mode === 'Count') {
-		return matches
-			.map(m =>
-				options.bareCount === true ? m.line : `${m.path}:${m.line}`,
-			)
-			.join('\n')
-	}
-	if (mode === 'FilesWithMatches') {
-		return matches.map(m => m.path).join('\n')
-	}
+  const mode = options.mode ?? 'Content'
+  if (mode === 'Count') {
+    return matches
+      .map(m =>
+        options.bareCount === true ? m.line : `${m.path}:${m.line}`,
+      )
+      .join('\n')
+  }
+  if (mode === 'FilesWithMatches') {
+    return matches.map(m => m.path).join('\n')
+  }
 
-	const withNumbers = options.showLineNumbers !== false
-	const lines: string[] = []
-	let prevPath: string | null = null
-	let prevEndLine = 0
-	for (const match of matches) {
-		const startLine = match.lineNumber - match.before.length
-		const endLine = match.lineNumber + match.after.length
-		// rg emits `--` before a group that is not contiguous with the previous
-		// one: any other file, or a same-file gap (start beyond prevEnd + 1).
-		// Unknown line numbers (0) count as a gap.
-		if (
-			options.context === true &&
-			prevPath !== null &&
-			(match.path !== prevPath ||
-				startLine <= 0 ||
-				startLine > prevEndLine + 1)
-		) {
-			lines.push('--')
-		}
-		for (let i = 0; i < match.before.length; i++) {
-			lines.push(
-				contextLine(
-					match.path,
-					startLine + i,
-					match.before[i] ?? '',
-					withNumbers,
-				),
-			)
-		}
-		const text =
-			match.truncated === true ? OMITTED_LONG_MATCHING_LINE : match.line
-		lines.push(
-			withNumbers
-				? `${match.path}:${match.lineNumber}:${text}`
-				: `${match.path}:${text}`,
-		)
-		for (let i = 0; i < match.after.length; i++) {
-			lines.push(
-				contextLine(
-					match.path,
-					match.lineNumber + 1 + i,
-					match.after[i] ?? '',
-					withNumbers,
-				),
-			)
-		}
-		prevPath = match.path
-		prevEndLine = endLine
-	}
-	return lines.join('\n')
+  const withNumbers = options.showLineNumbers !== false
+  const lines: string[] = []
+  let prevPath: string | null = null
+  let prevEndLine = 0
+  for (const match of matches) {
+    const startLine = match.lineNumber - match.before.length
+    const endLine = match.lineNumber + match.after.length
+    // rg emits `--` before a group that is not contiguous with the previous
+    // one: any other file, or a same-file gap (start beyond prevEnd + 1).
+    // Unknown line numbers (0) count as a gap.
+    if (
+      options.context === true &&
+      prevPath !== null &&
+      (match.path !== prevPath ||
+        startLine <= 0 ||
+        startLine > prevEndLine + 1)
+    ) {
+      lines.push('--')
+    }
+    for (let i = 0; i < match.before.length; i++) {
+      lines.push(
+        contextLine(
+          match.path,
+          startLine + i,
+          match.before[i] ?? '',
+          withNumbers,
+        ),
+      )
+    }
+    const text =
+      match.truncated === true ? OMITTED_LONG_MATCHING_LINE : match.line
+    lines.push(
+      withNumbers
+        ? `${match.path}:${match.lineNumber}:${text}`
+        : `${match.path}:${text}`,
+    )
+    for (let i = 0; i < match.after.length; i++) {
+      lines.push(
+        contextLine(
+          match.path,
+          match.lineNumber + 1 + i,
+          match.after[i] ?? '',
+          withNumbers,
+        ),
+      )
+    }
+    prevPath = match.path
+    prevEndLine = endLine
+  }
+  return lines.join('\n')
 }

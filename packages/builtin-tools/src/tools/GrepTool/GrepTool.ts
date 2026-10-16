@@ -218,9 +218,7 @@ type Output = z.infer<OutputSchema>
 type NativeCallContext = {
   abortController: AbortController
   getAppState: () => {
-    toolPermissionContext: Parameters<
-      typeof getFileReadIgnorePatterns
-    >[0]
+    toolPermissionContext: Parameters<typeof getFileReadIgnorePatterns>[0]
   }
 }
 
@@ -286,9 +284,7 @@ async function nativeGrepOutput(
         : `!**/${ignorePattern}`,
     )
   }
-  for (const exclusion of await getGlobExclusionsForPluginCache(
-    absolutePath,
-  )) {
+  for (const exclusion of await getGlobExclusionsForPluginCache(absolutePath)) {
     globParts.push(exclusion)
   }
   const nativeUnsafeGlob = globParts.some(
@@ -328,7 +324,8 @@ async function nativeGrepOutput(
   // budget (rg -mN semantics; max_count counts match lines). head_limit=0 is
   // the explicit unlimited escape hatch handled in applyHeadLimit.
   if (output_mode === 'content') {
-    const effectiveHeadLimit = head_limit === 0 ? undefined : (head_limit ?? DEFAULT_HEAD_LIMIT)
+    const effectiveHeadLimit =
+      head_limit === 0 ? undefined : (head_limit ?? DEFAULT_HEAD_LIMIT)
     if (effectiveHeadLimit !== undefined) {
       options.maxCount = effectiveHeadLimit + offset
     }
@@ -362,7 +359,11 @@ async function nativeGrepOutput(
   // Structural shape probe (validate-probe defense in depth): a payload that
   // doesn't look like GrepResult bails to the rg path instead of rendering
   // garbage. (med: Array.isArray defenses.)
-  if (result === null || typeof result !== 'object' || !Array.isArray(result.matches)) {
+  if (
+    result === null ||
+    typeof result !== 'object' ||
+    !Array.isArray(result.matches)
+  ) {
     return null
   }
   // Cancelled pipeline (searchCancel / native timeout) → hand the call to the

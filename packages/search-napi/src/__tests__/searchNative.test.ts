@@ -177,9 +177,9 @@ describe('renderGrepMatches', () => {
     expect(renderGrepMatches(matches, { mode: 'Count' })).toBe(
       '/proj/a.ts:7\n/proj/b.ts:2',
     )
-    expect(
-      renderGrepMatches(matches, { mode: 'Count', bareCount: true }),
-    ).toBe('7\n2')
+    expect(renderGrepMatches(matches, { mode: 'Count', bareCount: true })).toBe(
+      '7\n2',
+    )
   })
 
   test('files_with_matches mode renders one bare path per line', () => {
