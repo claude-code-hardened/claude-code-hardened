@@ -71,3 +71,4 @@ vendor/file-index/**/*.node
 docs/reverse/
 docs/reverse-284/
 vendor/search-kit/upstream/
+vendor/search/
