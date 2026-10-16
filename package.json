@@ -72,6 +72,7 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.4.0",
     "@claude-code-best/mcp-chrome-bridge": "^3.0.2",
+    "@google/genai": "^2.30.0",
     "highlight.js": "^11.11.1",
     "i18next": "^26.4.2",
     "ws": "^8.20.0"
