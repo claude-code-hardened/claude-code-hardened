@@ -27,7 +27,11 @@ import {
   convertOutputToLangfuse,
   convertToolsToLangfuse,
 } from '../../../services/langfuse/convert.js'
-import { streamGeminiGenerateContent } from './client.js'
+import {
+  getGeminiStreamUrl,
+  streamGeminiGenerateContent,
+} from './client.js'
+import { createStreamWatchdog } from './streamWatchdog.js'
 import {
   anthropicMessagesToGemini,
   resolveGeminiModel,
@@ -81,34 +85,54 @@ export async function* queryModelGemini(
     const geminiTools = anthropicToolsToGemini(standardTools)
     const toolChoice = anthropicToolChoiceToGemini(options.toolChoice)
 
-    const stream = streamGeminiGenerateContent({
+    // Call Gemini API with streaming. Served by the official @google/genai
+    // SDK (no hand-rolled fetch/SSE lives in this layer). The client sets no
+    // total-duration `timeout` (a request cap would kill long *healthy*
+    // streaming turns mid-flight; this SDK has no default — omitting leaves
+    // the stream unbounded) and SDK retries off (retry ownership belongs to
+    // QueryEngine's fallback state machine). Stalled streams are guarded by
+    // the silence-based idle watchdog: its signal replaces the raw one in
+    // generateContentStream and the upstream abort signal stays linked
+    // through it.
+    const watchdog = createStreamWatchdog({
+      url: getGeminiStreamUrl(geminiModel),
       model: geminiModel,
-      signal,
-      fetchOverride: options.fetchOverride as typeof fetch | undefined,
-      body: {
-        contents,
-        ...(systemInstruction && { systemInstruction }),
-        ...(geminiTools.length > 0 && { tools: geminiTools }),
-        ...(toolChoice && {
-          toolConfig: {
-            functionCallingConfig: toolChoice,
-          },
-        }),
-        generationConfig: {
-          ...(options.temperatureOverride !== undefined && {
-            temperature: options.temperatureOverride,
-          }),
-          ...(thinkingConfig.type !== 'disabled' && {
-            thinkingConfig: {
-              includeThoughts: true,
-              ...(thinkingConfig.type === 'enabled' && {
-                thinkingBudget: thinkingConfig.budgetTokens,
-              }),
+      externalSignal: signal,
+    })
+
+    const stream = watchdog.wrap(
+      streamGeminiGenerateContent({
+        model: geminiModel,
+        signal: watchdog.signal,
+        fetchOverride: options.fetchOverride as typeof fetch | undefined,
+        // Body layout mirrors the wire format (contents/systemInstruction/
+        // tools/toolConfig/generationConfig) — the client maps it onto the
+        // SDK's flattened GenerateContentConfig.
+        body: {
+          contents,
+          ...(systemInstruction && { systemInstruction }),
+          ...(geminiTools.length > 0 && { tools: geminiTools }),
+          ...(toolChoice && {
+            toolConfig: {
+              functionCallingConfig: toolChoice,
             },
           }),
+          generationConfig: {
+            ...(options.temperatureOverride !== undefined && {
+              temperature: options.temperatureOverride,
+            }),
+            ...(thinkingConfig.type !== 'disabled' && {
+              thinkingConfig: {
+                includeThoughts: true,
+                ...(thinkingConfig.type === 'enabled' && {
+                  thinkingBudget: thinkingConfig.budgetTokens,
+                }),
+              },
+            }),
+          },
         },
-      },
-    })
+      }),
+    )
 
     logForDebugging(
       `[Gemini] Calling model=${geminiModel}, messages=${contents.length}, tools=${geminiTools.length}`,
