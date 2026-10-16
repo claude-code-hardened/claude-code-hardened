@@ -29,6 +29,8 @@ export interface MockToolContextOptions {
   turnId?: string
   /** Override toolPermissionContext fields (e.g. mode, alwaysAllowRules). */
   permissionOverrides?: Record<string, unknown>
+  /** 注入既有 controller（默认新建一个活动 controller——spawn signal 面用）。 */
+  abortController?: AbortController
 }
 
 export function mockToolContext(opts: MockToolContextOptions = {}): never {
@@ -37,6 +39,9 @@ export function mockToolContext(opts: MockToolContextOptions = {}): never {
     parentMessageId: opts.parentMessageId,
     assistantMessageId: opts.assistantMessageId,
     turnId: opts.turnId,
+    // GrepTool 等 call() 解构 context.abortController.signal——缺失即同步
+    // TypeError（rg 分支第一行 spawn 选项）。默认新建活动 controller。
+    abortController: opts.abortController ?? new AbortController(),
     getAppState: () => ({
       toolPermissionContext: {
         mode: 'default',
