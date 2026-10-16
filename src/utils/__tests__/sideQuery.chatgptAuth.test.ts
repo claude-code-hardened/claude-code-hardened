@@ -166,17 +166,20 @@ beforeEach(() => {
   originalFetch = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    // SDK 面的 headers 三态归一（Headers 实例不可枚举——Object.entries
+    // 摸不到内部，必须走 entries()）；键统一小写存取。
     const headers: Record<string, string> = {}
     const rawHeaders = init?.headers
-    if (
-      rawHeaders &&
-      typeof rawHeaders === 'object' &&
-      !Array.isArray(rawHeaders)
-    ) {
+    if (rawHeaders instanceof Headers) {
+      for (const [k, v] of rawHeaders.entries()) headers[k.toLowerCase()] = v
+    } else if (Array.isArray(rawHeaders)) {
+      for (const [k, v] of rawHeaders as [string, string][])
+        headers[k.toLowerCase()] = v
+    } else if (rawHeaders && typeof rawHeaders === 'object') {
       for (const [k, v] of Object.entries(
         rawHeaders as Record<string, string>,
       )) {
-        headers[k] = v
+        headers[k.toLowerCase()] = v
       }
     }
     const body =
@@ -241,8 +244,8 @@ describe('sideQuery OpenAI ChatGPT OAuth path', () => {
       'chatgpt.com/backend-api/codex/responses',
     )
     // OAuth header present; do not assert the real token value.
-    expect(capturedFetch!.headers.Authorization).toMatch(/^Bearer \S+/)
-    expect(capturedFetch!.headers['ChatGPT-Account-Id']).toBe('acct_test')
+    expect(capturedFetch!.headers.authorization).toMatch(/^Bearer \S+/)
+    expect(capturedFetch!.headers['chatgpt-account-id']).toBe('acct_test')
     expect(capturedFetch!.body.stream).toBe(true)
     expect(capturedFetch!.body.model).toBe('gpt-5.5')
     expect(Array.isArray(capturedFetch!.body.tools)).toBe(true)
