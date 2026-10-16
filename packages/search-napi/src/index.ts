@@ -218,9 +218,7 @@ function contextLine(
   text: string,
   withNumbers: boolean,
 ): string {
-  return withNumbers
-    ? `${path}-${lineNumber}-${text}`
-    : `${path}-${text}`
+  return withNumbers ? `${path}-${lineNumber}-${text}` : `${path}-${text}`
 }
 
 /**
@@ -239,9 +237,7 @@ export function renderGrepMatches(
   const mode = options.mode ?? 'Content'
   if (mode === 'Count') {
     return matches
-      .map(m =>
-        options.bareCount === true ? m.line : `${m.path}:${m.line}`,
-      )
+      .map(m => (options.bareCount === true ? m.line : `${m.path}:${m.line}`))
       .join('\n')
   }
   if (mode === 'FilesWithMatches') {
@@ -261,9 +257,7 @@ export function renderGrepMatches(
     if (
       options.context === true &&
       prevPath !== null &&
-      (match.path !== prevPath ||
-        startLine <= 0 ||
-        startLine > prevEndLine + 1)
+      (match.path !== prevPath || startLine <= 0 || startLine > prevEndLine + 1)
     ) {
       lines.push('--')
     }
