@@ -1,5 +1,6 @@
 /**
- * 通用内嵌可执行文件 staging（rg / bfs / ugrep 共用）。
+ * 通用内嵌可执行文件 staging（rg 专用；bfs/ugrep 的 search-tools 链路
+ * 已拆除，见 embeddedTools.ts）。
  *
  * base64 → 内存准备 → 可 spawn 路径。三级策略按"尽可能不落盘"排序：
  *
@@ -39,11 +40,6 @@ export function stageExecutable(
   const staged = prepare(id, base64, binaryName)
   stagedCache.set(id, staged)
   return staged
-}
-
-/** 查询已 stage 的工具（不触发准备）。 */
-export function getStaged(id: string): StagedExecutable | null {
-  return stagedCache.get(id) ?? null
 }
 
 function prepare(

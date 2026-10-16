@@ -1,4 +1,10 @@
+import { feature } from 'bun:bundle'
+import { randomUUID } from 'crypto'
 import { basename, dirname, isAbsolute, join, sep } from 'path'
+import {
+  attachSearchCancel,
+  loadSearchNative,
+} from '../../packages/search-napi/src/index'
 import type { ToolPermissionContext } from '../Tool.js'
 import { isEnvTruthy } from './envUtils.js'
 import {
@@ -112,8 +118,60 @@ export async function glob(
   }
 
   // Exclude orphaned plugin version directories
-  for (const exclusion of await getGlobExclusionsForPluginCache(searchDir)) {
+  const pluginExclusions = await getGlobExclusionsForPluginCache(searchDir)
+  for (const exclusion of pluginExclusions) {
     args.push('--glob', exclusion)
+  }
+
+  // SEARCH_NAPI native-first dispatch (flag-gated — zero impact while off).
+  // The frozen GlobOptions carries a single include pattern and no negative
+  // glob list, so only dispatch when nothing needs excluding (permission
+  // ignore rules / orphaned plugin cache) — otherwise the rg branch below
+  // keeps byte-perfect fidelity. Any native failure also falls through.
+  if (feature('SEARCH_NAPI')) {
+    const mod = loadSearchNative()
+    if (
+      mod !== null &&
+      ignorePatterns.length === 0 &&
+      pluginExclusions.length === 0 &&
+      !abortSignal.aborted
+    ) {
+      const cancelKey = crypto.randomUUID()
+      const cancel = attachSearchCancel(mod, abortSignal, cancelKey)
+      try {
+        // maxResults carries a +1 sentinel: the native side applies the
+        // offset itself, so `returned.length > limit` is exactly today's
+        // `all.length > offset + limit` truncation predicate without
+        // materializing the full (unbounded) file list.
+        const found = await mod.findGlob({
+          pattern: searchPattern,
+          path: searchDir,
+          hidden, // rg path: --hidden (env CLAUDE_CODE_GLOB_HIDDEN)
+          gitignore: !noIgnore, // rg path: --no-ignore when noIgnore
+          sortByMtime: true, // rg path: --sort=modified
+          maxResults: limit + 1,
+          offset,
+          timeoutMs: 20_000,
+          // Per-call cancel key: abortSignal → searchCancel(key) kills ONLY
+          // this session (heart.rs CancelRegistry — concurrent searches never
+          // cross-cancel).
+          cancelKey,
+        })
+        // Native walks absolute roots → absolute paths; keep the same
+        // absolutization guard as the rg branch for relative cwd roots.
+        const absolutePaths = found.map(p =>
+          isAbsolute(p) ? p : join(searchDir, p),
+        )
+        return {
+          files: absolutePaths.slice(0, limit),
+          truncated: absolutePaths.length > limit,
+        }
+      } catch {
+        // Native engine failure (missing artifact, bad glob) → rg path below.
+      } finally {
+        cancel()
+      }
+    }
   }
 
   const allPaths = await ripGrep(args, searchDir, abortSignal)

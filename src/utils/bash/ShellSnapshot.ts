@@ -8,14 +8,6 @@ import { logEvent } from 'src/services/analytics/index.js'
 import { registerCleanup } from '../cleanupRegistry.js'
 import { getCwd } from '../cwd.js'
 import { logForDebugging } from '../debug.js'
-import {
-  embeddedSearchToolsBinaryPath,
-  hasEmbeddedSearchTools,
-} from '../embeddedTools.js'
-import {
-  hasEmbeddedBfsPayload,
-  hasEmbeddedUgrepPayload,
-} from '../embeddedSearchTools.js'
 import { getClaudeConfigHomeDir } from '../envUtils.js'
 import { pathExists } from '../file.js'
 import { getFsImplementation } from '../fsOperations.js'
@@ -26,25 +18,6 @@ import { subprocessEnv } from '../subprocessEnv.js'
 import { quote } from './shellQuote.js'
 
 const LITERAL_BACKSLASH = '\\'
-
-/**
- * grep → ugrep 的参数透传集（官方 _be 第 4 参数原文）：交互式 filter/
- * pager、null 分隔、大小写敏感特殊开关等命中时走系统原生 grep。
- */
-const GREP_BYPASS_PATTERNS = [
-  '*-filter*',
-  '*-pager*',
-  '*-view*',
-  '*-format-open*',
-  '*-config*',
-  '---*',
-  '-@*',
-  '*-save-config*',
-  '-[Zz]*',
-  '-[!-]*[Zz]*',
-  '--null',
-  '--null-data',
-]
 
 /**
  * pkill shadow（官方原文 1:1）：pgrep 探测用户 pattern，若匹配 CLAUDE_PID
@@ -87,7 +60,7 @@ const SNAPSHOT_CREATION_TIMEOUT = 10000 // 10 seconds
 /**
  * Creates a shell function that invokes `binaryPath` with a specific argv[0].
  * This uses the bun-internal ARGV0 dispatch trick: the bun binary checks its
- * argv[0] and runs the embedded tool (rg, bfs, ugrep) that matches.
+ * argv[0] and runs the embedded tool (rg) that matches.
  *
  * @param prependArgs - Arguments to inject before the user's args (e.g.,
  *   default flags). Injected literally; each element must be a valid shell
@@ -98,27 +71,12 @@ function createArgv0ShellFunction(
   argv0: string,
   binaryPath: string,
   prependArgs: string[] = [],
-  bypassPatterns: string[] = [],
 ): string {
   const quotedPath = quote([binaryPath])
   const argSuffix =
     prependArgs.length > 0 ? `${prependArgs.join(' ')} "$@"` : '"$@"'
-  // 官方 _be 的第 4 参数语义：参数命中 bypass pattern（fzf 类交互
-  // filter、特殊模式）→ 透传给系统原生命令（bfs/ugrep 的非交互语义
-  // 会破坏交互 filter 管道）
-  const bypassGuard =
-    bypassPatterns.length > 0
-      ? [
-          '  local _cc_a',
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: bash 源码字面（${} 是 shell 语法非 TS 模板）
-          '  for _cc_a in ${1+"$@"}; do',
-          `    case "$_cc_a" in ${bypassPatterns.join('|')}) command ${funcName} ${'"$@"'}; return ;; esac`,
-          '  done',
-        ]
-      : []
   return [
     `function ${funcName} {`,
-    ...bypassGuard,
     '  if [[ -n $ZSH_VERSION ]]; then',
     `    ARGV0=${argv0} ${quotedPath} ${argSuffix}`,
     '  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then',
@@ -165,131 +123,6 @@ export function createRipgrepShellIntegration(): {
       : quotedPath
 
   return { type: 'alias', snippet: aliasTarget }
-}
-
-/**
- * VCS directories to exclude from grep searches. Matches the list in
- * GrepTool (see GrepTool.ts: VCS_DIRECTORIES_TO_EXCLUDE).
- */
-const VCS_DIRECTORIES_TO_EXCLUDE = [
-  '.git',
-  '.svn',
-  '.hg',
-  '.bzr',
-  '.jj',
-  '.sl',
-] as const
-
-/**
- * Creates shell integration for `find` and `grep`, backed by bfs and ugrep
- * embedded in the bun binary (ant-native only). Unlike the rg integration,
- * this always shadows the system find/grep since bfs/ugrep are drop-in
- * replacements and we want consistent fast behavior.
- *
- * These wrappers replace the GlobTool/GrepTool dedicated tools (which are
- * removed from the tool registry when embedded search tools are available),
- * so they're tuned to match those tools' semantics, not GNU find/grep.
- *
- * `find` ↔ GlobTool:
- * - Inject `-regextype findutils-default`: bfs defaults to POSIX BRE for
- *   -regex, but GNU find defaults to emacs-flavor (which supports `\|`
- *   alternation). Without this, `find . -regex '.*\.\(js\|ts\)'` silently
- *   returns zero results. A later user-supplied -regextype still overrides.
- * - No gitignore filtering: GlobTool passes `--no-ignore` to rg. bfs has no
- *   gitignore support anyway, so this matches by default.
- * - Hidden files included: both GlobTool (`--hidden`) and bfs's default.
- *
- * Caveat: even with findutils-default, Oniguruma (bfs's regex engine) uses
- * leftmost-first alternation, not POSIX leftmost-longest. Patterns where
- * one alternative is a prefix of another (e.g., `\(ts\|tsx\)`) may miss
- * matches that GNU find catches. Workaround: put the longer alternative first.
- *
- * `grep` ↔ GrepTool (file filtering) + GNU grep (regex syntax):
- * - `-G` (basic regex / BRE): GNU grep defaults to BRE where `\|` is
- *   alternation. ugrep defaults to ERE where `|` is alternation and `\|` is a
- *   literal pipe. Without -G, `grep "foo\|bar"` silently returns zero results.
- *   User-supplied `-E`, `-F`, or `-P` later in argv overrides this.
- * - `--ignore-files`: respect .gitignore (GrepTool uses rg's default, which
- *   respects gitignore). Override with `grep --no-ignore-files`.
- * - `--hidden`: include hidden files (GrepTool passes `--hidden` to rg).
- *   Override with `grep --no-hidden`.
- * - `--exclude-dir` for VCS dirs: GrepTool passes `--glob '!.git'` etc. to rg.
- * - `-I`: skip binary files. rg's recursion silently skips binary matches
- *   by default (different from direct-file-arg behavior); ugrep doesn't, so
- *   we inject -I to match. Override with `grep -a`.
- *
- * Not replicated from GrepTool:
- * - `--max-columns 500`: ugrep's `--width` hard-truncates output which could
- *   break pipelines; rg's version replaces the line with a placeholder.
- * - Read deny rules / plugin cache exclusions: require toolPermissionContext
- *   which isn't available at shell-snapshot creation time.
- *
- * Returns null if embedded search tools are not available in this build.
- */
-export function createFindGrepShellIntegration(): string | null {
-  if (!hasEmbeddedSearchTools()) {
-    // dev / 常规构建：无嵌入 payload，find/grep 保持系统原版（可观测性：
-    // debug 日志里能看到这条，避免"没看到集成日志"被当成 bug）
-    logForDebugging(
-      '[shell-snapshot] find/grep integration skipped (no embedded search tools in this build)',
-    )
-    return null
-  }
-  const binaryPath = embeddedSearchToolsBinaryPath()
-  const parts: string[] = []
-  // 工具级降级（对齐官方语义）：bfs/ugrep 哪个不在本 build 里，哪个的
-  // shell 函数就不注入——Windows（无 bfs）只注入 grep→ugrep，find 保持
-  // 系统原版。unalias 同样只清有集成的名字。
-  if (hasEmbeddedBfsPayload()) {
-    logForDebugging(
-      '[shell-snapshot] find → bfs integration injected (payload present)',
-    )
-    parts.push(
-      'unalias find 2>/dev/null || true',
-      // User shell configs may define aliases like `alias find=gfind`
-      // (common on macOS with Homebrew GNU tools); a renaming alias would
-      // silently bypass the embedded dispatch (same fix the rg integration
-      // uses).
-      // 注：不注入 -regextype findutils-default——bfs 4.1.4 不支持该值
-      // （仅 posix-basic/ed/sed/posix-extended），注入会让每条 find 报
-      // "Unsupported regex type" 完全不可用。实测 bfs 默认 regextype 走
-      // Oniguruma，已兼容 GNU find 的 \(a\|b\) 交替语义（posix-basic 同样
-      // 通过），默认即所需行为。
-      createArgv0ShellFunction('find', 'bfs', binaryPath, []),
-    )
-  } else {
-    logForDebugging(
-      '[shell-snapshot] find → bfs skipped (no bfs payload in this build) → system find',
-    )
-  }
-  if (hasEmbeddedUgrepPayload()) {
-    logForDebugging(
-      '[shell-snapshot] grep → ugrep integration injected (payload present)',
-    )
-    parts.push(
-      'unalias grep 2>/dev/null || true',
-      createArgv0ShellFunction(
-        'grep',
-        'ugrep',
-        binaryPath,
-        [
-          '-G',
-          '--ignore-files',
-          '--hidden',
-          '-I',
-          ...VCS_DIRECTORIES_TO_EXCLUDE.map(d => `--exclude-dir=${d}`),
-        ],
-        GREP_BYPASS_PATTERNS,
-      ),
-    )
-  } else {
-    logForDebugging(
-      '[shell-snapshot] grep → ugrep skipped (no ugrep payload in this build) → system grep',
-    )
-  }
-  // pkill shadow（官方 snapshot 同款安全特性）
-  parts.push(createPkillShadow())
-  return parts.join('\n')
 }
 
 function getConfigFile(shellPath: string): string {
@@ -428,20 +261,16 @@ RIPGREP_FUNC_END
       echo "fi" >> "$SNAPSHOT_FILE"
   `
 
-  // For ant-native builds, shadow find/grep with bfs/ugrep embedded in the bun
-  // binary. Unlike rg (which only activates if system rg is absent), we always
-  // shadow find/grep since bfs/ugrep are drop-in replacements and we want
-  // consistent fast behavior in Claude's shell.
-  const findGrepIntegration = createFindGrepShellIntegration()
-  if (findGrepIntegration !== null) {
-    content += `
-      # Shadow find/grep with embedded bfs/ugrep (ant-native only)
-      echo "# Shadow find/grep with embedded bfs/ugrep" >> "$SNAPSHOT_FILE"
-      cat >> "$SNAPSHOT_FILE" << 'FIND_GREP_FUNC_END'
-${findGrepIntegration}
-FIND_GREP_FUNC_END
-    `
-  }
+  // pkill shadow（官方 snapshot 同款安全特性，非人性化项）：防止用户
+  // pkill 误杀 CLI 自身进程。原 find/grep→bfs/ugrep shadow 已拆除，此
+  // 安全特性保留并独立注入。
+  content += `
+      # pkill shadow: refuse to kill the Claude CLI process itself
+      echo "# pkill shadow" >> "$SNAPSHOT_FILE"
+      cat >> "$SNAPSHOT_FILE" << 'PKILL_SHADOW_END'
+${createPkillShadow()}
+PKILL_SHADOW_END
+  `
 
   // Add PATH to the file
   content += `

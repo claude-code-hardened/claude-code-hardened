@@ -77,14 +77,15 @@ if (feature('ABLATION_BASELINE') && process.env.CLAUDE_CODE_ABLATION_BASELINE) {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  // argv0 dispatch（对齐 ant-native）：compile 产物被 `exec -a rg/bfs/ugrep`
-  // （bash）或 `ARGV0=<tool> execPath`（zsh/Windows，无 exec -a）调用时，
-  // 把内嵌的对应二进制 stage 到内存并透传执行。官方 Bun 会消费 ARGV0 env
-  // 并设为 process.argv0（本机实测：env.ARGV0 为 undefined、argv0='ugrep'），
-  // 因此只读 process.argv0 即可覆盖 bash/zsh/Windows 全部注入路径。
+  // argv0 dispatch：compile 产物被 `exec -a rg`（bash）或 `ARGV0=rg execPath`
+  // （zsh/Windows，无 exec -a）调用时，把内嵌的 rg stage 到内存并透传
+  // 执行。官方 Bun 会消费 ARGV0 env 并设为 process.argv0（本机实测：
+  // env.ARGV0 为 undefined、argv0='rg'），因此只读 process.argv0 即可
+  // 覆盖 bash/zsh/Windows 全部注入路径。（bfs/ugrep 的 argv0 注入层已
+  // 拆除——它替用户 shadow 系统 find/grep，属人性化通道。）
   // dev 模式 argv0 是 bun 本体，basename 不命中 → 正常 CLI 流程，零影响。
   const argv0 = (process.argv0 || process.argv[0] || '').replace(/^.*[\\/]/, '');
-  if (argv0 === 'rg' || argv0 === 'bfs' || argv0 === 'ugrep') {
+  if (argv0 === 'rg') {
     const { dispatchEmbeddedTool } = await import('../utils/embeddedDispatch.js');
     // slice(2)：argv[1] 是 bundle 内部脚本路径，不能透传给工具（与下方
     // CLI 解析的 slice(2) 同款语义）。

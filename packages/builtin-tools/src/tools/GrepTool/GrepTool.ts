@@ -1,3 +1,5 @@
+import { feature } from 'bun:bundle'
+import { randomUUID } from 'crypto'
 import { z } from 'zod/v4'
 import type { ValidationResult } from 'src/Tool.js'
 import { buildTool, type ToolDef } from 'src/Tool.js'
@@ -19,6 +21,13 @@ import { ripGrep } from 'src/utils/ripgrep.js'
 import { semanticBoolean } from 'src/utils/semanticBoolean.js'
 import { semanticNumber } from 'src/utils/semanticNumber.js'
 import { plural } from 'src/utils/stringUtils.js'
+import {
+  attachSearchCancel,
+  type GrepOptionsLike,
+  type GrepResultLike,
+  loadSearchNative,
+  renderGrepMatches,
+} from '../../../../search-napi/src/index'
 import { GREP_TOOL_NAME, getDescription } from './prompt.js'
 import {
   getToolUseSummary,
@@ -196,6 +205,304 @@ type OutputSchema = ReturnType<typeof outputSchema>
 
 type Output = z.infer<OutputSchema>
 
+// SEARCH_NAPI native-first branch (flag-gated — zero impact while off).
+// Loads the in-process Rust search engine (packages/search-napi), renders its
+// matches into byte-identical rg subprocess output (see renderGrepMatches in
+// packages/search-napi/src/index.ts for the format anchors), then reuses
+// applyHeadLimit + relativeContentLine + the exact Output assembly of the rg
+// branch below. head_limit/offset stay post-hoc on rendered lines, like the
+// rg path which never passes them to the rg process. Any native absence or
+// failure returns null so the untouched rg path runs — the renderer contract
+// is that splitContentLine/relativeContentLine/count parsing round-trip every
+// emitted line.
+type NativeCallContext = {
+  abortController: AbortController
+  getAppState: () => {
+    toolPermissionContext: Parameters<
+      typeof getFileReadIgnorePatterns
+    >[0]
+  }
+}
+
+async function nativeGrepOutput(
+  args: InputSchema,
+  { abortController, getAppState }: NativeCallContext,
+): Promise<Output | null> {
+  const mod = loadSearchNative()
+  if (mod === null || abortController.signal.aborted) {
+    return null
+  }
+
+  const {
+    pattern,
+    path,
+    glob,
+    type,
+    output_mode = 'files_with_matches',
+    '-B': context_before,
+    '-A': context_after,
+    '-C': context_c,
+    context,
+    '-n': show_line_numbers = true,
+    '-i': case_insensitive = false,
+    multiline = false,
+    head_limit,
+    offset = 0,
+  } = args
+
+  const absolutePath = path ? expandPath(path) : getCwd()
+
+  // Compose the single glob expression the native pipeline accepts
+  // (comma/space separated, `!`-negated). The user glob is split exactly like
+  // the rg branch; pieces are space-joined so comma-bearing brace patterns
+  // keep their commas — but a piece that itself contains a comma or any
+  // whitespace cannot round-trip the native comma/space split (e.g.
+  // "*.{ts,tsx}" or an ignore rule with spaces) → bail out to rg, which
+  // passes those as separate --glob args with byte-perfect semantics.
+  const globParts: string[] = []
+  if (glob) {
+    const rawPatterns = glob.split(/\s+/)
+    for (const rawPattern of rawPatterns) {
+      if (rawPattern.includes('{') && rawPattern.includes('}')) {
+        globParts.push(rawPattern)
+      } else {
+        globParts.push(...rawPattern.split(',').filter(Boolean))
+      }
+    }
+  }
+  for (const dir of VCS_DIRECTORIES_TO_EXCLUDE) {
+    globParts.push(`!${dir}`)
+  }
+  const ignorePatterns = normalizePatternsToPath(
+    getFileReadIgnorePatterns(getAppState().toolPermissionContext),
+    getCwd(),
+  )
+  for (const ignorePattern of ignorePatterns) {
+    // Same positive→negative rewrite as the rg branch below (ripgrep applies
+    // gitignore-style globs relative to the search root).
+    globParts.push(
+      ignorePattern.startsWith('/')
+        ? `!${ignorePattern}`
+        : `!**/${ignorePattern}`,
+    )
+  }
+  for (const exclusion of await getGlobExclusionsForPluginCache(
+    absolutePath,
+  )) {
+    globParts.push(exclusion)
+  }
+  const nativeUnsafeGlob = globParts.some(
+    part => part.includes(',') || /\s/.test(part),
+  )
+  if (nativeUnsafeGlob) {
+    return null
+  }
+  const globExpr = globParts.length > 0 ? globParts.join(' ') : undefined
+
+  // -C/context takes precedence over -B/-A (same as the rg branch).
+  const sharedContext = context ?? context_c
+  const cancelKey = randomUUID()
+  const options: GrepOptionsLike = {
+    pattern,
+    path: absolutePath,
+    glob: globExpr,
+    type,
+    ignoreCase: case_insensitive,
+    multiline,
+    hidden: true, // rg branch: --hidden
+    gitignore: true, // rg path never passes --no-ignore → respect gitignore
+    maxColumns: 500, // rg branch: --max-columns 500
+    mode:
+      output_mode === 'files_with_matches'
+        ? 'FilesWithMatches'
+        : output_mode === 'count'
+          ? 'Count'
+          : 'Content',
+    timeoutMs: 20_000, // rg default timeout; native heart token double-insures
+    // Per-call cancel key: abortSignal → searchCancel(key) kills ONLY this
+    // session (heart.rs CancelRegistry) — concurrent native searches and the
+    // probe's legacy global-cancel surface never cross-cancel.
+    cancelKey,
+  }
+  // Content mode: let the native pipeline stop reading at the pagination
+  // budget (rg -mN semantics; max_count counts match lines). head_limit=0 is
+  // the explicit unlimited escape hatch handled in applyHeadLimit.
+  if (output_mode === 'content') {
+    const effectiveHeadLimit = head_limit === 0 ? undefined : (head_limit ?? DEFAULT_HEAD_LIMIT)
+    if (effectiveHeadLimit !== undefined) {
+      options.maxCount = effectiveHeadLimit + offset
+    }
+  }
+  if (sharedContext !== undefined) {
+    options.contextBefore = sharedContext
+    options.contextAfter = sharedContext
+  } else {
+    if (context_before !== undefined) {
+      options.contextBefore = context_before
+    }
+    if (context_after !== undefined) {
+      options.contextAfter = context_after
+    }
+  }
+  // rg only emits `--` group separators when context lines are involved at
+  // all (zero-width context behaves like no context).
+  const hadContext =
+    (options.contextBefore ?? 0) > 0 || (options.contextAfter ?? 0) > 0
+
+  const cancel = attachSearchCancel(mod, abortController.signal, cancelKey)
+  let result: GrepResultLike
+  try {
+    result = await mod.grepSearch(options)
+  } catch {
+    // Native engine failure (bad regex, aborted session, …) → rg path below.
+    return null
+  } finally {
+    cancel()
+  }
+  // Structural shape probe (validate-probe defense in depth): a payload that
+  // doesn't look like GrepResult bails to the rg path instead of rendering
+  // garbage. (med: Array.isArray defenses.)
+  if (result === null || typeof result !== 'object' || !Array.isArray(result.matches)) {
+    return null
+  }
+  // Cancelled pipeline (searchCancel / native timeout) → hand the call to the
+  // rg branch, whose own timeout/abort surfaces the exact same error class
+  // users see from the subprocess path today — never a silently truncated
+  // residual table.
+  if (result.cancelled === true) {
+    return null
+  }
+
+  if (output_mode === 'content') {
+    const rendered = renderGrepMatches(result.matches, {
+      mode: 'Content',
+      context: hadContext,
+      showLineNumbers,
+    })
+    const lines = rendered === '' ? [] : rendered.split('\n')
+    const { items: limitedResults, appliedLimit } = applyHeadLimit(
+      lines,
+      head_limit,
+      offset,
+    )
+    // Same relativization as the rg branch (context lines keep their raw
+    // path — the parser passes `path-line-text` lines through untouched).
+    const finalLines = limitedResults.map(relativeContentLine)
+    return {
+      data: {
+        mode: 'content',
+        numFiles: 0, // Not applicable for content mode
+        filenames: [],
+        content: finalLines.join('\n'),
+        numLines: finalLines.length,
+        ...(appliedLimit !== undefined && { appliedLimit }),
+        ...(offset > 0 && { appliedOffset: offset }),
+      },
+    }
+  }
+
+  if (output_mode === 'count') {
+    // `rg -c FILE` (single-file target) prints a bare count; a directory
+    // target prints `path:count` per file. Mirror both shapes.
+    let bareCount = false
+    try {
+      const stats = await getFsImplementation().stat(absolutePath)
+      bareCount = stats.isFile()
+    } catch {
+      bareCount = false
+    }
+    const rendered = renderGrepMatches(result.matches, {
+      mode: 'Count',
+      bareCount,
+    })
+    const renderedLines = rendered === '' ? [] : rendered.split('\n')
+    const { items: limitedResults, appliedLimit } = applyHeadLimit(
+      renderedLines,
+      head_limit,
+      offset,
+    )
+
+    // Same count-line relativization + total parsing as the rg branch.
+    const finalCountLines = limitedResults.map(line => {
+      const colonIndex = line.lastIndexOf(':')
+      if (colonIndex > 0) {
+        const filePath = line.substring(0, colonIndex)
+        const count = line.substring(colonIndex)
+        return toRelativePath(filePath) + count
+      }
+      return line
+    })
+
+    let totalMatches = 0
+    let fileCount = 0
+    for (const line of finalCountLines) {
+      const colonIndex = line.lastIndexOf(':')
+      if (colonIndex > 0) {
+        const countStr = line.substring(colonIndex + 1)
+        const count = parseInt(countStr, 10)
+        if (!isNaN(count)) {
+          totalMatches += count
+          fileCount += 1
+        }
+      }
+    }
+
+    return {
+      data: {
+        mode: 'count',
+        numFiles: fileCount,
+        filenames: [],
+        content: finalCountLines.join('\n'),
+        numMatches: totalMatches,
+        ...(appliedLimit !== undefined && { appliedLimit }),
+        ...(offset > 0 && { appliedOffset: offset }),
+      },
+    }
+  }
+
+  // files_with_matches mode: native emits exactly one GrepMatch per matching
+  // file. Sort by mtime like the rg branch (filename tiebreaker; under test,
+  // plain filename sort for determinism).
+  const allSettled = await Promise.allSettled(
+    result.matches.map(_ => getFsImplementation().stat(_.path)),
+  )
+  const sortedMatches = result.matches
+    .map((_, i) => {
+      const r = allSettled[i]!
+      return [
+        _.path,
+        r.status === 'fulfilled' ? (r.value.mtimeMs ?? 0) : 0,
+      ] as const
+    })
+    .sort((a, b) => {
+      if (process.env.NODE_ENV === 'test') {
+        return a[0].localeCompare(b[0])
+      }
+      const timeComparison = b[1] - a[1]
+      if (timeComparison === 0) {
+        return a[0].localeCompare(b[0])
+      }
+      return timeComparison
+    })
+    .map(_ => _[0])
+
+  const { items: finalMatches, appliedLimit } = applyHeadLimit(
+    sortedMatches,
+    head_limit,
+    offset,
+  )
+  const relativeMatches = finalMatches.map(toRelativePath)
+  return {
+    data: {
+      mode: 'files_with_matches',
+      filenames: relativeMatches,
+      numFiles: relativeMatches.length,
+      ...(appliedLimit !== undefined && { appliedLimit }),
+      ...(offset > 0 && { appliedOffset: offset }),
+    },
+  }
+}
+
 export const GrepTool = buildTool({
   name: GREP_TOOL_NAME,
   searchHint: 'search file contents with regex (ripgrep)',
@@ -365,6 +672,35 @@ export const GrepTool = buildTool({
     },
     { abortController, getAppState },
   ) {
+    // SEARCH_NAPI native-first dispatch — runs the in-process Rust engine
+    // when the flag is on AND the native module is loadable/structurally
+    // valid; otherwise (or on any native failure) falls through to the
+    // byte-identical rg subprocess branch below, untouched.
+    if (feature('SEARCH_NAPI')) {
+      const native = await nativeGrepOutput(
+        {
+          pattern,
+          path,
+          glob,
+          type,
+          output_mode,
+          '-B': context_before,
+          '-A': context_after,
+          '-C': context_c,
+          context,
+          '-n': show_line_numbers,
+          '-i': case_insensitive,
+          head_limit,
+          offset,
+          multiline,
+        },
+        { abortController, getAppState },
+      )
+      if (native !== null) {
+        return native
+      }
+    }
+
     const absolutePath = path ? expandPath(path) : getCwd()
     const args = ['--hidden']
 

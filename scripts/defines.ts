@@ -49,6 +49,7 @@ export const DEFAULT_BUILD_FEATURES = [
   'TOKEN_COUNT_NATIVE', // 本地 Rust BPE 精确 token 计数（native 缺失时自动回退 rough 估算）
   'TRANSCRIPT_NATIVE_SCAN', // 转录 JSONL 字节级链扫描 Rust 实现（native 缺失时回退 JS）
   'FILE_INDEX_NATIVE', // @-mention 文件路径模糊搜索 Rust 实现（native 缺失时回退 TS FileIndex）
+  // 'SEARCH_NAPI', // 已禁用：进程内原生搜索（grepSearch/findGlob/searchCancel）落地于 search-napi，需 FEATURE_SEARCH_NAPI=1。开启后 GrepTool/GlobTool 走 native-first（packages/search-napi/src/index.ts），native 缺失/结构不符/失败时逐字节回退既有 rg 分支
   // P0: local features
   'AGENT_TRIGGERS', // 本地 Agent 触发器（工具调用时启动子代理）
   'ULTRATHINK', // 超深度思考模式，增加推理链长度
