@@ -458,6 +458,36 @@ const CHATGPT_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
  * error as the Chat Completions path. The upstream abort signal stays linked
  * through the watchdog.
  */
+type CodexAuth = Awaited<ReturnType<typeof getValidChatGPTAuth>>
+
+let cachedCodexClient: { key: string; client: OpenAI } | null = null
+
+function buildCodexClient(
+  auth: CodexAuth,
+  fetchOverride?: typeof fetch,
+): OpenAI {
+  return new OpenAI({
+    apiKey: auth.accessToken,
+    baseURL: 'https://chatgpt.com/backend-api/codex',
+    // Large finite timeout (0 would arm a 0ms abort in the SDK's
+    // fetchWithTimeout); it covers headers only and never caps a streaming
+    // body — stalls are guarded by the idle watchdog. Retries belong to
+    // QueryEngine.
+    timeout: 600_000,
+    maxRetries: 0,
+    dangerouslyAllowBrowser: true,
+    defaultHeaders: {
+      'OpenAI-Beta': 'responses=experimental',
+      Origin: 'https://chatgpt.com',
+      Referer: 'https://chatgpt.com/',
+      originator: 'claude-code-hardened',
+      ...(auth.accountId ? { 'ChatGPT-Account-Id': auth.accountId } : {}),
+    },
+    fetchOptions: getProxyFetchOptions({ forAnthropicAPI: false }),
+    ...(fetchOverride ? { fetch: fetchOverride } : {}),
+  })
+}
+
 export async function createChatGPTResponsesStream(params: {
   request: ResponsesRequest
   signal: AbortSignal
@@ -470,26 +500,24 @@ export async function createChatGPTResponsesStream(params: {
     externalSignal: params.signal,
   })
   try {
-    const client = new OpenAI({
-      apiKey: auth.accessToken,
-      baseURL: 'https://chatgpt.com/backend-api/codex',
-      // Large finite timeout (0 would arm a 0ms abort in the SDK's
-      // fetchWithTimeout); it covers headers only and never caps a streaming
-      // body — stalls are guarded by the idle watchdog. Retries belong to
-      // QueryEngine.
-      timeout: 600_000,
-      maxRetries: 0,
-      dangerouslyAllowBrowser: true,
-      defaultHeaders: {
-        'OpenAI-Beta': 'responses=experimental',
-        Origin: 'https://chatgpt.com',
-        Referer: 'https://chatgpt.com/',
-        originator: 'claude-code-hardened',
-        ...(auth.accountId ? { 'ChatGPT-Account-Id': auth.accountId } : {}),
-      },
-      fetchOptions: getProxyFetchOptions({ forAnthropicAPI: false }),
-      ...(params.fetchOverride ? { fetch: params.fetchOverride } : {}),
-    })
+    // Official sharedClient semantics (reverse-284 0003 model-provider:
+    // `g = h ? h.sharedClient : buildClient(...)`): reuse one client per
+    // auth identity so the SDK/runtime keep-alive pool survives ACROSS
+    // queries — per-construction `new OpenAI()` rebuilt the connection pool
+    // for every concurrent subagent (full TCP+TLS handshake each, and
+    // chatgpt.com throttles concurrent handshakes hard: the "too many
+    // agents, connection very slow" shape). Token refresh changes the key
+    // → automatic rebuild. fetchOverride (test injection) bypasses cache.
+    const cacheKey = `${auth.accessToken}|${auth.accountId ?? ''}`
+    let client: OpenAI
+    if (params.fetchOverride) {
+      client = buildCodexClient(auth, params.fetchOverride)
+    } else if (cachedCodexClient?.key === cacheKey) {
+      client = cachedCodexClient.client
+    } else {
+      client = buildCodexClient(auth)
+      cachedCodexClient = { key: cacheKey, client }
+    }
     const created = await client.responses.create(
       params.request as unknown as Parameters<
         typeof client.responses.create
