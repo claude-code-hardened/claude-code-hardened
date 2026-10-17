@@ -194,10 +194,13 @@ export const startServer: (
         // ws URL is built from OUR bind address, never the request Host
         // header (a spoofed Host would aim clients at a third-party box),
         // and never reflects an external hostname.
-        const wsHost =
+        // A6 audit: a literal IPv6 host (::1 etc.) must be bracketed in the
+        // ws URL — `ws://::1:port` parses as invalid.
+        const rawWsHost =
           !config.host || config.host === '0.0.0.0' || config.host === '::'
             ? '127.0.0.1'
             : config.host
+        const wsHost = rawWsHost.includes(':') ? `[${rawWsHost}]` : rawWsHost
         const session = await sessionManager.createSession({
           ...(typeof body.cwd === 'string' ? { cwd: body.cwd } : {}),
           ...(body.dangerously_skip_permissions === true && {

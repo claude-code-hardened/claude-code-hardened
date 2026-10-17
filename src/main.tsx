@@ -4868,7 +4868,9 @@ async function run(): Promise<CommanderCommand> {
           // bind failure propagates as a thrown, styled error exit.
           const server = await startServer(config, sessionManager, logger);
           const actualPort = server.port ?? config.port;
-          printBanner(config, authToken, actualPort);
+          // A6 audit: banner moved AFTER lock acquisition — the lock-loser
+          // path below prints its own message; a pre-printed banner made the
+          // loser look like a live server before it exited(1).
 
           try {
             await writeServerLock({
@@ -4897,6 +4899,8 @@ async function run(): Promise<CommanderCommand> {
             );
             process.exit(1);
           }
+
+          printBanner(config, authToken, actualPort);
 
           let shuttingDown = false;
           const shutdown = async () => {

@@ -63,10 +63,10 @@ export class SessionManager {
     // free-run of the filesystem.
     const workspaceRoot = path.resolve(this.opts.workspace ?? process.cwd())
     const workDir = path.resolve(input.cwd ?? workspaceRoot)
-    if (
-      workDir !== workspaceRoot &&
-      !workDir.startsWith(workspaceRoot + path.sep)
-    ) {
+    // A6 audit: startsWith(root+sep) degenerates when root is '/' ('//' never
+    // matches) — path.relative + escape check is root-invariant.
+    const rel = path.relative(workspaceRoot, workDir)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error(
         `session cwd escapes the server workspace (${workspaceRoot}): ${workDir}`,
       )
@@ -179,7 +179,13 @@ export class SessionManager {
 
   async destroyAll(): Promise<void> {
     for (const id of [...this.sessions.keys()]) {
-      await this.destroySession(id)
+      // Per-session isolation: one poisoned session must not leak the rest
+      // (loser-path cleanup calls this during double-acquire teardown).
+      try {
+        await this.destroySession(id)
+      } catch (error) {
+        console.error('[sessionManager] destroySession failed:', error)
+      }
     }
     this.wss.close()
   }

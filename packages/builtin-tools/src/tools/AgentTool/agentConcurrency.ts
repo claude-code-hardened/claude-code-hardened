@@ -101,7 +101,15 @@ export function acquireAgentSlot(
   return () => {
     if (released) return
     released = true
-    runningByKind.set(key, Math.max(0, (runningByKind.get(key) ?? 1) - 1))
+    const next = Math.max(0, (runningByKind.get(key) ?? 1) - 1)
+    // Zero out and drop the key: agent types are attacker-influenceable
+    // (arbitrary custom definitions) — leaving zeroed keys grows the Map
+    // unboundedly across long-lived sessions.
+    if (next === 0) {
+      runningByKind.delete(key)
+    } else {
+      runningByKind.set(key, next)
+    }
   }
 }
 
