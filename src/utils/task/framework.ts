@@ -14,6 +14,7 @@ import {
   type TaskType,
 } from '../../Task.js'
 import type { TaskState } from '../../tasks/types.js'
+import { logForDebugging } from '../../utils/debug.js'
 import {
   consumeUndeliveredTerminalTasks,
   recordTaskHeartbeats,
@@ -57,6 +58,12 @@ export function updateTaskState<T extends TaskState>(
   setAppState(prev => {
     const task = prev.tasks?.[taskId] as T | undefined
     if (!task) {
+      // Official branch (0001:8423 task-not-in-reason=task-not-in-registry):
+      // a status/notification write racing an already-evicted task must be
+      // visible somewhere — silent swallow hid kill/complete races.
+      logForDebugging(
+        `task-not-in-registry: updateTaskState(${taskId}) hit an evicted/unknown task`,
+      )
       return prev
     }
     const updated = updater(task)
