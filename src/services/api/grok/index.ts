@@ -16,6 +16,12 @@ import type {
   ChatCompletionCreateParamsStreaming,
 } from 'openai/resources/chat/completions/completions.mjs'
 import { getGrokClient } from './client.js'
+import { createStreamWatchdog } from '../openai/streamWatchdog.js'
+import { withConnectionRetry } from 'src/services/api/connectionRetry.js'
+import {
+  releaseOnStreamEnd,
+  withProviderSlot,
+} from 'src/services/api/providerConcurrency.js'
 import { updateOpenAIUsage } from '../openai/openaiShared.js'
 import {
   anthropicMessagesToOpenAI,
@@ -99,28 +105,65 @@ export async function* queryModelGrok(
       `[Grok] Calling model=${grokModel}, messages=${openaiMessages.length}, tools=${openaiTools.length}`,
     )
 
-    const stream = await client.chat.completions.create(
-      {
-        model: grokModel,
-        messages: openaiMessages,
-        ...(openaiTools.length > 0 && {
-          tools: openaiTools,
-          ...(openaiToolChoice && { tool_choice: openaiToolChoice }),
-        }),
-        stream: true,
-        stream_options: { include_usage: true },
-        ...(options.temperatureOverride !== undefined && {
-          temperature: options.temperatureOverride,
-        }),
-      } as ChatCompletionCreateParamsStreaming,
-      {
-        signal,
-      },
-    )
+    // Establishment-only connection retry (official Anthropic SDK
+    // semantics): connection-class failures retry with capped backoff,
+    // user aborts and server vetoes do not. A per-attempt watchdog guards
+    // BOTH the establishment (first-byte window, same as the openai layer)
+    // and the consumption loop — without it a stalled grok stream hung the
+    // consuming generator forever (the pre-#31 leak family).
+    //
+    // Provider-concurrency slot (layer-2): acquired before the request goes
+    // out and released when the adapted stream settles (releaseOnStreamEnd
+    // finally — covers completion, error, break and teardown).
+    const adaptedStream = await withProviderSlot(
+      'grok',
+      async release => {
+        const { stream, watchdog } = await withConnectionRetry(
+          async () => {
+            const watchdog = createStreamWatchdog({
+              url: `${(client.baseURL ?? 'https://api.x.ai/v1').replace(
+                /\/+$/,
+                '',
+              )}/chat/completions`,
+              model: grokModel,
+              externalSignal: signal,
+            })
+            try {
+              const stream = await client.chat.completions.create(
+                {
+                  model: grokModel,
+                  messages: openaiMessages,
+                  ...(openaiTools.length > 0 && {
+                    tools: openaiTools,
+                    ...(openaiToolChoice && { tool_choice: openaiToolChoice }),
+                  }),
+                  stream: true,
+                  stream_options: { include_usage: true },
+                  ...(options.temperatureOverride !== undefined && {
+                    temperature: options.temperatureOverride,
+                  }),
+                } as ChatCompletionCreateParamsStreaming,
+                { signal: watchdog.signal },
+              )
+              watchdog.markEstablished()
+              return { stream, watchdog }
+            } catch (error) {
+              watchdog.settle()
+              throw error
+            }
+          },
+          { signal, source: options.querySource },
+        )
 
-    const adaptedStream = adaptOpenAIStreamToAnthropic(
-      stream as AsyncIterable<ChatCompletionChunk>,
-      grokModel,
+        return releaseOnStreamEnd(
+          adaptOpenAIStreamToAnthropic(
+            watchdog.wrap(stream) as AsyncIterable<ChatCompletionChunk>,
+            grokModel,
+          ),
+          release,
+        )
+      },
+      signal,
     )
 
     const contentBlocks: Record<number, Record<string, unknown>> = {}

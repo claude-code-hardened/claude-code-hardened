@@ -261,3 +261,59 @@ describe('stream idle watchdog', () => {
     }
   })
 })
+
+describe('gemini first-byte establishment guard', () => {
+  test('aborts an establishment that never returns headers', async () => {
+    const { createStreamWatchdog, getInFlightApiRequests } = await loadModule()
+    const previous = process.env['CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS']
+    try {
+      const watchdog = createStreamWatchdog({
+        url: 'https://generativelanguage.googleapis.com/stream',
+        model: 'gemini-relay',
+        firstByteTimeoutMs: 25,
+      })
+      const aborted = await new Promise<unknown>(resolve => {
+        if (watchdog.signal.aborted) resolve(watchdog.signal.reason)
+        watchdog.signal.addEventListener('abort', () =>
+          resolve(watchdog.signal.reason),
+        )
+      })
+      expect(watchdog.signal.aborted).toBe(true)
+      const { StreamIdleTimeoutError: IdleError } = await loadModule()
+      expect(aborted).toBeInstanceOf(IdleError)
+      watchdog.settle()
+      expect(
+        getInFlightApiRequests().find(e => e.requestId === watchdog.requestId),
+      ).toBeUndefined()
+    } finally {
+      if (previous === undefined) {
+        delete process.env['CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS']
+      } else {
+        process.env['CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS'] = previous
+      }
+    }
+  })
+
+  test('markEstablished disarms a nearly-spent window', async () => {
+    const { createStreamWatchdog } = await loadModule()
+    const previous = process.env['CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS']
+    try {
+      const watchdog = createStreamWatchdog({
+        url: 'https://generativelanguage.googleapis.com/stream',
+        model: 'gemini-relay',
+        firstByteTimeoutMs: 20,
+      })
+      await new Promise(resolve => setTimeout(resolve, 15))
+      watchdog.markEstablished()
+      await new Promise(resolve => setTimeout(resolve, 40))
+      expect(watchdog.signal.aborted).toBe(false)
+      watchdog.settle()
+    } finally {
+      if (previous === undefined) {
+        delete process.env['CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS']
+      } else {
+        process.env['CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS'] = previous
+      }
+    }
+  })
+})

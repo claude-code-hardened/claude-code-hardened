@@ -33,7 +33,6 @@ import type {
   GeminiPart,
   GeminiStreamChunk,
 } from '@ant/model-provider'
-import { errorMessage } from 'src/utils/errors.js'
 import { getProxyFetchOptions } from 'src/utils/proxy.js'
 
 const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
@@ -248,20 +247,18 @@ function projectChunk(response: GenerateContentResponse): GeminiStreamChunk {
 }
 
 /**
- * Stream Gemini generateContent through the official SDK. Same surface as the
- * pre-SDK hand-rolled client: yields the raw wire chunks (GeminiStreamChunk)
- * the aggregation/translation logic in @ant/model-provider consumes.
- *
- * `signal` should be the watchdog's signal (see streamWatchdog.ts) — it is
- * passed as config.abortSignal so the watchdog can tear the stuck request
- * down; the session-level signal stays linked into the watchdog itself.
+ * Establish only the Gemini stream (request → headers/SDK stream object).
+ * Split out from {@link streamGeminiGenerateContent} so the connection-retry
+ * wrapper in the adapter can await a typed establishment phase and retry it
+ * with a fresh watchdog signal per attempt; the original error class bubbles
+ * up (no generic re-wrap — the classification reads status/code/headers).
  */
-export async function* streamGeminiGenerateContent(params: {
+export async function establishGeminiStream(params: {
   model: string
   body: GeminiGenerateContentRequest
   signal: AbortSignal
   fetchOverride?: typeof fetch
-}): AsyncGenerator<GeminiStreamChunk, void> {
+}): Promise<AsyncIterable<GenerateContentResponse>> {
   const client = getGeminiClient({ fetchOverride: params.fetchOverride })
   const generationConfig = params.body.generationConfig
   const thinking = generationConfig?.thinkingConfig
@@ -270,45 +267,59 @@ export async function* streamGeminiGenerateContent(params: {
   const sdkTools =
     bodyTools && bodyTools.length > 0 ? sdkToolsForBody(params.body) : undefined
 
-  let stream: AsyncGenerator<GenerateContentResponse>
-  try {
-    stream = await client.models.generateContentStream({
-      model: params.model,
-      // GeminiContent[] is structurally the SDK's ContentListUnion.
-      contents: params.body.contents,
-      config: {
-        ...(params.body.systemInstruction && {
-          systemInstruction: params.body.systemInstruction,
-        }),
-        ...(sdkTools && { tools: sdkTools }),
-        ...(toolConfig && { toolConfig }),
-        ...(generationConfig?.temperature !== undefined && {
-          temperature: generationConfig.temperature,
-        }),
-        ...(thinking && {
-          thinkingConfig: {
-            ...(thinking.includeThoughts !== undefined && {
-              includeThoughts: thinking.includeThoughts,
-            }),
-            ...(thinking.thinkingBudget !== undefined && {
-              thinkingBudget: thinking.thinkingBudget,
-            }),
-          },
-        }),
-        // The hand-rolled client issued exactly one request; the SDK's
-        // automatic continuation-token resumption (default on) would hide
-        // follow-up requests under the hood where neither the watchdog nor
-        // QueryEngine's retry accounting can see them.
-        automaticContinuation: false,
-        // Watchdog aborts through this signal (idle timeout + session abort).
-        abortSignal: params.signal,
-      },
-    })
-  } catch (error) {
-    throw new Error(`Gemini API stream request failed: ${errorMessage(error)}`)
-  }
+  return await client.models.generateContentStream({
+    model: params.model,
+    // GeminiContent[] is structurally the SDK's ContentListUnion.
+    contents: params.body.contents,
+    config: {
+      ...(params.body.systemInstruction && {
+        systemInstruction: params.body.systemInstruction,
+      }),
+      ...(sdkTools && { tools: sdkTools }),
+      ...(toolConfig && { toolConfig }),
+      ...(generationConfig?.temperature !== undefined && {
+        temperature: generationConfig.temperature,
+      }),
+      ...(thinking && {
+        thinkingConfig: {
+          ...(thinking.includeThoughts !== undefined && {
+            includeThoughts: thinking.includeThoughts,
+          }),
+          ...(thinking.thinkingBudget !== undefined && {
+            thinkingBudget: thinking.thinkingBudget,
+          }),
+        },
+      }),
+      // The hand-rolled client issued exactly one request; the SDK's
+      // automatic continuation-token resumption (default on) would hide
+      // follow-up requests under the hood where neither the watchdog nor
+      // QueryEngine's retry accounting can see them.
+      automaticContinuation: false,
+      // Watchdog aborts through this signal (idle timeout + session abort).
+      abortSignal: params.signal,
+    },
+  })
+}
 
+/**
+ * Project raw SDK wire chunks onto the consumer-facing GeminiStreamChunk
+ * shape (pure per-chunk mapping — no awaits of its own, safe to wrap around
+ * an already-established stream).
+ */
+export async function* projectGeminiStream(
+  stream: AsyncIterable<GenerateContentResponse>,
+): AsyncGenerator<GeminiStreamChunk, void> {
   for await (const response of stream) {
     yield projectChunk(response)
   }
+}
+
+export async function* streamGeminiGenerateContent(params: {
+  model: string
+  body: GeminiGenerateContentRequest
+  signal: AbortSignal
+  fetchOverride?: typeof fetch
+}): AsyncGenerator<GeminiStreamChunk, void> {
+  const stream = await establishGeminiStream(params)
+  yield* projectGeminiStream(stream)
 }

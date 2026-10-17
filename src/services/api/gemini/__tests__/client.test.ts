@@ -307,7 +307,9 @@ describe('streamGeminiGenerateContent (SDK face)', () => {
     }
     expect(caught).toBeInstanceOf(Error)
     const message = (caught as Error).message
-    expect(message).toContain('Gemini API stream request failed')
+    // The establishment wrapper no longer re-wraps into a generic Error —
+    // the ORIGINAL error (class + message) escapes unchanged so the
+    // connection-retry classifier can read status/code/headers off it.
     expect(message).toContain('relay 502: upstream connect error')
   })
 })

@@ -258,3 +258,103 @@ describe('stream idle watchdog', () => {
     }
   })
 })
+
+describe('first-byte establishment guard', () => {
+  test('aborts an establishment that never returns headers, before wrap()', async () => {
+    const { createStreamWatchdog, getInFlightApiRequests } = await loadModule()
+    const previous = setIdleEnv('300000')
+    try {
+      // Simulates a relay that accepts the request and never answers:
+      // nothing is wrapped yet — the guard must fire from creation alone.
+      const watchdog = createStreamWatchdog({
+        url: 'http://127.0.0.1:17892/v1/chat/completions',
+        model: 'relay-model',
+        firstByteTimeoutMs: 25,
+      })
+      const aborted = await new Promise<unknown>(resolve => {
+        if (watchdog.signal.aborted) resolve(watchdog.signal.reason)
+        watchdog.signal.addEventListener('abort', () =>
+          resolve(watchdog.signal.reason),
+        )
+      })
+
+      expect(watchdog.signal.aborted).toBe(true)
+      const { StreamIdleTimeoutError: IdleError } = await loadModule()
+      expect(aborted).toBeInstanceOf(IdleError)
+      // Registry entry still cleared (settle path exists for the caller's
+      // catch in the adapters).
+      watchdog.settle()
+      expect(
+        getInFlightApiRequests().find(e => e.requestId === watchdog.requestId),
+      ).toBeUndefined()
+    } finally {
+      restoreIdleEnv(previous)
+    }
+  })
+
+  test('a healthy stream established after the guard window still consumes fully', async () => {
+    const { createStreamWatchdog } = await loadModule()
+    const previous = setIdleEnv('300000')
+    try {
+      const watchdog = createStreamWatchdog({
+        url: 'http://127.0.0.1:17892/v1/chat/completions',
+        model: 'relay-model',
+        firstByteTimeoutMs: 30,
+      })
+      // Establishment returns within the guard window, but the first chunk
+      // is slow (past what remained of the first-byte window). wrap() hands
+      // consumption over to the idle window, so a slow first chunk is not
+      // false-tripped by the already-elapsed creation window.
+      const wrapped = watchdog.wrap(makeFastStream(2, 60))
+      const outcome = await drainStream(wrapped)
+      expect(outcome.chunks).toEqual([0, 1])
+      expect(outcome.error).toBeNull()
+      expect(outcome.settled).toBe(true)
+      expect(watchdog.signal.aborted).toBe(false)
+      watchdog.settle()
+    } finally {
+      restoreIdleEnv(previous)
+    }
+  })
+})
+
+describe('first-byte guard suppression (watchdog fully disabled)', () => {
+  test('idle=0 suppresses the creation-time first-byte arm entirely', async () => {
+    const { createStreamWatchdog } = await loadModule()
+    const previous = setIdleEnv('0')
+    try {
+      const watchdog = createStreamWatchdog({
+        url: 'http://127.0.0.1:17892/v1/chat/completions',
+        model: 'relay-model',
+        // firstByteTimeoutMs deliberately left to env default (120s) —
+        // idle=0 must suppress it regardless ("0 = fully off" contract).
+      })
+      await new Promise(resolve => setTimeout(resolve, 60))
+      expect(watchdog.signal.aborted).toBe(false)
+      watchdog.settle()
+    } finally {
+      restoreIdleEnv(previous)
+    }
+  })
+
+  test('markEstablished disarms a nearly-spent first-byte window', async () => {
+    const { createStreamWatchdog } = await loadModule()
+    const previous = setIdleEnv('300000')
+    try {
+      const watchdog = createStreamWatchdog({
+        url: 'http://127.0.0.1:17892/v1/chat/completions',
+        model: 'relay-model',
+        firstByteTimeoutMs: 20,
+      })
+      // Establishment resolves at 15ms; markEstablished simulates the
+      // adapter handing the stream over — the 20ms guard must not fire.
+      await new Promise(resolve => setTimeout(resolve, 15))
+      watchdog.markEstablished()
+      await new Promise(resolve => setTimeout(resolve, 40))
+      expect(watchdog.signal.aborted).toBe(false)
+      watchdog.settle()
+    } finally {
+      restoreIdleEnv(previous)
+    }
+  })
+})

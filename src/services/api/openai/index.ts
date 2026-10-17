@@ -16,6 +16,11 @@ import type {
 import type { AgentId } from '../../../types/ids.js'
 import type { Tools } from '../../../Tool.js'
 import { getSessionId } from '../../../bootstrap/state.js'
+import { withConnectionRetry } from 'src/services/api/connectionRetry.js'
+import {
+  releaseOnStreamEnd,
+  withProviderSlot,
+} from 'src/services/api/providerConcurrency.js'
 import { getOpenAIClient } from './client.js'
 import { createStreamWatchdog } from './streamWatchdog.js'
 import {
@@ -384,20 +389,38 @@ export async function* queryModelOpenAI(
     // abort signal stays linked through it.
     let adaptedStream: AsyncGenerator<BetaRawMessageStreamEvent, void>
     if (useChatGPTResponses) {
-      adaptedStream = adaptResponsesStreamToAnthropic(
-        await createChatGPTResponsesStream({
-          request: buildResponsesRequest({
-            model: openaiModel,
-            messages: openaiMessages,
-            tools: openaiTools,
-            toolChoice: openaiToolChoice,
-            reasoningEffort,
-            promptCacheKey: sessionPromptCacheKey,
-          }),
-          signal,
-          fetchOverride: options.fetchOverride as unknown as typeof fetch,
-        }),
-        openaiModel,
+      // Establishment-only connection retry (official SDK semantics —
+      // connection-class failures retry, mid-stream errors never do).
+      // Provider-concurrency slot: acquired before the request goes out,
+      // held until the stream settles (releaseOnStreamEnd finally — the
+      // same teardown instant as the watchdog's settle inside the adapter).
+      adaptedStream = await withProviderSlot(
+        'openai',
+        async release => {
+          const stream: AsyncIterable<Record<string, unknown>> =
+            await withConnectionRetry(
+              () =>
+                createChatGPTResponsesStream({
+                  request: buildResponsesRequest({
+                    model: openaiModel,
+                    messages: openaiMessages,
+                    tools: openaiTools,
+                    toolChoice: openaiToolChoice,
+                    reasoningEffort,
+                    promptCacheKey: sessionPromptCacheKey,
+                  }),
+                  signal,
+                  fetchOverride:
+                    options.fetchOverride as unknown as typeof fetch,
+                }),
+              { signal, source: options.querySource },
+            )
+          return releaseOnStreamEnd(
+            adaptResponsesStreamToAnthropic(stream, openaiModel),
+            release,
+          )
+        },
+        signal,
       )
     } else {
       const client = getOpenAIClient({
@@ -405,39 +428,63 @@ export async function* queryModelOpenAI(
         fetchOverride: options.fetchOverride as unknown as typeof fetch,
         source: options.querySource,
       })
-      const watchdog = createStreamWatchdog({
-        url: `${(client.baseURL ?? 'https://api.openai.com/v1').replace(
-          /\/+$/,
-          '',
-        )}/chat/completions`,
-        model: openaiModel,
-        externalSignal: signal,
-      })
-      let rawStream: AsyncIterable<ChatCompletionChunk>
-      try {
-        rawStream = await client.chat.completions.create(
-          buildOpenAIRequestBody({
-            model: openaiModel,
-            messages: openaiMessages,
-            tools: openaiTools,
-            toolChoice: openaiToolChoice,
-            enableThinking,
-            maxTokens,
-            temperatureOverride: options.temperatureOverride,
-            promptCacheKey,
-          }),
-          { signal: watchdog.signal },
-        )
-      } catch (error) {
-        // The stream was never handed out — the wrap cannot settle the
-        // in-flight registry on our behalf.
-        watchdog.settle()
-        throw error
-      }
-      adaptedStream = adaptOpenAIStreamToAnthropic(
-        watchdog.wrap(rawStream),
-        openaiModel,
-        { includeCacheWriteTokens: useOfficialOpenAICache },
+      // Establishment-only connection retry with a per-attempt watchdog
+      // (official SDK semantics). A stalled attempt aborts through its own
+      // watchdog signal; the retry gets a fresh one, so an idle-fired
+      // watchdog cannot poison the next attempt.
+      // Provider-concurrency slot: acquired before the request goes out and
+      // released when the adapted stream settles (watchdog.wrap's settle
+      // fires one hop later in the same teardown chain).
+      adaptedStream = await withProviderSlot(
+        'openai',
+        async release => {
+          const { rawStream, watchdog } = await withConnectionRetry(
+            async () => {
+              const watchdog = createStreamWatchdog({
+                url: `${(client.baseURL ?? 'https://api.openai.com/v1').replace(
+                  /\/+$/,
+                  '',
+                )}/chat/completions`,
+                model: openaiModel,
+                externalSignal: signal,
+              })
+              try {
+                const rawStream = await client.chat.completions.create(
+                  buildOpenAIRequestBody({
+                    model: openaiModel,
+                    messages: openaiMessages,
+                    tools: openaiTools,
+                    toolChoice: openaiToolChoice,
+                    enableThinking,
+                    maxTokens,
+                    temperatureOverride: options.temperatureOverride,
+                    promptCacheKey,
+                  }),
+                  { signal: watchdog.signal },
+                )
+                // Establishment succeeded — disarm the first-byte window before
+                // the consumption loop re-arms the idle window.
+                watchdog.markEstablished()
+                return { rawStream, watchdog }
+              } catch (error) {
+                // The stream was never handed out — the wrap cannot settle the
+                // in-flight registry on our behalf.
+                watchdog.settle()
+                throw error
+              }
+            },
+            { signal, source: options.querySource },
+          )
+          return releaseOnStreamEnd(
+            adaptOpenAIStreamToAnthropic(
+              watchdog.wrap(rawStream),
+              openaiModel,
+              { includeCacheWriteTokens: useOfficialOpenAICache },
+            ),
+            release,
+          )
+        },
+        signal,
       )
     }
 

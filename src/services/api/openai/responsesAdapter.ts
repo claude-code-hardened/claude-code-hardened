@@ -496,6 +496,9 @@ export async function createChatGPTResponsesStream(params: {
       >[0],
       { signal: watchdog.signal },
     )
+    // Establishment succeeded — disarm the first-byte window before the
+    // consumption loop re-arms the idle window.
+    watchdog.markEstablished()
     return watchdog.wrap(
       created as unknown as AsyncIterable<Record<string, unknown>>,
     )

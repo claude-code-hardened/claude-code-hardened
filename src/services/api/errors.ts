@@ -67,8 +67,46 @@ export function startsWithApiErrorPrefix(text: string): boolean {
 }
 export const PROMPT_TOO_LONG_ERROR_MESSAGE = 'Prompt is too long'
 
+// Custom/relay models phrase the same refusal in many dialects, and the
+// prompt-too-long recovery (withheld 413 → reactiveCompact) only fires when
+// the shape matches. Families observed in the wild:
+// - Anthropic: "prompt is too long: N tokens > M maximum" (starts-with — the
+//   original contract, don't break it)
+// - OpenAI & compatible relays (vLLM/Ollama/…): "This model's maximum
+//   context length is N tokens. However, you requested M tokens" + the
+//   error type `context_length_exceeded`
+// - Chinese relays: "输入上下文长度超出限制" / "…上下文…超…"
+// Prompt-too-long recognition, calibrated against the official matcher
+// (reverse-284 decompiled: `jjn` — case-insensitive substring on
+// "prompt is too long" OR "input is too long for requested model" (the
+// Vertex/Gemini family) — plus the 400 bad_request classifier
+// /\b(too long|too large|exceeds|token limit|prompt is too long)\b/i).
+// Extended with relay-world dialects not present in official (custom
+// models through OpenAI-compatible relays and Chinese upstreams):
+const PROMPT_TOO_LONG_PATTERNS: Array<(text: string) => boolean> = [
+  text => text.toLowerCase().includes('prompt is too long'),
+  text => text.toLowerCase().includes('input is too long for requested model'),
+  text => /maximum context length/i.test(text),
+  text => text.includes('context_length_exceeded'),
+  text => /exceeds the maximum number of tokens/i.test(text),
+  text => /input token count[^。]{0,80}exceed/i.test(text),
+  text => /上下文长度[^。]{0,40}(超|溢)/.test(text),
+  text => /超[出击了]{0,2}[^。]{0,20}上下文/.test(text),
+]
+
 export function isPromptTooLongMessage(msg: AssistantMessage): boolean {
   if (!msg.isApiErrorMessage) {
+    return false
+  }
+  // Only the invalid_request family is actionable prompt-too-long. Rate-limit
+  // surfaces embed the upstream body verbatim (a 429 mentioning "maximum
+  // context length" is NOT compaction-actionable) and transient 5xx bodies
+  // may leak the same phrases — both must surface instead of routing into a
+  // destructive compaction.
+  if (msg.error && msg.error !== 'invalid_request') {
+    return false
+  }
+  if (/API Error: Request rejected \(429\)/.test(getMessageText(msg))) {
     return false
   }
   const content = msg.message!.content
@@ -76,10 +114,39 @@ export function isPromptTooLongMessage(msg: AssistantMessage): boolean {
     return false
   }
   return content.some(
-    block =>
-      block.type === 'text' &&
-      block.text.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE),
+    block => block.type === 'text' && matchesPromptTooLongErrorText(block.text),
   )
+}
+
+/** The shared matcher (canonical content producers + isPromptTooLongMessage). */
+export function matchesPromptTooLongErrorText(text: string): boolean {
+  return PROMPT_TOO_LONG_PATTERNS.some(match => match(text))
+}
+
+/**
+ * Decides whether an API error is ACTIONABLY prompt-too-long (recoverable
+ * via reactive compact) versus merely MENTIONING context limits in a
+ * transient failure's body. A 500 whose leaked metrics text contains
+ * "maximum context length" must NOT route the conversation into a
+ * destructive compaction. Known status requires 400/413; unknown-status
+ * raw relay errors must carry parseable token counts.
+ */
+function isPromptTooLongApiFailure(error: Error): boolean {
+  if (!matchesPromptTooLongErrorText(error.message)) return false
+  const status = (error as { status?: unknown }).status
+  if (typeof status === 'number') return status === 400 || status === 413
+  const { actualTokens, limitTokens } = parsePromptTooLongTokenCounts(
+    error.message,
+  )
+  return actualTokens !== undefined && limitTokens !== undefined
+}
+
+function getMessageText(msg: AssistantMessage): string {
+  const content = msg.message?.content
+  if (!Array.isArray(content)) return ''
+  return content
+    .map(block => (block.type === 'text' ? block.text : ''))
+    .join('\n')
 }
 
 /**
@@ -92,12 +159,41 @@ export function parsePromptTooLongTokenCounts(rawMessage: string): {
   actualTokens: number | undefined
   limitTokens: number | undefined
 } {
+  // Anthropic: "prompt is too long: 137500 tokens > 135000 maximum"
   const match = rawMessage.match(
     /prompt is too long[^0-9]*(\d+)\s*tokens?\s*>\s*(\d+)/i,
   )
+  if (match) {
+    return {
+      actualTokens: parseInt(match[1]!, 10),
+      limitTokens: parseInt(match[2]!, 10),
+    }
+  }
+  // OpenAI/vLLM relays: "maximum context length is 262144 tokens. However,
+  // you requested 270000 tokens" — note the order: limit FIRST, actual SECOND.
+  const relay = rawMessage.match(
+    /maximum context length[^0-9]*(\d+)[^0-9]*tokens?[^0-9]*requested\s+(\d+)/i,
+  )
+  if (relay) {
+    return {
+      actualTokens: parseInt(relay[2]!, 10),
+      limitTokens: parseInt(relay[1]!, 10),
+    }
+  }
+  // Gemini: "The input token count (270000) exceeds the maximum number of
+  // tokens allowed (262144)."
+  const gemini = rawMessage.match(
+    /input token count\s*\((\d+)\)[^0-9]*exceeds the maximum number of tokens allowed\s*\((\d+)\)/i,
+  )
+  if (gemini) {
+    return {
+      actualTokens: parseInt(gemini[1]!, 10),
+      limitTokens: parseInt(gemini[2]!, 10),
+    }
+  }
   return {
-    actualTokens: match ? parseInt(match[1]!, 10) : undefined,
-    limitTokens: match ? parseInt(match[2]!, 10) : undefined,
+    actualTokens: undefined,
+    limitTokens: undefined,
   }
 }
 
@@ -596,12 +692,10 @@ export function getAssistantMessageFromError(
     })
   }
 
-  // Handle prompt too long errors (Vertex returns 413, direct API returns 400)
-  // Use case-insensitive check since Vertex returns "Prompt is too long" (capitalized)
-  if (
-    error instanceof Error &&
-    error.message.toLowerCase().includes('prompt is too long')
-  ) {
+  // Handle prompt too long errors (Vertex returns 413, direct API returns
+  // 400, relay/OpenAI-family returns 400 "maximum context length", gemini
+  // "exceeds the maximum number of tokens" — one shared matcher).
+  if (error instanceof Error && isPromptTooLongApiFailure(error)) {
     // Content stays generic (UI matches on exact string). The raw error with
     // token counts goes into errorDetails — reactive compact's retry loop
     // parses the gap from there via getPromptTooLongTokenGap.

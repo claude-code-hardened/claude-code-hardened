@@ -111,7 +111,11 @@ export function extractGlobBaseDirectory(pattern: string): {
 export async function glob(
   filePattern: string,
   cwd: string,
-  { limit, offset }: { limit: number; offset: number },
+  {
+    limit,
+    offset,
+    maxDepth,
+  }: { limit: number; offset: number; maxDepth?: number },
   abortSignal: AbortSignal,
   toolPermissionContext: ToolPermissionContext,
 ): Promise<{ files: string[]; truncated: boolean }> {
@@ -195,6 +199,9 @@ export async function glob(
       sortByMtime: true, // retired rg path: --sort=modified
       maxResults: limit + 1,
       offset,
+      // bfs maxdepth (search-napi GlobOptionsLike.maxDepth): bounds how deep
+      // the traversal descends from the root; undefined = unbounded.
+      ...(maxDepth !== undefined ? { maxDepth } : {}),
       timeoutMs: 20_000,
       // Per-call cancel key: abortSignal → searchCancel(key) kills ONLY
       // this session (heart.rs CancelRegistry — concurrent searches never

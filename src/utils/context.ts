@@ -68,12 +68,35 @@ export function getContextWindowForModel(
   try {
     const overrides = getInitialSettings().contextWindowOverrides
     if (overrides) {
+      // Custom models may carry a "[1m]" suffix through the runtime alias
+      // (parseUserSpecifiedModel re-appends it) while /login stored the
+      // override under the bare id — try the suffixed, bare, and canonical
+      // keys in that order.
+      const bare = model.replace(/\[1m\]$/i, '')
+      // A DIRECT model-key entry is authoritative regardless of value: a
+      // positive number wins; 0/negative means "explicitly no override for
+      // this model" — sibling keys (bare / canonical aliases) must not
+      // revive it; fall straight through to detection.
       const direct = overrides[model]
-      if (direct && direct > 0) return direct
-      const canonical = getCanonicalName(model)
-      if (canonical !== model) {
-        const viaCanonical = overrides[canonical]
-        if (viaCanonical && viaCanonical > 0) return viaCanonical
+      if (direct !== undefined) {
+        if (direct > 0) return direct
+      } else {
+        const viaBare = overrides[bare]
+        if (viaBare && viaBare > 0) return viaBare
+        const canonical = getCanonicalName(model)
+        if (canonical !== model) {
+          const viaCanonical = overrides[canonical]
+          if (viaCanonical && viaCanonical > 0) return viaCanonical
+        }
+        if (bare !== model) {
+          const canonicalBare = getCanonicalName(bare)
+          if (canonicalBare !== bare) {
+            const viaCanonicalBare = overrides[canonicalBare]
+            if (viaCanonicalBare && viaCanonicalBare > 0) {
+              return viaCanonicalBare
+            }
+          }
+        }
       }
     }
   } catch {

@@ -45,6 +45,31 @@ export function getStreamIdleTimeoutMs(): number {
   return parsed
 }
 
+// Official-parity establishment guard (reverse-284:
+// CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS): the silence window above only arms
+// once consumption starts (wrapped()), so a relay that accepts the request
+// and never returns headers stalled the establishment phase unbounded (the
+// openai SDK's 600s headers timeout was the only backstop; the gemini SDK
+// has none). Arming a shorter first-byte window at watchdog creation turns
+// that stall into an abort — a connection-class failure the connection
+// retry layer then re-arms with a fresh per-attempt watchdog.
+export const STREAM_FIRST_BYTE_TIMEOUT_ENV =
+  'CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS'
+export const DEFAULT_STREAM_FIRST_BYTE_TIMEOUT_MS = 120_000
+
+/** Parse CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS. 0 disables the guard. */
+export function getStreamFirstByteTimeoutMs(): number {
+  const raw = process.env[STREAM_FIRST_BYTE_TIMEOUT_ENV]
+  if (raw === undefined || raw === '') {
+    return DEFAULT_STREAM_FIRST_BYTE_TIMEOUT_MS
+  }
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_STREAM_FIRST_BYTE_TIMEOUT_MS
+  }
+  return parsed
+}
+
 /** One active API request, kept for diagnostics while it is in flight. */
 export type InFlightApiRequest = {
   requestId: string
@@ -95,6 +120,13 @@ export type StreamWatchdog = {
    * torn down.
    */
   wrap<T>(stream: AsyncIterable<T>): AsyncGenerator<T, void, undefined>
+  /**
+   * Disarm the creation-time first-byte timer once the SDK call resolved.
+   * Consuming the wrapped stream re-arms with the idle window; an abort in
+   * the microscopic gap between them would otherwise kill a healthy stream
+   * whose establishment ate most of the first-byte window.
+   */
+  markEstablished(): void
   /** Idempotently remove the request from the in-flight registry. */
   settle(): void
 }
@@ -115,9 +147,13 @@ export function createStreamWatchdog(params: {
   /** Upstream (user/session) abort signal, linked into the watchdog signal. */
   externalSignal?: AbortSignal
   requestId?: string
+  /** Test override for the first-byte window (env default otherwise). */
+  firstByteTimeoutMs?: number
 }): StreamWatchdog {
   const requestId = params.requestId ?? randomUUID()
   const idleTimeoutMs = getStreamIdleTimeoutMs()
+  const firstByteTimeoutMs =
+    params.firstByteTimeoutMs ?? getStreamFirstByteTimeoutMs()
   const startedAt = Date.now()
 
   // Registered at "started": before create() hands out its stream. The entry
@@ -161,7 +197,7 @@ export function createStreamWatchdog(params: {
     idleFired = true
     logForDebugging(
       `[OpenAI] Stream idle watchdog: no stream data for ` +
-        `${Math.round(idleTimeoutMs / 1000)}s — aborting model=` +
+        `${Math.round(activeWindowMs / 1000)}s — aborting model=` +
         `${params.model}, request=${requestId}, url=${params.url}, ` +
         `elapsed=${Date.now() - startedAt}ms`,
       { level: 'warn' },
@@ -170,22 +206,41 @@ export function createStreamWatchdog(params: {
       new StreamIdleTimeoutError({
         model: params.model,
         requestId,
-        idleTimeoutMs,
+        idleTimeoutMs: activeWindowMs,
       }),
     )
   }
+
+  // The silence window starts at watchdog CREATION with the shorter
+  // first-byte window (establishment guard), then every received chunk
+  // re-arms it with the full idle window. A healthy long stream never
+  // trips either; an establishment stall aborts before any body exists.
+  let activeWindowMs = firstByteTimeoutMs
 
   function armTimer(): void {
     if (idleFired || settled || controller.signal.aborted) return
     if (idleTimer !== null) clearTimeout(idleTimer)
     const timer: ReturnType<typeof setTimeout> = setTimeout(
       fireIdle,
-      idleTimeoutMs,
+      activeWindowMs,
     )
     idleTimer = timer
     // Never keep the process alive just for the watchdog.
     const unref = (timer as unknown as { unref?: () => void }).unref
     if (unref) unref.call(timer)
+  }
+
+  if (idleTimeoutMs > 0 && firstByteTimeoutMs > 0) {
+    // idle=0 means the watchdog is fully off — the documented "0 = disabled"
+    // contract wins over the first-byte guard (no half-armed states).
+    armTimer()
+  }
+
+  // See the interface doc: called once the SDK create() resolved, so a
+  // nearly-spent first-byte window cannot abort a just-established stream
+  // in the microscopic gap before consumption re-arms the idle window.
+  function markEstablished(): void {
+    disarmTimer()
   }
 
   function disarmTimer(): void {
@@ -218,7 +273,12 @@ export function createStreamWatchdog(params: {
   async function* wrapped<T>(
     stream: AsyncIterable<T>,
   ): AsyncGenerator<T, void, undefined> {
+    // A stream was handed out — the first-byte phase is over regardless of
+    // which window was armed at creation; the idle cadence takes over (or
+    // nothing, when the watchdog is disabled).
+    activeWindowMs = idleTimeoutMs
     if (idleTimeoutMs <= 0) {
+      disarmTimer()
       // Watchdog disabled — silent passthrough; still settle the registry.
       try {
         for await (const chunk of stream) {
@@ -234,8 +294,11 @@ export function createStreamWatchdog(params: {
     let exhausted = false
     try {
       while (true) {
-        // Silence window: restarts on every received chunk. A healthy long
-        // stream never trips it; a stalled one lands the structured error.
+        // Silence window: restarts on every received chunk. Switch from the
+        // creation-time first-byte window to the full idle window once the
+        // stream is established — the first chunk inherits the idle cadence,
+        // so a just-narrowed window cannot false-trip a healthy slow start.
+        activeWindowMs = idleTimeoutMs
         armTimer()
         const nextPromise = iterator.next()
         const raced = await Promise.race([
@@ -275,6 +338,7 @@ export function createStreamWatchdog(params: {
     requestId,
     signal: controller.signal,
     wrap: stream => wrapped(stream),
+    markEstablished,
     settle,
   }
 }

@@ -27,7 +27,16 @@ import {
   convertOutputToLangfuse,
   convertToolsToLangfuse,
 } from '../../../services/langfuse/convert.js'
-import { getGeminiStreamUrl, streamGeminiGenerateContent } from './client.js'
+import {
+  establishGeminiStream,
+  getGeminiStreamUrl,
+  projectGeminiStream,
+} from './client.js'
+import { withConnectionRetry } from 'src/services/api/connectionRetry.js'
+import {
+  releaseOnStreamEnd,
+  withProviderSlot,
+} from 'src/services/api/providerConcurrency.js'
 import { createStreamWatchdog } from './streamWatchdog.js'
 import {
   anthropicMessagesToGemini,
@@ -83,59 +92,90 @@ export async function* queryModelGemini(
     const toolChoice = anthropicToolChoiceToGemini(options.toolChoice)
 
     // Call Gemini API with streaming. Served by the official @google/genai
-    // SDK (no hand-rolled fetch/SSE lives in this layer). The client sets no
-    // total-duration `timeout` (a request cap would kill long *healthy*
-    // streaming turns mid-flight; this SDK has no default — omitting leaves
-    // the stream unbounded) and SDK retries off (retry ownership belongs to
-    // QueryEngine's fallback state machine). Stalled streams are guarded by
-    // the silence-based idle watchdog: its signal replaces the raw one in
-    // generateContentStream and the upstream abort signal stays linked
-    // through it.
-    const watchdog = createStreamWatchdog({
-      url: getGeminiStreamUrl(geminiModel),
-      model: geminiModel,
-      externalSignal: signal,
-    })
-
-    const stream = watchdog.wrap(
-      streamGeminiGenerateContent({
-        model: geminiModel,
-        signal: watchdog.signal,
-        fetchOverride: options.fetchOverride as typeof fetch | undefined,
-        // Body layout mirrors the wire format (contents/systemInstruction/
-        // tools/toolConfig/generationConfig) — the client maps it onto the
-        // SDK's flattened GenerateContentConfig.
-        body: {
-          contents,
-          ...(systemInstruction && { systemInstruction }),
-          ...(geminiTools.length > 0 && { tools: geminiTools }),
-          ...(toolChoice && {
-            toolConfig: {
-              functionCallingConfig: toolChoice,
-            },
-          }),
-          generationConfig: {
-            ...(options.temperatureOverride !== undefined && {
-              temperature: options.temperatureOverride,
-            }),
-            ...(thinkingConfig.type !== 'disabled' && {
-              thinkingConfig: {
-                includeThoughts: true,
-                ...(thinkingConfig.type === 'enabled' && {
-                  thinkingBudget: thinkingConfig.budgetTokens,
-                }),
-              },
-            }),
+    // SDK (no hand-rolled fetch/SSE lives in this layer). Establishment runs
+    // through withConnectionRetry (official SDK semantics: connection-class
+    // failures retry with capped backoff; stream bodies are never retried).
+    // Each attempt gets a fresh watchdog — a stall aborts through that
+    // attempt's signal, so an idle-fired watchdog cannot poison the retry.
+    // Stalled streams post-establishment are still guarded by the wrapped
+    // watchdog from the successful attempt.
+    //
+    // Provider-concurrency slot (layer-2): acquired before the request goes
+    // out, held until the settled stream is fully consumed
+    // (releaseOnStreamEnd finally — closing it closes the adaptation chain
+    // and the watchdog-wrapped stream, whose settle fires in the same
+    // teardown).
+    const adaptedStream = await withProviderSlot(
+      'gemini',
+      async release => {
+        const { stream } = await withConnectionRetry(
+          async () => {
+            const watchdog = createStreamWatchdog({
+              url: getGeminiStreamUrl(geminiModel),
+              model: geminiModel,
+              externalSignal: signal,
+            })
+            try {
+              const raw = await establishGeminiStream({
+                model: geminiModel,
+                signal: watchdog.signal,
+                fetchOverride: options.fetchOverride as
+                  | typeof fetch
+                  | undefined,
+                // Body layout mirrors the wire format (contents/systemInstruction/
+                // tools/toolConfig/generationConfig) — the client maps it onto the
+                // SDK's flattened GenerateContentConfig.
+                body: {
+                  contents,
+                  ...(systemInstruction && { systemInstruction }),
+                  ...(geminiTools.length > 0 && { tools: geminiTools }),
+                  ...(toolChoice && {
+                    toolConfig: {
+                      functionCallingConfig: toolChoice,
+                    },
+                  }),
+                  generationConfig: {
+                    ...(options.temperatureOverride !== undefined && {
+                      temperature: options.temperatureOverride,
+                    }),
+                    ...(thinkingConfig.type !== 'disabled' && {
+                      thinkingConfig: {
+                        includeThoughts: true,
+                        ...(thinkingConfig.type === 'enabled' && {
+                          thinkingBudget: thinkingConfig.budgetTokens,
+                        }),
+                      },
+                    }),
+                  },
+                },
+              })
+              // Establishment succeeded — disarm the first-byte window before
+              // the consumption loop re-arms the idle window.
+              watchdog.markEstablished()
+              return {
+                stream: projectGeminiStream(watchdog.wrap(raw)),
+                watchdog,
+              }
+            } catch (error) {
+              watchdog.settle()
+              throw error
+            }
           },
-        },
-      }),
+          { signal, source: options.querySource },
+        )
+
+        logForDebugging(
+          `[Gemini] Calling model=${geminiModel}, messages=${contents.length}, tools=${geminiTools.length}`,
+        )
+
+        return releaseOnStreamEnd(
+          adaptGeminiStreamToAnthropic(stream, geminiModel),
+          release,
+        )
+      },
+      signal,
     )
 
-    logForDebugging(
-      `[Gemini] Calling model=${geminiModel}, messages=${contents.length}, tools=${geminiTools.length}`,
-    )
-
-    const adaptedStream = adaptGeminiStreamToAnthropic(stream, geminiModel)
     const contentBlocks: Record<number, Record<string, unknown>> = {}
     const textDeltas = new Map<number, string[]>()
     const collectedMessages: AssistantMessage[] = []

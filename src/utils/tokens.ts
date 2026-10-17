@@ -1,5 +1,8 @@
 import type { BetaUsage as Usage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import { roughTokenCountEstimationForMessages } from '../services/tokenEstimation.js'
+import {
+  countTokensPreciseForMessages,
+  roughTokenCountEstimationForMessages,
+} from '../services/tokenEstimation.js'
 import type {
   AssistantMessage,
   ContentItem,
@@ -277,7 +280,7 @@ export function tokenCountWithEstimation(messages: readonly Message[]): number {
       }
       return (
         getTokenCountFromUsage(usage) +
-        roughTokenCountEstimationForMessages(
+        countTokensPreciseForMessages(
           messages.slice(i + 1) as Parameters<
             typeof roughTokenCountEstimationForMessages
           >[0],
@@ -286,7 +289,11 @@ export function tokenCountWithEstimation(messages: readonly Message[]): number {
     }
     i--
   }
-  return roughTokenCountEstimationForMessages(
+  // No usage anchor anywhere in the transcript (relay streams without
+  // usage blocks): the cl100k-baseline counter (native, cached) degrades
+  // far more gracefully than the blind chars/4 estimate — CJK payloads
+  // were underestimated ~4x on that path.
+  return countTokensPreciseForMessages(
     messages as Parameters<typeof roughTokenCountEstimationForMessages>[0],
   )
 }
