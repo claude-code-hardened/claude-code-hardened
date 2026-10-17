@@ -1,8 +1,15 @@
 import { describe, expect, mock, test } from 'bun:test'
+import { taskRegistryMock } from '../../../../../../tests/mocks/taskRegistry'
 
 mock.module('bun:bundle', () => ({
   feature: (_name: string) => true,
 }))
+
+// resumeAgent → runAgent → taskRegistry pulls the bootstrap/envUtils
+// side-effect chain at import; stub the registry face so the module graph
+// loads without.realpathSync side effects (see tests/mocks/taskRegistry.ts).
+mock.module('src/services/taskRegistry/taskRegistry.js', () => taskRegistryMock)
+mock.module('src/services/taskRegistry/taskRegistry.ts', () => taskRegistryMock)
 
 describe('resumeAgent', () => {
   test('module exports resumeAgentBackground', async () => {

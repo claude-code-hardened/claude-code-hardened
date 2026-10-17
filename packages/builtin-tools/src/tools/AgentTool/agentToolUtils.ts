@@ -246,6 +246,10 @@ export const agentToolResultSchema = lazySchema(() =>
     // result trailer — one-shot built-ins skip the SendMessage hint.
     agentType: z.string().optional(),
     content: z.array(z.object({ type: z.literal('text'), text: z.string() })),
+    // Official turn-limit disclosure (reverse-284 module-006): set when the
+    // stream ended on max_turns_reached — the parent tool_result then shows
+    // a "stopped at its N-turn limit (partial result)" line.
+    stoppedAtTurnLimit: z.number().optional(),
     totalToolUseCount: z.number(),
     totalDurationMs: z.number(),
     totalTokens: z.number(),
@@ -286,6 +290,30 @@ export function countToolUses(messages: MessageType[]): number {
     }
   }
   return count
+}
+
+/**
+ * Official turn-limit disclosure source: the max_turns_reached attachment
+ * query.ts yields right before ending a turn-capped stream. `undefined` =
+ * natural completion.
+ */
+function extractStoppedAtTurnLimit(
+  agentMessages: MessageType[],
+): number | undefined {
+  for (let i = agentMessages.length - 1; i >= 0; i--) {
+    const m = agentMessages[i] as unknown as Record<string, unknown>
+    if (m?.type !== 'attachment') continue
+    const attachment = m.attachment as unknown as
+      | { type?: string; maxTurns?: unknown }
+      | undefined
+    if (
+      attachment?.type === 'max_turns_reached' &&
+      typeof attachment.maxTurns === 'number'
+    ) {
+      return attachment.maxTurns
+    }
+  }
+  return undefined
 }
 
 export function finalizeAgentTool(
@@ -380,6 +408,11 @@ export function finalizeAgentTool(
     agentId,
     agentType,
     content,
+    // Official turn-limit disclosure (reverse-284 module-006) — the parent
+    // tool_result gains a "stopped at its N-turn limit (partial result)"
+    // line when the stream ended on max_turns_reached, so a truncated agent
+    // is never mistaken for a natural finish.
+    stoppedAtTurnLimit: extractStoppedAtTurnLimit(agentMessages),
     totalDurationMs: Date.now() - startTime,
     totalTokens,
     totalToolUseCount,

@@ -1661,10 +1661,19 @@ The agent is now running and will receive instructions via mailbox.`,
       const worktreeInfoText = worktreeData.worktreePath
         ? `\nworktreePath: ${worktreeData.worktreePath}\nworktreeBranch: ${worktreeData.worktreeBranch}`
         : '';
-      // If the subagent completes with no content, the tool_result is just the
-      // agentId/usage trailer below — a metadata-only block at the prompt tail.
-      // Some models read that as "nothing to act on" and end their turn
-      // immediately. Say so explicitly so the parent has something to react to.
+      // Official turn-limit disclosure (reverse-284 module-006: "stopped at
+      // its N-turn limit (partial result; … to continue)"): without this the
+      // parent can't distinguish a natural finish from a turn-exhaustion cut,
+      // and treats a truncated fleet as done. The continue handles ship in
+      // the trailer below.
+      const turnLimitNote = data.stoppedAtTurnLimit
+        ? [
+            {
+              type: 'text' as const,
+              text: `⚠ Agent stopped at its ${data.stoppedAtTurnLimit}-turn limit (partial result — its context was cut mid-work). Continue via SendMessage with to: '${data.agentId}', or finish the remaining work on the main thread.`,
+            },
+          ]
+        : [];
       const contentOrMarker =
         data.content.length > 0
           ? data.content
@@ -1691,6 +1700,7 @@ The agent is now running and will receive instructions via mailbox.`,
         type: 'tool_result',
         content: [
           ...contentOrMarker,
+          ...turnLimitNote,
           {
             type: 'text',
             text: `agentId: ${data.agentId} (use SendMessage with to: '${data.agentId}' to continue this agent)${worktreeInfoText}
