@@ -139,6 +139,16 @@ mock.module('src/services/analytics/index.js', () => ({
   stripProtoFields: (v: unknown) => v,
 }))
 
+// The share command's assertions are written against the ENGLISH source
+// keys — pin t() to identity so the suite is locale-independent (runner
+// locale must not flip these to Chinese/… translations).
+const identityT = (key: string, params?: Record<string, unknown>): string =>
+  key.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
+    params && name in params ? String(params[name]) : `{{${name}}}`,
+  )
+mock.module('src/i18n/index.js', () => ({ t: identityT }))
+mock.module('src/i18n/index.ts', () => ({ t: identityT }))
+
 // ── State ──
 let tmpDir: string
 let claudeDir: string
