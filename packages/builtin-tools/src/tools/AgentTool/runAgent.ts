@@ -290,21 +290,43 @@ export async function* runAgent(
   const releaseAgentSlot = acquireAgentSlot({
     agentKey: input.agentDefinition?.agentType,
   })
+  // A2 audit (HIGH): handle identity must be the AGENT's own id, not the
+  // toolUseContext's (that is the spawner/parent — nested spawns shared one
+  // parent id and froze each other out of the registry's terminal states).
+  // Generate here and push into the override so runAgentCapped's createAgentId
+  // fallback never diverges from the handle id.
+  const wrapperAgentId = input.override?.agentId ?? createAgentId()
+  const wrappedArgs = [
+    {
+      ...input,
+      override: { ...input.override, agentId: wrapperAgentId },
+    },
+    ...args.slice(1),
+  ] as Parameters<typeof runAgentCapped>
   // Task-handle registry (reverse-284 0002 module-005 semantic — one
   // central handle per spawned agent): previously only LocalShellTask /
   // LocalAgentTask recorded handles, so synchronous Task-tool agents were
   // INVISIBLE to the registry (empty tasks/ dir despite a running fleet).
   // The wrapper is the choke point all three AgentTool spawn paths funnel
   // through, so spawn/terminal bookkeeping lives here next to slot release.
-  const handleId = input.toolUseContext?.agentId ?? `agent-${randomUUID()}`
-  recordTaskHandle({
-    id: handleId,
-    type: 'local_agent',
-    status: 'running',
-    description: input.agentDefinition?.agentType ?? 'task',
-  })
+  // Inside the try: recordTaskHandle does disk I/O and can throw — a throw
+  // here would leak the slot (finally below only covers the try body).
+  // terminalRecorded (A2 audit MED-HIGH): a generator .return() mid-stream
+  // (backgrounding / parent cancel) exits yield* WITHOUT running the
+  // post-loop completed record NOR the catch — without this flag the handle
+  // stays 'running' forever. 'killed' is the honest terminal for an
+  // abandoned sync run (the async continuation records its own handle).
+  let terminalRecorded = false
+  let handleId = wrapperAgentId
   try {
-    yield* runAgentCapped(...args)
+    recordTaskHandle({
+      id: handleId,
+      type: 'local_agent',
+      status: 'running',
+      description: input.agentDefinition?.agentType ?? 'task',
+    })
+    yield* runAgentCapped(...wrappedArgs)
+    terminalRecorded = true
     recordTaskHandle({
       id: handleId,
       type: 'local_agent',
@@ -312,6 +334,7 @@ export async function* runAgent(
       exitKind: 'completed',
     })
   } catch (error) {
+    terminalRecorded = true
     recordTaskHandle({
       id: handleId,
       type: 'local_agent',
@@ -320,6 +343,14 @@ export async function* runAgent(
     })
     throw error
   } finally {
+    if (!terminalRecorded) {
+      recordTaskHandle({
+        id: handleId,
+        type: 'local_agent',
+        status: 'killed',
+        exitKind: 'killed',
+      })
+    }
     releaseAgentSlot()
   }
 }
@@ -919,17 +950,13 @@ async function* runAgentCapped({
         // Handle max turns reached signal from query.ts
         if ((message as any).attachment.type === 'max_turns_reached') {
           logForDebugging(
-            `[Agent
-: $
-{
-  agentDefinition.agentType
-}
-] Reached max turns limit ($
-{
-  (message as any).attachment.maxTurns
-}
-)`,
+            `[Agent: ${agentDefinition.agentType}] Reached max turns limit (${(message as any).attachment.maxTurns})`,
           )
+          // A2 audit (CRITICAL): this attachment is the SOLE source feeding
+          // extractStoppedAtTurnLimit → the parent tool_result's turn-limit
+          // disclosure. Swallowing it here made the whole disclosure chain
+          // dead code. Yield before breaking.
+          yield message as Message
           break
         }
         yield message as Message

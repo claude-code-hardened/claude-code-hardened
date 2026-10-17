@@ -1224,6 +1224,14 @@ export const AgentTool = buildTool({
                       // Extract text from agent result content for the notification
                       let finalMessage = extractTextContent(agentResult.content, '\n');
 
+                      // A2 audit (MED): background/TaskOutput face must show the
+                      // turn-limit disclosure too — otherwise an agent truncated
+                      // at maxTurns looks like a natural finish to whoever reads
+                      // the notification instead of the tool_result.
+                      if (agentResult.stoppedAtTurnLimit) {
+                        finalMessage = `⚠ Agent stopped at its ${agentResult.stoppedAtTurnLimit}-turn limit (partial result) — resume via SendMessage or finish on the main thread.${finalMessage ? `\n\n${finalMessage}` : ''}`;
+                      }
+
                       if (feature('TRANSCRIPT_CLASSIFIER')) {
                         const backgroundedAppState = toolUseContext.getAppState();
                         const handoffWarning = await classifyHandoffIfNeeded({
@@ -1689,10 +1697,13 @@ The agent is now running and will receive instructions via mailbox.`,
       // block (it uses logEvent in finalizeAgentTool), so dropping is safe.
       // agentType is optional for resume compat — missing means show trailer.
       if (data.agentType && ONE_SHOT_BUILTIN_AGENT_TYPES.has(data.agentType) && !worktreeInfoText) {
+        // A2 audit (MED): one-shots skip the agentId/usage trailer (cost
+        // trade at 34M Explore runs/week) but must not skip the turn-limit
+        // disclosure — a truncated Explore result must still say so.
         return {
           tool_use_id: toolUseID,
           type: 'tool_result',
-          content: contentOrMarker,
+          content: [...contentOrMarker, ...turnLimitNote],
         };
       }
       return {
