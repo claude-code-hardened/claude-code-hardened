@@ -1,5 +1,6 @@
 import { logForDebugging } from 'src/utils/debug.js'
 import { errorMessage } from 'src/utils/errors.js'
+import { isEnvTruthy } from 'src/utils/envUtils.js'
 
 /**
  * Connection-layer retry for the non-Anthropic provider adapters
@@ -211,7 +212,9 @@ function retryAfterMs(error: unknown): number | undefined {
 function computeBackoffDelayMs(error: unknown, attempt: number): number {
   const fromHeader = retryAfterMs(error)
   if (fromHeader !== undefined) return Math.min(fromHeader, 30_000)
-  const base = Math.min(0.5 * 2 ** (attempt - 1), 8)
+  // Official backoff cap is 20s (reverse-284 module-006: nIe=20000) — the
+  // old 8s cap made long outages burn the whole budget in half a minute.
+  const base = Math.min(0.5 * 2 ** (attempt - 1), 20)
   const jitter = 1 - Math.random() * 0.25
   return base * jitter * 1000
 }
@@ -229,7 +232,7 @@ const defaultSleep = (ms: number): Promise<void> => {
 }
 
 export interface ConnectionRetryOptions {
-  /** Official SDK default; CLAUDE_CODE_CONNECTION_MAX_RETRIES overrides. */
+  /** Explicit budget override (call-site). Otherwise the env chain below. */
   maxRetries?: number
   /** The session-level signal — aborted here marks a user abort (no retry). */
   signal?: AbortSignal
@@ -239,16 +242,55 @@ export interface ConnectionRetryOptions {
   sleep?: (ms: number) => Promise<void>
 }
 
+/**
+ * Official retry budget chain (reverse-284 module-006 `cIe()`/`kWo()`,
+ * constants wZe=4 / eIe=15):
+ *   explicit call-site override
+ *   > CLAUDE_CODE_MAX_RETRIES (official env name)
+ *   > CLAUDE_CODE_CONNECTION_MAX_RETRIES (CCH legacy alias, still honored)
+ *   > default 4.
+ * A budget above 15 requires CLAUDE_CODE_RETRY_WATCHDOG=1 (the official
+ * fuse: runaway budgets hang the session in retry loops) — otherwise the
+ * budget is clamped to 15 with a debug note.
+ */
+const OFFICIAL_DEFAULT_RETRIES = 4
+const OFFICIAL_RETRY_FUSE = 15
+
+export function resolveConnectionMaxRetries(
+  override?: number,
+  env: Record<string, string | undefined> = process.env,
+): number {
+  const parse = (raw: string | undefined): number | undefined => {
+    const parsed = Number.parseInt(raw ?? '', 10)
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined
+  }
+  const explicit =
+    override ??
+    parse(env.CLAUDE_CODE_MAX_RETRIES) ??
+    parse(env.CLAUDE_CODE_CONNECTION_MAX_RETRIES) ??
+    OFFICIAL_DEFAULT_RETRIES
+  const watchdog = env.CLAUDE_CODE_RETRY_WATCHDOG
+  if (
+    explicit > OFFICIAL_RETRY_FUSE &&
+    !(
+      watchdog === '1' ||
+      watchdog === 'true' ||
+      (watchdog !== undefined && isEnvTruthy(watchdog))
+    )
+  ) {
+    logForDebugging(
+      `connection retry budget ${explicit} exceeds ${OFFICIAL_RETRY_FUSE} without CLAUDE_CODE_RETRY_WATCHDOG — clamped`,
+    )
+    return OFFICIAL_RETRY_FUSE
+  }
+  return explicit
+}
+
 export async function withConnectionRetry<T>(
   operation: (attempt: number) => Promise<T>,
   options: ConnectionRetryOptions = {},
 ): Promise<T> {
-  const envMax = Number.parseInt(
-    process.env.CLAUDE_CODE_CONNECTION_MAX_RETRIES ?? '',
-    10,
-  )
-  const maxRetries =
-    options.maxRetries ?? (Number.isFinite(envMax) ? envMax : 2)
+  const maxRetries = resolveConnectionMaxRetries(options.maxRetries)
   const sleep = options.sleep ?? defaultSleep
   let attempt = 0
   while (true) {

@@ -231,8 +231,9 @@ describe('withConnectionRetry', () => {
       },
       { maxRetries: 6, sleep: async ms => void sleeps.push(ms) },
     )
-    // attempt N delay = min(0.5 * 2^(N-1), 8s) * jitter(0.75–1)
-    const base = [500, 1000, 2000, 4000, 8000, 8000]
+    // attempt N delay = min(0.5 * 2^(N-1), 20s) * jitter(0.75–1) — the
+    // official backoff cap is 20s (reverse-284 module-006 nIe=20000)
+    const base = [500, 1000, 2000, 4000, 8000, 16000]
     expect(sleeps.length).toBe(6)
     sleeps.forEach((ms, i) => {
       expect(ms).toBeGreaterThanOrEqual(base[i]! * 0.74)

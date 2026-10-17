@@ -324,6 +324,13 @@ export async function* runAgent(
   }
 }
 
+/** Official CLAUDE_CODE_MAX_TURNS: positive integer, unset/invalid = uncapped. */
+function parseMaxTurnsEnv(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined
+  const parsed = Number.parseInt(raw.trim(), 10)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
 async function* runAgentCapped({
   agentDefinition,
   promptMessages,
@@ -886,7 +893,14 @@ async function* runAgentCapped({
       canUseTool,
       toolUseContext: agentToolUseContext,
       querySource,
-      maxTurns: maxTurns ?? agentDefinition.maxTurns,
+      // Turn ceiling chain (official has the CLAUDE_CODE_MAX_TURNS env —
+      // 0082 config/env-vars registry): explicit call site > agent
+      // definition frontmatter > the global env. Unset = uncapped, same as
+      // official behavior when the env is absent.
+      maxTurns:
+        maxTurns ??
+        agentDefinition.maxTurns ??
+        parseMaxTurnsEnv(process.env.CLAUDE_CODE_MAX_TURNS),
     })) {
       onQueryProgress?.()
       // Forward subagent API request starts to parent's metrics display
