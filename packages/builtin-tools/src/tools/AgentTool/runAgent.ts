@@ -92,6 +92,7 @@ import {
   registerSubagentSpawnDepth,
   unregisterSubagentSpawnDepth,
 } from './subagentDepth.js'
+import { acquireAgentSlot } from './agentConcurrency.js'
 import { resolveAgentTools } from './agentToolUtils.js'
 import { filterIncompleteToolCalls } from './filterIncompleteToolCalls.js'
 import { type AgentDefinition, isBuiltInAgent } from './loadAgentsDir.js'
@@ -261,7 +262,41 @@ function isRecordableMessage(
   )
 }
 
-export async function* runAgent({
+/**
+ * Max-concurrent-subagents gate (lateral cap — see agentConcurrency.ts).
+ *
+ * The slot covers the agent's WHOLE lifecycle: acquired when the consumer's
+ * first `next()` starts this generator, released in the wrapper's finally,
+ * which fires on completion, AbortError, any thrown error and early
+ * `.return()` (the async-teardown path in AgentTool.tsx) — the same
+ * finally-guaranteed teardown the inner generator's own cleanup relies on.
+ * When every slot is taken, spawners queue FIFO; the (max+1)-th spawn waits
+ * for a running agent to finish instead of failing.
+ *
+ * The actual agent body lives in runAgentCapped below (unchanged apart from
+ * its name): delegating through this thin wrapper keeps the slot release
+ * outside the body's own try/finally so a pre-query-loop setup failure
+ * cannot leak a slot either.
+ */
+export async function* runAgent(
+  ...args: Parameters<typeof runAgentCapped>
+): AsyncGenerator<Message, void> {
+  // Official spawn gate (reverse-284 module-006): REFUSE at cap, per-kind
+  // counters, limit re-read per spawn. Throwing here surfaces the refusal
+  // as a tool error back to the model — no waiting parents exist, so the
+  // agent-lifetime-slot deadlock (OMP #3749) cannot be constructed.
+  const input = args[0]
+  const releaseAgentSlot = acquireAgentSlot({
+    agentKey: input.agentDefinition?.agentType,
+  })
+  try {
+    yield* runAgentCapped(...args)
+  } finally {
+    releaseAgentSlot()
+  }
+}
+
+async function* runAgentCapped({
   agentDefinition,
   promptMessages,
   toolUseContext,

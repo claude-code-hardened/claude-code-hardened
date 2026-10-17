@@ -2,6 +2,7 @@ import { z } from 'zod/v4'
 import type { ValidationResult } from 'src/Tool.js'
 import { buildTool, type ToolDef } from 'src/Tool.js'
 import { getCwd } from 'src/utils/cwd.js'
+import { semanticNumber } from 'src/utils/semanticNumber.js'
 import { isENOENT } from 'src/utils/errors.js'
 import { FILE_NOT_FOUND_CWD_NOTE, suggestPathUnderCwd } from 'src/utils/file.js'
 import { getFsImplementation } from 'src/utils/fsOperations.js'
@@ -29,6 +30,9 @@ const inputSchema = lazySchema(() =>
       .describe(
         'The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter "undefined" or "null" - simply omit it for the default behavior. Must be a valid directory path if provided.',
       ),
+    max_depth: semanticNumber(z.number().int().min(1).optional()).describe(
+      'Bound how deep the traversal descends past the search root (bfs maxdepth). 1 = root-level entries only, 2 adds grandchildren, etc. Useful for huge trees.',
+    ),
   }),
 )
 type InputSchema = ReturnType<typeof inputSchema>
@@ -155,7 +159,7 @@ export const GlobTool = buildTool({
     const { files, truncated } = await glob(
       input.pattern,
       GlobTool.getPath(input),
-      { limit, offset: 0 },
+      { limit, offset: 0, maxDepth: input.max_depth },
       abortController.signal,
       appState.toolPermissionContext,
     )
