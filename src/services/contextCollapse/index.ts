@@ -1,4 +1,11 @@
 // Auto-generated stub — replace with real implementation
+// CCH: CONTEXT_COLLAPSE is a deliberate half-implemented stub. Message-level
+// collapse storage (see persists/entries that official drains and re-commits)
+// was never implemented, so enabling the feature would suppress auto compact
+// and strand the context window. see docs/reverse-284 + scripts/defines.ts.
+// Safety: while FEATURE_CONTEXT_COLLAPSE is on, every public entry point throws
+// instead of silently no-op'ing, so the flag can never be "accidentally on".
+import { feature } from 'bun:bundle'
 import type { Message } from '../../types/message.js'
 import type { ToolUseContext } from '../../Tool.js'
 import type { QuerySource } from '../../constants/querySource.js'
@@ -49,11 +56,31 @@ export function isContextCollapseEnabled(): boolean {
 export const subscribe: (callback: () => void) => () => void =
   (_callback: () => void) => () => {}
 
+/**
+ * Guard for un-implemented CONTEXT_COLLAPSE entry points. Storage is not
+ * implemented in CCH (defines.ts keeps the feature disabled for exactly this
+ * reason), so a force-enabled gate must fail loudly instead of silently
+ * dropping auto compact / collapsing behavior.
+ */
+export function assertContextCollapseNotEnabled(): void {
+  if (feature('CONTEXT_COLLAPSE')) {
+    throw new Error(
+      'CONTEXT_COLLAPSE is not implemented in this build: message collapse storage ' +
+        '(persist/drain/commit) is absent, so enabling the feature would suppress auto ' +
+        'compact and strand the context window. Remove FEATURE_CONTEXT_COLLAPSE=1 ' +
+        '(see scripts/defines.ts) or implement the storage layer first.',
+    )
+  }
+}
+
 export const applyCollapsesIfNeeded: (
   messages: Message[],
   toolUseContext: ToolUseContext,
   querySource: QuerySource,
-) => Promise<CollapseResult> = async (messages: Message[]) => ({ messages })
+) => Promise<CollapseResult> = async (messages: Message[]) => {
+  assertContextCollapseNotEnabled()
+  return { messages }
+}
 
 export const isWithheldPromptTooLong: (
   message: Message,

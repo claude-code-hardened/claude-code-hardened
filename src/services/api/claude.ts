@@ -1716,7 +1716,6 @@ async function* queryModel(
     const contextManagement = getAPIContextManagement({
       hasThinking,
       isRedactThinkingActive: betasParams.includes(REDACT_THINKING_BETA_HEADER),
-      clearAllThinking: false,
     })
 
     const enablePromptCaching =

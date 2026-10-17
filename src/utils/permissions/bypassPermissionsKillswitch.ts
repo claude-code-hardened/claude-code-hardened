@@ -9,34 +9,100 @@ import {
   useSetAppState,
 } from '../../state/AppState.js'
 import type { ToolPermissionContext } from '../../Tool.js'
-import { verifyAutoModeGateAccess } from './permissionSetup.js'
+import {
+  initialPermissionModeFromCLI,
+  verifyAutoModeGateAccess,
+} from './permissionSetup.js'
 
 /**
- * No-op — bypass permissions is always available.
+ * Periodic bypass-permissions gate. Reuses the startup-mode adjudication
+ * (`initialPermissionModeFromCLI` — the single source that folds the statsig
+ * org-policy gate + `permissions.disableBypassPermissionsMode` settings, so
+ * the official notification copy "Bypass permissions mode was disabled by
+ * your organization policy" / "...by settings" stays defined in one place).
+ * While a session sits in bypassPermissions and the policy verdict is no
+ * longer bypass, downgrades to the adjudicated mode (settings defaultMode,
+ * else 'default') and surfaces the notification on the existing queue face.
  */
 export async function checkAndDisableBypassPermissionsIfNeeded(
-  _toolPermissionContext: ToolPermissionContext,
-  _setAppState: (
+  toolPermissionContext: ToolPermissionContext,
+  setAppState: (
     f: (
       prev: import('../../state/AppState.js').AppState,
     ) => import('../../state/AppState.js').AppState,
   ) => void,
 ): Promise<void> {
-  // Bypass permissions is always available — no gate check needed
+  if (getIsRemoteMode()) return
+  if (toolPermissionContext.mode !== 'bypassPermissions') return
+
+  // Periodic read: fresh settings + gate verdict on every invocation. The
+  // bypass candidate is forced (`dangerouslySkipPermissions: true`) so that
+  // exactly the startup disabled-by-policy/settings branch is adjudicated.
+  const { mode, notification } = initialPermissionModeFromCLI({
+    permissionModeCli: undefined,
+    dangerouslySkipPermissions: true,
+  })
+  if (mode === 'bypassPermissions') {
+    // Policy still allows bypass right now — nothing to downgrade.
+    return
+  }
+
+  setAppState(prev => {
+    // Re-check under the store: the session may have left bypass meanwhile.
+    if (prev.toolPermissionContext.mode !== 'bypassPermissions') return prev
+    const downgraded = {
+      ...prev,
+      toolPermissionContext: { ...prev.toolPermissionContext, mode },
+    }
+    if (!notification) return downgraded
+    return {
+      ...downgraded,
+      notifications: {
+        ...downgraded.notifications,
+        queue: [
+          ...downgraded.notifications.queue,
+          {
+            key: 'bypass-permissions-gate-notification',
+            text: notification,
+            color: 'warning' as const,
+            priority: 'high' as const,
+          },
+        ],
+      },
+    }
+  })
 }
 
 /**
- * Reset stub — kept for interface compatibility.
+ * Kept for interface compatibility — the periodic read above is stateless
+ * (fresh verdict on every call), so there is nothing to reset.
  */
 export function resetBypassPermissionsCheck(): void {
   // No-op
 }
 
 /**
- * No-op hook — bypass permissions is always available.
+ * Kick the periodic gate check on mount and whenever the permission mode
+ * changes (mirrors the auto-mode gate hook below).
  */
 export function useKickOffCheckAndDisableBypassPermissionsIfNeeded(): void {
-  // No-op
+  const contextMode = useAppState(s => s.toolPermissionContext.mode)
+  const setAppState = useSetAppState()
+  const store = useAppStateStore()
+  useEffect(() => {
+    if (getIsRemoteMode()) return
+    void checkAndDisableBypassPermissionsIfNeeded(
+      store.getState().toolPermissionContext,
+      setAppState,
+    ).catch(error => {
+      logError(
+        new Error('Bypass permissions gate check failed', {
+          cause: toError(error),
+        }),
+      )
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextMode])
 }
 
 let autoModeCheckRan = false

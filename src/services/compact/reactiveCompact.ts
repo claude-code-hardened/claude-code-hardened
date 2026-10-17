@@ -1,4 +1,5 @@
 import { isEnvTruthy } from '../../utils/envUtils.js'
+import { getSettings_DEPRECATED } from '../../utils/settings/settings.js'
 import {
   isMediaSizeErrorMessage,
   isPromptTooLongMessage,
@@ -9,7 +10,23 @@ import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
 import type { CacheSafeParams } from '../../utils/forkedAgent.js'
 
-export const isReactiveOnlyMode: () => boolean = () => false
+export const isReactiveOnlyMode: () => boolean = () => {
+  // CCH wiring for the official reactive-only compaction path. Official
+  // 2.1.284 ships telemetry counters reactive_compact_attempt/triggered/
+  // failed/succeeded + a _remote variant (docs/reverse-284 decompiled/
+  // 0001-chunk-* telemetry-events), but the decompiled source carries no
+  // readable settings/gate key for the decision — wired up as settings/env
+  // with default OFF, so the traditional /compact behavior (consumer:
+  // src/commands/compact/compact.ts isReactiveOnlyMode gate) is unchanged.
+  // Either of these enables:
+  //   settings.json: { "compact": { "reactiveOnlyMode": true } }
+  //   env:           ENABLE_REACTIVE_COMPACT_ONLY=1
+  if (isEnvTruthy(process.env.ENABLE_REACTIVE_COMPACT_ONLY)) return true
+  const settings = getSettings_DEPRECATED() as unknown as
+    | { compact?: { reactiveOnlyMode?: boolean } }
+    | null
+  return settings?.compact?.reactiveOnlyMode === true
+}
 
 export const reactiveCompactOnPromptTooLong: (
   messages: Message[],

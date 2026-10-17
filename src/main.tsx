@@ -4802,10 +4802,14 @@ async function run(): Promise<CommanderCommand> {
       .command('server')
       .description('Start a Claude Code session server')
       .option('--port <number>', 'HTTP port', '0')
-      .option('--host <string>', 'Bind address', '0.0.0.0')
+      .option('--host <string>', 'Bind address', '127.0.0.1')
       .option('--auth-token <token>', 'Bearer token for auth')
       .option('--unix <path>', 'Listen on a unix domain socket')
       .option('--workspace <dir>', 'Default working directory for sessions that do not specify cwd')
+      .option(
+        '--allow-dangerous-sessions',
+        'Permit clients to request --dangerously-skip-permissions for spawned sessions (default: requested and ignored)',
+      )
       .option('--idle-timeout <ms>', 'Idle timeout for detached sessions in ms (0 = never expire)', '600000')
       .option('--max-sessions <n>', 'Maximum concurrent sessions (0 = unlimited)', '32')
       .action(
@@ -4815,6 +4819,7 @@ async function run(): Promise<CommanderCommand> {
           authToken?: string;
           unix?: string;
           workspace?: string;
+          allowDangerousSessions?: boolean;
           idleTimeout: string;
           maxSessions: string;
         }) => {
@@ -4853,20 +4858,45 @@ async function run(): Promise<CommanderCommand> {
           const sessionManager = new SessionManager(backend, {
             idleTimeoutMs: config.idleTimeoutMs,
             maxSessions: config.maxSessions,
+            workspace: config.workspace,
+            allowDangerousSkipPermissions: opts.allowDangerousSessions === true,
           });
           const logger = createServerLogger();
 
-          const server = startServer(config, sessionManager, logger);
+          // Await the real listen: banner + lock only fire from a bound
+          // socket (port 0 resolves to the kernel-assigned port), and a
+          // bind failure propagates as a thrown, styled error exit.
+          const server = await startServer(config, sessionManager, logger);
           const actualPort = server.port ?? config.port;
           printBanner(config, authToken, actualPort);
 
-          await writeServerLock({
-            pid: process.pid,
-            port: actualPort,
-            host: config.host,
-            httpUrl: config.unix ? `unix:${config.unix}` : `http://${config.host}:${actualPort}`,
-            startedAt: Date.now(),
-          });
+          try {
+            await writeServerLock({
+              pid: process.pid,
+              port: actualPort,
+              host: config.host,
+              httpUrl: config.unix
+                ? `unix:${config.unix}`
+                : `http://${config.host === '0.0.0.0' || config.host === '::' ? '127.0.0.1' : config.host}:${actualPort}`,
+              startedAt: Date.now(),
+            });
+          } catch (err) {
+            // O_EXCL lock reservation lost — a concurrent start claimed the
+            // config-dir first. We bound an orphan port; tear it down and
+            // exit with the same "already running" contract.
+            server.stop(true);
+            await sessionManager.destroyAll();
+            const existingAfterRace = await probeRunningServer();
+            process.stderr.write(
+              existingAfterRace
+                ? t('A claude server is already running (pid {{pid}}) at {{url}}', {
+                    pid: existingAfterRace.pid,
+                    url: existingAfterRace.httpUrl,
+                  }) + '\n'
+                : `server lock write failed: ${errorMessage(err)}\n`,
+            );
+            process.exit(1);
+          }
 
           let shuttingDown = false;
           const shutdown = async () => {
@@ -4967,7 +4997,7 @@ async function run(): Promise<CommanderCommand> {
 
           const prompt = typeof opts.print === 'string' ? opts.print : '';
           const interactive = opts.print === true;
-          await runConnectHeadless(connectConfig, prompt, opts.outputFormat, interactive);
+          await runConnectHeadless(connectConfig, prompt, opts.outputFormat ?? 'text', interactive);
         },
       );
   }
