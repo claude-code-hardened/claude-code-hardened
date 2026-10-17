@@ -14,6 +14,9 @@ mock.module('src/services/tokenEstimation.ts', () => ({
   countTokensWithAPI: async () => 0,
   countMessagesTokensWithAPI: async () => 0,
   countTokensViaHaikuFallback: async () => 0,
+  countTokensPrecise: (text: string) => Math.ceil(text.length / 4),
+  countTokensPreciseForMessages: (msgs: { length: number }[]) =>
+    msgs.length * 100,
 }))
 
 // Mock slowOperations to avoid bun:bundle import

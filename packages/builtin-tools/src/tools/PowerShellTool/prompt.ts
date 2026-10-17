@@ -120,7 +120,7 @@ Second line with $literal dollar signs.
 
 Usage notes:
   - The command argument is required.
-  - You can specify an optional timeout in milliseconds (up to ${getMaxTimeoutMs()}ms / ${getMaxTimeoutMs() / 60000} minutes). If not specified, commands will timeout after ${getDefaultTimeoutMs()}ms (${getDefaultTimeoutMs() / 60000} minutes).
+  - You can specify an optional timeout in milliseconds (up to ${getMaxTimeoutMs()}ms / ${getMaxTimeoutMs() / 60000} minutes). If not specified, commands will timeout after ${getDefaultTimeoutMs()}ms (${getDefaultTimeoutMs() / 60000} minutes). A timeout above the maximum is silently capped at the maximum (not rejected); 0 or a negative value falls back to the default.
   - It is very helpful if you write a clear, concise description of what this command does.
   - If the output exceeds ${getMaxOutputLength()} characters, output will be truncated before being returned to you.
 ${backgroundNote ? backgroundNote + '\n' : ''}\
