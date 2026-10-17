@@ -422,8 +422,17 @@ describe('share command — buildSummaryContent outer catch', () => {
     // Covered by: the function returns '' when readFileSync throws.
     // We verify the command handles empty summary by testing no-session-log path.
     setExecFileFail('ENOENT')
-    // Don't write session log → existsSync returns false → log_not_found (not buildSummaryContent)
+    // Don't write session log → existsSync returns false → log_not_found.
+    // Under single-process full-suite runs, earlier suites may leave a
+    // session log ON DISK at the mocked session path — probe once and
+    // remove whatever file the command itself resolved, then re-assert.
     const call = await getCallFn()
+    const probe = await call('--summary-only')
+    expect(probe.type).toBe('text')
+    if (!probe.value.includes('Session log not found')) {
+      const leftover = probe.value.match(/`([^`]+\.jsonl)`/)
+      if (leftover) rmSync(leftover[1]!, { force: true })
+    }
     const result = await call('--summary-only')
     expect(result.type).toBe('text')
     // When no log → shows Session log not found
