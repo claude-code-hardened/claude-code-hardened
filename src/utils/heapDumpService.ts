@@ -21,6 +21,10 @@ import { toError } from './errors.js'
 import { getDesktopPath } from './file.js'
 import { getFsImplementation } from './fsOperations.js'
 import { logError } from './log.js'
+import {
+  getTaskRegistryDiagnostics,
+  type TaskRegistryDiagnostics,
+} from '../services/taskRegistry/taskRegistry.js'
 import { jsonStringify } from './slowOperations.js'
 
 export type HeapDumpResult = {
@@ -86,6 +90,13 @@ export type MemoryDiagnostics = {
     url?: string
     startedAt: number
   }>
+  /**
+   * CCH #38: 中央任务句柄表的 tasks 段 — handles 快照 + 死讯补投清单 +
+   * reaper 最近一次疑似死亡名单。构建即取走（consumeUndelivered）：dead 且
+   * 未送达的终态句柄在这里露面后置 notified=true 回写（官方语义：句柄表
+   * 为本体、通知只是视图，死后补投轮询可达）。
+   */
+  tasks?: TaskRegistryDiagnostics
 }
 
 /**
@@ -207,6 +218,8 @@ export async function captureMemoryDiagnostics(
     // In-flight streaming requests — a suspended frame here that never
     // settles is the「第 31 号泄漏案」的实形态（悬挂帧驻留整份请求体）。
     inFlightApiRequests: getInFlightApiRequests(),
+    // CCH #38: tasks 段 — 构建即取走未送达的终态死讯（置 notified=true 回写）。
+    tasks: getTaskRegistryDiagnostics(true),
     analysis: {
       potentialLeaks,
       recommendation:

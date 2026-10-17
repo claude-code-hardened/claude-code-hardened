@@ -9,6 +9,7 @@ import {
   TOOL_USE_ID_TAG,
 } from '../../constants/xml.js';
 import { abortSpeculation } from '../../services/PromptSuggestion/speculation.js';
+import { recordTaskHandle } from '../../services/taskRegistry/taskRegistry.js';
 import type { AppState } from '../../state/AppState.js';
 import type { LocalShellSpawnInput, SetAppState, Task, TaskContext, TaskHandle } from '../../Task.js';
 import { createTaskStateBase } from '../../Task.js';
@@ -147,6 +148,18 @@ function enqueueShellNotification(
     return { ...task, notified: true };
   });
 
+  // CCH #38: 死讯补投 — 终态写入点回写中央句柄表（官方：句柄表为本体，
+  // 通知只是视图）。通知已抑制（TaskStop/kill 静默路）时压 notified。
+  recordTaskHandle({
+    id: taskId,
+    type: 'local_bash',
+    status,
+    description,
+    outputFile: getTaskOutputPath(taskId),
+    exitKind: status,
+    ...(shouldEnqueue ? {} : { notified: true }),
+  });
+
   if (!shouldEnqueue) {
     return;
   }
@@ -243,6 +256,16 @@ export async function spawnShellTask(
 
   registerTask(taskState, setAppState);
 
+  // CCH #38: spawn 建中央句柄（reaper 的 running 本体；官方"句柄表为本体"）。
+  recordTaskHandle({
+    id: taskId,
+    type: 'local_bash',
+    status: 'running',
+    description,
+    outputFile: getTaskOutputPath(taskId),
+    startedAt: taskState.startTime,
+  });
+
   // Data flows through TaskOutput automatically — no stream listeners needed.
   // Just transition to backgrounded state so the process keeps running.
   shellCommand.background(taskId);
@@ -324,6 +347,16 @@ export function registerForeground(
   };
 
   registerTask(taskState, setAppState);
+
+  // CCH #38: spawn 建中央句柄（前台 shell 后台化后同样可被 reaper 观察到）。
+  recordTaskHandle({
+    id: taskId,
+    type: 'local_bash',
+    status: 'running',
+    description,
+    outputFile: getTaskOutputPath(taskId),
+    startedAt: taskState.startTime,
+  });
   return taskId;
 }
 

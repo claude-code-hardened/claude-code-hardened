@@ -12,6 +12,11 @@ import {
   WORKTREE_TAG,
 } from '../../constants/xml.js';
 import { abortSpeculation } from '../../services/PromptSuggestion/speculation.js';
+import {
+  isTerminalHandleStatus,
+  recordTaskHandle,
+  recordTaskHeartbeat,
+} from '../../services/taskRegistry/taskRegistry.js';
 import type { AppState } from '../../state/AppState.js';
 import type { SetAppState, Task, TaskStateBase } from '../../Task.js';
 import { createTaskStateBase } from '../../Task.js';
@@ -281,6 +286,18 @@ export function enqueueAgentNotification({
     };
   });
 
+  // CCH #38: 死讯补投 — 终态写入点回写中央句柄表（官方：句柄表为本体，
+  // 通知只是视图）。通知被抑制（notified 已置）时压 notified，不留假死讯。
+  recordTaskHandle({
+    id: taskId,
+    type: 'local_agent',
+    status,
+    description,
+    outputFile: getTaskOutputPath(taskId),
+    exitKind: status,
+    ...(shouldEnqueue ? {} : { notified: true }),
+  });
+
   if (!shouldEnqueue) {
     return;
   }
@@ -354,7 +371,14 @@ export function killAsyncAgent(taskId: string, setAppState: SetAppState): void {
       selectedAgent: undefined,
     };
   });
+  // CCH #38: 终态写入点 → 中央句柄表（死讯待补投，除非通知面另行压位）。
   if (killed) {
+    recordTaskHandle({
+      id: taskId,
+      type: 'local_agent',
+      status: 'killed',
+      exitKind: 'killed',
+    });
     void evictTaskOutput(taskId);
   }
 }
@@ -377,7 +401,9 @@ export function killAllRunningAgentTasks(tasks: Record<string, TaskState>, setAp
  * when a single aggregate message is sent instead.
  */
 export function markAgentsNotified(taskId: string, setAppState: SetAppState): void {
+  let finalStatus: LocalAgentTaskState['status'] | undefined;
   updateTaskState<LocalAgentTaskState>(taskId, setAppState, task => {
+    finalStatus = task.status;
     if (task.notified) {
       return task;
     }
@@ -386,6 +412,16 @@ export function markAgentsNotified(taskId: string, setAppState: SetAppState): vo
       notified: true,
     };
   });
+  // CCH #38（官方 quietlyParked）：通知被静默抑制的终态 → parked 挂表，
+  // 不产生待补投死讯（死讯已随聚合消息本体送达）。
+  if (finalStatus && isTerminalHandleStatus(finalStatus)) {
+    recordTaskHandle({
+      id: taskId,
+      type: 'local_agent',
+      status: finalStatus,
+      quietlyParked: true,
+    });
+  }
 }
 
 /**
@@ -394,6 +430,8 @@ export function markAgentsNotified(taskId: string, setAppState: SetAppState): vo
  * results are not clobbered by progress updates from assistant messages.
  */
 export function updateAgentProgress(taskId: string, progress: AgentProgress, setAppState: SetAppState): void {
+  // CCH #38: 进度增量 → 中央句柄心跳（reaper 的"超时无增量"基准）。
+  recordTaskHeartbeat(taskId);
   updateTaskState<LocalAgentTaskState>(taskId, setAppState, task => {
     if (task.status !== 'running') {
       return task;
@@ -482,6 +520,8 @@ export function completeAgentTask(result: AgentToolResult, setAppState: SetAppSt
       selectedAgent: undefined,
     };
   });
+  // CCH #38: 终态写入点 → 中央句柄表（死讯待补投）。
+  recordTaskHandle({ id: taskId, type: 'local_agent', status: 'completed', exitKind: 'completed' });
   void evictTaskOutput(taskId);
   // Note: Notification is sent by AgentTool via enqueueAgentNotification
 }
@@ -508,6 +548,8 @@ export function failAgentTask(taskId: string, error: string, setAppState: SetApp
       selectedAgent: undefined,
     };
   });
+  // CCH #38: 终态写入点 → 中央句柄表（死讯待补投）。description 由通知面补齐。
+  recordTaskHandle({ id: taskId, type: 'local_agent', status: 'failed', exitKind: 'failed' });
   void evictTaskOutput(taskId);
   // Note: Notification is sent by AgentTool via enqueueAgentNotification
 }
@@ -571,6 +613,16 @@ export function registerAsyncAgent({
 
   // Register task in AppState
   registerTask(taskState, setAppState);
+
+  // CCH #38: spawn 建中央句柄（reaper/死讯面的 running 本体；官方"句柄表为本体"）。
+  recordTaskHandle({
+    id: agentId,
+    type: 'local_agent',
+    status: 'running',
+    description,
+    outputFile: getTaskOutputPath(agentId),
+    startedAt: taskState.startTime,
+  });
 
   return taskState;
 }
@@ -640,6 +692,16 @@ export function registerAgentForeground({
   backgroundSignalResolvers.set(agentId, resolveBackgroundSignal!);
 
   registerTask(taskState, setAppState);
+
+  // CCH #38: spawn 建中央句柄（前台 Agent 后台化后同样可被 reaper/补投面观察）。
+  recordTaskHandle({
+    id: agentId,
+    type: 'local_agent',
+    status: 'running',
+    description,
+    outputFile: getTaskOutputPath(agentId),
+    startedAt: taskState.startTime,
+  });
 
   // Auto-background after timeout if configured
   let cancelAutoBackground: (() => void) | undefined;

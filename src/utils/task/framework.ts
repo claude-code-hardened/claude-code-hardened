@@ -14,6 +14,7 @@ import {
   type TaskType,
 } from '../../Task.js'
 import type { TaskState } from '../../tasks/types.js'
+import { recordTaskHeartbeats } from '../../services/taskRegistry/taskRegistry.js'
 import { enqueuePendingNotification } from '../messageQueueManager.js'
 import { enqueueSdkEvent } from '../sdkEventQueue.js'
 import { getTaskOutputDelta, getTaskOutputPath } from './diskOutput.js'
@@ -201,6 +202,9 @@ export async function generateTaskAttachments(state: AppState): Promise<{
     // attachments here would race with those per-type callbacks, causing
     // dual delivery (one inline attachment + one separate API turn).
   }
+
+  // CCH #38: 输出增量 → 中央句柄心跳（reaper"超时无增量"的增量来源）。
+  recordTaskHeartbeats(Object.keys(updatedTaskOffsets))
 
   return { attachments, updatedTaskOffsets, evictedTaskIds }
 }
