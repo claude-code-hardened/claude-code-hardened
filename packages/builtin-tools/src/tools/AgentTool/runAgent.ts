@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import uniqBy from 'lodash-es/uniqBy.js'
 import { logForDebugging } from 'src/utils/debug.js'
 import { getProjectRoot, getSessionId } from 'src/bootstrap/state.js'
+import { recordTaskHandle } from 'src/services/taskRegistry/taskRegistry.js'
 import { getCommand, getSkillToolCommands, hasCommand } from 'src/commands.js'
 import {
   DEFAULT_AGENT_PROMPT,
@@ -289,8 +290,35 @@ export async function* runAgent(
   const releaseAgentSlot = acquireAgentSlot({
     agentKey: input.agentDefinition?.agentType,
   })
+  // Task-handle registry (reverse-284 0002 module-005 semantic — one
+  // central handle per spawned agent): previously only LocalShellTask /
+  // LocalAgentTask recorded handles, so synchronous Task-tool agents were
+  // INVISIBLE to the registry (empty tasks/ dir despite a running fleet).
+  // The wrapper is the choke point all three AgentTool spawn paths funnel
+  // through, so spawn/terminal bookkeeping lives here next to slot release.
+  const handleId = input.toolUseContext?.agentId ?? `agent-${randomUUID()}`
+  recordTaskHandle({
+    id: handleId,
+    type: 'local_agent',
+    status: 'running',
+    description: input.agentDefinition?.agentType ?? 'task',
+  })
   try {
     yield* runAgentCapped(...args)
+    recordTaskHandle({
+      id: handleId,
+      type: 'local_agent',
+      status: 'completed',
+      exitKind: 'completed',
+    })
+  } catch (error) {
+    recordTaskHandle({
+      id: handleId,
+      type: 'local_agent',
+      status: 'failed',
+      exitKind: 'failed',
+    })
+    throw error
   } finally {
     releaseAgentSlot()
   }
