@@ -210,13 +210,16 @@ function retryAfterMs(error: unknown): number | undefined {
 }
 
 function computeBackoffDelayMs(error: unknown, attempt: number): number {
+  // Official XD formula (reverse-284 module-006): base = min(500·2^(n-1),
+  // nIe=20000), then ADDITIVE jitter上调 0~+25% and round; retry-after
+  // merges as max(header, base) rather than overriding the curve.
+  const baseMs = Math.min(0.5 * 2 ** (attempt - 1), 20) * 1000
+  const bumped = Math.round(baseMs * (1 + Math.random() * 0.25))
   const fromHeader = retryAfterMs(error)
-  if (fromHeader !== undefined) return Math.min(fromHeader, 30_000)
-  // Official backoff cap is 20s (reverse-284 module-006: nIe=20000) — the
-  // old 8s cap made long outages burn the whole budget in half a minute.
-  const base = Math.min(0.5 * 2 ** (attempt - 1), 20)
-  const jitter = 1 - Math.random() * 0.25
-  return base * jitter * 1000
+  if (fromHeader !== undefined) {
+    return Math.max(fromHeader, bumped)
+  }
+  return bumped
 }
 
 // unref'd: a long retry-after cap (30s) must not pin the event loop alive

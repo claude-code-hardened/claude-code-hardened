@@ -1965,10 +1965,12 @@ async function* queryModel(
     // fires when the *next* chunk arrives), this uses setTimeout to actively
     // kill hung streams. Without this, a silently dropped connection can hang
     // the session indefinitely since the SDK's request timeout only covers the
-    // initial fetch(), not the streaming body.
-    const streamWatchdogEnabled = isEnvTruthy(
-      process.env.CLAUDE_ENABLE_STREAM_WATCHDOG,
-    )
+    // initial fetch(), not the streaming body. Official default is ON
+    // (0032 core: CLAUDE_ENABLE_STREAM_WATCHDOG ?? true) — default-off left
+    // first-party streams unprotected unless opted in.
+    const streamWatchdogRaw = process.env.CLAUDE_ENABLE_STREAM_WATCHDOG
+    const streamWatchdogEnabled =
+      streamWatchdogRaw === undefined ? true : isEnvTruthy(streamWatchdogRaw)
     const STREAM_IDLE_TIMEOUT_MS =
       parseInt(process.env.CLAUDE_STREAM_IDLE_TIMEOUT_MS || '', 10) || 90_000
     const STREAM_IDLE_WARNING_MS = STREAM_IDLE_TIMEOUT_MS / 2

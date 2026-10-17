@@ -199,7 +199,7 @@ describe('withConnectionRetry', () => {
     expect(attempts).toBe(1)
   })
 
-  test('retry-after-ms header overrides default backoff', async () => {
+  test('retry-after-ms header merges as max(header, base) per official XD', async () => {
     const sleeps: number[] = []
     let attempts = 0
     await withConnectionRetry(
@@ -215,7 +215,29 @@ describe('withConnectionRetry', () => {
       },
       { sleep: async ms => void sleeps.push(ms) },
     )
-    expect(sleeps).toEqual([250])
+    // official XD: max(retry-after, round(base·(1+rand·0.25))) — base at
+    // attempt 1 is 500ms, so a smaller 250ms header cannot win the max.
+    expect(sleeps.length).toBe(1)
+    expect(sleeps[0]!).toBeGreaterThanOrEqual(500)
+    expect(sleeps[0]!).toBeLessThanOrEqual(630)
+
+    // a larger header (5s) does win the max
+    const big: number[] = []
+    let tries = 0
+    await withConnectionRetry(
+      async () => {
+        tries++
+        if (tries === 1) {
+          throw Object.assign(new Error('rate limited'), {
+            status: 429,
+            headers: { 'retry-after-ms': '5000' },
+          })
+        }
+        return 'ok'
+      },
+      { sleep: async ms => void big.push(ms) },
+    )
+    expect(big).toEqual([5000])
   })
 
   test('default backoff honors the official curve (bounded, jittered)', async () => {
@@ -231,13 +253,13 @@ describe('withConnectionRetry', () => {
       },
       { maxRetries: 6, sleep: async ms => void sleeps.push(ms) },
     )
-    // attempt N delay = min(0.5 * 2^(N-1), 20s) * jitter(0.75–1) — the
-    // official backoff cap is 20s (reverse-284 module-006 nIe=20000)
+    // attempt N delay = round(min(0.5 * 2^(N-1), 20s) * (1 + rand*0.25)) —
+    // official XD formula: additive jitter UP 0~+25%, cap 20s (nIe=20000)
     const base = [500, 1000, 2000, 4000, 8000, 16000]
     expect(sleeps.length).toBe(6)
     sleeps.forEach((ms, i) => {
-      expect(ms).toBeGreaterThanOrEqual(base[i]! * 0.74)
-      expect(ms).toBeLessThanOrEqual(base[i]!)
+      expect(ms).toBeGreaterThanOrEqual(base[i]!)
+      expect(ms).toBeLessThanOrEqual(Math.round(base[i]! * 1.26))
     })
   })
 })
