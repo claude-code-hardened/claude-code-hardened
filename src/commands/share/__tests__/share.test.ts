@@ -20,7 +20,7 @@ import {
 import { promisify } from 'node:util'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 // Default: gh --version succeeds, gist create fails (upload error is acceptable
 // for tests that only need to reach the content-preparation stage).
@@ -148,17 +148,12 @@ async function getCallFn(): Promise<CallFn> {
 }
 
 async function writeSessionLog(entries?: string[]): Promise<void> {
-  // Write the session log at the path share/index.ts will compute at runtime.
-  // We use the real state values (no mock) to match the actual path.
-  const { sanitizePath } = await import('../../../utils/path.js')
-  const { getSessionId, getOriginalCwd } = await import(
-    '../../../bootstrap/state.js'
-  )
-  const sessionId = getSessionId()
-  const cwd = getOriginalCwd()
-  const encoded = sanitizePath(cwd)
-  const dir = join(claudeDir, 'projects', encoded)
-  mkdirSync(dir, { recursive: true })
+  // Write to the EXACT path share/index.ts will read via the same
+  // getTranscriptPath() source — a parallel path re-derivation diverges
+  // under CI's single-process full-suite run order.
+  const { getTranscriptPath } = await import('../../../utils/sessionStorage.js')
+  const logFile = getTranscriptPath()
+  mkdirSync(dirname(logFile), { recursive: true })
   const content = entries ?? [
     JSON.stringify({ role: 'user', content: 'hello world' }),
     JSON.stringify({
@@ -166,7 +161,7 @@ async function writeSessionLog(entries?: string[]): Promise<void> {
       content: [{ type: 'text', text: 'hi there' }],
     }),
   ]
-  writeFileSync(join(dir, `${sessionId}.jsonl`), content.join('\n') + '\n')
+  writeFileSync(logFile, content.join('\n') + '\n')
 }
 
 // Activate child_process stubs only for this suite.
@@ -281,10 +276,21 @@ describe('share command — log exists', () => {
   })
 
   test('log exists + --summary-only with only system entries → no conversation content', async () => {
-    await writeSessionLog([
-      JSON.stringify({ type: 'system', content: 'system message' }),
-    ])
+    // Two-phase robust write: under single-process full-suite runs, other
+    // suites' partial mocks (bootstrap/state, envUtils) may fork the path
+    // derivation helpers — so we first PROBE for the exact expected path
+    // the command itself computed, then write there and re-run. Immune to
+    // any mock/env divergence by construction.
     const call = await getCallFn()
+    const probe = await call('--summary-only')
+    expect(probe.type).toBe('text')
+    const expectedMatch = probe.value.match(/`([^`]+\.jsonl)`/)
+    expect(expectedMatch).not.toBeNull()
+    mkdirSync(dirname(expectedMatch![1]!), { recursive: true })
+    writeFileSync(
+      expectedMatch![1]!,
+      `${JSON.stringify({ type: 'system', content: 'system message' })}\n`,
+    )
     const result = await call('--summary-only')
     expect(result.type).toBe('text')
     expect(result.value).toContain('No conversation content')

@@ -22,7 +22,7 @@ import {
 import { promisify } from 'node:util'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 // ── Mock control state ──
 // We use a single shared callback variable that each test can replace.
@@ -149,6 +149,37 @@ const identityT = (key: string, params?: Record<string, unknown>): string =>
 mock.module('src/i18n/index.js', () => ({ t: identityT }))
 mock.module('src/i18n/index.ts', () => ({ t: identityT }))
 
+// Bun's mock.module is process-global (last-write-wins): other suites
+// (teleport/compactWindowUpgrade/LocalAgentTask) partially mock
+// src/utils/sessionStorage.js and ERASE the transcript-path face share
+// reads. Re-register a COMPLETE face built from the unmocked portable
+// siblings, so share's read path is intact regardless of run order.
+const sessionStorageShareFace = async () => {
+  const { getClaudeConfigHomeDir } = await import('src/utils/envUtils.js')
+  const { sanitizePath } = await import('src/utils/sessionStoragePortable.js')
+  const { getSessionId, getOriginalCwd } = await import(
+    'src/bootstrap/state.js'
+  )
+  const joinP = (await import('node:path')).join
+  const projectsDir = () => joinP(getClaudeConfigHomeDir(), 'projects')
+  const projectDirOf = (cwd: string) => joinP(projectsDir(), sanitizePath(cwd))
+  return {
+    getProjectsDir: projectsDir,
+    getProjectDir: projectDirOf,
+    getTranscriptPath: () =>
+      joinP(projectDirOf(getOriginalCwd()), `${getSessionId()}.jsonl`),
+    getTranscriptPathForSession: (sessionId: string) =>
+      joinP(projectDirOf(getOriginalCwd()), `${sessionId}.jsonl`),
+    sanitizePath,
+    getSessionProjectDir: () => null,
+  }
+}
+{
+  const face = await sessionStorageShareFace()
+  mock.module('src/utils/sessionStorage.js', () => face)
+  mock.module('src/utils/sessionStorage.ts', () => face)
+}
+
 // ── State ──
 let tmpDir: string
 let claudeDir: string
@@ -181,15 +212,13 @@ async function getCallFn(): Promise<CallFn> {
 }
 
 async function writeSessionLog(entries?: string[]): Promise<void> {
-  const { sanitizePath } = await import('../../../utils/path.js')
-  const { getSessionId, getOriginalCwd } = await import(
-    '../../../bootstrap/state.js'
-  )
-  const sessionId = getSessionId()
-  const cwd = getOriginalCwd()
-  const encoded = sanitizePath(cwd)
-  const dir = join(claudeDir, 'projects', encoded)
-  mkdirSync(dir, { recursive: true })
+  // Write to the EXACT path share/index.ts will read: derive it from the
+  // same getTranscriptPath() source instead of re-deriving the layout
+  // (a parallel re-derivation diverges under CI's single-process run
+  // order — memoized/aliased path helpers resolve differently there).
+  const { getTranscriptPath } = await import('../../../utils/sessionStorage.js')
+  const logFile = getTranscriptPath()
+  mkdirSync(dirname(logFile), { recursive: true })
   const content = entries ?? [
     JSON.stringify({ role: 'user', content: 'hello world' }),
     JSON.stringify({
@@ -197,7 +226,7 @@ async function writeSessionLog(entries?: string[]): Promise<void> {
       content: [{ type: 'text', text: 'hi there' }],
     }),
   ]
-  writeFileSync(join(dir, `${sessionId}.jsonl`), content.join('\n') + '\n')
+  writeFileSync(logFile, content.join('\n') + '\n')
 }
 
 // Helper: make execFile always succeed with given stdout
