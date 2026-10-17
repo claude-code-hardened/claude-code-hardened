@@ -1,4 +1,6 @@
-import { mkdir, writeFile } from 'fs/promises'
+import { mkdir, rename, writeFile } from 'fs/promises'
+import { existsSync, readdirSync, readFileSync } from 'fs'
+import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
 
@@ -158,11 +160,13 @@ function writeSnapshot(record: TaskHandleRecord): void {
   const chain = (pendingWrites.get(record.id) ?? Promise.resolve())
     .then(async () => {
       await mkdir(getSnapshotsDir(), { recursive: true })
-      await writeFile(
-        getTaskSnapshotPath(record.id),
-        JSON.stringify(record, null, 2),
-        { mode: 0o600 },
-      )
+      // 原子写（tmp+rename）：多进程/撕裂防护——链串行化只防本进程乱序。
+      const finalPath = getTaskSnapshotPath(record.id)
+      const tmpPath = `${finalPath}.tmp-${randomUUID()}`
+      await writeFile(tmpPath, JSON.stringify(record, null, 2), {
+        mode: 0o600,
+      })
+      await rename(tmpPath, finalPath)
     })
     .catch((e: unknown) => {
       // 写失败不抛：快照是诊断/补投的增强面，主流程（内存表）必须继续。
@@ -205,9 +209,13 @@ export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
       updatedAt: now,
     }
   } else {
-    // 终态后冻结 status（新迁移只允许同向终态更新 exitKind 等元数据）。
+    // 终态冻结：进终态后拒绝一切 status 迁移（回迁非终态与异种终态互踩
+    // 都拒绝——completed→failed 的迟到写同样是诈尸），仅放行 notified/
+    // parked/updatedAt 等元数据位。
     const status =
-      prevTerminal && !nextTerminal ? existing.status : input.status
+      prevTerminal && existing!.status !== input.status
+        ? existing!.status
+        : input.status
     record = {
       ...existing,
       type: input.type,
@@ -295,11 +303,64 @@ export function getAllTaskHandleRecords(): TaskHandleRecord[] {
 }
 
 /**
+ * 启动恢复（lazy，单次）：进程重启后内存表为空，快照目录里的终态死讯若不
+ * hydrate 就永远无人投递（孤儿文件）；running 快照保持 running（reaper 按
+ * updatedAt 判疑似）。所有读取/消费面前置调用。
+ */
+let hydrated = false
+export function hydrateTaskRegistry(): void {
+  if (hydrated) return
+  hydrated = true
+  let dir: string
+  try {
+    dir = getSnapshotsDir()
+    if (!existsSync(dir)) return
+  } catch {
+    return
+  }
+  let files: string[]
+  try {
+    files = readdirSync(dir).filter((f: string) => f.endsWith('.state.json'))
+  } catch (e: unknown) {
+    console.debug(
+      '[taskRegistry] hydrate scan failed:',
+      e instanceof Error ? e.message : e,
+    )
+    return
+  }
+  for (const file of files) {
+    try {
+      const raw = readFileSync(join(dir, file), 'utf8')
+      const parsed = JSON.parse(raw) as TaskHandleRecord
+      if (
+        typeof parsed?.id !== 'string' ||
+        typeof parsed?.type !== 'string' ||
+        typeof parsed?.status !== 'string'
+      ) {
+        continue
+      }
+      // 内存表缺位才补（同进程先 spawn 的条目以内存为准）。
+      hydrateHandles(parsed)
+    } catch {
+      // 单文件损坏跳过，不阻塞整体恢复
+    }
+  }
+}
+
+/** hydrate 注入：绕过 recordTaskHandle 的覆盖语义，直接补位。 */
+function hydrateHandles(record: TaskHandleRecord): void {
+  if (!handles.has(record.id)) {
+    handles.set(record.id, record)
+  }
+}
+
+/**
  * 死讯补投投递面：快照里 status 终态且 notified=false 的清单，取走即置
- * notified=true 回写。主代理侧轮询（眼下挂在诊断构建面：heapdump
- * diagnostics JSON 的 tasks 段 —— captureMemoryDiagnostics）。
+ * notified=true 回写。消费点点位见 generateTaskAttachments（每轮任务附件
+ * 面，模型可见）与诊断构建面。
  */
 export function consumeUndeliveredTerminalTasks(): UndeliveredTerminalTask[] {
+  hydrateTaskRegistry()
   const undelivered: UndeliveredTerminalTask[] = []
   for (const record of handles.values()) {
     if (!isTerminalHandleStatus(record.status) || record.notified) {
@@ -353,6 +414,8 @@ export function reapSuspiciousTasks(
 export function getTaskRegistryDiagnostics(
   consumeUndelivered = false,
 ): TaskRegistryDiagnostics {
+  // 诊断/消费面前置 hydrate：重启后快照孤儿先回表再视图/消费。
+  hydrateTaskRegistry()
   const handlesView = [...handles.values()].map(record => ({
     id: record.id,
     type: record.type,

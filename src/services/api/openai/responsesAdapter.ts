@@ -460,7 +460,11 @@ const CHATGPT_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
  */
 type CodexAuth = Awaited<ReturnType<typeof getValidChatGPTAuth>>
 
-let cachedCodexClient: { key: string; client: OpenAI } | null = null
+let cachedCodexClient: {
+  key: string
+  client: OpenAI
+  fetchRef: typeof fetch
+} | null = null
 
 function buildCodexClient(
   auth: CodexAuth,
@@ -509,14 +513,21 @@ export async function createChatGPTResponsesStream(params: {
     // agents, connection very slow" shape). Token refresh changes the key
     // → automatic rebuild. fetchOverride (test injection) bypasses cache.
     const cacheKey = `${auth.accessToken}|${auth.accountId ?? ''}`
+    // fetch 身份纳入失效判定：globalThis.fetch 是进程级可替换面（测试注入
+    // /代理运行时切换）——client 构造时捕获了当时 fetch 的引用，缓存命中前
+    // 校验身份，变了就重建（否则旧 fetch 的行为会泄漏给新调用方）。
+    const currentFetch = globalThis.fetch
     let client: OpenAI
     if (params.fetchOverride) {
       client = buildCodexClient(auth, params.fetchOverride)
-    } else if (cachedCodexClient?.key === cacheKey) {
+    } else if (
+      cachedCodexClient?.key === cacheKey &&
+      cachedCodexClient.fetchRef === currentFetch
+    ) {
       client = cachedCodexClient.client
     } else {
       client = buildCodexClient(auth)
-      cachedCodexClient = { key: cacheKey, client }
+      cachedCodexClient = { key: cacheKey, client, fetchRef: currentFetch }
     }
     const created = await client.responses.create(
       params.request as unknown as Parameters<

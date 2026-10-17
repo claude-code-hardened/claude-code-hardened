@@ -567,6 +567,7 @@ export function markTaskNotified(taskId: string, setAppState: SetAppState): void
  */
 export function unregisterForeground(taskId: string, setAppState: SetAppState): void {
   let cleanupFn: (() => void) | undefined;
+  let completedNaturally = false;
 
   setAppState(prev => {
     const task = prev.tasks[taskId];
@@ -577,10 +578,23 @@ export function unregisterForeground(taskId: string, setAppState: SetAppState): 
 
     // Capture cleanup function to call outside of updater
     cleanupFn = task.unregisterCleanup;
+    // Foreground completion previously bypassed the central handle — the
+    // snapshot stayed 'running' forever (zombie + reaper false suspect).
+    completedNaturally = true;
 
     const { [taskId]: removed, ...rest } = prev.tasks;
     return { ...prev, tasks: rest };
   });
+
+  if (completedNaturally) {
+    recordTaskHandle({
+      id: taskId,
+      type: 'local_bash',
+      status: 'completed',
+      exitKind: 'completed',
+      notified: true,
+    });
+  }
 
   // Call cleanup outside of the state updater (avoid side effects in updater)
   cleanupFn?.();

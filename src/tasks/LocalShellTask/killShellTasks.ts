@@ -10,6 +10,7 @@ import { dequeueAllMatching } from '../../utils/messageQueueManager.js'
 import { evictTaskOutput } from '../../utils/task/diskOutput.js'
 import { updateTaskState } from '../../utils/task/framework.js'
 import { isLocalShellTask } from './guards.js'
+import { recordTaskHandle } from '../../services/taskRegistry/taskRegistry.js'
 
 type SetAppStateFn = (updater: (prev: AppState) => AppState) => void
 
@@ -31,6 +32,17 @@ export function killTask(taskId: string, setAppState: SetAppStateFn): void {
     if (task.cleanupTimeoutId) {
       clearTimeout(task.cleanupTimeoutId)
     }
+
+    // Task-handle registry: kill paths (TaskStop / ESC / agent teardown)
+    // previously bypassed the central handle — the snapshot stayed 'running'
+    // forever (zombie + fake reaper suspects). Mirror the state transition.
+    recordTaskHandle({
+      id: taskId,
+      type: 'local_bash',
+      status: 'killed',
+      exitKind: 'killed',
+      notified: true,
+    })
 
     return {
       ...task,

@@ -14,7 +14,10 @@ import {
   type TaskType,
 } from '../../Task.js'
 import type { TaskState } from '../../tasks/types.js'
-import { recordTaskHeartbeats } from '../../services/taskRegistry/taskRegistry.js'
+import {
+  consumeUndeliveredTerminalTasks,
+  recordTaskHeartbeats,
+} from '../../services/taskRegistry/taskRegistry.js'
 import { enqueuePendingNotification } from '../messageQueueManager.js'
 import { enqueueSdkEvent } from '../sdkEventQueue.js'
 import { getTaskOutputDelta, getTaskOutputPath } from './diskOutput.js'
@@ -201,6 +204,21 @@ export async function generateTaskAttachments(state: AppState): Promise<{
     // completion notification via enqueuePendingNotification(). Generating
     // attachments here would race with those per-type callbacks, causing
     // dual delivery (one inline attachment + one separate API turn).
+  }
+
+  // CCH #38/#47: 死讯补投的主消费面——终态未被置 notified 的句柄（含重启
+  // 后从快照 hydrate 的孤儿）转为模型可见的 task_status 附件。此前消费点
+  // 挂在 /heapdump 诊断构建（手动/1.5GB 才触发），死讯实质永不达。
+  const deadLetters = consumeUndeliveredTerminalTasks()
+  for (const dead of deadLetters) {
+    attachments.push({
+      type: 'task_status',
+      taskId: dead.id,
+      taskType: 'local_agent',
+      status: dead.status as TaskStatus,
+      description: `[task-registry] subagent ${dead.id} ${dead.status}${dead.exitKind ? ` (${dead.exitKind})` : ''} — its result was never delivered (crash/timeout/kill). Do not assume it finished; resume or redo as needed.`,
+      deltaSummary: null,
+    })
   }
 
   // CCH #38: 输出增量 → 中央句柄心跳（reaper"超时无增量"的增量来源）。
