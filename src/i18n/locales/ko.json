@@ -3023,5 +3023,12 @@
   "  Log: {{path}}": "  로그: {{path}}",
   "Use `cch bg attach {{name}}` to reconnect.": "`cch bg attach {{name}}`으로 다시 연결하세요.",
   "Use `cch agents` to list sessions.": "`cch agents`로 세션을 나열하세요.",
-  "Use `cch stop {{name}}` to stop.": "`cch stop {{name}}`으로 중지하세요."
+  "Use `cch stop {{name}}` to stop.": "`cch stop {{name}}`으로 중지하세요.",
+  "{{count}} tasks ({{done}} done, {{pending}} open)": "작업 {{count}}개 (완료 {{done}}, 대기 {{pending}})",
+  "{{count}} tasks ({{done}} done, {{inProgress}} in progress, {{pending}} open)": "작업 {{count}}개 (완료 {{done}}, 진행 중 {{inProgress}}, 대기 {{pending}})",
+  "{{n}} in progress": "{{n}}개 진행 중",
+  "{{n}} pending": "{{n}}개 대기",
+  "{{n}} completed": "{{n}}개 완료",
+  "(timeout {{time}})": "(제한 시간 {{time}})",
+  "({{elapsed}} · timeout {{time}})": "({{elapsed}} · 제한 시간 {{time}})"
 }

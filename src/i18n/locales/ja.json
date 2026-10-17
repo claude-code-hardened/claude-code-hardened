@@ -3023,5 +3023,12 @@
   "  Log: {{path}}": "  ログ：{{path}}",
   "Use `cch bg attach {{name}}` to reconnect.": "`cch bg attach {{name}}` で再アタッチします。",
   "Use `cch agents` to list sessions.": "`cch agents` でセッションを一覧表示します。",
-  "Use `cch stop {{name}}` to stop.": "`cch stop {{name}}` で停止します。"
+  "Use `cch stop {{name}}` to stop.": "`cch stop {{name}}` で停止します。",
+  "{{count}} tasks ({{done}} done, {{pending}} open)": "{{count}} 件のタスク（完了 {{done}}、未完了 {{pending}}）",
+  "{{count}} tasks ({{done}} done, {{inProgress}} in progress, {{pending}} open)": "{{count}} 件のタスク（完了 {{done}}、進行中 {{inProgress}}、未完了 {{pending}}）",
+  "{{n}} in progress": "{{n}} 件進行中",
+  "{{n}} pending": "{{n}} 件保留",
+  "{{n}} completed": "{{n}} 件完了",
+  "(timeout {{time}})": "（タイムアウト {{time}}）",
+  "({{elapsed}} · timeout {{time}})": "（{{elapsed}} · タイムアウト {{time}}）"
 }

@@ -10,6 +10,7 @@ import {
 } from '@claude-code-hardened/builtin-tools/tools/AgentTool/agentColorManager.js';
 import { isAgentSwarmsEnabled } from '../utils/agentSwarmsEnabled.js';
 import { count } from '../utils/array.js';
+import { t } from '../i18n/index.js';
 import { summarizeRecentActivities } from '../utils/collapseReadSearch.js';
 import { truncateToWidth } from '../utils/format.js';
 import { isTodoV2Enabled, type Task } from '../utils/tasks.js';
@@ -186,13 +187,13 @@ export function TaskListV2({ tasks, isStandalone = false }: Props): React.ReactN
     const hiddenInProgress = count(hiddenTasks, t => t.status === 'in_progress');
     const hiddenCompleted = count(hiddenTasks, t => t.status === 'completed');
     if (hiddenInProgress > 0) {
-      parts.push(`${hiddenInProgress} in progress`);
+      parts.push(t('{{n}} in progress', { n: hiddenInProgress }));
     }
     if (hiddenPending > 0) {
-      parts.push(`${hiddenPending} pending`);
+      parts.push(t('{{n}} pending', { n: hiddenPending }));
     }
     if (hiddenCompleted > 0) {
-      parts.push(`${hiddenCompleted} completed`);
+      parts.push(t('{{n}} completed', { n: hiddenCompleted }));
     }
     hiddenSummary = ` … +${parts.join(', ')}`;
   }
@@ -219,18 +220,18 @@ export function TaskListV2({ tasks, isStandalone = false }: Props): React.ReactN
       <Box flexDirection="column" marginTop={1} marginLeft={2}>
         <Box>
           <Text dimColor>
-            <Text bold>{tasks.length}</Text>
-            {' tasks ('}
-            <Text bold>{completedCount}</Text>
-            {' done, '}
-            {inProgressCount > 0 && (
-              <>
-                <Text bold>{inProgressCount}</Text>
-                {' in progress, '}
-              </>
-            )}
-            <Text bold>{pendingCount}</Text>
-            {' open)'}
+            {inProgressCount > 0
+              ? t('{{count}} tasks ({{done}} done, {{inProgress}} in progress, {{pending}} open)', {
+                  count: tasks.length,
+                  done: completedCount,
+                  inProgress: inProgressCount,
+                  pending: pendingCount,
+                })
+              : t('{{count}} tasks ({{done}} done, {{pending}} open)', {
+                  count: tasks.length,
+                  done: completedCount,
+                  pending: pendingCount,
+                })}
           </Text>
         </Box>
         {content}

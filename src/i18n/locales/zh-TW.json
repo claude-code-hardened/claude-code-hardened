@@ -3023,5 +3023,12 @@
   "  Log: {{path}}": "  日誌：{{path}}",
   "Use `cch bg attach {{name}}` to reconnect.": "用 `cch bg attach {{name}}` 重新附加。",
   "Use `cch agents` to list sessions.": "用 `cch agents` 列出工作階段。",
-  "Use `cch stop {{name}}` to stop.": "用 `cch stop {{name}}` 停止。"
+  "Use `cch stop {{name}}` to stop.": "用 `cch stop {{name}}` 停止。",
+  "{{count}} tasks ({{done}} done, {{pending}} open)": "{{count}} 個任務（{{done}} 完成，{{pending}} 待辦）",
+  "{{count}} tasks ({{done}} done, {{inProgress}} in progress, {{pending}} open)": "{{count}} 個任務（{{done}} 完成，{{inProgress}} 進行中，{{pending}} 待辦）",
+  "{{n}} in progress": "{{n}} 進行中",
+  "{{n}} pending": "{{n}} 待辦",
+  "{{n}} completed": "{{n}} 完成",
+  "(timeout {{time}})": "（逾時 {{time}}）",
+  "({{elapsed}} · timeout {{time}})": "（{{elapsed}} · 逾時 {{time}}）"
 }
