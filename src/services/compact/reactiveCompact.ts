@@ -22,9 +22,9 @@ export const isReactiveOnlyMode: () => boolean = () => {
   //   settings.json: { "compact": { "reactiveOnlyMode": true } }
   //   env:           ENABLE_REACTIVE_COMPACT_ONLY=1
   if (isEnvTruthy(process.env.ENABLE_REACTIVE_COMPACT_ONLY)) return true
-  const settings = getSettings_DEPRECATED() as unknown as
-    | { compact?: { reactiveOnlyMode?: boolean } }
-    | null
+  const settings = getSettings_DEPRECATED() as unknown as {
+    compact?: { reactiveOnlyMode?: boolean }
+  } | null
   return settings?.compact?.reactiveOnlyMode === true
 }
 
