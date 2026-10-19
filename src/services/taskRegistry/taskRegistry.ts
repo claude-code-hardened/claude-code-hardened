@@ -94,6 +94,14 @@ export type TaskHandleInput = {
   notified?: boolean
   /** 官方 parked 语义：静默完成挂表。 */
   quietlyParked?: boolean
+  /**
+   * CCH #52/#46 官方复活位（0001-chunk-xrzcaagk/module-006-uncategorized.js
+   * `$M`：resume 落点 `quietlyParked===true → {notified:false, quietlyParked:false}`）。
+   * 复活路径显式传入：清除 quietlyParked，并把已冻结的终态句柄重开为
+   * input.status（非终态时）——终态冻结防的是快照链迟到写诈尸，不拦
+   * 用户/上游发起的真实复活。
+   */
+  unpark?: boolean
   /** 测试/接线点可对齐 AppState 的 startTime。 */
   startedAt?: number
   /** 测试用时钟缝。 */
@@ -185,7 +193,8 @@ function writeSnapshot(record: TaskHandleRecord): void {
 
 /**
  * 中央句柄表 upsert：spawn 建表 + 每次 status 迁移/标志位变化改写。
- * 已终态句柄不接受非终态回迁（快照链的迟到写不能诈尸）。
+ * 已终态句柄不接受非终态回迁（快照链的迟到写不能诈尸）；例外是
+ * input.unpark?:true 的显式复活位（官方 $M 语义，见 TaskHandleInput）。
  */
 export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
   const now = input.updatedAt ?? Date.now()
@@ -193,6 +202,9 @@ export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
   const prevTerminal =
     existing !== undefined && isTerminalHandleStatus(existing.status)
   const nextTerminal = isTerminalHandleStatus(input.status)
+  // CCH #52/#46 官方 $M 复活位：显式 unpark 清 parked 并可重开终态句柄。
+  const allowReopen =
+    input.unpark === true && existing !== undefined && !nextTerminal
   let record: TaskHandleRecord
 
   if (existing === undefined) {
@@ -211,21 +223,30 @@ export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
   } else {
     // 终态冻结：进终态后拒绝一切 status 迁移（回迁非终态与异种终态互踩
     // 都拒绝——completed→failed 的迟到写同样是诈尸），仅放行 notified/
-    // parked/updatedAt 等元数据位。
+    // parked/updatedAt 等元数据位。唯一例外是官方 $M 复活路径的显式
+    // unpark：真实复活把句柄重开为非终态（并清 parked/notified）。
     const status =
-      prevTerminal && existing!.status !== input.status
+      prevTerminal && existing!.status !== input.status && !allowReopen
         ? existing!.status
         : input.status
+    const reopened = allowReopen && existing!.status !== status
     record = {
       ...existing,
       type: input.type,
       status,
       description: input.description ?? existing.description,
       outputFile: input.outputFile ?? existing.outputFile,
-      exitKind: input.exitKind ?? existing.exitKind,
+      // 复活重开：上一轮的终态成因不带走（exitKind 只见证最近一次终态）。
+      exitKind: reopened ? undefined : (input.exitKind ?? existing.exitKind),
       // not 传即保留：补投位（consume）与接线点的已送达位互不回退。
-      notified: input.notified ?? existing.notified,
-      quietlyParked: input.quietlyParked ?? existing.quietlyParked,
+      // 官方 $M：复活需要重置 notified（新生命周期的死讯/补投位归零）。
+      notified: reopened
+        ? (input.notified ?? false)
+        : (input.notified ?? existing.notified),
+      // 官方 $M：复活落点显式清 quietlyParked。
+      quietlyParked: input.unpark
+        ? false
+        : (input.quietlyParked ?? existing.quietlyParked),
       startedAt: existing.startedAt,
       updatedAt: Math.max(now, existing.updatedAt),
     }

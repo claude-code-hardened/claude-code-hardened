@@ -14,12 +14,96 @@ import type {
   QueuePriority,
 } from '../types/textInputTypes.js'
 import type { PastedContent } from './config.js'
+import { logForDebugging } from './debug.js'
 import { extractTextContent } from './messages.js'
 import { objectGroupBy } from './objectGroupBy.js'
 import { recordQueueOperation } from './sessionStorage.js'
 import { createSignal } from './signal.js'
 
 export type SetAppState = (f: (prev: AppState) => AppState) => void
+
+// ============================================================================
+// Notification envelope facets (CCH #50/#52 官方队列命令形状对齐)
+// ============================================================================
+
+/**
+ * CCH #50/#52 (官方 2.1.284 队列命令信封字段——
+ * docs/reverse-284/0001-chunk-xrzcaagk/module-006-uncategorized.js:2295
+ * `Eyo` 的命令形状 {mode:'task-notification',skipAttachments,priority,
+ * agentId,taskId,userResumeNotice,passive})：通知类命令在 QueuedCommand
+ * 之上可携带的 mailbox 三面标记。
+ */
+/**
+ * CCH #50/#52 (官方 2.1.284 队列命令信封字段——
+ * docs/reverse-284/0001-chunk-xrzcaagk/module-006-uncategorized.js:2295
+ * `Eyo` 的命令形状 {mode:'task-notification',skipAttachments,priority,
+ * agentId,taskId,userResumeNotice,passive})：通知类命令在 QueuedCommand
+ * 之上可携带的 mailbox 三面标记。
+ */
+export type NotificationCommandOptions = {
+  /**
+   * CCH #50 插队面：true 时插到队列首（优先于既有待处理命令），
+   * 而非按默认的 FIFO/priority 追加。写路径已由 enqueuePendingNotification
+   * 消费（unshift），测试面覆盖；生产 sender 尚未接线（pending wiring，
+   * 官方 Er 的 ahead 走 enqueueReportingAdmission 的 peer 收条面——CCH
+   * peer 链尚未打通，勿在无官方出处处强行挂用）。
+   */
+  ahead?: boolean
+  /**
+   * CCH #50/#46 静默面：官方 passive（module-006:2200 lh / :2208 P8）=
+   * 「入上下文但不计入 hasUserIntent（官方 so()=hasUserIntentCommandsInQueue
+   * 里被 `passive!==!0` 排除，module-006:9229）、不触发新 query 轮」。
+   * 消费面：isUserIntentCommand / hasUserIntentCommandsInQueue（不 wake）+
+   * 渲染面（预览 isQueuedCommandVisible / UserAgentNotificationMessage 通知
+   * pill）静默；消息本体照常投递给模型。官方只在"目标是当前主会话的
+   * userResumeNotice"上置位（`...r===qe()&&{passive:!0}`）。
+   */
+  passive?: boolean
+  /**
+   * CCH #50 官方 skipAttachments：官方 Trt（module-006:2116，poll-event /
+   * task-notification / skipAttachments===!0 的命令不参与附件收集）——
+   * CCH 消费点在 getQueuedCommandAttachments（src/utils/attachments.ts）：
+   * 命中即跳过图片块收集（文本本体照进上下文）。官方 resume/bulk 通知
+   * 均带 `skipAttachments:!0`。
+   */
+  skipAttachments?: boolean
+  /** 关联任务 id（官方命令形状携带；供消费面/去重判定）。 */
+  taskId?: string
+  /** CCH #46: 官方 userResumeNotice 标记（复活通知；配合模块级去重）。 */
+  userResumeNotice?: boolean
+}
+
+/** 携带 mailbox 信封字段的队列命令。 */
+export type NotificationCommand = QueuedCommand & NotificationCommandOptions
+
+/** CCH #50 静默面读取。 */
+export function isPassiveNotification(cmd: QueuedCommand): boolean {
+  return (cmd as NotificationCommand).passive === true
+}
+
+/**
+ * CCH #50/#52 消费面判定（官方 lh/P8 等价，module-006:2200/2208）：
+ * 该命令是否算 user intent。passive 通知入上下文但不算 user intent。
+ */
+export function isUserIntentCommand(cmd: QueuedCommand): boolean {
+  return !isPassiveNotification(cmd)
+}
+
+/**
+ * CCH #50 官方 so()（hasUserIntentCommandsInQueue，module-006:9229
+ * `g.some(Ro=>!_b(Ro)&&Ro.passive!==!0)`）的 CCH 等价：队列里是否还有
+ * 会触发新 query 轮的 user-intent 命令。passive 通知被排除——纯 passive
+ * 队列不 wake（useQueueProcessor 消费点）。
+ * （CCH 无 poll-event 形态，_b 排除项不适用。）
+ */
+export function hasUserIntentCommandsInQueue(): boolean {
+  return commandQueue.some(isUserIntentCommand)
+}
+
+/** CCH #50 skipAttachments 信封读取（官方 processUserInput face 的消费形）。 */
+export function shouldSkipAttachmentsForCommand(cmd: QueuedCommand): boolean {
+  return (cmd as NotificationCommand).skipAttachments === true
+}
 
 // ============================================================================
 // Logging helper
@@ -138,14 +222,60 @@ export function enqueue(command: QueuedCommand): void {
  * Add a task notification to the queue.
  * Convenience wrapper that defaults priority to 'later' so user input
  * is never starved by system messages.
+ *
+ * CCH #50 mailbox 三面（NotificationCommandOptions）：
+ *  - `ahead: true`      插队到队列首（unshift），不等既有待处理命令；
+ *  - `passive: true`    渲染面（预览/ pill）静默不弹提示；
+ *  - `skipAttachments`  信封声明，构造处/消费面跳过 attachment 收集。
+ *
+ * CCH #52 待投递去重：同 (taskId,status) 的 task-notification 已在队列
+ * 待投递（pending）时直接跳过（官方去重护栏——enqueueAgentNotification 的
+ * 完成通知与 TaskStop/kill 路径竞态时不再重复入队）。
  */
-export function enqueuePendingNotification(command: QueuedCommand): void {
-  commandQueue.push({ ...command, priority: command.priority ?? 'later' })
+export function enqueuePendingNotification(command: NotificationCommand): void {
+  const dedupKey = notificationDedupKey(command)
+  if (dedupKey !== undefined) {
+    const duplicate = commandQueue.some(
+      cmd => notificationDedupKey(cmd) === dedupKey,
+    )
+    if (duplicate) {
+      logForDebugging(
+        `[messageQueue] skip duplicate pending notification (${dedupKey})`,
+      )
+      return
+    }
+  }
+  const stored: QueuedCommand = {
+    ...command,
+    priority: command.priority ?? 'later',
+  }
+  if (command.ahead === true) {
+    commandQueue.unshift(stored)
+  } else {
+    commandQueue.push(stored)
+  }
   notifySubscribers()
   logOperation(
     'enqueue',
     typeof command.value === 'string' ? command.value : undefined,
   )
+}
+
+// (taskId,status) 待投递去重：从 task-notification 文本里提取键。非
+// task-notification 命令或缺失标签 → undefined（不去重）。
+const NOTIFICATION_TASK_KEY_RE = /<task-id>([^<]+)<\/task-id>/
+const NOTIFICATION_STATUS_KEY_RE = /<status>([^<]*)<\/status>/
+
+function notificationDedupKey(cmd: QueuedCommand): string | undefined {
+  if (cmd.mode !== 'task-notification' || typeof cmd.value !== 'string') {
+    return undefined
+  }
+  const taskId = NOTIFICATION_TASK_KEY_RE.exec(cmd.value)?.[1]
+  if (taskId === undefined) {
+    return undefined
+  }
+  const status = NOTIFICATION_STATUS_KEY_RE.exec(cmd.value)?.[1] ?? ''
+  return `${taskId}\u0000${status}`
 }
 
 const PRIORITY_ORDER: Record<QueuePriority, number> = {
@@ -364,8 +494,12 @@ export function isQueuedCommandEditable(cmd: QueuedCommand): boolean {
  * Whether this queued command should render in the queue preview under the
  * prompt. Superset of editable — channel messages show (so the keyboard user
  * sees what arrived) but stay non-editable (raw XML).
+ *
+ * CCH #50/#52 静默面：passive 通知（如主会话的 userResumeNotice）不进
+ * 预览、不弹提示 —— 消息本体照常投递给模型。
  */
 export function isQueuedCommandVisible(cmd: QueuedCommand): boolean {
+  if (isPassiveNotification(cmd)) return false
   if (
     (feature('KAIROS') || feature('KAIROS_CHANNELS')) &&
     (cmd as Record<string, unknown>).origin !== undefined &&

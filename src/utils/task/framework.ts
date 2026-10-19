@@ -17,8 +17,11 @@ import type { TaskState } from '../../tasks/types.js'
 import { logForDebugging } from '../../utils/debug.js'
 import {
   consumeUndeliveredTerminalTasks,
+  getAllTaskHandleRecords,
+  hydrateTaskRegistry,
   recordTaskHeartbeats,
 } from '../../services/taskRegistry/taskRegistry.js'
+import { escapeXml } from '../xml.js'
 import { enqueuePendingNotification } from '../messageQueueManager.js'
 import { enqueueSdkEvent } from '../sdkEventQueue.js'
 import { getTaskOutputDelta, getTaskOutputPath } from './diskOutput.js'
@@ -228,10 +231,85 @@ export async function generateTaskAttachments(state: AppState): Promise<{
     })
   }
 
+  // CCH #52/#44: 子代理列表模型侧视图——每轮把中央句柄表里的 still-running
+  // 快照注入给主代理（官方对齐 docs/reverse-284:
+  // 0001-chunk-xrzcaagk/module-006-uncategorized.js:8781 task_status 附件
+  // running 分支的 `<system-reminder>` + isMeta 形态，措辞取 #52 工作包制式）。
+  enqueueStillRunningReminder()
+
   // CCH #38: 输出增量 → 中央句柄心跳（reaper"超时无增量"的增量来源）。
   recordTaskHeartbeats(Object.keys(updatedTaskOffsets))
 
   return { attachments, updatedTaskOffsets, evictedTaskIds }
+}
+
+// ── CCH #52/#44: still-running 快照注入 ─────────────────────────────────
+//
+// 数据源：中央句柄表（taskRegistry.getAllTaskHandleRecords 过滤
+// status==='running'），与 AppState.tasks 视图解耦——TaskStop 后被逐出、
+// 或 compaction 后 spawn 消息丢失的 agent 依然可见，防模型重复 spawn。
+//
+// 防自激：reminder 走命令队列（mid-turn 'next' 优先级，isMeta 隐藏于
+// transcript）；若内容与上一条完全一致则跳过。没有这一步，"空闲队列
+// 唤醒新 turn → turn 内 attachments 再次入队 → 再唤醒"会自持成环。
+//
+// staleness 复位（R1-high）：running 集清空时必须重置去重位——否则
+// completed → revive（unpark 复活路）的同名串会被旧串完全匹配吞掉，
+// 复活后的 running 视图对模型静默丢失。复位只发生在"已经没有 running"
+// 的时刻，此刻无队列自激面（无注入→无唤醒）。
+
+const STILL_RUNNING_PRIORITY = 'next' as const
+
+let lastStillRunningReminder: string | undefined
+
+/** 测试缝：清 still-running 去重位。 */
+export function _resetStillRunningReminderForTest(): void {
+  lastStillRunningReminder = undefined
+}
+
+export function buildStillRunningReminder(): string | undefined {
+  hydrateTaskRegistry()
+  const running = getAllTaskHandleRecords().filter(
+    record => record.status === 'running',
+  )
+  if (running.length === 0) {
+    return undefined
+  }
+  // 官方逐字（0001-chunk-xrzcaagk/module-006-uncategorized.js:8781 running
+  // 分支）：taskId ("desc") is still running. Do not start it again; to
+  // restart it, stop it with TaskStop first.
+  const lines = running.map(
+    record =>
+      `${record.id} ("${escapeXml(record.description)}") is still running. Do not start it again; to restart it, stop it with TaskStop first.`,
+  )
+  return `<system-reminder>\n${lines.join('\n')}\n</system-reminder>`
+}
+
+/**
+ * 把 still-running 快照注入命令队列（agent_registry_snapshot 附件面）。
+ * 内容与上一条一致时跳过（防队列自激，见上方注释）；集合变化（agent
+ * 完成/复活/新 spawn）时重新注入，模型在下一轮拿到最新名单；running 集
+ * 清空时复位去重位（completed → revive 同名串不再被旧去重位吞掉）。
+ */
+export function enqueueStillRunningReminder(): boolean {
+  const reminder = buildStillRunningReminder()
+  if (reminder === undefined) {
+    // R1-high staleness 复位：无 running 记录时旧快照串已成死面，留着只会
+    // 吞掉复活后同名快照。复位（无注入 → 无唤醒 → 无自激环）。
+    lastStillRunningReminder = undefined
+    return false
+  }
+  if (reminder === lastStillRunningReminder) {
+    return false
+  }
+  lastStillRunningReminder = reminder
+  enqueuePendingNotification({
+    value: reminder,
+    mode: 'task-notification',
+    priority: STILL_RUNNING_PRIORITY,
+    isMeta: true,
+  })
+  return true
 }
 
 /**

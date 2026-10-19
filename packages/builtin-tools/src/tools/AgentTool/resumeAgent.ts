@@ -25,6 +25,7 @@ import {
 } from 'src/utils/sessionStorage.js'
 import { buildEffectiveSystemPrompt } from 'src/utils/systemPrompt.js'
 import type { SystemPrompt } from 'src/utils/systemPromptType.js'
+import { recordTaskHandle } from 'src/services/taskRegistry/taskRegistry.js'
 import { getTaskOutputPath } from 'src/utils/task/diskOutput.js'
 import { getParentSessionId } from 'src/utils/teammate.js'
 import { reconstructForSubagentResume } from 'src/utils/toolResultStorage.js'
@@ -34,12 +35,14 @@ import { FORK_AGENT, isForkSubagentEnabled } from './forkSubagent.js'
 import type { AgentDefinition } from './loadAgentsDir.js'
 import { isBuiltInAgent } from './loadAgentsDir.js'
 import { runAgent } from './runAgent.js'
+import { publishUserResumeNotice } from './userResumeNotice.js'
 
 export type ResumeAgentResult = {
   agentId: string
   description: string
   outputFile: string
 }
+
 export async function resumeAgentBackground({
   agentId,
   prompt,
@@ -205,6 +208,18 @@ export async function resumeAgentBackground({
     toolUseId: toolUseContext.toolUseId,
   })
 
+  // CCH #52/#46 复活面 → 中央句柄表 unpark（官方 $M：复活落点清
+  // quietlyParked 并重开句柄；registerAsyncAgent 的 running 写在已冻结
+  // 句柄上会被终态冻结吞掉，复活路必须显式 unpark 重开）。
+  recordTaskHandle({
+    id: agentId,
+    type: 'local_agent',
+    status: 'running',
+    description: uiDescription,
+    outputFile: getTaskOutputPath(agentId),
+    unpark: true,
+  })
+
   const metadata = {
     prompt,
     resolvedAgentModel,
@@ -257,6 +272,11 @@ export async function resumeAgentBackground({
       }),
     ),
   )
+
+  // CCH #52/#46: 复活成功 → 父会话队列一条官方制式复活通知（userResumeNotice，
+  // 见 ./userResumeNotice.js —— 模型不得把复活当作已取消而重启；结果经后续
+  // task-notification 到达）。
+  void publishUserResumeNotice(agentId, uiDescription)
 
   return {
     agentId,

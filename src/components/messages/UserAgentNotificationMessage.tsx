@@ -22,7 +22,13 @@ function getStatusColor(status: string | null): TextProps['color'] {
   }
 }
 
+// CCH #52/#50/#46 静默面：官方复活通知（userResumeNotice→passive）在
+// CCH 里随信使文本携带 passive 标记（构造处 resumeAgent.ts 写入属性），
+// 渲染面判定到即静默不弹提示 —— 消息本体照常投递给模型。
+const PASSIVE_MARKER = '<task-notification passive="true">';
+
 export function UserAgentNotificationMessage({ addMargin, param: { text } }: Props): React.ReactNode {
+  if (text.includes(PASSIVE_MARKER)) return null;
   const summary = extractTag(text, 'summary');
   if (!summary) return null;
 

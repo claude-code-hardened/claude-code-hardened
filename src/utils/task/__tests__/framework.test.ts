@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { mkdir, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { debugMock } from '../../../../tests/mocks/debug.js'
-
 // ─── Mocks ───
 
 const noop = () => {}
@@ -19,8 +21,13 @@ mock.module('src/utils/task/diskOutput.js', () => ({
   initTaskOutputAsSymlink: async () => {},
 }))
 
+// 保留原文件的 messageQueueManager mock 面（仅 enqueuePendingNotification），
+// 升级为录制器：still-running 快照注入（CCH #52/#44）的断言面。
+const queuedNotifications: any[] = []
 mock.module('src/utils/messageQueueManager.js', () => ({
-  enqueuePendingNotification: noop,
+  enqueuePendingNotification: (cmd: any) => {
+    queuedNotifications.push(cmd)
+  },
 }))
 
 // ─── Import after mocks ───
@@ -29,9 +36,52 @@ const {
   updateTaskState,
   registerTask,
   evictTerminalTask,
+  generateTaskAttachments,
   POLL_INTERVAL_MS,
   PANEL_GRACE_MS,
+  buildStillRunningReminder,
+  enqueueStillRunningReminder,
+  _resetStillRunningReminderForTest,
 } = await import('../framework.js')
+
+const {
+  _resetTaskRegistryForTest,
+  _flushTaskRegistrySnapshotsForTest,
+  recordTaskHandle,
+  getAllTaskHandleRecords,
+} = await import('src/services/taskRegistry/taskRegistry.js')
+
+let tempDir: string
+let previousConfigDir: string | undefined
+
+beforeEach(async () => {
+  previousConfigDir = process.env.CLAUDE_CONFIG_DIR
+  tempDir = join(
+    tmpdir(),
+    `framework-still-running-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}`,
+  )
+  await mkdir(tempDir, { recursive: true })
+  process.env.CLAUDE_CONFIG_DIR = join(tempDir, 'config')
+  await _resetTaskRegistryForTest()
+  _resetStillRunningReminderForTest()
+  queuedNotifications.length = 0
+})
+
+afterEach(async () => {
+  await _resetTaskRegistryForTest()
+  _resetStillRunningReminderForTest()
+  queuedNotifications.length = 0
+  if (previousConfigDir === undefined) {
+    delete process.env.CLAUDE_CONFIG_DIR
+  } else {
+    process.env.CLAUDE_CONFIG_DIR = previousConfigDir
+  }
+  await _flushTaskRegistrySnapshotsForTest()
+  await rm(tempDir, { recursive: true, force: true })
+  sdkEvents.length = 0
+})
 
 // ─── Helpers ───
 
@@ -217,5 +267,172 @@ describe('constants', () => {
 
   test('PANEL_GRACE_MS is 30000', () => {
     expect(PANEL_GRACE_MS).toBe(30_000)
+  })
+})
+
+// ─── CCH #52/#44: still-running 快照注入 ─────────────────────────────────
+
+describe('buildStillRunningReminder', () => {
+  test('无 running 句柄 → undefined', () => {
+    expect(buildStillRunningReminder()).toBeUndefined()
+  })
+
+  test('有 running 句柄 → <system-reminder> 制式快照行（官方逐字）', () => {
+    recordTaskHandle({
+      id: 'agnt_snap01',
+      type: 'local_agent',
+      status: 'running',
+      description: 'scout & <builder>',
+    })
+    const reminder = buildStillRunningReminder()
+    expect(reminder).toBeDefined()
+    expect(reminder!.startsWith('<system-reminder>')).toBe(true)
+    expect(reminder!.endsWith('</system-reminder>')).toBe(true)
+    // 官方逐字（0001/module-006:8781 running 分支）：is still running +
+    // 两处 it + TaskStop 工具名。
+    expect(reminder).toContain(
+      'agnt_snap01 ("scout &amp; &lt;builder&gt;") is still running. Do not start it again; to restart it, stop it with TaskStop first.',
+    )
+    expect(reminder).toContain('<system-reminder>')
+    expect(reminder!.includes('Do not start it again')).toBe(true)
+  })
+
+  test('空描述句柄也注入（占位空引号）', () => {
+    recordTaskHandle({
+      id: 'agnt_snap02',
+      type: 'local_bash',
+      status: 'running',
+    })
+    expect(buildStillRunningReminder()).toContain(
+      'agnt_snap02 ("") is still running. Do not start it again; to restart it, stop it with TaskStop first.',
+    )
+  })
+})
+
+describe('enqueueStillRunningReminder', () => {
+  test('首注入：task-notification 信封 + isMeta + next 优先级', async () => {
+    recordTaskHandle({
+      id: 'agnt_snap03',
+      type: 'local_agent',
+      status: 'running',
+      description: 'worker',
+    })
+    expect(
+      getAllTaskHandleRecords().some(
+        r => r.id === 'agnt_snap03' && r.status === 'running',
+      ),
+    ).toBe(true)
+    const enqueued = await Promise.resolve(enqueueStillRunningReminder())
+    expect(enqueued).toBe(true)
+    expect(queuedNotifications).toHaveLength(1)
+    const cmd = queuedNotifications[0]!
+    expect(cmd.mode).toBe('task-notification')
+    expect(cmd.priority).toBe('next')
+    expect(cmd.isMeta).toBe(true)
+    expect(typeof cmd.value).toBe('string')
+    expect(cmd.value).toContain('<system-reminder>')
+  })
+
+  test('内容未变不再重复入队（防空闲唤醒自激）', () => {
+    recordTaskHandle({
+      id: 'agnt_snap04',
+      type: 'local_agent',
+      status: 'running',
+      description: 'worker',
+    })
+    expect(enqueueStillRunningReminder()).toBe(true)
+    const count = queuedNotifications.length
+    expect(enqueueStillRunningReminder()).toBe(false)
+    expect(queuedNotifications.length).toBe(count)
+  })
+
+  test('集合变化后重新注入（完成 → 剩集快照更新）', () => {
+    recordTaskHandle({
+      id: 'agnt_snap05',
+      type: 'local_agent',
+      status: 'running',
+      description: 'a',
+    })
+    recordTaskHandle({
+      id: 'agnt_snap06',
+      type: 'local_agent',
+      status: 'running',
+      description: 'b',
+    })
+    expect(enqueueStillRunningReminder()).toBe(true)
+    // a 完成：still-running 集收缩 → 内容变化 → 再注入
+    recordTaskHandle({
+      id: 'agnt_snap05',
+      type: 'local_agent',
+      status: 'completed',
+      exitKind: 'completed',
+    })
+    expect(enqueueStillRunningReminder()).toBe(true)
+    const last = queuedNotifications.at(-1)!
+    expect(last.value).not.toContain('agnt_snap05')
+    expect(last.value).toContain('agnt_snap06')
+  })
+
+  test('全部完成后不再注入（上一轮 stale 快照自然终止）', () => {
+    recordTaskHandle({
+      id: 'agnt_snap07',
+      type: 'local_agent',
+      status: 'running',
+      description: 'solo',
+    })
+    expect(enqueueStillRunningReminder()).toBe(true)
+    recordTaskHandle({
+      id: 'agnt_snap07',
+      type: 'local_agent',
+      status: 'completed',
+      exitKind: 'completed',
+    })
+    expect(enqueueStillRunningReminder()).toBe(false)
+  })
+
+  test('R1-high staleness：completed → revive(unpark) 同名快照再注入', () => {
+    recordTaskHandle({
+      id: 'agnt_snap09',
+      type: 'local_agent',
+      status: 'running',
+      description: 'revive-me',
+    })
+    expect(enqueueStillRunningReminder()).toBe(true)
+    expect(queuedNotifications).toHaveLength(1)
+    // 完成 → running 集清空 → 不注入，且去重位复位
+    recordTaskHandle({
+      id: 'agnt_snap09',
+      type: 'local_agent',
+      status: 'completed',
+      exitKind: 'completed',
+    })
+    expect(enqueueStillRunningReminder()).toBe(false)
+    expect(queuedNotifications).toHaveLength(1)
+    // 复活（unpark 重开句柄，官方 $M 路，resumeAgentBackground 同参）：
+    // 同 id 同名再次 running —— 旧串去重位若不复位会吞掉同名快照。
+    recordTaskHandle({
+      id: 'agnt_snap09',
+      type: 'local_agent',
+      status: 'running',
+      description: 'revive-me',
+      unpark: true,
+    })
+    expect(enqueueStillRunningReminder()).toBe(true)
+    expect(queuedNotifications).toHaveLength(2)
+    expect(queuedNotifications[1]!.value).toContain(
+      'agnt_snap09 ("revive-me") is still running. Do not start it again; to restart it, stop it with TaskStop first.',
+    )
+  })
+
+  test('generateTaskAttachments 每轮驱动注入（组装面接线）', async () => {
+    recordTaskHandle({
+      id: 'agnt_snap08',
+      type: 'local_agent',
+      status: 'running',
+      description: 'driven',
+    })
+    await generateTaskAttachments({ tasks: {} } as any)
+    expect(queuedNotifications.length).toBeGreaterThanOrEqual(1)
+    expect(queuedNotifications[0]!.value).toContain('agnt_snap08 ("driven")')
   })
 })
