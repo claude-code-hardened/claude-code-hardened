@@ -80,6 +80,16 @@ import {
   clearClaudeAIMcpConfigsCache,
   fetchClaudeAIMcpConfigsIfEligible,
 } from './claudeai.js'
+import {
+  clearResourceTemplatesCache,
+  fetchResourceTemplatesForClient,
+} from './completions.js'
+import {
+  isMcpHealthCheckEnabled,
+  startHealthCheck,
+  stopAllHealthChecks,
+  stopHealthCheck,
+} from './healthCheck.js'
 import { registerElicitationHandler } from './elicitationHandler.js'
 import { getMcpPrefix } from './mcpStringUtils.js'
 import { commandBelongsToServer, excludeStalePluginClients } from './utils.js'
@@ -330,8 +340,45 @@ export function useManageMCPConnections(
           // re-running for every already-connected server on each state change.
           registerElicitationHandler(client.client, client.name, setAppState)
 
+          // Optional liveness probe (mcp-dispatch health semantics): ping
+          // interval + consecutive-failure count → mark unhealthy/recover in
+          // AppState. Opt-in via CLAUDE_CODE_MCP_HEALTH_CHECK (default off).
+          // Disposition for the unhealthy mark (R6 review): for reconnectable
+          // transports the dead connection is torn down here, which fires the
+          // onclose handler below (clear cache → exponential-backoff
+          // reconnection) — without this the mark only ever aged in state.
+          // stdio/sdk have no reconnection path; for those the mark stays
+          // advisory in AppState.
+          if (isMcpHealthCheckEnabled()) {
+            const connectedClient = client
+            startHealthCheck(client.name, client.client, {
+              onUnhealthy: health => {
+                updateServer({ ...connectedClient, health })
+                const configType = connectedClient.config.type ?? 'stdio'
+                if (configType !== 'stdio' && configType !== 'sdk') {
+                  logMCPDebug(
+                    client.name,
+                    `Marked unhealthy by health check — closing transport to trigger reconnection`,
+                  )
+                  void connectedClient.client.close().catch(error => {
+                    logMCPError(
+                      client.name,
+                      `Health-check-triggered close failed: ${error}`,
+                    )
+                  })
+                }
+              },
+              onRecover: health => {
+                updateServer({ ...connectedClient, health })
+              },
+            })
+          }
+
           client.client.onclose = () => {
             const configType = client.config.type ?? 'stdio'
+
+            // Liveness probe must not outlive the connection.
+            stopHealthCheck(client.name)
 
             clearServerCache(client.name, client.config).catch(() => {
               logForDebugging(
@@ -709,6 +756,10 @@ export function useManageMCPConnections(
                 })
                 try {
                   fetchResourcesForClient.cache.delete(client.name)
+                  // Templates are a resources sub-surface: a list_changed on
+                  // resources must invalidate their cache too (official os0034
+                  // anchor enumerates templates alongside resources).
+                  clearResourceTemplatesCache(client.name)
                   if (feature('MCP_SKILLS')) {
                     // Skills are discovered from resources, so refresh them too.
                     // Invalidate prompts cache as well: we write commands here,
@@ -721,6 +772,9 @@ export function useManageMCPConnections(
                         fetchResourcesForClient(client),
                         fetchCommandsForClient(client),
                         fetchMcpSkillsForClient!(client),
+                        // Template re-enumeration warms the completions LRU;
+                        // the value itself stays cache-resident.
+                        fetchResourceTemplatesForClient(client),
                       ])
                     updateServer({
                       ...client,
@@ -731,7 +785,10 @@ export function useManageMCPConnections(
                     // next discovery rebuilds with the new set.
                     clearSkillIndexCache?.()
                   } else {
-                    const newResources = await fetchResourcesForClient(client)
+                    const [newResources] = await Promise.all([
+                      fetchResourcesForClient(client),
+                      fetchResourceTemplatesForClient(client),
+                    ])
                     updateServer({ ...client, resources: newResources })
                   }
                 } catch (error) {
@@ -1025,6 +1082,8 @@ export function useManageMCPConnections(
         clearTimeout(timer)
       }
       timers.clear()
+      // Stop any liveness probes started for connected servers
+      stopAllHealthChecks()
       // Flush any pending batched MCP updates before unmount
       if (flushTimerRef.current !== null) {
         clearTimeout(flushTimerRef.current)

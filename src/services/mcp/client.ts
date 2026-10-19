@@ -163,6 +163,12 @@ import {
   wrapFetchWithStepUpDetection,
 } from './auth.js'
 import { markClaudeAiMcpConnected } from './claudeai.js'
+import {
+  clearResourceTemplatesCache,
+  completeResourceTemplate,
+  fetchResourceTemplatesForClient,
+  supportsCompletions,
+} from './completions.js'
 import { getAllMcpConfigs, isMcpServerDisabled } from './config.js'
 import { getMcpServerHeaders } from './headersHelper.js'
 import { SdkControlClientTransport } from './SdkControlTransport.js'
@@ -1412,6 +1418,7 @@ export const connectToServer = memoize(
         // fetch would return stale tools/resources from the old connection.
         fetchToolsForClient.cache.delete(name)
         fetchResourcesForClient.cache.delete(name)
+        clearResourceTemplatesCache(name)
         fetchCommandsForClient.cache.delete(name)
         if (feature('MCP_SKILLS')) {
           fetchMcpSkillsForClient!.cache.delete(name)
@@ -1688,6 +1695,7 @@ export async function clearServerCache(
   connectToServer.cache.delete(key)
   fetchToolsForClient.cache.delete(name)
   fetchResourcesForClient.cache.delete(name)
+  clearResourceTemplatesCache(name)
   fetchCommandsForClient.cache.delete(name)
   if (feature('MCP_SKILLS')) {
     fetchMcpSkillsForClient!.cache.delete(name)
@@ -1723,6 +1731,42 @@ export async function ensureConnectedClient(
     )
   }
   return connectedClient
+}
+
+/**
+ * completions/complete against a connected server (official anchor
+ * 0034-chunk-2qjch3b9 Tp / 0041 _d: capability-negotiated
+ * complete_resource_template). Service-level entry: consults the
+ * capabilities.completions negotiation first (skips the reconnect entirely
+ * for servers that don't declare the capability), then fills one template
+ * URI variable. Degrades to [] on any failure — never throws.
+ *
+ * Consumer face (R6 review): no in-repo caller yet — the intended consumer is
+ * the @-mention resource typeahead, which would call this to fill template
+ * URI variables as the user types. TODO(mention-typeahead): wire the resource
+ * mention picker to this entry so templates offer real completions instead of
+ * raw template URIs.
+ */
+export async function completeMcpResourceTemplate(
+  client: ConnectedMCPServer,
+  uri: string,
+  argumentName: string,
+  argumentValue: string,
+  contextArguments?: Record<string, string>,
+): Promise<string[]> {
+  // OFFICIAL anchor first check: no completions capability → [] without
+  // touching the connection.
+  if (!supportsCompletions(client.capabilities)) {
+    return []
+  }
+  const connected = await ensureConnectedClient(client)
+  return completeResourceTemplate(
+    connected,
+    uri,
+    argumentName,
+    argumentValue,
+    contextArguments,
+  )
 }
 
 /**
@@ -2190,13 +2234,23 @@ export async function reconnectMcpServerImpl(
 
     const supportsResources = !!client.capabilities?.resources
 
-    const [tools, mcpCommands, mcpSkills, resources] = await Promise.all([
+    const [
+      tools,
+      mcpCommands,
+      mcpSkills,
+      resources /* templates: LRU-cached for completions */,
+    ] = await Promise.all([
       fetchToolsForClient(client),
       fetchCommandsForClient(client),
       feature('MCP_SKILLS') && supportsResources
         ? fetchMcpSkillsForClient!(client)
         : Promise.resolve([]),
       supportsResources ? fetchResourcesForClient(client) : Promise.resolve([]),
+      // resources/templates/list enumeration (official os0034 anchor:
+      // templates listed alongside resources for template URI completion).
+      supportsResources
+        ? fetchResourceTemplatesForClient(client)
+        : Promise.resolve([]),
     ])
     const commands = [...mcpCommands, ...mcpSkills]
 

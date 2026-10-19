@@ -10,61 +10,20 @@ import type { Tool } from 'src/Tool.js';
 import { buildTool, type ToolDef } from 'src/Tool.js';
 import { lazySchema } from 'src/utils/lazySchema.js';
 import {
-  ASK_USER_QUESTION_TOOL_CHIP_WIDTH,
   ASK_USER_QUESTION_TOOL_NAME,
   ASK_USER_QUESTION_TOOL_PROMPT,
   DESCRIPTION,
   PREVIEW_FEATURE_PROMPT,
 } from './prompt.js';
+import { BASE_QUESTION_MAX, buildQuestionSchema, getQuestionSchemaFlags } from './questionFlags.js';
 
-const questionOptionSchema = lazySchema(() =>
-  z.object({
-    label: z
-      .string()
-      .describe(
-        'The display text for this option that the user will see and select. Should be concise (1-5 words) and clearly describe the choice.',
-      ),
-    description: z
-      .string()
-      .describe(
-        'Explanation of what this option means or what will happen if chosen. Useful for providing context about trade-offs or implications.',
-      ),
-    preview: z
-      .string()
-      .optional()
-      .describe(
-        'Optional preview content rendered when this option is focused. Use for mockups, code snippets, or visual comparisons that help users compare options. See the tool description for the expected content format.',
-      ),
-  }),
-);
+// QUESTION env extensions (CLAUDE_CODE_QUESTION_EXTENDED /
+// CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS, official 0311-chunk-dyqmyxqn
+// kind-form schema + 0044 chunk env gates): read once at first schema access
+// so input/output schemas stay consistent.
+const getQuestionFlags = () => getQuestionSchemaFlags();
 
-const questionSchema = lazySchema(() =>
-  z.object({
-    question: z
-      .string()
-      .describe(
-        'The complete question to ask the user. Should be clear, specific, and end with a question mark. Example: "Which library should we use for date formatting?" If multiSelect is true, phrase it accordingly, e.g. "Which features do you want to enable?"',
-      ),
-    header: z
-      .string()
-      .describe(
-        `Very short label displayed as a chip/tag (max ${ASK_USER_QUESTION_TOOL_CHIP_WIDTH} chars). Examples: "Auth method", "Library", "Approach".`,
-      ),
-    options: z
-      .array(questionOptionSchema())
-      .min(2)
-      .max(4)
-      .describe(
-        `The available choices for this question. Must have 2-4 options. Each option should be a distinct, mutually exclusive choice (unless multiSelect is enabled). There should be no 'Other' option, that will be provided automatically.`,
-      ),
-    multiSelect: z
-      .boolean()
-      .default(false)
-      .describe(
-        'Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive.',
-      ),
-  }),
-);
+const questionSchema = lazySchema(() => buildQuestionSchema(getQuestionFlags()));
 
 const annotationsSchema = lazySchema(() => {
   const annotationSchema = z.object({
@@ -119,7 +78,14 @@ const commonFields = lazySchema(() => ({
 const inputSchema = lazySchema(() =>
   z
     .strictObject({
-      questions: z.array(questionSchema()).min(1).max(4).describe('Questions to ask the user (1-4 questions)'),
+      questions: z
+        .array(questionSchema())
+        .min(1)
+        // QUESTION EXTENDED widens the per-question FORM (kind face) — the
+        // question count cap does NOT change with the mode (R6 review: the
+        // earlier 4→8 reading was a fabrication; official keeps one cap).
+        .max(BASE_QUESTION_MAX)
+        .describe(`Questions to ask the user (1-${BASE_QUESTION_MAX} questions)`),
       ...commonFields(),
     })
     .refine(UNIQUENESS_REFINE.check, {
@@ -147,7 +113,7 @@ export const _sdkInputSchema = inputSchema;
 export const _sdkOutputSchema = outputSchema;
 
 export type Question = z.infer<ReturnType<typeof questionSchema>>;
-export type QuestionOption = z.infer<ReturnType<typeof questionOptionSchema>>;
+export type QuestionOption = Question['options'][number];
 export type Output = z.infer<OutputSchema>;
 
 function AskUserQuestionResultMessage({ answers }: { answers: Output['answers'] }): React.ReactNode {
@@ -180,12 +146,28 @@ export const AskUserQuestionTool: Tool<InputSchema, Output> = buildTool({
   },
   async prompt() {
     const format = getQuestionPreviewFormat();
+    const flags = getQuestionFlags();
+    const extensions: string[] = [];
+    if (flags.extended) {
+      // Official QUESTION_EXTENDED semantics (0311 anchor): widens the
+      // per-question FORM with a kind face — the question count cap does not
+      // move (fabricated 4→8 wording removed per R6 review).
+      extensions.push(
+        'Extended question form is enabled: each question may set kind — "choice" (default, options picker), "text" (free-text answer box using placeholder, no options), or "number" (value between min and max, with optional step/defaultValue/unit). Render support for text/number kinds in the terminal UI is pending (honest TODO); remote/SDK form surfaces render them fully. Until local rendering lands, prefer kind "choice" questions but keep text/number questions semantically intact — they are answered as typed text.',
+      );
+    }
+    if (flags.optionalDescriptions) {
+      extensions.push(
+        'Option descriptions are optional in this session: omit the description field when the label alone is self-explanatory.',
+      );
+    }
+    const extensionText = extensions.length > 0 ? `\n\n${extensions.join(' ')}` : '';
     if (format === undefined) {
       // SDK consumer that hasn't opted into a preview format — omit preview
       // guidance (they may not render the field at all).
-      return ASK_USER_QUESTION_TOOL_PROMPT;
+      return ASK_USER_QUESTION_TOOL_PROMPT + extensionText;
     }
-    return ASK_USER_QUESTION_TOOL_PROMPT + PREVIEW_FEATURE_PROMPT[format];
+    return ASK_USER_QUESTION_TOOL_PROMPT + PREVIEW_FEATURE_PROMPT[format] + extensionText;
   },
   get inputSchema(): InputSchema {
     return inputSchema();
@@ -214,7 +196,30 @@ export const AskUserQuestionTool: Tool<InputSchema, Output> = buildTool({
     return true;
   },
   toAutoClassifierInput(input) {
-    return input.questions.map(q => q.question).join(' | ');
+    // Official parity (0311 anchor): kind facets are only exposed to the
+    // classifier when the extended surface is active.
+    const flags = getQuestionFlags();
+    return input.questions
+      .map(q => {
+        let facets = '';
+        if (flags.extended) {
+          const kindFacets: [string, unknown][] = [
+            ['kind', q.kind],
+            ['description', q.description],
+            ['placeholder', q.placeholder],
+            ['min', q.min],
+            ['max', q.max],
+            ['step', q.step],
+            ['default', q.defaultValue],
+            ['unit', q.unit],
+          ];
+          for (const [name, value] of kindFacets) {
+            if (value !== undefined && value !== '') facets += ` [${name}: ${String(value)}]`;
+          }
+        }
+        return `"${q.question}"${facets} options: ${q.options.map(o => o.label).join(', ')}`;
+      })
+      .join(' | ');
   },
   requiresUserInteraction() {
     return true;

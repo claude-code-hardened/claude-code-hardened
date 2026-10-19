@@ -179,6 +179,15 @@ export const McpJsonConfigSchema = lazySchema(() =>
 
 export type McpJsonConfig = z.infer<ReturnType<typeof McpJsonConfigSchema>>
 
+// Connection liveness (optional health probe, see healthCheck.ts — the
+// mcp-dispatch health semantics: ping interval + failure count → unhealthy)
+export type MCPServerHealth = {
+  status: 'healthy' | 'unhealthy'
+  failureCount: number
+  lastPingAt?: number
+  lastError?: string
+}
+
 // Server connection types
 export type ConnectedMCPServer = {
   client: Client
@@ -190,6 +199,7 @@ export type ConnectedMCPServer = {
     version: string
   }
   instructions?: string
+  health?: MCPServerHealth
   config: ScopedMcpServerConfig
   cleanup: () => Promise<void>
 }
