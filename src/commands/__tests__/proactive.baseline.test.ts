@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import proactiveCommand from '../proactive'
 import {
   activateProactive,
@@ -11,6 +11,12 @@ beforeEach(() => {
 })
 
 describe('/proactive baseline', () => {
+  /** Locale-independent translation source — the command t()'s its output. */
+  let translate: (key: string) => string
+  beforeAll(async () => {
+    ;({ t: translate } = await import('../../i18n/index.js'))
+  })
+
   test('invoking the command enables proactive mode and emits a system reminder', async () => {
     const mod = await proactiveCommand.load()
     let resultText: string | undefined
@@ -22,7 +28,11 @@ describe('/proactive baseline', () => {
     }, {} as any)
 
     expect(isProactiveActive()).toBe(true)
-    expect(resultText).toContain('Proactive mode enabled')
+    expect(resultText).toBe(
+      translate(
+        'Proactive mode enabled — model will work autonomously between ticks',
+      ),
+    )
     expect(options?.display).toBe('system')
     expect(options?.metaMessages?.[0]).toContain(
       'Proactive mode is now enabled',
@@ -42,7 +52,7 @@ describe('/proactive baseline', () => {
     }, {} as any)
 
     expect(isProactiveActive()).toBe(false)
-    expect(resultText).toBe('Proactive mode disabled')
+    expect(resultText).toBe(translate('Proactive mode disabled'))
     expect(options?.display).toBe('system')
   })
 })

@@ -153,6 +153,46 @@ const contextNonInteractive = lazyCommand(
 // cost/index.ts re-exports usage — /cost is now an alias of /usage
 const diff = lazyCommand(() => require('./commands/diff/index.js'))
 const doctor = lazyCommand(() => require('./commands/doctor/index.js'))
+// W3 task #54 — dug-up command cluster (loops/alias/credits/design/focus/…).
+const loopsCommand = lazyCommand(() => require('./commands/loops/index.js'))
+const aliasCommand = lazyCommand(() => require('./commands/alias/index.js'))
+const usageCredits = lazyCommand(() =>
+  require('./commands/usage-credits/index.js'),
+)
+const pluginTypes = lazyCommand(() =>
+  require('./commands/plugin-types/index.js'),
+)
+const reloadSkills = lazyCommand(() =>
+  require('./commands/reload-skills/index.js'),
+)
+const skillDoctor = lazyCommand(() =>
+  require('./commands/skill-doctor/index.js'),
+)
+// W5 R5-review — the previously-orphaned /skills-dashboard registration
+// (definition lives beside its renderer in components/SkillsDashboard/index.ts).
+const skillsDashboard = lazyCommand(() =>
+  require('./components/SkillsDashboard/index.js'),
+)
+const cloudPlugins = lazyCommand(() =>
+  require('./commands/cloud-plugins/index.js'),
+)
+const autoModeSetup = lazyCommand(() =>
+  require('./commands/auto-mode-setup/index.js'),
+)
+const designConsent = lazyCommand(() =>
+  require('./commands/design-consent/index.js'),
+)
+const designLogin = lazyCommand(() =>
+  require('./commands/design-login/index.js'),
+)
+const designRevoke = lazyCommand(() =>
+  require('./commands/design-revoke/index.js'),
+)
+const focusMode = lazyCommand(() => require('./commands/focus/index.js'))
+const powerupCommand = lazyCommand(() => require('./commands/powerup/index.js'))
+const proTrialExpired = lazyCommand(() =>
+  require('./commands/pro-trial-expired/index.js'),
+)
 const memory = lazyCommand(() => require('./commands/memory/index.js'))
 const mode = lazyCommand(() => require('./commands/mode/index.js'))
 const ide = lazyCommand(() => require('./commands/ide/index.js'))
@@ -497,6 +537,22 @@ const COMMANDS = memoize((): Command[] => [
   contextNonInteractive,
   diff,
   doctor,
+  // W3 task #54 — dug-up command cluster.
+  aliasCommand,
+  autoModeSetup,
+  cloudPlugins,
+  designConsent,
+  designLogin,
+  designRevoke,
+  focusMode,
+  loopsCommand,
+  pluginTypes,
+  powerupCommand,
+  proTrialExpired,
+  reloadSkills,
+  skillDoctor,
+  skillsDashboard,
+  usageCredits,
   effort,
   exit,
   fast,

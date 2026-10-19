@@ -27,6 +27,7 @@ import {
 } from '../../utils/model/model.js';
 import { isModelAllowed } from '../../utils/model/modelAllowlist.js';
 import { validateModel } from '../../utils/model/validateModel.js';
+import { emitPostModelSwitch, emitPreModelSwitch } from '../../utils/hooks/lifecycleHookEvents.js';
 
 function ModelPickerWrapper({
   onDone,
@@ -54,11 +55,16 @@ function ModelPickerWrapper({
       from_model: mainLoopModel as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       to_model: model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     });
+    // W7 #58: lifecycle hook emissions around the local /model picker switch
+    // (official PreModelSwitch/PostModelSwitch, source 'picker'). The emitters
+    // are observability-only — hooks observe, they cannot deny-cancel here.
+    void emitPreModelSwitch({ fromModel: mainLoopModel, toModel: model, source: 'picker' });
     setAppState(prev => ({
       ...prev,
       mainLoopModel: model,
       mainLoopModelForSession: null,
     }));
+    void emitPostModelSwitch({ fromModel: mainLoopModel, toModel: model, source: 'picker' });
 
     let message = `Set model to ${chalk.bold(renderModelLabel(model))}`;
     if (effort !== undefined) {
@@ -116,6 +122,7 @@ function SetModelAndClose({
   onDone: (result?: string, options?: { display?: CommandResultDisplay }) => void;
 }): React.ReactNode {
   const isFastMode = useAppState(s => s.fastMode);
+  const prevMainLoopModel = useAppState(s => s.mainLoopModel);
   const setAppState = useSetAppState();
   const model = args === 'default' ? null : args;
 
@@ -178,11 +185,16 @@ function SetModelAndClose({
     }
 
     function setModel(modelValue: string | null): void {
+      // W7 #58: lifecycle hook emissions around the local /model <name> switch
+      // (official PreModelSwitch/PostModelSwitch, source 'command').
+      // Observability-only — hooks cannot deny-cancel this switch.
+      void emitPreModelSwitch({ toModel: modelValue, source: 'command' });
       setAppState(prev => ({
         ...prev,
         mainLoopModel: modelValue,
         mainLoopModelForSession: null,
       }));
+      void emitPostModelSwitch({ fromModel: prevMainLoopModel, toModel: modelValue, source: 'command' });
       let message = `Set model to ${chalk.bold(renderModelLabel(modelValue))}`;
 
       let wasFastModeToggledOn;

@@ -208,7 +208,12 @@ export type CommandBase = {
     | 'plugin'
     | 'managed'
     | 'bundled'
-    | 'mcp' // Where the command was loaded from
+    | 'mcp'
+    // claude.ai-synced skills (skills pulled down from the synced-skills
+    // surface under the config home — see src/skills/syncedSkills.ts).
+    // Upstream anchor 0025 module-003: skill identifiers use the
+    // `synced-skill:` prefix when `loadedFrom === 'syncedSkills'`.
+    | 'syncedSkills' // Where the command was loaded from
   kind?: 'workflow' // Distinguishes workflow-backed commands (badged in autocomplete)
   immediate?: boolean // If true, command executes immediately without waiting for a stop point (bypasses queue)
   isSensitive?: boolean // If true, args are redacted from the conversation history

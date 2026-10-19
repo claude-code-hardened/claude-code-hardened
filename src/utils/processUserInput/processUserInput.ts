@@ -59,6 +59,7 @@ import {
   hasUltraplanKeyword,
   replaceUltraplanKeyword,
 } from '../ultraplan/keyword.js'
+import { applyAliasesToInputText } from '../../hooks/aliasExpansion.js'
 import { processTextPrompt } from './processTextPrompt.js'
 export type ProcessUserInputContext = ToolUseContext & LocalJSXCommandContext
 
@@ -550,9 +551,14 @@ async function processUserInputBase(
     !effectiveSkipSlash &&
     inputString.startsWith('/')
   ) {
+    // User-defined aliases expand ahead of slash dispatch: an alias
+    // registered via /alias forwards to its target command with the typed
+    // tail preserved (see src/hooks/aliasExpansion.ts). Unknown commands are
+    // returned unchanged by the expander, so this is a no-op for them.
+    const expandedInput = applyAliasesToInputText(inputString)
     const { processSlashCommand } = await import('./processSlashCommand.js')
     const slashResult = await processSlashCommand(
-      inputString,
+      expandedInput,
       precedingInputBlocks,
       imageContentBlocks,
       attachmentMessages,
