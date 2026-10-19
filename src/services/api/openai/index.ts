@@ -42,6 +42,7 @@ import {
   adaptResponsesStreamToAnthropic,
   buildResponsesRequest,
   createChatGPTResponsesStream,
+  invalidateCachedCodexClient,
   type ResponsesReasoningEffort,
 } from './responsesAdapter.js'
 import { normalizeMessagesForAPI } from '../../../utils/messages.js'
@@ -423,112 +424,127 @@ export async function* queryModelOpenAI(
     // awaited retry loops (both paths), replayed into the message stream once
     // the stream is secured.
     const retryNotices: SystemAPIErrorMessage[] = []
-    if (useChatGPTResponses) {
-      // Establishment-only connection retry (official SDK semantics —
-      // connection-class failures retry, mid-stream errors never do).
-      // Provider-concurrency slot: acquired before the request goes out,
-      // held until the stream settles (releaseOnStreamEnd finally — the
-      // same teardown instant as the watchdog's settle inside the adapter).
-      adaptedStream = await withProviderSlot(
-        'openai',
-        async release => {
-          const stream: AsyncIterable<Record<string, unknown>> =
-            await withConnectionRetry(
-              () =>
-                createChatGPTResponsesStream({
-                  request: buildResponsesRequest({
-                    model: openaiModel,
-                    messages: openaiMessages,
-                    tools: openaiTools,
-                    toolChoice: openaiToolChoice,
-                    reasoningEffort,
-                    promptCacheKey: sessionPromptCacheKey,
+    // W2.12 flush 面：establishment 终抛（budget 已尽 / RetryAfterTooLong /
+    // user abort）时把缓冲的 "Retrying in Xs…" 行先落为 system 消息再让
+    // 终错逃逸——丢弃窗口里的重试史对用户不可见曾是静默面（官方 g0 行的
+    // 回放不因终态丢失）。
+    try {
+      if (useChatGPTResponses) {
+        // Establishment-only connection retry (official SDK semantics —
+        // connection-class failures retry, mid-stream errors never do).
+        // Provider-concurrency slot: acquired before the request goes out,
+        // held until the stream settles (releaseOnStreamEnd finally — the
+        // same teardown instant as the watchdog's settle inside the adapter).
+        adaptedStream = await withProviderSlot(
+          'openai',
+          async release => {
+            const stream: AsyncIterable<Record<string, unknown>> =
+              await withConnectionRetry(
+                () =>
+                  createChatGPTResponsesStream({
+                    request: buildResponsesRequest({
+                      model: openaiModel,
+                      messages: openaiMessages,
+                      tools: openaiTools,
+                      toolChoice: openaiToolChoice,
+                      reasoningEffort,
+                      promptCacheKey: sessionPromptCacheKey,
+                    }),
+                    signal,
+                    fetchOverride:
+                      options.fetchOverride as unknown as typeof fetch,
                   }),
+                {
                   signal,
-                  fetchOverride:
-                    options.fetchOverride as unknown as typeof fetch,
-                }),
+                  source: options.querySource,
+                  onRetryStatus: collectRetryStatus(retryNotices),
+                  // W2.11 per-request usedTokenCache 标记（0032:706 shouldRetry
+                  // 401 门）：codex establishment 面每次经 getValidChatGPTAuth()
+                  // 从 ChatGPT 凭据缓存取 token → 恒置位；401 刷新前走
+                  // invalidate 面（丢 cached codex client，凭据键重读）。
+                  usedTokenCache: () => true,
+                  invalidateTokenCache: invalidateCachedCodexClient,
+                },
+              )
+            return releaseOnStreamEnd(
+              adaptResponsesStreamToAnthropic(stream, openaiModel),
+              release,
+            )
+          },
+          signal,
+        )
+      } else {
+        const client = getOpenAIClient({
+          maxRetries: 0,
+          fetchOverride: options.fetchOverride as unknown as typeof fetch,
+          source: options.querySource,
+        })
+        // Establishment-only connection retry with a per-attempt watchdog
+        // (official SDK semantics). A stalled attempt aborts through its own
+        // watchdog signal; the retry gets a fresh one, so an idle-fired
+        // watchdog cannot poison the next attempt.
+        // Provider-concurrency slot: acquired before the request goes out and
+        // released when the adapted stream settles (watchdog.wrap's settle
+        // fires one hop later in the same teardown chain).
+        adaptedStream = await withProviderSlot(
+          'openai',
+          async release => {
+            const { rawStream, watchdog } = await withConnectionRetry(
+              async () => {
+                const watchdog = createStreamWatchdog({
+                  url: `${(
+                    client.baseURL ?? 'https://api.openai.com/v1'
+                  ).replace(/\/+$/, '')}/chat/completions`,
+                  model: openaiModel,
+                  externalSignal: signal,
+                })
+                try {
+                  const rawStream = await client.chat.completions.create(
+                    buildOpenAIRequestBody({
+                      model: openaiModel,
+                      messages: openaiMessages,
+                      tools: openaiTools,
+                      toolChoice: openaiToolChoice,
+                      enableThinking,
+                      maxTokens,
+                      temperatureOverride: options.temperatureOverride,
+                      promptCacheKey,
+                    }),
+                    { signal: watchdog.signal },
+                  )
+                  // Establishment succeeded — disarm the first-byte window before
+                  // the consumption loop re-arms the idle window.
+                  watchdog.markEstablished()
+                  return { rawStream, watchdog }
+                } catch (error) {
+                  // The stream was never handed out — the wrap cannot settle the
+                  // in-flight registry on our behalf.
+                  watchdog.settle()
+                  throw error
+                }
+              },
               {
                 signal,
                 source: options.querySource,
                 onRetryStatus: collectRetryStatus(retryNotices),
               },
             )
-          return releaseOnStreamEnd(
-            adaptResponsesStreamToAnthropic(stream, openaiModel),
-            release,
-          )
-        },
-        signal,
-      )
-    } else {
-      const client = getOpenAIClient({
-        maxRetries: 0,
-        fetchOverride: options.fetchOverride as unknown as typeof fetch,
-        source: options.querySource,
-      })
-      // Establishment-only connection retry with a per-attempt watchdog
-      // (official SDK semantics). A stalled attempt aborts through its own
-      // watchdog signal; the retry gets a fresh one, so an idle-fired
-      // watchdog cannot poison the next attempt.
-      // Provider-concurrency slot: acquired before the request goes out and
-      // released when the adapted stream settles (watchdog.wrap's settle
-      // fires one hop later in the same teardown chain).
-      adaptedStream = await withProviderSlot(
-        'openai',
-        async release => {
-          const { rawStream, watchdog } = await withConnectionRetry(
-            async () => {
-              const watchdog = createStreamWatchdog({
-                url: `${(client.baseURL ?? 'https://api.openai.com/v1').replace(
-                  /\/+$/,
-                  '',
-                )}/chat/completions`,
-                model: openaiModel,
-                externalSignal: signal,
-              })
-              try {
-                const rawStream = await client.chat.completions.create(
-                  buildOpenAIRequestBody({
-                    model: openaiModel,
-                    messages: openaiMessages,
-                    tools: openaiTools,
-                    toolChoice: openaiToolChoice,
-                    enableThinking,
-                    maxTokens,
-                    temperatureOverride: options.temperatureOverride,
-                    promptCacheKey,
-                  }),
-                  { signal: watchdog.signal },
-                )
-                // Establishment succeeded — disarm the first-byte window before
-                // the consumption loop re-arms the idle window.
-                watchdog.markEstablished()
-                return { rawStream, watchdog }
-              } catch (error) {
-                // The stream was never handed out — the wrap cannot settle the
-                // in-flight registry on our behalf.
-                watchdog.settle()
-                throw error
-              }
-            },
-            {
-              signal,
-              source: options.querySource,
-              onRetryStatus: collectRetryStatus(retryNotices),
-            },
-          )
-          return releaseOnStreamEnd(
-            adaptOpenAIStreamToAnthropic(
-              watchdog.wrap(rawStream),
-              openaiModel,
-              { includeCacheWriteTokens: useOfficialOpenAICache },
-            ),
-            release,
-          )
-        },
-        signal,
-      )
+            return releaseOnStreamEnd(
+              adaptOpenAIStreamToAnthropic(
+                watchdog.wrap(rawStream),
+                openaiModel,
+                { includeCacheWriteTokens: useOfficialOpenAICache },
+              ),
+              release,
+            )
+          },
+          signal,
+        )
+      }
+    } catch (establishmentError) {
+      for (const notice of retryNotices) yield notice
+      retryNotices.length = 0
+      throw establishmentError
     }
 
     // The stream is secured — replay the buffered establishment-retry rows

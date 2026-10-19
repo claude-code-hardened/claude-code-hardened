@@ -208,16 +208,17 @@ export async function resumeAgentBackground({
     toolUseId: toolUseContext.toolUseId,
   })
 
-  // CCH #52/#46 复活面 → 中央句柄表 unpark（官方 $M：复活落点清
-  // quietlyParked 并重开句柄；registerAsyncAgent 的 running 写在已冻结
-  // 句柄上会被终态冻结吞掉，复活路必须显式 unpark 重开）。
+  // CCH #52/#46 复活面 → 中央句柄表重开。Q2 收敛（官方 $M :8428 原文只
+  // 清停车位、不动 status）：unpark 现为纯 $M 静默清停；把已冻结终态句柄
+  // 重开为 running 走显式 reopenRunning 接线路（registerAsyncAgent 的
+  // running 写在已冻结句柄上会被终态冻结吞掉，复活路必须显式重开）。
   recordTaskHandle({
     id: agentId,
     type: 'local_agent',
     status: 'running',
     description: uiDescription,
     outputFile: getTaskOutputPath(agentId),
-    unpark: true,
+    reopenRunning: true,
   })
 
   const metadata = {

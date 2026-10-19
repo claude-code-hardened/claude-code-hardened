@@ -27,21 +27,36 @@ import { isChatGPTAuthEnabled } from './openai/chatgptAuth.js'
  *    max(header, base) merge). Without a header:
  *    min(0.5 * 2^(attempt-1), 8s) * (1 - rand*0.25) — an UNROUNDED
  *    downward jitter, capped at 8s at the SDK layer.
- * 5. Retry-after-too-long fuse (module-006 loop): a resolved delay above
- *    $Eo=60000 with the retry watchdog off throws RetryAfterTooLongError
- *    instead of sleeping (official `tengu_api_retry_after_too_long`).
+ *    W2.9 两套共存面：429 的循环层延迟另走 XD 曲线（0032:592 原文，
+ *    retry-after max(c*1000, i) 合并 + UEo=300000 base cap + 上抖动
+ *    round），其余建立面维持本 retryRequest 版。
+ * 5. Retry gate（module-006 循环层原文，W2.8 收敛）：429 分支恒
+ *    Math.min(XD(UEo), oIe=21600000)——原文 429 不读 Pq/$Eo，无熔断；
+ *    非 429：watchdog on（CLAUDE_CODE_RETRY_WATCHDOG）→ min(un, oIe)
+ *    （补官方 cap 的未 cap 侧），watchdog off → un>$Eo=60000 抛
+ *    RetryAfterTooLongError（官方 `tengu_api_retry_after_too_long`）。
  * 6. The terminal error rethrown after an exhausted budget keeps its
  *    original class — the caller's formatting surface is unchanged.
- * 7. Outer-retry face (module-006 vWo() + classifier TZe/EZe curve): after
- *    the inner budget is spent, the 529/overloaded_error class (official
- *    rP) may get N extra rounds behind
- *    CLAUDE_CODE_UNAVAILABLE_OUTER_RETRIES (default off, 0..10 on the vWo
- *    face — out-of-bounds falls back to 0), backed by its own
+ * 7. Outer-retry face (module-006 vWo() + :7495 循环原文 + classifier
+ *    TZe/EZe curve): after the inner budget is spent, N extra rounds
+ *    (default off, 0..10 on the vWo face — out-of-bounds falls back to 0)
+ *    run while the error stays in the official FHt class (W2.10：
+ *    wall_clock/connection timeout + connection_error + http_429/5xx —
+ *    非仅 529+overloaded；529/overloaded_error 体面保留)，且官方
+ *    「有 retryAfterMs 即 break」（`Fo.retryAfterMs!==void 0 → break`，
+ *    服务端已给等待时长不再外层补轮）。每轮用
  *    min(2000 * 2^(n-1), 10s) + floor additive-jitter curve, separate from
  *    the inner SDK curve.
- * 8. A 401 while a refreshable token face exists (ChatGPT OAuth) retries
- *    exactly once so the next getValidChatGPTAuth() can rotate the cached
- *    credential.
+ * 8. A 401 refresh gate follows the official per-request semantics
+ *    (W2.11, 0032:706 shouldRetry 原文): only a request that actually
+ *    served its credential from the token cache (usedTokenCache 标记) and
+ *    has not refreshed yet retries once, invalidating the cache
+ *    (`tokenCache.invalidate()`) first. 调用点缺省无标记时保留会话级
+ *    isChatGPTAuthEnabled() 放宽作 fallback（取舍声明见 options 注释）。
+ * 9. onRetryStatus buffering: establishment-terminal throws and aborts
+ *    flush the buffered "Retrying in Xs…" rows before the error escapes
+ *    (adapter call sites' catch; W2.12 — official g0 face rows otherwise
+ *    lost in the discard window).
  */
 
 const CONNECTION_ERROR_CODES = new Set([
@@ -244,6 +259,43 @@ function computeBackoffDelayMs(error: unknown, attempt: number): number {
   return baseMs * (1 - Math.random() * 0.25)
 }
 
+// module-006 循环层 oIe：watchdog-on 面 / 429 延迟面的上限（6h）。
+const OIe_LOOP_DELAY_CAP_MS = 21_600_000
+// module-006 循环层 UEo：429 分支 XD 曲线的 base cap（5min）。
+const Ueo_429_LOOP_CAP_MS = 300_000
+
+/**
+ * 循环层 XD 曲线（W2.9，官方 0032-chunk-dyqmyxqn/module-005-uncategorized.js
+ * :592 原文：`function XD(e,r,n=32000,s=Math.random){let o=Math.min(500*
+ * Math.pow(2,e-1),n),i=Math.round(o+s()*0.25*o);if(r){let c=parseInt(r,10);
+ * if(!isNaN(c))return Math.max(c*1000,i)}return i}`）：base=min(500·
+ * 2^(attempt-1), capMs) ×(1+rand·0.25) 上抖动后 round；retry-after 秒数走
+ * **max-merge**（max(c*1000, i)），与内层建立面 retryRequest 的
+ * “头字段全量覆盖”（computeBackoffDelayMs，同 0032 retryRequest 原文）是
+ * 两套共存面：429/循环层重试路径用本曲线，其余建立面维持 retryRequest 版。
+ */
+function computeLoopBackoffDelayMs(
+  error: unknown,
+  attempt: number,
+  capMs: number,
+): number {
+  const baseMs = Math.min(500 * 2 ** (attempt - 1), capMs)
+  const jittered = Math.round(baseMs + Math.random() * 0.25 * baseMs)
+  const retryAfterSeconds = retryAfterSecondsOf(error)
+  if (retryAfterSeconds !== undefined) {
+    return Math.max(retryAfterSeconds * 1000, jittered)
+  }
+  return jittered
+}
+
+/** 服务端 retry-after（秒）——官方 XD 的 r 参（iIe 等价：原样秒数串）。 */
+function retryAfterSecondsOf(error: unknown): number | undefined {
+  const asSeconds = errHeaderOf(error, 'retry-after')
+  if (asSeconds === undefined) return undefined
+  const seconds = Number.parseFloat(asSeconds)
+  return Number.isNaN(seconds) ? undefined : seconds
+}
+
 /**
  * Retry-after-too-long fuse (module-006 retry loop): with the retry
  * watchdog off, a resolved delay above $Eo=60000 aborts the session loop
@@ -325,6 +377,23 @@ export interface ConnectionRetryOptions {
   source?: string
   /** Test injection point for the backoff sleep. */
   sleep?: (ms: number) => Promise<void>
+  /**
+   * Official per-request auth flag (W2.11, 0032-chunk-dyqmyxqn/
+   * module-005-uncategorized.js:706 `_authFlags`/`authHeaders`/`shouldRetry`
+   * 原文)：请求建模是否实际从 token cache 取了签发凭据。官方 401 门
+   * `if(e.status===401&&this._authState.tokenCache&&n.usedTokenCache&&
+   * !n.didRefreshFor401)return n.didRefreshFor401=!0,this._authState.
+   * tokenCache.invalidate(),!0` —— 仅「该请求真的用过缓存凭据」才放行
+   * 单次 401 刷新重试。codex/OpenAI 的 ChatGPT 路径在每次 establishment
+   * 都经 getValidChatGPTAuth() 从缓存放签发凭据（responsesAdapter），置位
+   * 封闭在调用点。缺省（无 per-request 标记的调用点）保留会话级放宽
+   * isChatGPTAuthEnabled() 作 fallback——官方门为本函数注释所引原文，
+   * fallback 是 CCH 单面的保守放宽（取舍声明）。
+   */
+  usedTokenCache?: () => boolean
+  /** 官方 shouldRetry 401 路的 `tokenCache.invalidate()` 等价面：401 刷新
+   * 重试前失效旧缓存（CCH 的 codex client 缓存随 access token 键重建）。 */
+  invalidateTokenCache?: () => void
   /**
    * Optional per-retry status callback — official module-006 payload
    * ({kind:'retrying', error, attempt, maxRetries, retryInMs, deadline}).
@@ -451,6 +520,28 @@ function isUnavailableOverloadedError(error: unknown): boolean {
   )
 }
 
+/**
+ * 外层轮次类判（W2.10）：官方 FHt（0001-chunk-xrzcaagk/module-006-
+ * uncategorized.js:7495）原文 `function FHt(e){if(e===void 0)return!1;
+ * if(e==="wall_clock_timeout"||e==="connection_timeout"||
+ * e==="connection_error")return!0;let n=e.match(/^http_(\d{3})/);if(n){
+ * let r=Number(n[1]);return r===429||r>=500&&r<600}return!1}` — 原文
+ * 外层循环（:7495 vWo 面 `for(Er=1;Er<=zo;Er++){if(g.aborted||!Fo.unavailable
+ * ||!FHt(Fo.errorKind)||Fo.errorKind?.endsWith("_no_retry")||
+ * Fo.retryAfterMs!==void 0)break;...}`）的参检类：timeout / connection /
+ * http_429 / http_5xx 全在类内。CCH 的 timeout/connection 姿态由
+ * isConnectionClassError（含 timeout-class 回退）承载，http_429/5xx 按
+ * status 码判定；529/overloaded_error 体面（rP）保留为显式成员。
+ */
+function isOuterRetryClassError(error: unknown): boolean {
+  if (isUnavailableOverloadedError(error)) return true
+  if (isConnectionClassError(error)) return true
+  const status = errStatusOf(error)
+  return (
+    status === 429 || (status !== undefined && status >= 500 && status < 600)
+  )
+}
+
 /** Outer-round backoff: TZe=2000·2^(n-1) capped at EZe=10s + floored
  * additive 0~+25% jitter (module-006 classifier face, not the SDK curve). */
 function computeOuterBackoffDelayMs(round: number): number {
@@ -497,13 +588,24 @@ export async function withConnectionRetry<T>(
   }
   let attempt = 0
   let authRefreshRetrySpent = false
-  // Retry-after-too-long gate (module-006: `un > $Eo && !Pq()` → throw):
-  // without the retry watchdog, a resolved wait above 60s surfaces as a
-  // RetryAfterTooLongError instead of stalling the session. Watchdog-on
-  // sessions take the official `min(un, oIe)` path instead (unbounded wait
-  // accepted).
+  // Retry gate（官方 module-006 循环层两分支，W2.8／W2.9 原文核对：
+  // 0001:6798 `if(Tn){U++;let zo=null;if(bt instanceof Pt&&bt.status===429){
+  // if(zo=pCo(bt,g),zo!==null&&...rejected)yn=bt}un=zo??Math.min(XD(U,qn,
+  // UEo,r.random),oIe)}else if(VM(bt))un=AEo;else if(zn)un=NEo;else if(
+  // un=XD(nt+U,qn,void 0,r.random),Pq())un=Math.min(un,oIe),Xt=!0;else if(
+  // un>$Eo)throw ...tengu_api_retry_after_too_long...`）：
+  // - 429 分支**恒** Math.min(XD(UEo), oIe)——原文 429 不读 Pq/$Eo，熔断
+  //   从不存在（「429 官方循环层恒 min(oIe) 无熔断」，Q2 复核确认）。
+  // - 非 429 分支：watchdog on（Pq）→ min(un, oIe=6h)（补 cap 的"未 cap
+  //   侧"——上一版 watchdog-on 直放是真偏差）；watchdog off → un>$Eo 抛。
   const gateDelayMs = (ms: number, failure: unknown): number => {
-    if (ms > RETRY_AFTER_TOO_LONG_MS && !isRetryWatchdogOn(process.env)) {
+    if (errStatusOf(failure) === 429) {
+      return Math.min(ms, OIe_LOOP_DELAY_CAP_MS)
+    }
+    if (isRetryWatchdogOn(process.env)) {
+      return Math.min(ms, OIe_LOOP_DELAY_CAP_MS)
+    }
+    if (ms > RETRY_AFTER_TOO_LONG_MS) {
       throw new RetryAfterTooLongError(ms, failure)
     }
     return ms
@@ -531,8 +633,14 @@ export async function withConnectionRetry<T>(
         isProviderConnectionRetryable(error, options.signal)
       ) {
         const timedOut = isTimeoutClassError(error)
+        // W2.9 两套共存面：429 的循环层延迟走 XD max-merge 曲线（0032:592
+        // + module-006 `un=zo??Math.min(XD(U,qn,UEo),oIe)`——retry-after
+        // max(c*1000, i) 合并、UEo=300000 base cap），其余建立面维持
+        // retryRequest 版（头字段全量覆盖）。
         const retryInMs = gateDelayMs(
-          computeBackoffDelayMs(error, attempt),
+          errStatusOf(error) === 429
+            ? computeLoopBackoffDelayMs(error, attempt, Ueo_429_LOOP_CAP_MS)
+            : computeBackoffDelayMs(error, attempt),
           error,
         )
         logForDebugging(
@@ -542,17 +650,28 @@ export async function withConnectionRetry<T>(
         if (!(await sleepBeforeRetry(retryInMs))) throw error
         continue
       }
-      // 401 with a refreshable credential face (ChatGPT OAuth): the cached
-      // access token may have expired server-side — the next getValidChatGPTAuth()
-      // re-reads the auth file and refreshes near-expiry tokens. Exactly one
-      // such retry is granted; a second 401 is a real auth failure.
+      // 401 refresh gate — official per-request semantics (W2.11,
+      // 0032-chunk-dyqmyxqn/module-005-uncategorized.js:706 `shouldRetry`
+      // 原文: `if(e.status===401&&this._authState.tokenCache&&
+      // n.usedTokenCache&&!n.didRefreshFor401)return n.didRefreshFor401
+      // =!0,this._authState.tokenCache.invalidate(),!0`)：仅当本请求实际
+      // 从 token cache 取过凭据（usedTokenCache 标记，codex/OpenAI 的
+      // getValidChatGPTAuth 缓存读取面）且未在本请求刷新过，才重试一次，
+      // 重试前 invalidate 旧缓存。无 per-request 标记的调用点保留会话级
+      // 放宽 isChatGPTAuthEnabled() 作 fallback（会话级放宽与官方门的
+      // 取舍已在 ConnectionRetryOptions.usedTokenCache 注释声明）。
+      const usedTokenCacheFlag =
+        options.usedTokenCache !== undefined
+          ? options.usedTokenCache() === true
+          : isChatGPTAuthEnabled()
       if (
         errStatusOf(error) === 401 &&
         !authRefreshRetrySpent &&
         !options.signal?.aborted &&
-        isChatGPTAuthEnabled()
+        usedTokenCacheFlag
       ) {
         authRefreshRetrySpent = true
+        options.invalidateTokenCache?.()
         const retryInMs = gateDelayMs(
           computeBackoffDelayMs(error, attempt),
           error,
@@ -565,17 +684,22 @@ export async function withConnectionRetry<T>(
         continue
       }
       if (remaining > 0) throw error
-      // Official outer-retry face (module-006 vWo() unavailableOuterRetries):
-      // past the exhausted inner budget, the rP overload class (529 +
-      // overloaded_error body) gets N more rounds (default vZe=0 — off).
-      // Each round backoffs on the classifier-face curve — its own
-      // min(TZe·2^(n-1), EZe) + floored additive jitter, separate from the
-      // inner SDK curve.
+      // Official outer-retry face (module-006 vWo() unavailableOuterRetries,
+      // :7495 循环原文): past the exhausted inner budget, N more rounds
+      // (default vZe=0 — off) while the error stays in the FHt class
+      // (W2.10: timeout/connection/http_429/5xx — 非仅 529+overloaded)。
+      // 官方 4 句 break 连词的 CCH 对应：aborted（signal）、非类内
+      // （isOuterRetryClassError）、`Fo.retryAfterMs!==void 0`（服务端已
+      // 给出等待时长 → 不再外层补轮）、`_no_retry` 后缀类（等价
+      // x-should-retry veto → isProviderConnectionRetryable 拒绝）。每轮
+      // 走 classifier-face 曲线（min(TZe·2^(n-1), EZe) + floored additive
+      // jitter），独立于内层 SDK 曲线。
       const outerRound = attempt - maxRetries
       if (
         outerRound > outerRetries ||
         options.signal?.aborted ||
-        !isUnavailableOverloadedError(error) ||
+        !isOuterRetryClassError(error) ||
+        retryAfterMs(error) !== undefined ||
         !isProviderConnectionRetryable(error, options.signal)
       ) {
         throw error

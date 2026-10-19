@@ -1,6 +1,7 @@
 import type {
   BetaToolUnion,
   BetaMessage,
+  BetaRawMessageStreamEvent,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { randomUUID } from 'crypto'
 import type {
@@ -140,80 +141,90 @@ export async function* queryModelGemini(
     // awaited retry loop, replayed into the message stream once the stream
     // is secured.
     const retryNotices: SystemAPIErrorMessage[] = []
-    const adaptedStream = await withProviderSlot(
-      'gemini',
-      async release => {
-        const { stream } = await withConnectionRetry(
-          async () => {
-            const watchdog = createStreamWatchdog({
-              url: getGeminiStreamUrl(geminiModel),
-              model: geminiModel,
-              externalSignal: signal,
-            })
-            try {
-              const raw = await establishGeminiStream({
+    // W2.12 flush 面：establishment 终抛（budget 已尽 / RetryAfterTooLong /
+    // user abort）时先回放缓冲的 "Retrying in Xs…" 行再让终错逃逸——
+    // 官方 g0 行不落在丢弃窗口里。
+    let adaptedStream: AsyncGenerator<BetaRawMessageStreamEvent, void>
+    try {
+      adaptedStream = await withProviderSlot(
+        'gemini',
+        async release => {
+          const { stream } = await withConnectionRetry(
+            async () => {
+              const watchdog = createStreamWatchdog({
+                url: getGeminiStreamUrl(geminiModel),
                 model: geminiModel,
-                signal: watchdog.signal,
-                fetchOverride: options.fetchOverride as
-                  | typeof fetch
-                  | undefined,
-                // Body layout mirrors the wire format (contents/systemInstruction/
-                // tools/toolConfig/generationConfig) — the client maps it onto the
-                // SDK's flattened GenerateContentConfig.
-                body: {
-                  contents,
-                  ...(systemInstruction && { systemInstruction }),
-                  ...(geminiTools.length > 0 && { tools: geminiTools }),
-                  ...(toolChoice && {
-                    toolConfig: {
-                      functionCallingConfig: toolChoice,
-                    },
-                  }),
-                  generationConfig: {
-                    ...(options.temperatureOverride !== undefined && {
-                      temperature: options.temperatureOverride,
-                    }),
-                    ...(thinkingConfig.type !== 'disabled' && {
-                      thinkingConfig: {
-                        includeThoughts: true,
-                        ...(thinkingConfig.type === 'enabled' && {
-                          thinkingBudget: thinkingConfig.budgetTokens,
-                        }),
+                externalSignal: signal,
+              })
+              try {
+                const raw = await establishGeminiStream({
+                  model: geminiModel,
+                  signal: watchdog.signal,
+                  fetchOverride: options.fetchOverride as
+                    | typeof fetch
+                    | undefined,
+                  // Body layout mirrors the wire format (contents/systemInstruction/
+                  // tools/toolConfig/generationConfig) — the client maps it onto the
+                  // SDK's flattened GenerateContentConfig.
+                  body: {
+                    contents,
+                    ...(systemInstruction && { systemInstruction }),
+                    ...(geminiTools.length > 0 && { tools: geminiTools }),
+                    ...(toolChoice && {
+                      toolConfig: {
+                        functionCallingConfig: toolChoice,
                       },
                     }),
+                    generationConfig: {
+                      ...(options.temperatureOverride !== undefined && {
+                        temperature: options.temperatureOverride,
+                      }),
+                      ...(thinkingConfig.type !== 'disabled' && {
+                        thinkingConfig: {
+                          includeThoughts: true,
+                          ...(thinkingConfig.type === 'enabled' && {
+                            thinkingBudget: thinkingConfig.budgetTokens,
+                          }),
+                        },
+                      }),
+                    },
                   },
-                },
-              })
-              // Establishment succeeded — disarm the first-byte window before
-              // the consumption loop re-arms the idle window.
-              watchdog.markEstablished()
-              return {
-                stream: projectGeminiStream(watchdog.wrap(raw)),
-                watchdog,
+                })
+                // Establishment succeeded — disarm the first-byte window before
+                // the consumption loop re-arms the idle window.
+                watchdog.markEstablished()
+                return {
+                  stream: projectGeminiStream(watchdog.wrap(raw)),
+                  watchdog,
+                }
+              } catch (error) {
+                watchdog.settle()
+                throw error
               }
-            } catch (error) {
-              watchdog.settle()
-              throw error
-            }
-          },
-          {
-            signal,
-            source: options.querySource,
-            onRetryStatus: collectRetryStatus(retryNotices),
-          },
-        )
+            },
+            {
+              signal,
+              source: options.querySource,
+              onRetryStatus: collectRetryStatus(retryNotices),
+            },
+          )
 
-        logForDebugging(
-          `[Gemini] Calling model=${geminiModel}, messages=${contents.length}, tools=${geminiTools.length}`,
-        )
+          logForDebugging(
+            `[Gemini] Calling model=${geminiModel}, messages=${contents.length}, tools=${geminiTools.length}`,
+          )
 
-        return releaseOnStreamEnd(
-          adaptGeminiStreamToAnthropic(stream, geminiModel),
-          release,
-        )
-      },
-      signal,
-    )
+          return releaseOnStreamEnd(
+            adaptGeminiStreamToAnthropic(stream, geminiModel),
+            release,
+          )
+        },
+        signal,
+      )
+    } catch (establishmentError) {
+      for (const notice of retryNotices) yield notice
+      retryNotices.length = 0
+      throw establishmentError
+    }
 
     const contentBlocks: Record<number, Record<string, unknown>> = {}
     const textDeltas = new Map<number, string[]>()

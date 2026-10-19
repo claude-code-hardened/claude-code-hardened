@@ -33,20 +33,13 @@ export type SetAppState = (f: (prev: AppState) => AppState) => void
  * agentId,taskId,userResumeNotice,passive})：通知类命令在 QueuedCommand
  * 之上可携带的 mailbox 三面标记。
  */
-/**
- * CCH #50/#52 (官方 2.1.284 队列命令信封字段——
- * docs/reverse-284/0001-chunk-xrzcaagk/module-006-uncategorized.js:2295
- * `Eyo` 的命令形状 {mode:'task-notification',skipAttachments,priority,
- * agentId,taskId,userResumeNotice,passive})：通知类命令在 QueuedCommand
- * 之上可携带的 mailbox 三面标记。
- */
 export type NotificationCommandOptions = {
   /**
    * CCH #50 插队面：true 时插到队列首（优先于既有待处理命令），
    * 而非按默认的 FIFO/priority 追加。写路径已由 enqueuePendingNotification
    * 消费（unshift），测试面覆盖；生产 sender 尚未接线（pending wiring，
    * 官方 Er 的 ahead 走 enqueueReportingAdmission 的 peer 收条面——CCH
-   * peer 链尚未打通，勿在无官方出处处强行挂用）。
+   * peer 链尚未打通，勿在无官方出出处强行挂用）。
    */
   ahead?: boolean
   /**
@@ -67,6 +60,17 @@ export type NotificationCommandOptions = {
    * 均带 `skipAttachments:!0`。
    */
   skipAttachments?: boolean
+  /**
+   * W1.5（Q2）：官方信封字段 `agentId:r`（0001/module-006:2295 `Eyo` 的
+   * `agentId:r` = 目标会话路由位）。上一版信封类型缺该字段（F4 顾虑）。
+   * CCH 主线程消费面（print.ts dequeue/isMainThread、query.ts 子代理
+   * mid-turn 摘取）以 `cmd.agentId === undefined` 判主线程——**在本会话
+   * 内自投**的通知（userResumeNotice、still-running 快照）必须留空，
+   * 否则永远无人投递（F4 顾虑复核为真实，保 payload tag 面 +
+   * AgentTool/userResumeNotice.ts 头注释的官方差异声明）；跨会话/子代理
+   * 定向投递的生产者（官方按 `agentId:r` 路由的信使）才携带本字段。
+   */
+  agentId?: string
   /** 关联任务 id（官方命令形状携带；供消费面/去重判定）。 */
   taskId?: string
   /** CCH #46: 官方 userResumeNotice 标记（复活通知；配合模块级去重）。 */

@@ -2,6 +2,7 @@ import type {
   BetaToolUnion,
   BetaMessage,
   BetaUsage,
+  BetaRawMessageStreamEvent,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import type { SystemPrompt } from '../../../utils/systemPromptType.js'
 import type {
@@ -150,60 +151,71 @@ export async function* queryModelGrok(
     // awaited retry loop, replayed into the message stream once the stream
     // is secured.
     const retryNotices: SystemAPIErrorMessage[] = []
-    const adaptedStream = await withProviderSlot(
-      'grok',
-      async release => {
-        const { stream, watchdog } = await withConnectionRetry(
-          async () => {
-            const watchdog = createStreamWatchdog({
-              url: `${(client.baseURL ?? 'https://api.x.ai/v1').replace(
-                /\/+$/,
-                '',
-              )}/chat/completions`,
-              model: grokModel,
-              externalSignal: signal,
-            })
-            try {
-              const stream = await client.chat.completions.create(
-                {
-                  model: grokModel,
-                  messages: openaiMessages,
-                  ...(openaiTools.length > 0 && {
-                    tools: openaiTools,
-                    ...(openaiToolChoice && { tool_choice: openaiToolChoice }),
-                  }),
-                  stream: true,
-                  stream_options: { include_usage: true },
-                  ...(options.temperatureOverride !== undefined && {
-                    temperature: options.temperatureOverride,
-                  }),
-                } as ChatCompletionCreateParamsStreaming,
-                { signal: watchdog.signal },
-              )
-              watchdog.markEstablished()
-              return { stream, watchdog }
-            } catch (error) {
-              watchdog.settle()
-              throw error
-            }
-          },
-          {
-            signal,
-            source: options.querySource,
-            onRetryStatus: collectRetryStatus(retryNotices),
-          },
-        )
+    // W2.12 flush 面：establishment 终抛（budget 已尽 / RetryAfterTooLong /
+    // user abort）时先回放缓冲的 "Retrying in Xs…" 行再让终错逃逸。
+    let adaptedStream: AsyncGenerator<BetaRawMessageStreamEvent, void>
+    try {
+      adaptedStream = await withProviderSlot(
+        'grok',
+        async release => {
+          const { stream, watchdog } = await withConnectionRetry(
+            async () => {
+              const watchdog = createStreamWatchdog({
+                url: `${(client.baseURL ?? 'https://api.x.ai/v1').replace(
+                  /\/+$/,
+                  '',
+                )}/chat/completions`,
+                model: grokModel,
+                externalSignal: signal,
+              })
+              try {
+                const stream = await client.chat.completions.create(
+                  {
+                    model: grokModel,
+                    messages: openaiMessages,
+                    ...(openaiTools.length > 0 && {
+                      tools: openaiTools,
+                      ...(openaiToolChoice && {
+                        tool_choice: openaiToolChoice,
+                      }),
+                    }),
+                    stream: true,
+                    stream_options: { include_usage: true },
+                    ...(options.temperatureOverride !== undefined && {
+                      temperature: options.temperatureOverride,
+                    }),
+                  } as ChatCompletionCreateParamsStreaming,
+                  { signal: watchdog.signal },
+                )
+                watchdog.markEstablished()
+                return { stream, watchdog }
+              } catch (error) {
+                watchdog.settle()
+                throw error
+              }
+            },
+            {
+              signal,
+              source: options.querySource,
+              onRetryStatus: collectRetryStatus(retryNotices),
+            },
+          )
 
-        return releaseOnStreamEnd(
-          adaptOpenAIStreamToAnthropic(
-            watchdog.wrap(stream) as AsyncIterable<ChatCompletionChunk>,
-            grokModel,
-          ),
-          release,
-        )
-      },
-      signal,
-    )
+          return releaseOnStreamEnd(
+            adaptOpenAIStreamToAnthropic(
+              watchdog.wrap(stream) as AsyncIterable<ChatCompletionChunk>,
+              grokModel,
+            ),
+            release,
+          )
+        },
+        signal,
+      )
+    } catch (establishmentError) {
+      for (const notice of retryNotices) yield notice
+      retryNotices.length = 0
+      throw establishmentError
+    }
 
     const contentBlocks: Record<number, Record<string, unknown>> = {}
     const textDeltas = new Map<number, string[]>()

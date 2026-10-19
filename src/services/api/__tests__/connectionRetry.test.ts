@@ -216,8 +216,10 @@ describe('withConnectionRetry', () => {
       async () => {
         attempts++
         if (attempts === 1) {
-          throw Object.assign(new Error('rate limited'), {
-            status: 429,
+          // 非 429（建立面）：retryRequest 脸面保留（0032 原文头字段全量
+          // 覆盖）。429 已改走 XD 循环层曲线（见 retry gate describe）。
+          throw Object.assign(new Error('service unavailable'), {
+            status: 503,
             headers: { 'retry-after-ms': '250' },
           })
         }
@@ -237,8 +239,8 @@ describe('withConnectionRetry', () => {
       async () => {
         tries++
         if (tries === 1) {
-          throw Object.assign(new Error('rate limited'), {
-            status: 429,
+          throw Object.assign(new Error('service unavailable'), {
+            status: 503,
             headers: { 'retry-after-ms': '5000' },
           })
         }
@@ -276,7 +278,9 @@ describe('withConnectionRetry', () => {
   test('onRetryStatus reports the official payload per retry', async () => {
     const notices: ConnectionRetryStatus[] = []
     let attempts = 0
-    const failure = Object.assign(new Error('throttled'), { status: 429 })
+    // 非 429 类（建立面 0032 retryRequest 曲线 [375,500]）；429 的 payload
+    // 面走 XD 曲线（retry gate describe 单测）。
+    const failure = Object.assign(new Error('throttled'), { status: 503 })
     await withConnectionRetry(
       async () => {
         attempts++
@@ -484,15 +488,15 @@ describe('withConnectionRetry outer retries (unavailableOuterRetries)', () => {
     }
   })
 
-  test('503 is not the official rP overload class — no outer rounds', async () => {
+  test('503 is in the official FHt class — outer rounds granted (W2.10 扩类)', async () => {
     const previous = withEnv('1')
     try {
       let attempts = 0
       const terminal = Object.assign(new Error('service unavailable'), {
         status: 503,
       })
-      // rP (module-006) is 529 / overloaded_error only: a 503 stays a plain
-      // 5xx (inner-budget material) and grants zero outer rounds.
+      // 官方 FHt（0001:7495）http_5xx 全在类内（W2.10：timeout/connection/
+      // http_429/5xx —— 非仅 529+overloaded）：503 拿 1 个外层轮后才让位。
       await expect(
         withConnectionRetry(
           async () => {
@@ -502,19 +506,20 @@ describe('withConnectionRetry outer retries (unavailableOuterRetries)', () => {
           { maxRetries: 0, sleep: async () => {} },
         ),
       ).rejects.toBe(terminal)
-      expect(attempts).toBe(1)
+      expect(attempts).toBe(2) // 1 establishment + 1 outer round
     } finally {
       restoreEnv(ENV, previous)
     }
   })
 
-  test('non-overload class gets no outer rounds', async () => {
+  test('non-FHt class gets no outer rounds (http_4xx stays terminal)', async () => {
     const previous = withEnv('5')
     try {
       let attempts = 0
-      const terminal = Object.assign(new Error('relay gone'), {
-        code: 'ECONNREFUSED',
-      })
+      // 官方 FHt 只收 timeout/connection/http_429/http_5xx——http_400 不在
+      // 类内（`r===429||r>=500&&r<600`），外层不补轮；400 亦非内层可重试
+      // 类（408/409/429/5xx 之外）→ 一次即终。
+      const terminal = Object.assign(new Error('bad request'), { status: 400 })
       await expect(
         withConnectionRetry(
           async () => {
@@ -524,23 +529,26 @@ describe('withConnectionRetry outer retries (unavailableOuterRetries)', () => {
           { maxRetries: 1, sleep: async () => {} },
         ),
       ).rejects.toBe(terminal)
-      expect(attempts).toBe(2)
+      expect(attempts).toBe(1)
     } finally {
       restoreEnv(ENV, previous)
     }
   })
 })
 
-describe('withConnectionRetry retry-after-too-long fuse', () => {
+describe('withConnectionRetry retry gate（module-006 循环层原文，W2.8）', () => {
   const WATCHDOG = 'CLAUDE_CODE_RETRY_WATCHDOG'
 
-  test('header wait >60s without the watchdog throws RetryAfterTooLongError', async () => {
+  test('non-429 header wait >60s without the watchdog throws RetryAfterTooLongError', async () => {
     const previous = process.env[WATCHDOG]
     delete process.env[WATCHDOG]
     let attempts = 0
     const sleeps: number[] = []
-    const failure = Object.assign(new Error('rate limited'), {
-      status: 429,
+    // 官方非 429 分支（0001:6798 原文）：`un=XD(...),Pq() ? min(un,oIe) :
+    // un>$Eo → throw tengu_api_retry_after_too_long` —— 熔断只作用于
+    // 非 429 类且 watchdog 关。
+    const failure = Object.assign(new Error('service unavailable'), {
+      status: 503,
       headers: { 'retry-after-ms': '90000' },
     })
     try {
@@ -561,7 +569,38 @@ describe('withConnectionRetry retry-after-too-long fuse', () => {
     }
   })
 
-  test('watchdog-on sessions take the min(un, oIe) wait instead of fusing', async () => {
+  test('429 has no fuse with the watchdog off — official 恒 min(XD(U,UEo),oIe) loop face', async () => {
+    const previous = process.env[WATCHDOG]
+    delete process.env[WATCHDOG]
+    let attempts = 0
+    const sleeps: number[] = []
+    // 官方 429 分支原文（0001:6798）：`un = zo ?? Math.min(XD(U, qn, UEo,
+    // r.random), oIe)` —— 不读 Pq/$Eo，无熔断；XD 的 r 参只认 retry-after
+    // 秒数（iIe 原文），retry-after-ms 属 SDK retryRequest 面（非 429 用）。
+    const failure = Object.assign(new Error('rate limited'), {
+      status: 429,
+      headers: { 'retry-after-ms': '90000' },
+    })
+    try {
+      await withConnectionRetry(
+        async () => {
+          attempts++
+          if (attempts === 1) throw failure
+          return 'ok'
+        },
+        { maxRetries: 3, sleep: async ms => void sleeps.push(ms) },
+      )
+      expect(attempts).toBe(2)
+      // XD 循环层曲线（0032:592）：base=min(500·2^0, UEo=300000)=500，
+      // +0~25% 上抖动后 round → [500, 625]。
+      expect(sleeps[0]).toBeGreaterThanOrEqual(500)
+      expect(sleeps[0]).toBeLessThanOrEqual(625)
+    } finally {
+      restoreEnv(WATCHDOG, previous)
+    }
+  })
+
+  test('watchdog-on non-429 takes min(un, oIe) instead of fusing（补 cap 未 cap 侧）', async () => {
     const previous = process.env[WATCHDOG]
     process.env[WATCHDOG] = '1'
     let attempts = 0
@@ -571,8 +610,8 @@ describe('withConnectionRetry retry-after-too-long fuse', () => {
         async () => {
           attempts++
           if (attempts === 1) {
-            throw Object.assign(new Error('rate limited'), {
-              status: 429,
+            throw Object.assign(new Error('slow relay'), {
+              status: 503,
               headers: { 'retry-after-ms': '90000' },
             })
           }
@@ -582,6 +621,35 @@ describe('withConnectionRetry retry-after-too-long fuse', () => {
       )
       expect(attempts).toBe(2)
       expect(sleeps).toEqual([90000])
+    } finally {
+      restoreEnv(WATCHDOG, previous)
+    }
+  })
+
+  test('429 huge retry-after seconds sleep through (XD max-merge, no $Eo fuse)', async () => {
+    const previous = process.env[WATCHDOG]
+    delete process.env[WATCHDOG]
+    let attempts = 0
+    const sleeps: number[] = []
+    try {
+      await withConnectionRetry(
+        async () => {
+          attempts++
+          if (attempts === 1) {
+            throw Object.assign(new Error('reset soon'), {
+              status: 429,
+              headers: { 'retry-after': '1200' },
+            })
+          }
+          return 'ok'
+        },
+        { maxRetries: 3, sleep: async ms => void sleeps.push(ms) },
+      )
+      expect(attempts).toBe(2)
+      // XD max-merge（0032:592 原文 `return Math.max(c*1000, i)`）：
+      // max(1200*1000, jitter[500,625]) = 1200000；min(un, oIe) 不再收敛，
+      // 无 $Eo 熔断（watchdog 关也不抛）。
+      expect(sleeps).toEqual([1200000])
     } finally {
       restoreEnv(WATCHDOG, previous)
     }
@@ -666,6 +734,60 @@ describe('withConnectionRetry 401 token-cache refresh retry-once', () => {
           throw Object.assign(new Error('unauthorized'), { status: 401 })
         },
         { maxRetries: 3, sleep: async () => {} },
+      ).catch(e => e)
+      expect(attempts).toBe(1)
+      expect((result as { status?: number }).status).toBe(401)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('W2.11: per-request usedTokenCache=true grants one refresh + invalidates cache', async () => {
+    const previous = process.env[ENV]
+    delete process.env[ENV] // 会话级 fallback off —— 只有 per-request 标记放行
+    try {
+      let attempts = 0
+      const invalidations: number[] = []
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          // 每次尝试都从 token cache 取凭据（codex getValidChatGPTAuth 面）
+          throw Object.assign(new Error('unauthorized'), { status: 401 })
+        },
+        {
+          maxRetries: 3,
+          sleep: async () => {},
+          usedTokenCache: () => true,
+          invalidateTokenCache: () => void invalidations.push(1),
+        },
+      ).catch(e => e)
+      // 第二次 401 仍为终态（官方 didRefreshFor401 单次门）
+      expect(attempts).toBe(2)
+      expect((result as { status?: number }).status).toBe(401)
+      // 官方 `tokenCache.invalidate()` 在重试前执行一次
+      expect(invalidations).toHaveLength(1)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('W2.11: per-request usedTokenCache=false does not grant the 401 retry', async () => {
+    const previous = process.env[ENV]
+    process.env[ENV] = 'chatgpt' // 会话级放宽开着 —— per-request 标记优先
+    try {
+      let attempts = 0
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          throw Object.assign(new Error('unauthorized'), { status: 401 })
+        },
+        {
+          maxRetries: 3,
+          sleep: async () => {},
+          // 非缓存请求面（API-key 路径）：官方 `n.usedTokenCache` 为 false
+          // → 401 门不放行（不含会话级 fallback）。
+          usedTokenCache: () => false,
+        },
       ).catch(e => e)
       expect(attempts).toBe(1)
       expect((result as { status?: number }).status).toBe(401)

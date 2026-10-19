@@ -39,7 +39,7 @@ const {
   generateTaskAttachments,
   POLL_INTERVAL_MS,
   PANEL_GRACE_MS,
-  buildStillRunningReminder,
+  buildStillRunningReminders,
   enqueueStillRunningReminder,
   _resetStillRunningReminderForTest,
 } = await import('../framework.js')
@@ -270,42 +270,81 @@ describe('constants', () => {
   })
 })
 
-// ─── CCH #52/#44: still-running 快照注入 ─────────────────────────────────
+// ─── CCH #52/#44: still-running 快照注入（Q2 按官方 8781 原文纠偏） ─────────
 
-describe('buildStillRunningReminder', () => {
-  test('无 running 句柄 → undefined', () => {
-    expect(buildStillRunningReminder()).toBeUndefined()
+describe('buildStillRunningReminders', () => {
+  test('无 running 句柄 → 空数组', () => {
+    expect(buildStillRunningReminders()).toEqual([])
   })
 
-  test('有 running 句柄 → <system-reminder> 制式快照行（官方逐字）', () => {
+  test('local_agent running → 官方 8781 agent 分支逐字（每任务一信使）', () => {
     recordTaskHandle({
       id: 'agnt_snap01',
       type: 'local_agent',
       status: 'running',
       description: 'scout & <builder>',
     })
-    const reminder = buildStillRunningReminder()
-    expect(reminder).toBeDefined()
-    expect(reminder!.startsWith('<system-reminder>')).toBe(true)
-    expect(reminder!.endsWith('</system-reminder>')).toBe(true)
-    // 官方逐字（0001/module-006:8781 running 分支）：is still running +
-    // 两处 it + TaskStop 工具名。
+    const reminders = buildStillRunningReminders()
+    expect(reminders).toHaveLength(1)
+    const reminder = reminders[0]!
+    expect(reminder.startsWith('<system-reminder>')).toBe(true)
+    expect(reminder.endsWith('</system-reminder>')).toBe(true)
+    // 官方逐字（0001/module-006:8781 task_status running agent 分支）：
+    // `Background agent "${desc}" (${id}) is still running.` +
+    // `Do NOT spawn a duplicate. You will be notified when it completes.` +
+    // 无输出文件尾句 = SendMessage 催报。agent 分支原文无 TaskStop 续句。
     expect(reminder).toContain(
-      'agnt_snap01 ("scout &amp; &lt;builder&gt;") is still running. Do not start it again; to restart it, stop it with TaskStop first.',
+      'Background agent "scout &amp; &lt;builder&gt;" (agnt_snap01) is still running. Do NOT spawn a duplicate. You will be notified when it completes. Send it a message with SendMessage if you need a progress report before then.',
     )
-    expect(reminder).toContain('<system-reminder>')
-    expect(reminder!.includes('Do not start it again')).toBe(true)
+    expect(reminder.includes('Do not start it again')).toBe(false)
   })
 
-  test('空描述句柄也注入（占位空引号）', () => {
+  test('local_agent 带输出文件 → agent 分支有文件尾句（读 partial output + SendMessage）', () => {
+    recordTaskHandle({
+      id: 'agnt_snap10',
+      type: 'local_agent',
+      status: 'running',
+      description: 'with-output',
+      outputFile: '/tmp/output/agnt_snap10',
+    })
+    const reminder = buildStillRunningReminders()[0]!
+    expect(reminder).toContain(
+      'Background agent "with-output" (agnt_snap10) is still running. Do NOT spawn a duplicate. You will be notified when it completes. You can read partial output at /tmp/output/agnt_snap10 or send it a message with SendMessage.',
+    )
+  })
+
+  test('local_bash running → 官方 8781 bash 分支逐字（Background shell + TaskStop 续句）', () => {
     recordTaskHandle({
       id: 'agnt_snap02',
       type: 'local_bash',
       status: 'running',
     })
-    expect(buildStillRunningReminder()).toContain(
-      'agnt_snap02 ("") is still running. Do not start it again; to restart it, stop it with TaskStop first.',
+    const reminder = buildStillRunningReminders()[0]!
+    // 官方 bash 分支：`Background shell ${id} ("${desc}") is still running.`
+    // + `Do not start it again; to restart it, stop it with TaskStop first.`
+    expect(reminder).toContain(
+      'Background shell agnt_snap02 ("") is still running. Do not start it again; to restart it, stop it with TaskStop first.',
     )
+    expect(reminder.includes('Do NOT spawn a duplicate')).toBe(false)
+  })
+
+  test('多 running 句柄 → 每任务一条信使（官方每任务一信使，不跨任务合并）', () => {
+    recordTaskHandle({
+      id: 'agnt_snap11',
+      type: 'local_agent',
+      status: 'running',
+      description: 'a',
+    })
+    recordTaskHandle({
+      id: 'agnt_snap12',
+      type: 'local_bash',
+      status: 'running',
+      description: 'b',
+    })
+    const reminders = buildStillRunningReminders()
+    expect(reminders).toHaveLength(2)
+    expect(reminders[0]).toContain('Background agent "a" (agnt_snap11)')
+    expect(reminders[1]).toContain('Background shell agnt_snap12 ("b")')
   })
 })
 
@@ -346,7 +385,7 @@ describe('enqueueStillRunningReminder', () => {
     expect(queuedNotifications.length).toBe(count)
   })
 
-  test('集合变化后重新注入（完成 → 剩集快照更新）', () => {
+  test('集合变化后重新注入（完成 → 剩集快照更新，逐任务重发）', () => {
     recordTaskHandle({
       id: 'agnt_snap05',
       type: 'local_agent',
@@ -360,7 +399,9 @@ describe('enqueueStillRunningReminder', () => {
       description: 'b',
     })
     expect(enqueueStillRunningReminder()).toBe(true)
-    // a 完成：still-running 集收缩 → 内容变化 → 再注入
+    // 首注：每任务一信使 → 两条
+    expect(queuedNotifications).toHaveLength(2)
+    // a 完成：still-running 集收缩 → 快照变化 → 剩集任务按官方制式重发
     recordTaskHandle({
       id: 'agnt_snap05',
       type: 'local_agent',
@@ -370,7 +411,9 @@ describe('enqueueStillRunningReminder', () => {
     expect(enqueueStillRunningReminder()).toBe(true)
     const last = queuedNotifications.at(-1)!
     expect(last.value).not.toContain('agnt_snap05')
-    expect(last.value).toContain('agnt_snap06')
+    expect(last.value).toContain(
+      'Background agent "b" (agnt_snap06) is still running',
+    )
   })
 
   test('全部完成后不再注入（上一轮 stale 快照自然终止）', () => {
@@ -408,19 +451,20 @@ describe('enqueueStillRunningReminder', () => {
     })
     expect(enqueueStillRunningReminder()).toBe(false)
     expect(queuedNotifications).toHaveLength(1)
-    // 复活（unpark 重开句柄，官方 $M 路，resumeAgentBackground 同参）：
-    // 同 id 同名再次 running —— 旧串去重位若不复位会吞掉同名快照。
+    // 复活（reopenRunning 显式重开，官方 $M unpark 现仅清停车位；
+    // resumeAgentBackground 同参）：同 id 同名再次 running —— 旧串去重位
+    // 若不复位会吞掉同名快照。
     recordTaskHandle({
       id: 'agnt_snap09',
       type: 'local_agent',
       status: 'running',
       description: 'revive-me',
-      unpark: true,
+      reopenRunning: true,
     })
     expect(enqueueStillRunningReminder()).toBe(true)
     expect(queuedNotifications).toHaveLength(2)
     expect(queuedNotifications[1]!.value).toContain(
-      'agnt_snap09 ("revive-me") is still running. Do not start it again; to restart it, stop it with TaskStop first.',
+      'Background agent "revive-me" (agnt_snap09) is still running. Do NOT spawn a duplicate.',
     )
   })
 
@@ -433,6 +477,8 @@ describe('enqueueStillRunningReminder', () => {
     })
     await generateTaskAttachments({ tasks: {} } as any)
     expect(queuedNotifications.length).toBeGreaterThanOrEqual(1)
-    expect(queuedNotifications[0]!.value).toContain('agnt_snap08 ("driven")')
+    expect(queuedNotifications[0]!.value).toContain(
+      'Background agent "driven" (agnt_snap08) is still running',
+    )
   })
 })

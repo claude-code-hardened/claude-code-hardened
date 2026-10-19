@@ -60,8 +60,15 @@ export const BYTE_WATCHDOG_ENV = 'CLAUDE_ENABLE_BYTE_WATCHDOG'
 /** CLAUDE_ENABLE_BYTE_WATCHDOG — byte-watchdog on/off (default on). */
 export function isByteWatchdogEnabled(): boolean {
   const raw = process.env[BYTE_WATCHDOG_ENV]
-  if (raw === undefined) return true
-  return isEnvTruthy(raw)
+  // W2.7 真 bug 修正（官方 mC() 原文，reverse-284
+  // 0004-chunk-zrkp23rq/module-005-uncategorized.js:3979）：
+  // `function mC(){let e=a.CLAUDE_ENABLE_BYTE_WATCHDOG;if(e!==void 0)return e;
+  // return x("tengu_stream_watchdog_default_on",!0)}` —— env **有定义即原值
+  // 语义**（原始字符串自身的 truthy 判定进布尔位：'false' 字符串 → truthy →
+  // ON；'' 空串 → falsy → OFF），不做 isEnvTruthy 白名单改写——'0'/'no'
+  // 等在官方语义里同属非空 truthy。
+  if (raw !== undefined) return Boolean(raw)
+  return true
 }
 
 /**
@@ -77,7 +84,10 @@ export const BYTE_WATCHDOG_BEDROCK_ENV = 'CLAUDE_ENABLE_BYTE_WATCHDOG_BEDROCK'
 /** CLAUDE_ENABLE_BYTE_WATCHDOG_BEDROCK — bedrock variant of the gate. */
 export function isByteWatchdogEnabledForBedrock(): boolean {
   const raw = process.env[BYTE_WATCHDOG_BEDROCK_ENV]
-  if (raw !== undefined) return isEnvTruthy(raw)
+  // 官方 gC()（0004 module-005:3342）：`return a.CLAUDE_ENABLE_BYTE_WATCHDOG_
+  // BEDROCK` —— 同 mC 的原值 truthy 语义（W2.7）；CCH 折面保留：未设时回退
+  // 共享 CLAUDE_ENABLE_BYTE_WATCHDOG 决策（本层无 bedrock 路由，见上注释）。
+  if (raw !== undefined) return Boolean(raw)
   return isByteWatchdogEnabled()
 }
 

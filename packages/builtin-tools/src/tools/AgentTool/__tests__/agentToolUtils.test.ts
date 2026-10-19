@@ -105,6 +105,11 @@ mock.module('src/context/notifications.js', () => ({
 }))
 mock.module('src/context/overlayContext.js', () => ({
   useIsOverlayActive: () => false,
+  // 进程级注册表 last-write-wins：同进程后跑的消费面（MessageRow 等组件
+  // 链 import useRegisterOverlay）也吃这份 stub——缺导出会让后续文件
+  // 加载即炸 SyntaxError（本文件断言面只消费 useIsOverlayActive）。
+  useRegisterOverlay: () => undefined,
+  useIsModalOverlayActive: () => false,
 }))
 mock.module('src/components/PromptInput/utils.js', () => ({
   isVimModeEnabled: () => false,

@@ -175,6 +175,12 @@ mock.module('src/utils/teammateContext.js', () => ({
 }))
 mock.module('src/utils/teleport.js', () => ({
   teleportToRemote: async () => undefined,
+  // 进程级注册表 last-write-wins：同进程后跑的消费面（如 query 链上的
+  // archiveRemoteSession / pollRemoteSessionEvents）也吃这份 stub——缺
+  // 导出会让后续文件加载即炸 SyntaxError（本文件断言面只消费
+  // teleportToRemote，补齐是纯增量）。
+  archiveRemoteSession: async () => undefined,
+  pollRemoteSessionEvents: async () => undefined,
 }))
 mock.module('src/utils/tokens.js', () => ({
   getTokenCountFromUsage: () => 0,

@@ -466,6 +466,17 @@ let cachedCodexClient: {
   fetchRef: typeof fetch
 } | null = null
 
+/**
+ * W2.11 invalidate 面（官方 `_authState.tokenCache.invalidate()` 的 CCH
+ * 对应，0032-chunk-dyqmyxqn/module-005-uncategorized.js:706 shouldRetry
+ * 401 路）：401 刷新重试前丢掉缓存的 codex client——token 无进程内
+ * memo（getValidChatGPTAuth 每次从盘读），失效即落在本 client 缓存上，
+ * 下一次 establishment 以重读凭据键重建。
+ */
+export function invalidateCachedCodexClient(): void {
+  cachedCodexClient = null
+}
+
 function buildCodexClient(
   auth: CodexAuth,
   fetchOverride?: typeof fetch,

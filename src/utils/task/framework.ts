@@ -20,6 +20,7 @@ import {
   getAllTaskHandleRecords,
   hydrateTaskRegistry,
   recordTaskHeartbeats,
+  type TaskHandleRecord,
 } from '../../services/taskRegistry/taskRegistry.js'
 import { escapeXml } from '../xml.js'
 import { enqueuePendingNotification } from '../messageQueueManager.js'
@@ -234,7 +235,8 @@ export async function generateTaskAttachments(state: AppState): Promise<{
   // CCH #52/#44: 子代理列表模型侧视图——每轮把中央句柄表里的 still-running
   // 快照注入给主代理（官方对齐 docs/reverse-284:
   // 0001-chunk-xrzcaagk/module-006-uncategorized.js:8781 task_status 附件
-  // running 分支的 `<system-reminder>` + isMeta 形态，措辞取 #52 工作包制式）。
+  // running 分支：`<system-reminder>` + isMeta 形态 + bash/agent 两分支
+  // 逐字措辞 + 每任务一信使）。
   enqueueStillRunningReminder()
 
   // CCH #38: 输出增量 → 中央句柄心跳（reaper"超时无增量"的增量来源）。
@@ -267,48 +269,94 @@ export function _resetStillRunningReminderForTest(): void {
   lastStillRunningReminder = undefined
 }
 
-export function buildStillRunningReminder(): string | undefined {
+/**
+ * 单个 running 句柄的官方逐字 still-running 信使行（0001-chunk-xrzcaagk/
+ * module-006-uncategorized.js:8781 task_status running 分支，原文分两个
+ * 形态；每个 task_status 附件产出一整条 `sl(...)` 信使 = 官方每任务一条
+ * 信使，不在跨任务间合并）：
+ *
+ * - local_bash 分支（shell 面）：`Background shell\|monitor ${id} ("${desc}")
+ *   is still running.` + `Do not start it again; to restart it, stop it with
+ *   TaskStop first.`（原文 `${ug}`=TaskStop 工具名）+ 可选
+ *   `You can read its output at ${path}.`
+ * - agent 分支（其余）：`Background agent "${desc}" (${id}) is still
+ *   running.` + `Do NOT spawn a duplicate. You will be notified when it
+ *   completes. ` + 尾句按有无输出文件二分（列 partial output + SendMessage
+ *   催报 / 仅 SendMessage 催报）。agent 分支原文**没有** TaskStop 续句——
+ *   上一版把 bash 分支措辞套到 agent 上是错体。
+ */
+function stillRunningReminderForRecord(record: TaskHandleRecord): string {
+  const desc = escapeXml(record.description)
+  if (record.type === 'local_bash') {
+    // 原文 bash 分支尾句按有无输出文件二分（有 → 读输出文件句）。
+    const output = record.outputFile
+      ? ` You can read its output at ${record.outputFile}.`
+      : ''
+    // 原文 `${U} ${e.taskId} ("${W}") is still running${V}.`：bash 分支
+    // id 在前、括引描述在后；CCH TaskHandleRecord 无 shell.kind——monitor
+    // 变体（"Background monitor"）留待 monitor 句柄接线时启用。
+    return (
+      `Background shell ${record.id} ("${desc}") is still running. ` +
+      `Do not start it again; to restart it, stop it with TaskStop first.` +
+      output
+    )
+  }
+  // agent 分支尾句按有无输出文件二分（原文两选一）。
+  const tail = record.outputFile
+    ? `You can read partial output at ${record.outputFile} or send it a message with SendMessage.`
+    : `Send it a message with SendMessage if you need a progress report before then.`
+  return (
+    `Background agent "${desc}" (${record.id}) is still running. ` +
+    `Do NOT spawn a duplicate. You will be notified when it completes. ${tail}`
+  )
+}
+
+/**
+ * 每任务一条的 still-running 信使（官方形制：每 task_status 附件一条信使
+ * `return[Re({content:sl(...),isMeta:!0})]`，sl() 即 <system-reminder>
+ * 包裹）。跨任务合并单信使体是上一版偏差——按官方拆分（每任务一条独立
+ * reminder 信使，官方每任务一信使口径）。
+ */
+export function buildStillRunningReminders(): string[] {
   hydrateTaskRegistry()
   const running = getAllTaskHandleRecords().filter(
     record => record.status === 'running',
   )
-  if (running.length === 0) {
-    return undefined
-  }
-  // 官方逐字（0001-chunk-xrzcaagk/module-006-uncategorized.js:8781 running
-  // 分支）：taskId ("desc") is still running. Do not start it again; to
-  // restart it, stop it with TaskStop first.
-  const lines = running.map(
+  // 官方遍历序（Object.values）→ 保持注册表插入序，快照随集合变化可重现。
+  return running.map(
     record =>
-      `${record.id} ("${escapeXml(record.description)}") is still running. Do not start it again; to restart it, stop it with TaskStop first.`,
+      `<system-reminder>${stillRunningReminderForRecord(record)}</system-reminder>`,
   )
-  return `<system-reminder>\n${lines.join('\n')}\n</system-reminder>`
 }
 
 /**
  * 把 still-running 快照注入命令队列（agent_registry_snapshot 附件面）。
- * 内容与上一条一致时跳过（防队列自激，见上方注释）；集合变化（agent
- * 完成/复活/新 spawn）时重新注入，模型在下一轮拿到最新名单；running 集
+ * 官方形制：每任务一条信使（8781 task_status 附件每附件一信使），running
+ * 快照整体作为去重单元（内容与上一条完全一致则跳过，防队列自激；集合
+ * 变化（agent 完成/复活/新 spawn）时按最新名单逐任务重新入队；running 集
  * 清空时复位去重位（completed → revive 同名串不再被旧去重位吞掉）。
  */
 export function enqueueStillRunningReminder(): boolean {
-  const reminder = buildStillRunningReminder()
-  if (reminder === undefined) {
+  const reminders = buildStillRunningReminders()
+  if (reminders.length === 0) {
     // R1-high staleness 复位：无 running 记录时旧快照串已成死面，留着只会
     // 吞掉复活后同名快照。复位（无注入 → 无唤醒 → 无自激环）。
     lastStillRunningReminder = undefined
     return false
   }
-  if (reminder === lastStillRunningReminder) {
+  const snapshotKey = reminders.join('\n')
+  if (snapshotKey === lastStillRunningReminder) {
     return false
   }
-  lastStillRunningReminder = reminder
-  enqueuePendingNotification({
-    value: reminder,
-    mode: 'task-notification',
-    priority: STILL_RUNNING_PRIORITY,
-    isMeta: true,
-  })
+  lastStillRunningReminder = snapshotKey
+  for (const reminder of reminders) {
+    enqueuePendingNotification({
+      value: reminder,
+      mode: 'task-notification',
+      priority: STILL_RUNNING_PRIORITY,
+      isMeta: true,
+    })
+  }
   return true
 }
 

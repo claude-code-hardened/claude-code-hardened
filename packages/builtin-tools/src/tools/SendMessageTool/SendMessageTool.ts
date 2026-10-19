@@ -132,15 +132,25 @@ export type SendMessageToolOutput =
 
 const UDS_INLINE_TOKEN_MARKER = '#token='
 
-// ── CCH #52 (R1-low): 转发链护栏对齐官方 hop 准入双口径 ─────────────────
-// 官方真源 docs/reverse-284/decompiled/0258-chunk-116j5z58/
-// module-005-uncategorized.js:117 `Tan={...maxSelfHops:10,maxChainLength:28}`
-// + :121 `g(d,o)`：链长 > maxChainLength → "hop-runaway"；链中自会话 id
-// 出现次数 ≥ maxSelfHops → "hop-loop"；且仅 peer origin 参检（官方 vr 的
-// 准入检查只对 origin.kind==="peer" 生效）。
-// CCH 落法（保留 Map 记账结构）：Map 值由标量深度升级为该 agent 的 hop
-// 链（string[]）；转发时 nextChain = 源链 + [源 id]，接收方自引命中数按
-// 链内等值计数。主会话（getAgentId() 未设）非 peer origin，不限不记。
+// ── CCH #52 (R1-low / Q2 判定源收敛): 转发链护栏对齐官方 hop 准入 ─────────
+// 官方真源（Q2 亲读原文）：
+// - docs/reverse-284/decompiled/0258-chunk-116j5z58/module-005-uncategorized.js
+//   :117 `Tan={...maxSelfHops:10,maxChainLength:28}` + :121 `g(d,o)`：链长 >
+//   maxChainLength → "hop-runaway"；链中自会话 id 出现 ≥ maxSelfHops →
+//   "hop-loop"。
+// - 0001-chunk-xrzcaagk/module-006-uncategorized.js:2180 `_ge(e)`=e.origin
+//   kind==='peer' 且无 senderTaskId；:2184 `b4e(e)`=
+//   `e.verifiedPeerPid!==void 0||e.from!=="unknown"`；:9228 `vr()`：
+//   `if(!_ge(sr))return Zpe` —— **非 peer origin 无条件放行**，hop 准入
+//   （checkHopChain/admit）只对跨 transport 真 peer 生效；未识别 peer
+//   （b4e===false）只查 hopChain，已识别 peer 才进 admit 的 senderKey 共存面。
+// Q2 判定源收敛：上一版以发送方 agentId（getAgentId 未设与否）为判定源，
+// 进程内 agent（同宿主进程）被计入 hops——过宽；bridge/uds/tcp 真 peer 又
+// 被 transport 前置 return 直接漏检。现改为按**路由的宿主进程标记**判定：
+// 同 process（进程内 agent 路由）→ 不参检不记账；跨 transport（bridge/
+// uds/tcp 真 peer）→ 参检记账。peer 链为发送侧本进程可见面记账（官方
+// hopChain 跨进程续链在接收面 vr/admit，CCH 未接线；同链同源重复发送的
+// 链不增长，官方 admit() 共存面的近似——见 enforcePeerHopAdmission）。
 // 自造的 forwardChain=5 单口径退役。
 export const MAX_SELF_HOPS = 10
 export const MAX_CHAIN_LENGTH = 28
@@ -206,6 +216,79 @@ export function recordForwardChain(
 /** 测试缝：清转发链记账。 */
 export function _resetForwardChainForTest(): void {
   forwardChains.clear()
+}
+
+/**
+ * 官方 `_ge(origin)`（0001:2180）的 CCH 路由面等价判定：该 to 是否跨
+ * transport 真 peer（origin.kind==='peer' 的发送/投递对应物）。进程内
+ * agent 路由（裸名 / raw agentId）不是 peer——同宿主进程不计 hops。
+ */
+export type CrossTransportPeerRoute = {
+  kind: 'uds' | 'tcp' | 'bridge'
+  /** 链记账键：去 token 的 transport 地址（uds:/…、tcp:host:port、bridge:id）。 */
+  peerKey: string
+}
+
+export function crossTransportPeerRoute(
+  to: string,
+): CrossTransportPeerRoute | undefined {
+  const addr = parseAddress(to)
+  switch (addr.scheme) {
+    case 'uds':
+      return {
+        kind: 'uds',
+        // 记账键不带 inline token（与展示面同一脱敏），token 探针不入链。
+        peerKey: `uds:${stripInlineUdsToken(addr.target)}`,
+      }
+    case 'tcp':
+      return { kind: 'tcp', peerKey: `tcp:${addr.target}` }
+    case 'bridge':
+      return { kind: 'bridge', peerKey: `bridge:${addr.target}` }
+    default:
+      return undefined
+  }
+}
+
+/** 发送侧链 link（官方 hopChain 的链节点）：进程内发送者 id；主会话无
+ * agentId 时用哨兵 id（同 host 面内稳定可计数）。 */
+export function senderHopLink(): string {
+  return getAgentId() || 'main-session'
+}
+
+/**
+ * 跨 transport 真 peer 的 hop 准入（官方 0001:9228 vr() 对
+ * _ge(origin)===true 命令的 checkHopChain/send-side 近似）：
+ * nextChain = 该 peer 的已记账链 + 本发送者 link，链长/自引双口径
+ * （0258:121 g()）判定；admits 才记账，且**链与已记账值完全一致时不重复
+ * 记**（同链同源重复发送不增长——官方 admit() 的 senderKey 共存面近似）。
+ * 被拒时返回与 call() 其余拒绝分支同形的失败结果。
+ */
+export function enforcePeerHopAdmission(
+  route: CrossTransportPeerRoute,
+): { data: { success: false; message: string } } | undefined {
+  const existing = forwardChainOf(route.peerKey)
+  const link = senderHopLink()
+  const nextChain = existing.at(-1) === link ? existing : [...existing, link]
+  const verdict = checkForwardHopAdmission(nextChain, route.peerKey)
+  if (!verdict.admitted) {
+    logForDebugging(
+      `[SendMessageTool] forward chain rejected (${verdict.reason}) sending to peer ${route.peerKey} (chain=${nextChain.join('->')})`,
+    )
+    const detail =
+      verdict.reason === 'hop-runaway'
+        ? `forward chain exceeded the max length (${nextChain.length} hops > ${MAX_CHAIN_LENGTH})`
+        : `the message would pass through ${route.peerKey} a ${countSelfHops(nextChain, route.peerKey) + 1}th time, exceeding max self-hops (${MAX_SELF_HOPS})`
+    return {
+      data: {
+        success: false,
+        message: `Forward rejected (${verdict.reason}): ${detail} — not forwarding to ${route.peerKey}. Deliver your result back to the requester instead of relaying.`,
+      },
+    }
+  }
+  if (nextChain !== existing) {
+    recordForwardChain(route.peerKey, nextChain)
+  }
+  return undefined
 }
 
 function stripInlineUdsToken(target: string): string {
@@ -903,6 +986,12 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
               },
             }
           }
+          // W1.3（Q2）：bridge 真 peer 参检 hop 准入（上一版 transport
+          // 前置 return 漏检；官方 vr 只对 _ge peer origin 参检）。
+          const peerRejection = enforcePeerHopAdmission(
+            crossTransportPeerRoute(input.to)!,
+          )
+          if (peerRejection) return peerRejection
           /* eslint-disable @typescript-eslint/no-require-imports */
           const { postInterClaudeMessage } =
             require('src/bridge/peerSessions.js') as typeof import('src/bridge/peerSessions.js')
@@ -922,6 +1011,11 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
           }
         }
         if (addr.scheme === 'uds') {
+          // W1.3（Q2）：uds 真 peer 参检 hop 准入（官方 _ge origin 对应面）。
+          const peerRejection = enforcePeerHopAdmission(
+            crossTransportPeerRoute(input.to)!,
+          )
+          if (peerRejection) return peerRejection
           const recipient = recipientForDisplay(input.to)
           /* eslint-disable @typescript-eslint/no-require-imports */
           const { sendToUdsSocket } =
@@ -959,6 +1053,11 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
               },
             }
           }
+          // W1.3（Q2）：tcp LAN 真 peer 参检 hop 准入。
+          const peerRejection = enforcePeerHopAdmission(
+            crossTransportPeerRoute(input.to)!,
+          )
+          if (peerRejection) return peerRejection
           try {
             const client = new PipeClient(input.to, `send-${process.pid}`, ep)
             await client.connect(5000)
@@ -989,32 +1088,11 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
         const registered = appState.agentNameRegistry.get(input.to)
         const agentId = registered ?? toAgentId(input.to)
         if (agentId) {
-          // CCH #52 (R1-low): 官方 hop 准入双口径（0258:117/121）——仅
-          // peer origin 参检：主会话转发不限不记；agent 转发帶链入链，
-          // hop-runaway（链长>28）/ hop-loop（自引≥10）即拒。运行中队列
-          // 投递 + 停滞/被逐出 agent 的自动复活都从这条路径走。
-          const sourceAgentId = getAgentId()
-          if (sourceAgentId !== undefined && sourceAgentId.length > 0) {
-            const sourceChain = forwardChainOf(sourceAgentId)
-            const nextChain = [...sourceChain, sourceAgentId]
-            const verdict = checkForwardHopAdmission(nextChain, agentId)
-            if (!verdict.admitted) {
-              logForDebugging(
-                `[SendMessageTool] forward chain rejected (${verdict.reason}) forwarding to ${input.to} (${agentId}, chain=${nextChain.join('->')}); rejecting`,
-              )
-              const detail =
-                verdict.reason === 'hop-runaway'
-                  ? `forward chain exceeded the max length (${nextChain.length} hops > ${MAX_CHAIN_LENGTH})`
-                  : `the message would pass through ${input.to} a ${countSelfHops(nextChain, agentId) + 1}th time, exceeding max self-hops (${MAX_SELF_HOPS})`
-              return {
-                data: {
-                  success: false,
-                  message: `Forward rejected (${verdict.reason}): ${detail} — not forwarding to ${input.to}. Deliver your result back to the requester instead of relaying.`,
-                },
-              }
-            }
-            recordForwardChain(agentId, nextChain)
-          }
+          // W1.3（Q2 判定源收敛）：进程内 agent → 进程内 agent 是同宿主
+          // 进程路由——官方 vr()（0001:9228）`if(!_ge(sr))return Zpe` 对
+          // 非 peer origin 无条件放行，**不参检、不记账 hops**。上一版以
+          // 发送方 agentId 为判定源把进程内转发也计入链（过宽），已退役；
+          // hop 准入只在 bridge/uds/tcp 真 peer 的 transport 分支执行。
           const task = appState.tasks[agentId]
           if (isLocalAgentTask(task) && !isMainSessionTask(task)) {
             if (task.status === 'running') {

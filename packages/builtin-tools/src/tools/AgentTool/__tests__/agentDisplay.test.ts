@@ -3,6 +3,12 @@ import { mock, describe, expect, test } from 'bun:test'
 // Mock heavy deps
 mock.module('src/utils/model/agent.js', () => ({
   getDefaultSubagentModel: () => undefined,
+  // 进程级注册表是 last-write-wins：同一进程后跑的 resumeAgent.ts（import
+  // getAgentModel）也吃这份 stub——缺导出会让后续文件加载即炸 SyntaxError
+  // （本文件断言面只消费 getDefaultSubagentModel，补齐导出面是纯增量）。
+  getAgentModel: () => undefined,
+  getAgentModelDisplay: () => '',
+  getAgentModelOptions: () => [],
 }))
 
 mock.module('src/utils/settings/constants.js', () => ({

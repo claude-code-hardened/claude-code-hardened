@@ -17,11 +17,13 @@ import {
  * CCH 落法：resumeAgentBackground 是全部复活路（REPL transcript 视图复活、
  * SendMessage 停滞 agent 自动复活、bridge）的唯一咽喉，通知在该单点发射。
  *
- * R1-low（official `agentId:r` 补齐）：目标 id 随 payload（值的
- * <agent-id> 行）携带。官方 agentId 是队列路由面（投递方向），而 CCH 队列
- * 消费面（queueProcessor/query.ts）以 `agentId === undefined` 判主线程——
- * 信封若携带会让通知永远无人投递；故信封不带、payload 带官方字段。目标在
- * CCH 复活路里恒为发布方所在会话（进程内自投），即 getSessionId()。
+ * R1-low（official `agentId:r` 补齐；Q2 W1.5 复核）：NotificationCommandOptions
+ * 现已具备官方 `agentId` 信封字段（0001/module-006:2295 `Eyo` 同型），但
+ * 本通知**不**走信封字段：CCH 队列消费面（queueProcessor/query.ts）以
+ * `agentId === undefined` 判主线程，本会话内自投的通知若携带信封 agentId
+ * 会永远无人投递（F4 顾虑复核为真实）。故保 payload `agent-id` tag 行 +
+ * 本注释声明官方差异（官方信封字段是跨会话路由面；CCH 目标恒为发布方
+ * 所在会话，即 getSessionId()）。
  *
  * passive 在 CCH 里无法从队列信封结构化地传到渲染面，随信使文本携带
  * （`<task-notification passive="true">` 属性），由
