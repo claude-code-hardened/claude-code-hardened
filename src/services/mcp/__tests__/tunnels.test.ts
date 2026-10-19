@@ -14,6 +14,7 @@ import {
   MCP_TUNNELS_BETA_HEADER,
   getTunnelsBaseUrl,
   isMcpTunnelsEnabled,
+  withBetas,
 } from '../tunnels.js'
 import { getOauthConfig } from 'src/constants/oauth.js'
 
@@ -86,5 +87,19 @@ describe('getTunnelsBaseUrl', () => {
     expect(getTunnelsBaseUrl()).toBe(
       getOauthConfig().BASE_API_URL.replace(/\/$/, ''),
     )
+  })
+})
+
+describe('beta merge order (R2, 0032 anchor)', () => {
+  test('per-call betas come FIRST, the tunnels version header appended last', () => {
+    // Official verbatim (0032 chunk, every tunnels route):
+    // `{"anthropic-beta":[...perCallBetas??[],"mcp-tunnels-2026-06-22"].toString()}`.
+    expect(withBetas(['context-1m-2025-08-07', 'custom-beta'])).toEqual({
+      'anthropic-beta':
+        'context-1m-2025-08-07,custom-beta,mcp-tunnels-2026-06-22',
+    })
+    // No per-call betas → no merged anthropic-beta header at all.
+    expect(withBetas(undefined)).toEqual({})
+    expect(withBetas([])).toEqual({})
   })
 })

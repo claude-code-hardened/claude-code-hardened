@@ -78,6 +78,15 @@ const commonFields = lazySchema(() => ({
 const inputSchema = lazySchema(() =>
   z
     .strictObject({
+      // Official 0311 anchor (`ye`): top-level optional single-line heading —
+      // "Optional single-line heading shown above the questions, e.g. "Before
+      // I build your deck".". Declared so the strictObject accepts it; the
+      // base surface strips it (the official base fe=Z(C()) carries no title,
+      // so the default object parse drops the unknown key).
+      title: z
+        .string()
+        .optional()
+        .describe('Optional single-line heading shown above the questions, e.g. "Before I build your deck".'),
       questions: z
         .array(questionSchema())
         .min(1)
@@ -90,7 +99,8 @@ const inputSchema = lazySchema(() =>
     })
     .refine(UNIQUENESS_REFINE.check, {
       message: UNIQUENESS_REFINE.message,
-    }),
+    })
+    .transform(data => (getQuestionFlags().extended ? data : { ...data, title: undefined })),
 );
 type InputSchema = ReturnType<typeof inputSchema>;
 

@@ -15,6 +15,10 @@ const sandboxState = {
   allowUnsandboxedCommands: true,
   unsandboxedCommandsDisabled: false,
   excludedCommands: [] as string[],
+  // R2 (Q4-2): refuse face plumbing — non-supported platform / pinned-but-
+  // missing sandbox make the shared decision surface refuse.
+  platformSupported: true,
+  unavailableReason: undefined as string | undefined,
 }
 
 // Mirrors areUnsandboxedCommandsAllowedIn / isStrictSandboxModeConfiguredIn
@@ -22,11 +26,16 @@ const sandboxState = {
 // these flags.
 const sandboxManagerMock = {
   initialize: async () => {},
-  isSandboxingEnabled: () => sandboxState.enabled,
+  // Mirrors the real adapter: sandboxing folds in platform support + the
+  // pinned-but-unavailable availability error.
+  isSandboxingEnabled: () =>
+    sandboxState.enabled &&
+    sandboxState.platformSupported &&
+    sandboxState.unavailableReason === undefined,
   isSandboxEnabledInSettings: () => sandboxState.enabled,
-  isSupportedPlatform: () => true,
+  isSupportedPlatform: () => sandboxState.platformSupported,
   isPlatformInEnabledList: () => true,
-  getSandboxUnavailableReason: () => undefined,
+  getSandboxUnavailableReason: () => sandboxState.unavailableReason,
   checkDependencies: () => ({ errors: [], warnings: [] }),
   isAutoAllowBashIfSandboxedEnabled: () => true,
   areUnsandboxedCommandsAllowed: () => {
@@ -72,7 +81,8 @@ mock.module('src/utils/sandbox/sandbox-adapter.js', () => ({
   SandboxManager: sandboxManagerMock,
 }))
 
-const { shouldUseSandboxForPowerShell } = await import('../sandboxDecision.js')
+const { evaluateSandboxDecisionForPowerShell, shouldUseSandboxForPowerShell } =
+  await import('../sandboxDecision.js')
 
 beforeEach(() => {
   sandboxState.enabled = false
@@ -80,6 +90,8 @@ beforeEach(() => {
   sandboxState.allowUnsandboxedCommands = true
   sandboxState.unsandboxedCommandsDisabled = false
   sandboxState.excludedCommands = []
+  sandboxState.platformSupported = true
+  sandboxState.unavailableReason = undefined
 })
 
 describe('shouldUseSandboxForPowerShell strict gate (R4)', () => {
@@ -128,5 +140,43 @@ describe('shouldUseSandboxForPowerShell strict gate (R4)', () => {
       true,
     )
     expect(shouldUseSandboxForPowerShell({})).toBe(false) // no command → nothing to sandbox
+  })
+})
+
+describe('evaluateSandboxDecisionForPowerShell refuse face (R2 #0051)', () => {
+  test('strict + unavailable sandbox → refuse (three-state, not a silent bare run)', () => {
+    sandboxState.enabled = true
+    sandboxState.strictSandboxMode = true
+    sandboxState.platformSupported = false
+    expect(
+      evaluateSandboxDecisionForPowerShell({ command: 'Write-Host hi' }),
+    ).toEqual({ mode: 'refuse', reason: 'sandbox_unavailable' })
+    // The boolean view maps refuse to false (the caller must ingest the
+    // decision object itself to surface the tool error).
+    expect(shouldUseSandboxForPowerShell({ command: 'Write-Host hi' })).toBe(
+      false,
+    )
+  })
+
+  test('strict opt-out with unavailable sandbox → still forced to the sandbox branch', () => {
+    sandboxState.enabled = true
+    sandboxState.strictSandboxMode = true
+    sandboxState.platformSupported = false
+    // Official tn `…||e` keeps the model opt-out out of the tn refusal; the
+    // PowerShell strict gate forces the sandbox branch regardless.
+    expect(
+      evaluateSandboxDecisionForPowerShell({
+        command: 'Write-Host hi',
+        dangerouslyDisableSandbox: true,
+      }),
+    ).toEqual({ mode: 'sandbox' })
+  })
+
+  test('non-strict + unavailable sandbox stays fail-open unsandboxed', () => {
+    sandboxState.enabled = true
+    sandboxState.platformSupported = false
+    expect(
+      evaluateSandboxDecisionForPowerShell({ command: 'Write-Host hi' }),
+    ).toEqual({ mode: 'unsandboxed' })
   })
 })

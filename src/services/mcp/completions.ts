@@ -18,6 +18,7 @@ import type {
 import { errorMessage } from '../../utils/errors.js'
 import { logMCPDebug, logMCPError } from '../../utils/log.js'
 import { memoizeWithLRU } from '../../utils/memoize.js'
+import type { ScopedMcpServerConfig } from './types.js'
 
 /** Per-server template cache size — matches the resources/list fetch cache in client.ts. */
 const COMPLETIONS_CACHE_SIZE = 20
@@ -25,11 +26,34 @@ const COMPLETIONS_CACHE_SIZE = 20
 export type ServerResourceTemplate = ResourceTemplate & { server: string }
 
 /** Minimal structural view of a connected MCP server — avoids a hard
- * dependency on the full MCPServerConnection union (pure module). */
+ * dependency on the full MCPServerConnection union (pure module). Real
+ * connections (ConnectedMCPServer) carry `config`, which the W6 cache key
+ * consumes as server identity. */
 export interface CompletionConnection {
   name: string
   client: Client
   capabilities?: ServerCapabilities | null
+  /** W6 (Q6): config identity (scope + endpoint fingerprint). Present on
+   * real connections; pure/mocked views may omit it (key falls back to the
+   * display name alone). */
+  config?: ScopedMcpServerConfig
+}
+
+/** Cache key: server identity, not just display name. Two same-named
+ * servers with different configs (project-vs-user scope, two stdio
+ * commands, distinct URLs) must never cross-read template caches. Fields
+ * beyond the endpoint fingerprint (headers, env) are identity-irrelevant
+ * for template listing. */
+function completionsCacheKey(connection: CompletionConnection): string {
+  const config = connection.config
+  if (!config) return connection.name
+  const endpoint =
+    'url' in config && typeof config.url === 'string'
+      ? config.url
+      : 'command' in config && typeof config.command === 'string'
+        ? [config.command, ...(config.args ?? [])].join(' ')
+        : ''
+  return `${connection.name}::${config.scope ?? ''}::${endpoint}`
 }
 
 /** capabilities.completions negotiation: servers that don't declare the
@@ -40,8 +64,8 @@ export function supportsCompletions(
   return !!capabilities?.completions
 }
 
-/** resources/templates/list enumeration (memoized per server name, same LRU
- * semantics as fetchResourcesForClient in client.ts). */
+/** resources/templates/list enumeration (memoized per server identity, same
+ * LRU semantics as fetchResourcesForClient in client.ts). */
 export const fetchResourceTemplatesForClient = memoizeWithLRU(
   async (
     connection: CompletionConnection,
@@ -71,13 +95,20 @@ export const fetchResourceTemplatesForClient = memoizeWithLRU(
       return []
     }
   },
-  (connection: CompletionConnection) => connection.name,
+  completionsCacheKey,
   COMPLETIONS_CACHE_SIZE,
 )
 
-/** Invalidate the per-server template cache (list_changed refresh path). */
+/** Invalidate the per-server template cache (list_changed refresh path).
+ * Deletes every identity key belonging to the server name (identity keys are
+ * `${name}::${scope}::${endpoint}` — the same logical server can hold
+ * several scoped configs). */
 export function clearResourceTemplatesCache(serverName: string): void {
-  fetchResourceTemplatesForClient.cache.delete(serverName)
+  for (const key of [...fetchResourceTemplatesForClient.cache.keys()]) {
+    if (key === serverName || key.startsWith(`${serverName}::`)) {
+      fetchResourceTemplatesForClient.cache.delete(key)
+    }
+  }
 }
 
 /** completions/complete with complete_resource_template semantics: fill in

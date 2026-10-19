@@ -8,6 +8,7 @@ import { isENOENT, isFsInaccessible } from '../utils/errors.js'
 import { getAuthHeaders } from '../utils/http.js'
 import { logError } from '../utils/log.js'
 import { parseFrontmatter } from '../utils/frontmatterParser.js'
+import { writeTextContent } from '../utils/file.js'
 import {
   createSkillCommand,
   parseSkillFrontmatterFields,
@@ -270,6 +271,141 @@ export async function loadSyncedSkills(): Promise<Command[]> {
     logForDebugging(`[synced-skills] Loaded ${skills.length} synced skills`)
   }
   return skills
+}
+
+// ============================================================================
+// Accepted-ids model (anchor 0025 module-003 Rl/Zu, verbatim functions)
+// ============================================================================
+
+/** Filename of the persisted accepted-skill-id set, under the claude config home. */
+export const ACCEPTED_SKILL_IDS_FILENAME = 'synced-skills-accepted.json'
+
+/** Shape of the accepted-ids persistence file. `savedAt` is metadata written
+ * on every store (hook point for future eviction); the Rl/Zu acceptance model
+ * itself does not expire entries — the 0025 anchors carry no TTL semantics. */
+export type AcceptedSkillIdsFile = {
+  version?: 1
+  savedAt?: string
+  ids: string[]
+}
+
+/** Path of the accepted-ids file: `getClaudeConfigHomeDir()/synced-skills-accepted.json`. */
+export function getAcceptedSkillIdsPath(): string {
+  return join(getClaudeConfigHomeDir(), ACCEPTED_SKILL_IDS_FILENAME)
+}
+
+/**
+ * Reads the persisted accepted id set. Degradates to an empty set on ENOENT /
+ * unreadable / malformed payloads — acceptance state is advisory, never
+ * blocking.
+ */
+export async function readAcceptedSkillIds(): Promise<Set<string>> {
+  const fs = getFsImplementation()
+  let raw: string
+  try {
+    raw = await fs.readFile(getAcceptedSkillIdsPath(), { encoding: 'utf-8' })
+  } catch (e: unknown) {
+    if (!isENOENT(e) && !isFsInaccessible(e)) logError(e)
+    return new Set()
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<AcceptedSkillIdsFile>
+    if (!Array.isArray(parsed?.ids)) return new Set()
+    return new Set(
+      parsed.ids.filter((id): id is string => typeof id === 'string'),
+    )
+  } catch (e: unknown) {
+    logForDebugging(`[synced-skills] accepted-ids file unreadable: ${e}`)
+    return new Set()
+  }
+}
+
+/** Persists the accepted id set (sync write with the shared flush+atomic path). */
+export function writeAcceptedSkillIdsSync(ids: ReadonlySet<string>): void {
+  const payload: AcceptedSkillIdsFile = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    ids: [...ids],
+  }
+  writeTextContent(
+    getAcceptedSkillIdsPath(),
+    JSON.stringify(payload, null, 2),
+    'utf8',
+    'LF',
+  )
+}
+
+/**
+ * Effective accepted/id-mark set — verbatim port of official `Rl` (0025
+ * module-003): `function Rl(a,h){let k=new Set,b=[];for(let P of h){let R=Br(P);
+ * if(P.loadedFrom==="syncedSkills")b.push(R);else k.add(R)}let v=null;
+ * for(let P of b){if(a.has(P))continue;for(let R of Ju(P))
+ * if(a.has(R)&&!k.has(R)){v??=new Set(a),v.add(P);break}}return v??a}`
+ *
+ * A synced id not yet in the set is migrated-in when an alias expansion
+ * (`skill:` form) is already accepted AND that alias is not occupied by a
+ * local skill — local (non-synced) ids block the migration. Non-mutating:
+ * returns the input set identity when nothing migrates.
+ */
+export function computeEffectiveAcceptedSkillIds(
+  accepted: ReadonlySet<string>,
+  skills: readonly SkillIdentifierInput[],
+): ReadonlySet<string> {
+  const localIds = new Set<string>()
+  const syncedIds: string[] = []
+  for (const skill of skills) {
+    const id = buildSkillIdentifier(skill)
+    if (id.startsWith(SYNCED_SKILL_PREFIX)) syncedIds.push(id)
+    else localIds.add(id)
+  }
+  let updated: Set<string> | null = null
+  for (const id of syncedIds) {
+    if (accepted.has(id)) continue
+    for (const alias of getSkillIdentifierAliases(id)) {
+      if (accepted.has(alias) && !localIds.has(alias)) {
+        updated ??= new Set(accepted)
+        updated.add(id)
+        break
+      }
+    }
+  }
+  return updated ?? accepted
+}
+
+/**
+ * Toggle a skill id in the accepted set — verbatim port of official `Zu`
+ * (0025 module-003): `function Zu(a,h,k){let b=Rl(a,k),v=new Set(a);
+ * if(!b.has(h))return v.add(h),v;v.delete(h);
+ * for(let P of Ju(h))if(!k.some((R)=>R.loadedFrom!=="syncedSkills"&&Br(R)===P))
+ * v.delete(P);return v}`
+ *
+ * Toggle-on adds the id. Toggle-off removes it AND its alias expansions —
+ * except an alias that a local skill occupies, so a local skill and its
+ * same-name synced sibling keep co-existing as distinct ids in the set.
+ */
+export function toggleAcceptedSkillId(
+  accepted: ReadonlySet<string>,
+  identifier: string,
+  skills: readonly SkillIdentifierInput[],
+): Set<string> {
+  const effective = computeEffectiveAcceptedSkillIds(accepted, skills)
+  const next = new Set(accepted)
+  if (!effective.has(identifier)) {
+    next.add(identifier)
+    return next
+  }
+  next.delete(identifier)
+  for (const alias of getSkillIdentifierAliases(identifier)) {
+    const occupiedByLocal = skills.some(
+      skill =>
+        !String(buildSkillIdentifier(skill)).startsWith(SYNCED_SKILL_PREFIX) &&
+        buildSkillIdentifier(skill) === alias,
+    )
+    if (!occupiedByLocal) {
+      next.delete(alias)
+    }
+  }
+  return next
 }
 
 // ============================================================================

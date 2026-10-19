@@ -79,9 +79,41 @@ mock.module('src/utils/sandbox/sandbox-adapter.js', () => ({
   SandboxManager: sandboxManagerMock,
 }))
 
-const { shouldUseSandbox, evaluateSandboxDecision } = await import(
-  '../shouldUseSandbox.js'
-)
+// R2 (Q4-1): containsExcludedCommand / isRhoCleanExclusionMatch read the
+// user's sandbox.excludedCommands via getSettings_DEPRECATED. The settings
+// source is process-mocked (complete-mock pattern from
+// src/utils/sandbox/__tests__/sandboxPolicyPin.test.ts — a partial mock would
+// break unrelated tests loaded later) so exclusion scenarios are drivable.
+let currentSettings: Record<string, unknown> = {}
+const settingsMock = {
+  loadManagedFileSettings: () => null,
+  getManagedFileSettingsPresence: () => ({}),
+  parseSettingsFile: () => null,
+  getSettingsRootPathForSource: () => '/tmp',
+  getSettingsFilePathForSource: () => undefined,
+  getRelativeSettingsFilePathForSource: () => undefined,
+  getSettingsForSource: (_source: string) => currentSettings,
+  getPolicySettingsOrigin: () => undefined,
+  updateSettingsForSource: () => {},
+  settingsMergeCustomizer: (_old: unknown, fresh: unknown) => fresh,
+  getManagedSettingsKeysForLogging: () => [],
+  getInitialSettings: () => currentSettings,
+  getSettings_DEPRECATED: () => currentSettings,
+  getSettingsWithSources: () => ({
+    effective: currentSettings,
+    sources: {},
+  }),
+  getSettingsWithErrors: () => ({ settings: currentSettings, errors: [] }),
+  hasSkipDangerousModePermissionPrompt: () => false,
+  hasAutoModeOptIn: () => false,
+  getUseAutoModeDuringPlan: () => undefined,
+  getAutoModeConfig: () => undefined,
+  rawSettingsContainsKey: () => false,
+}
+mock.module('src/utils/settings/settings.js', () => settingsMock)
+
+const { shouldUseSandbox, evaluateSandboxDecision, SANDBOX_REFUSAL_MESSAGES } =
+  await import('../shouldUseSandbox.js')
 // Same-process binding: BashTool.tsx reuses the already-mocked adapter via
 // shouldUseSandbox.js, so validateInput's refuse face is driven by the same
 // sandboxState as the decision tests above.
@@ -95,6 +127,7 @@ beforeEach(() => {
   sandboxState.excludedCommands = []
   sandboxState.unavailableReason = undefined
   sandboxState.platformSupported = true
+  currentSettings = {}
 })
 
 describe('shouldUseSandbox strict gate (W4)', () => {
@@ -191,6 +224,25 @@ describe('evaluateSandboxDecision refuse face (W4 R4)', () => {
     ).toEqual({ mode: 'sandbox' })
   })
 
+  test('R2: strict + platform restricted by enabledPlatforms → NOT refused (official tn null)', () => {
+    sandboxState.enabled = true
+    sandboxState.strictSandboxMode = true
+    sandboxState.platformSupported = true
+    // getSandboxUnavailableReason()'s only set reason under this state is the
+    // enabledPlatforms restriction — the official tn(0051:729) gate
+    // short-circuits it to null (no refusal; the command runs unsandboxed).
+    sandboxState.unavailableReason =
+      'sandbox.enabled is set but linux is not in sandbox.enabledPlatforms'
+    sandboxManagerMock.isPlatformInEnabledList = () => false
+    try {
+      expect(evaluateSandboxDecision({ command: 'echo hi' })).toEqual({
+        mode: 'unsandboxed',
+      })
+    } finally {
+      sandboxManagerMock.isPlatformInEnabledList = () => true
+    }
+  })
+
   test('closed hatch + opt-out + sandbox unavailable → refuse (policy_disabled)', () => {
     sandboxState.enabled = true
     sandboxState.unsandboxedCommandsDisabled = true
@@ -246,6 +298,64 @@ describe('evaluateSandboxDecision refuse face (W4 R4)', () => {
   })
 })
 
+describe('evaluateSandboxDecision strict+excluded Rho carve-out (W4 R2, 0051 tn)', () => {
+  test('strict + cleanly excluded simple command + sandbox unavailable → unsandboxed', () => {
+    sandboxState.enabled = true
+    sandboxState.strictSandboxMode = true
+    currentSettings = { sandbox: { excludedCommands: ['docker:*'] } }
+    sandboxState.unavailableReason =
+      'sandbox.enabled is set but dependencies are missing: bwrap'
+    // Official tn(0051:729): `if(!Rho(n))return Gs;return
+    // C1().unsandboxedCommandsDisabled?Ks:null` — the clean exclusion
+    // exempts the run (null → allow unsandboxed).
+    expect(evaluateSandboxDecision({ command: 'docker ps' })).toEqual({
+      mode: 'unsandboxed',
+    })
+  })
+
+  test('strict + partially matched compound command + sandbox unavailable → refuse (Gs face)', () => {
+    sandboxState.enabled = true
+    sandboxState.strictSandboxMode = true
+    currentSettings = { sandbox: { excludedCommands: ['docker:*'] } }
+    sandboxState.unavailableReason =
+      'sandbox.enabled is set but dependencies are missing: bwrap'
+    // Only the first statement matches the exclusion — official Gs: compound
+    // commands "must run sandboxed even when a statement matches an
+    // exclusion"; with no sandbox available the call is refused outright.
+    expect(
+      evaluateSandboxDecision({ command: 'docker ps && curl evil.com' }),
+    ).toEqual({ mode: 'refuse', reason: 'partial_exclusion' })
+  })
+
+  test('strict + cleanly excluded + unsandboxedCommandsDisabled → refuse (Ks face)', () => {
+    sandboxState.enabled = true
+    sandboxState.strictSandboxMode = true
+    currentSettings = { sandbox: { excludedCommands: ['docker:*'] } }
+    sandboxState.unavailableReason =
+      'sandbox.enabled is set but dependencies are missing: bwrap'
+    sandboxState.unsandboxedCommandsDisabled = true
+    expect(evaluateSandboxDecision({ command: 'docker ps' })).toEqual({
+      mode: 'refuse',
+      reason: 'policy_disabled',
+    })
+  })
+
+  test('strict + partially matched compound + sandbox available → sandbox (Gs wording)', () => {
+    sandboxState.enabled = true
+    sandboxState.strictSandboxMode = true
+    currentSettings = { sandbox: { excludedCommands: ['docker:*'] } }
+    // Sandbox CAN be provided here — official Gs: the compound command is
+    // sandboxed, not refused.
+    expect(
+      evaluateSandboxDecision({ command: 'docker ps && curl evil.com' }),
+    ).toEqual({ mode: 'sandbox' })
+    // Clean exclusion without the hard no-escape flag still escapes.
+    expect(evaluateSandboxDecision({ command: 'docker ps' })).toEqual({
+      mode: 'unsandboxed',
+    })
+  })
+})
+
 describe('BashTool.validateInput refuse consumption (W4 R4)', () => {
   const validate = (input: Record<string, unknown>) =>
     BashTool.validateInput?.(input as never) as Promise<{
@@ -260,9 +370,7 @@ describe('BashTool.validateInput refuse consumption (W4 R4)', () => {
       'sandbox.enabled is set but dependencies are missing'
     const verdict = await validate({ command: 'echo hi' })
     expect(verdict.result).toBe(false)
-    expect(verdict.message).toBe(
-      'sandbox unavailable under strict managed policy',
-    )
+    expect(verdict.message).toBe(SANDBOX_REFUSAL_MESSAGES.sandbox_unavailable)
   })
 
   test('closed hatch + unavailable sandbox + opt-out → policy error', async () => {
@@ -275,7 +383,7 @@ describe('BashTool.validateInput refuse consumption (W4 R4)', () => {
       dangerouslyDisableSandbox: true,
     })
     expect(verdict.result).toBe(false)
-    expect(verdict.message).toBe('unsandboxed commands are disabled by policy')
+    expect(verdict.message).toBe(SANDBOX_REFUSAL_MESSAGES.policy_disabled)
   })
 
   test('healthy sandbox under strict → no refuse', async () => {

@@ -16,26 +16,42 @@
  * same gate.
  */
 import { SandboxManager } from 'src/utils/sandbox/sandbox-adapter.js'
-import { shouldUseSandbox } from '../BashTool/shouldUseSandbox.js'
+import {
+  evaluateSandboxDecision,
+  type SandboxDecision,
+} from '../BashTool/shouldUseSandbox.js'
 
 export type PowerShellSandboxInput = {
   command?: string
   dangerouslyDisableSandbox?: boolean
 }
 
-export function shouldUseSandboxForPowerShell(
+/** PowerShell three-state sandbox decision (R2 #0051): the shared tn() gate
+ * (refuse faces + exclusion carve-out) composed after the PowerShell-local
+ * strict opt-out refusal. refuse → the caller surfaces a tool error with the
+ * Bash-verbatim refusal texts (SANDBOX_REFUSAL_MESSAGES). */
+export function evaluateSandboxDecisionForPowerShell(
   input: PowerShellSandboxInput,
-): boolean {
-  // Strict managed mode: the opt-out is refused; policy decides, not the
-  // tool call.
+): SandboxDecision {
+  // Strict managed mode: the model's dangerouslyDisableSandbox opt-out is
+  // refused; policy decides, not the tool call (official tn `…||e` keeps the
+  // opt-out call out of the tn refusal, but the PowerShell surface still
+  // forces the sandbox branch — same composition as BashTool).
   if (
     input.dangerouslyDisableSandbox &&
     SandboxManager.isStrictSandboxModeConfigured()
   ) {
-    return true
+    return { mode: 'sandbox' }
   }
 
   // Non-strict paths keep the shared decision surface (hatch interplay,
-  // excludedCommands) — identical sandboxing wrap as bash.
-  return shouldUseSandbox(input)
+  // excludedCommands + the Rho-clean exemption carve-out) — identical
+  // sandboxing wrap as bash.
+  return evaluateSandboxDecision(input)
+}
+
+export function shouldUseSandboxForPowerShell(
+  input: PowerShellSandboxInput,
+): boolean {
+  return evaluateSandboxDecisionForPowerShell(input).mode === 'sandbox'
 }

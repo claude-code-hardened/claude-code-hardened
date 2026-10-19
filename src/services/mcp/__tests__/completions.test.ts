@@ -124,6 +124,60 @@ describe('clearResourceTemplatesCache', () => {
     await fetchResourceTemplatesForClient(connection)
     expect(calls).toBe(2)
   })
+
+  test('W6: same-name servers with different configs never cross-read the cache', async () => {
+    let projectCalls = 0
+    let userCalls = 0
+    const projectConnection = makeConnection({
+      name: 'dual-server',
+      listResourceTemplates: () => {
+        projectCalls += 1
+        return Promise.resolve({
+          resourceTemplates: [{ uriTemplate: 'project://t/{id}', name: 'p' }],
+        })
+      },
+    })
+    const userConnection = makeConnection({
+      name: 'dual-server',
+      listResourceTemplates: () => {
+        userCalls += 1
+        return Promise.resolve({
+          resourceTemplates: [{ uriTemplate: 'user://t/{id}', name: 'u' }],
+        })
+      },
+    })
+    // Identity = scope + endpoint fingerprint: same display name, two distinct
+    // config identities must not share a cache entry.
+    ;(projectConnection as { config?: unknown }).config = {
+      scope: 'project',
+      type: 'stdio',
+      command: 'node',
+      args: ['server-a.js'],
+    }
+    ;(userConnection as { config?: unknown }).config = {
+      scope: 'user',
+      type: 'stdio',
+      command: 'node',
+      args: ['server-b.js'],
+    }
+
+    await fetchResourceTemplatesForClient(projectConnection)
+    await fetchResourceTemplatesForClient(userConnection)
+    expect(projectCalls).toBe(1)
+    expect(userCalls).toBe(1)
+
+    // Identical identity (same connection object) hits the same entry.
+    await fetchResourceTemplatesForClient(projectConnection)
+    expect(projectCalls).toBe(1)
+    expect(userCalls).toBe(1)
+
+    // Clear-by-name drops every identity entry of the server.
+    clearResourceTemplatesCache('dual-server')
+    await fetchResourceTemplatesForClient(projectConnection)
+    await fetchResourceTemplatesForClient(userConnection)
+    expect(projectCalls).toBe(2)
+    expect(userCalls).toBe(2)
+  })
 })
 
 describe('completeResourceTemplate', () => {

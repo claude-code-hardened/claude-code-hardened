@@ -12,6 +12,16 @@
  * owns validation and the error messages, and exposes the bundle for the
  * transport layer that can use it (native/node child transports, proxies).
  * When none of the three vars are set this is a complete no-op.
+ *
+ * R2 (#0051 review) — cert/key pairing is NOT verified, deliberately:
+ * validateBundle() checks PEM shape and key parseability (passphrase) but
+ * never confirms the certificate matches the private key (modulus/public-key
+ * comparison). This mirrors the official surface, which only records the
+ * presence of the credential env vars (telemetry presence probe — see
+ * hasClientCertBundle) and does no pairing check either. A mismatched
+ * bundle therefore fails downstream at the TLS handshake, not here; that
+ * failure mode is stated rather than papered over. (Presence probe surface:
+ * hasClientCertConfigured.)
  */
 
 import { existsSync, readFileSync, statSync } from 'fs'

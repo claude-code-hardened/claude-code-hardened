@@ -15,7 +15,9 @@
 //   - POST /v1/tunnels/{id}/reveal_token?beta=true             (tunnels.revealToken)
 //   - POST /v1/tunnels/{id}/rotate_token?beta=true             (tunnels.rotateToken)
 //   - GET  /v1/tunnels/{tunnel_id}/certificates?beta=true      (certificates.list)
-//   - POST /v1/tunnels/{tunnel_id}/certificates/{id}/archive   (certificates.archive)
+//   - POST /v1/tunnels/{tunnel_id}/certificates/{id}/archive?beta=true
+//     (certificates.archive — 0032 class `_r.archive`: the nested route still
+//     sends `?beta=true`, verbatim `/certificates/${id}/archive?beta=true`)
 // The `certificates` resource is nested under a tunnel, per the official
 // client (`this.certificates = new _r(this._client)`).
 // Cloud dependency: feature-gated by MCP_TUNNELS (build defaults leave it
@@ -105,7 +107,11 @@ export function isMcpTunnelsEnabled(): boolean {
   return feature('MCP_TUNNELS') ? true : false
 }
 
-/** Build request headers with the mcp-tunnels version header (0032 anchor). */
+/** Build request headers with the mcp-tunnels version header (0032 anchor
+ * `u([{"anthropic-beta":[...betas??[],"mcp-tunnels-2026-06-22"].toString()},
+ * extra?.headers])` — the merged anthropic-beta value feeds the same header
+ * slot that `extra` (per-call headers) may override wholesale, mirroring the
+ * official second-element override). */
 export function buildTunnelsHeaders(
   extra?: Record<string, string>,
 ): Record<string, string> {
@@ -123,9 +129,15 @@ export function getTunnelsBaseUrl(explicit?: string): string {
   return getOauthConfig().BASE_API_URL.replace(/\/$/, '')
 }
 
-function withBetas(betas?: string[]): Record<string, string> {
+/** Official beta merge (0032-chunk-dyqmyxqn model-provider/anthropic.js,
+ * every tunnels route verbatim):
+ *   `{"anthropic-beta": [...perCallBetas ?? [], "mcp-tunnels-2026-06-22"].toString()}`
+ * — per-call betas come FIRST, the tunnels version header is appended last.
+ * Exported for the merge-order test (the gate itself is not runtime-flippable
+ * under bun:bundle defines). */
+export function withBetas(betas?: string[]): Record<string, string> {
   return betas && betas.length > 0
-    ? { 'anthropic-beta': [MCP_TUNNELS_BETA_HEADER, ...betas].join(',') }
+    ? { 'anthropic-beta': [...betas, MCP_TUNNELS_BETA_HEADER].join(',') }
     : {}
 }
 

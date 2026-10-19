@@ -65,7 +65,7 @@ import { interpretCommandResult } from './commandSemantics.js';
 import { clampTimeoutMs, getMaxTimeoutMs, getSimplePrompt } from './prompt.js';
 import { checkReadOnlyConstraints } from './readOnlyValidation.js';
 import { parseSedEditCommand } from './sedEditParser.js';
-import { evaluateSandboxDecision, shouldUseSandbox } from './shouldUseSandbox.js';
+import { evaluateSandboxDecision, SANDBOX_REFUSAL_MESSAGES, shouldUseSandbox } from './shouldUseSandbox.js';
 import { BASH_TOOL_NAME } from './toolName.js';
 import {
   BackgroundHint,
@@ -683,14 +683,13 @@ export const BashTool = buildTool({
     // refused outright instead of being forced into a sandbox that silently
     // fails and falls through to a bare-metal run. A globally disabled sandbox
     // (no availability error) is plain non-enforcement and never refuses.
+    // R2: refusal texts are the shared Gs/Ks-derived map (verbatim official
+    // wording + adaptation note in shouldUseSandbox.ts).
     const sandboxDecision = evaluateSandboxDecision(input);
-    if (sandboxDecision.mode === 'refuse') {
+    if (sandboxDecision.mode === 'refuse' && sandboxDecision.reason) {
       return {
         result: false,
-        message:
-          sandboxDecision.reason === 'policy_disabled'
-            ? 'unsandboxed commands are disabled by policy'
-            : 'sandbox unavailable under strict managed policy',
+        message: SANDBOX_REFUSAL_MESSAGES[sandboxDecision.reason],
         errorCode: 10,
       };
     }

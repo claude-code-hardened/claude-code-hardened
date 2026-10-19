@@ -146,14 +146,13 @@ describe('buildQuestionSchema — base surface', () => {
     expect(schema.safeParse(choiceQuestion()).success).toBe(true)
   })
 
-  test('rejects kind — the base surface is choice-only (honest fail, not silent strip)', () => {
+  test('silently strips kind — official fe=Z(C()) (0311 anchor): base parse drops the undeclared key', () => {
     const result = schema.safeParse({ ...choiceQuestion(), kind: 'text' })
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      const issues = result.error.issues.map(i => i.message)
-      expect(issues.some(m => m.includes('extended-question surface'))).toBe(
-        true,
-      )
+    expect(result.success).toBe(true)
+    if (result.success) {
+      // The strip means downstream sees no kind — the question degrades to
+      // the choice picker exactly as the official base shape does.
+      expect(result.data.kind).toBeUndefined()
     }
   })
 

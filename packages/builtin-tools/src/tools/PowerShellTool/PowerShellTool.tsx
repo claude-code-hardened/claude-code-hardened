@@ -48,7 +48,8 @@ import {
   getToolResultPath,
   PREVIEW_SIZE_BYTES,
 } from 'src/utils/toolResultStorage.js';
-import { shouldUseSandboxForPowerShell } from './sandboxDecision.js';
+import { evaluateSandboxDecisionForPowerShell, shouldUseSandboxForPowerShell } from './sandboxDecision.js';
+import { SANDBOX_REFUSAL_MESSAGES } from '../BashTool/shouldUseSandbox.js';
 import { BackgroundHint } from '../BashTool/UI.js';
 import {
   buildImageToolResult,
@@ -444,6 +445,18 @@ export const PowerShellTool = buildTool({
         errorCode: 11,
       };
     }
+    // R2 (#0051) — the sandbox decision is three-state: a `refuse` verdict
+    // (strict/closed policy with no materializable sandbox, or the official
+    // Gs/Ks exclusion carve-out) becomes a tool error with the same message
+    // texts BashTool uses, instead of silently falling through to a bare run.
+    const sandboxDecision = evaluateSandboxDecisionForPowerShell(input);
+    if (sandboxDecision.mode === 'refuse' && sandboxDecision.reason) {
+      return {
+        result: false,
+        message: SANDBOX_REFUSAL_MESSAGES[sandboxDecision.reason],
+        errorCode: 10,
+      };
+    }
     if (feature('MONITOR_TOOL') && !isBackgroundTasksDisabled && !input.run_in_background) {
       const sleepPattern = detectBlockedSleepPattern(input.command);
       if (sleepPattern !== null) {
@@ -546,6 +559,13 @@ export const PowerShellTool = buildTool({
     // comment for the policy rationale.
     if (isWindowsSandboxPolicyViolation()) {
       throw new Error(WINDOWS_SANDBOX_POLICY_REFUSAL);
+    }
+    // R2 (#0051) — same three-state consumption as validateInput: refuse now,
+    // never run bare under a strict/closed policy that cannot provide the
+    // sandbox (tool error, Bash-verbatim texts).
+    const sandboxDecision = evaluateSandboxDecisionForPowerShell(input);
+    if (sandboxDecision.mode === 'refuse' && sandboxDecision.reason) {
+      throw new Error(SANDBOX_REFUSAL_MESSAGES[sandboxDecision.reason]);
     }
 
     const { abortController, setAppState, setToolJSX } = toolUseContext;

@@ -130,12 +130,51 @@ function containsExcludedCommand(command: string): boolean {
 /** Sandbox execution mode decided for one tool call. */
 export type SandboxDecisionMode = 'sandbox' | 'unsandboxed' | 'refuse'
 
-/** Why a refused command is rejected outright (official tn 0051:729). */
-export type SandboxDecisionReason = 'sandbox_unavailable' | 'policy_disabled'
+/** Why a refused command is rejected outright (official tn 0051:729).
+ * `partial_exclusion` is the official Gs face: the command matches a sandbox
+ * exclusion only in part (compound / metacharacter form), while
+ * `policy_disabled` is the official Ks face: the exclusion would exempt the
+ * command but unsandboxed execution cannot be approved. */
+export type SandboxDecisionReason =
+  | 'sandbox_unavailable'
+  | 'policy_disabled'
+  | 'partial_exclusion'
 
 export type SandboxDecision = {
   mode: SandboxDecisionMode
   reason?: SandboxDecisionReason
+}
+
+/**
+ * Refusal texts for the three refuse faces (shared verbatim by BashTool and
+ * PowerShellTool — "tool error 同 Bash 文案").
+ *
+ * Official wording (0051-chunk-bxerm1mk:729, variables Gs/Ks, Windows-scoped
+ * there):
+ *   Gs = "Enterprise policy requires sandboxing, but this command would not
+ *   be sandboxed on Windows: either the sandbox is unavailable, or the command
+ *   matches a sandbox exclusion pattern only in part. Compound commands and
+ *   commands with shell metacharacters must run sandboxed even when a
+ *   statement matches an exclusion. Shell command execution is blocked by
+ *   policy."
+ *   Ks = "Enterprise policy requires sandboxing, but the sandbox is
+ *   unavailable on Windows. The command matches a sandbox exclusion pattern,
+ *   but exclusions only exempt a command where a permission prompt can
+ *   approve the unsandboxed run, and none is available here. Shell command
+ *   execution is blocked by policy."
+ *
+ * Adaptation declared per W4 review: the official texts hard-code "on
+ * Windows" (the official gate is the Windows-only tn()); this gate is
+ * platform-general, so the platform clause is dropped and the availability /
+ * partial-exclusion clauses are kept 1:1.
+ */
+export const SANDBOX_REFUSAL_MESSAGES: Record<SandboxDecisionReason, string> = {
+  sandbox_unavailable:
+    'Enterprise policy requires sandboxing, but the sandbox is unavailable. Shell command execution is blocked by policy.',
+  policy_disabled:
+    'Enterprise policy requires sandboxing, but unsandboxed command execution is disabled by policy: exclusions only exempt a command where a permission prompt can approve the unsandboxed run, and none is available here. Shell command execution is blocked by policy.',
+  partial_exclusion:
+    'Enterprise policy requires sandboxing, but this command would not be sandboxed: it matches a sandbox exclusion pattern only in part. Compound commands and commands with shell metacharacters must run sandboxed even when a statement matches an exclusion. Shell command execution is blocked by policy.',
 }
 
 /**
@@ -152,6 +191,15 @@ export type SandboxDecision = {
  * Boundary (official four-condition gate includes `enabled`): a globally
  * disabled sandbox (isSandboxingEnabled() false with no availability error)
  * is plain non-enforcement — no refuse, plain unsandboxed execution.
+ *
+ * R2 (Q4-3) — official tn(0051:729) short-circuits the refusal off when the
+ * platform is restricted via enabledPlatforms:
+ *   `function tn(e,n,r){if(r||I()!=="windows"||!ze.isSandboxEnabledInSettings()
+ *      ||!ze.isPlatformInEnabledList()||!ze.isStrictSandboxModeConfigured()||e)
+ *      return null; …}`
+ * An enabledPlatforms restriction disables sandboxing for that platform but is
+ * NOT part of the strict-refusal category — the gate falls through to the
+ * plain unsandboxed path instead of refusing.
  */
 export function evaluateSandboxDecision(
   input: Partial<SandboxInput>,
@@ -165,10 +213,37 @@ export function evaluateSandboxDecision(
     SandboxManager.areUnsandboxedCommandsDisabled()
 
   if (strict || optOutDenied) {
+    // R2 (Q4-3): an enabledPlatforms restriction is never a strict-refusal
+    // trigger (official tn verbatim above) — treat it as non-refusing and let
+    // the isSandboxingEnabled() === false path below run the command
+    // unsandboxed.
+    const platformInEnabledList = SandboxManager.isPlatformInEnabledList()
     const sandboxUnavailable =
       !SandboxManager.isSupportedPlatform() ||
-      SandboxManager.getSandboxUnavailableReason() !== undefined
+      (platformInEnabledList &&
+        SandboxManager.getSandboxUnavailableReason() !== undefined)
     if (sandboxUnavailable) {
+      // R2 (Q4-1) — official tn(0051:729) exclusion carve-out, verbatim:
+      //   `if(!Rho(n))return Gs;return C1().unsandboxedCommandsDisabled?Ks:null`
+      // An excluded command may still run unsandboxed — but only when the
+      // exclusion cleanly covers the whole command (official `Rho`, 0001
+      // chunk: simple command + full-command rule match). The carve-out does
+      // not apply to model opt-out calls (official tn `…||e` short-circuits
+      // before the exclusion logic; the Nh path governs those).
+      if (
+        strict &&
+        input.dangerouslyDisableSandbox !== true &&
+        input.command !== undefined &&
+        containsExcludedCommand(input.command)
+      ) {
+        if (!isRhoCleanExclusionMatch(input.command)) {
+          return { mode: 'refuse', reason: 'partial_exclusion' }
+        }
+        if (SandboxManager.areUnsandboxedCommandsDisabled()) {
+          return { mode: 'refuse', reason: 'policy_disabled' }
+        }
+        return { mode: 'unsandboxed' }
+      }
       return {
         mode: 'refuse',
         reason: strict ? 'sandbox_unavailable' : 'policy_disabled',
@@ -200,12 +275,71 @@ export function evaluateSandboxDecision(
     return { mode: 'unsandboxed' }
   }
 
-  // Don't sandbox if the command contains user-configured excluded commands
-  if (containsExcludedCommand(input.command)) {
+  // Don't sandbox if the command contains user-configured excluded commands.
+  // R2 (Q4-1): under strict managed policy the exemption narrows to the
+  // official `Rho` semantics — a compound command (or one with shell
+  // metacharacters) "must run sandboxed even when a statement matches an
+  // exclusion" (official Gs, 0051-chunk-bxerm1mk:729), so only a cleanly
+  // excluded simple command escapes; partial matches stay sandboxed.
+  if (input.command !== undefined && containsExcludedCommand(input.command)) {
+    if (strict && !isRhoCleanExclusionMatch(input.command)) {
+      return { mode: 'sandbox' }
+    }
     return { mode: 'unsandboxed' }
   }
 
   return { mode: 'sandbox' }
+}
+
+/**
+ * Verbatim port of the official `Rho` exclusion-check (0001-chunk-xrzcaagk,
+ * `function Rho(e)` + the `JLe` matcher) narrowed to what the Bash-side
+ * decision surface needs: the command is only cleanly excludable when the
+ * FULL trimmed command itself matches one exclusion rule (prefix == whole
+ * command, exact equality, or wildcard) and the command is not a compound or
+ * obfuscated form (multi-statement split, quoted first token). Officially the
+ * rule list comes from the excluded-commands settings via `nGn()`, mirrored
+ * here by `sandbox.excludedCommands`.
+ *
+ * Official `JLe(e,n)`: `case"prefix":return n===e.prefix||n.startsWith(e.prefix+" ");
+ * case"exact":return n===e.command;case"wildcard":return hR(e.pattern,n)`.
+ */
+export function isRhoCleanExclusionMatch(command: string): boolean {
+  const trimmed = command.trim()
+  if (trimmed.length === 0) return false
+
+  // Rho's compound/obfuscation screen: a command that splits into more than
+  // one statement (&&, ;, |, …) never cleanly matches — Gs text (0051:729):
+  // "Compound commands and commands with shell metacharacters must run
+  // sandboxed even when a statement matches an exclusion."
+  let subcommands: string[]
+  try {
+    subcommands = splitCommand_DEPRECATED(trimmed)
+  } catch {
+    return false
+  }
+  if (subcommands.length > 1) return false
+
+  // Rho: `if(/['"‘-’“-„]/.test(r.split(/[ \t]+/)[0]??""))return!1` — a quoted
+  // first token hides the real command and is not cleanly excludable.
+  const firstToken = trimmed.split(/[ \t]+/)[0] ?? ''
+  if (/['"‘-’“-„]/.test(firstToken)) return false
+
+  const userExcludedCommands =
+    getSettings_DEPRECATED().sandbox?.excludedCommands ?? []
+  if (userExcludedCommands.length === 0) return false
+
+  return userExcludedCommands.some(pattern => {
+    const rule = bashPermissionRule(pattern)
+    switch (rule.type) {
+      case 'prefix':
+        return trimmed === rule.prefix || trimmed.startsWith(rule.prefix + ' ')
+      case 'exact':
+        return trimmed === rule.command
+      case 'wildcard':
+        return matchWildcardPattern(rule.pattern, trimmed)
+    }
+  })
 }
 
 export function shouldUseSandbox(input: Partial<SandboxInput>): boolean {
