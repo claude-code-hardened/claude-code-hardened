@@ -101,6 +101,10 @@ import { registerHookEventHandler } from 'src/utils/hooks/hookEvents.js'
 import { executeFilePersistence } from 'src/utils/filePersistence/filePersistence.js'
 import { finalizePendingAsyncHooks } from 'src/utils/hooks/AsyncHookRegistry.js'
 import {
+  emitPostModelSwitch,
+  emitPreModelSwitch,
+} from 'src/utils/hooks/lifecycleHookEvents.js'
+import {
   gracefulShutdown,
   gracefulShutdownSync,
   isShuttingDown,
@@ -3129,10 +3133,16 @@ function runHeadlessStreaming(
             requestedModel === 'default'
               ? getDefaultMainLoopModel()
               : requestedModel
+          // W7 #58: the SDK -p set_model control path now emits the
+          // Pre/PostModelSwitch lifecycle hooks (previously only the bridge
+          // control path fired them). Observability-only — hooks observe but
+          // cannot deny-cancel an SDK-requested switch.
+          void emitPreModelSwitch({ toModel: model, source: 'sdk' })
           activeUserSpecifiedModel = model
           setMainLoopModelOverride(model)
           notifySessionMetadataChanged({ model })
           injectModelSwitchBreadcrumbs(requestedModel, model)
+          void emitPostModelSwitch({ toModel: model, source: 'sdk' })
 
           sendControlResponseSuccess(msg)
         } else if (msg.request.subtype === 'set_max_thinking_tokens') {

@@ -393,6 +393,29 @@ async function main(): Promise<void> {
     }
   }
 
+  // Fast-path for `claude self-hosted-runner ...` (also accepts the
+  // environment-runner alias) — official anchor 0239:227 exports
+  // selfHostedRunnerDoctorMain for `claude self-hosted-runner doctor`.
+  // CCH keeps this a fast-path (no full Commander bootstrap, no wizard
+  // child): only the structured doctor checklist is wired; any other
+  // subcommand is rejected with a pointer at `doctor`.
+  if (feature('BRIDGE_MODE') && (args[0] === 'self-hosted-runner' || args[0] === 'environment-runner')) {
+    profileCheckpoint('cli_self_hosted_runner_path');
+    const { matchRunnerDoctorArgv, selfHostedRunnerDoctorMain } = await import('../remoteRuntime/runnerDoctor.js');
+    const rest = args.slice(1);
+    const doctorArgs = matchRunnerDoctorArgv(rest);
+    if (doctorArgs) {
+      const doctorCode = await selfHostedRunnerDoctorMain(doctorArgs);
+      flushStartupProfile();
+      process.exitCode = doctorCode;
+      return;
+    }
+    console.error(`Unknown ${args[0]} subcommand — usage: claude ${args[0]} doctor [--json]`);
+    flushStartupProfile();
+    process.exitCode = 1;
+    return;
+  }
+
   // Redirect common update flag mistakes to the update subcommand
   if (args.length === 1 && (args[0] === '--update' || args[0] === '--upgrade')) {
     process.argv = [process.argv[0]!, process.argv[1]!, 'update'];

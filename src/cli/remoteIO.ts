@@ -2,7 +2,12 @@ import type { StdoutMessage } from 'src/entrypoints/sdk/controlTypes.js'
 import { PassThrough } from 'stream'
 import { URL } from 'url'
 import { getSessionId } from '../bootstrap/state.js'
+import { feature } from 'bun:bundle'
 import { getPollIntervalConfig } from '../bridge/pollConfig.js'
+import {
+  closeRunnerHealthz,
+  maybeStartRunnerHealthz,
+} from '../remoteRuntime/healthServer.js'
 import { registerCleanup } from '../utils/cleanupRegistry.js'
 import { setCommandLifecycleListener } from '../utils/commandLifecycle.js'
 import { isDebugMode, logForDebugging } from '../utils/debug.js'
@@ -200,6 +205,24 @@ export class RemoteIO extends StructuredIO {
 
     // Register for graceful shutdown cleanup
     registerCleanup(async () => this.close())
+
+    // Self-hosted runner /healthz listener (work package W8 #59 block 1).
+    // RemoteIO is the runner-side session entry face: when this process was
+    // launched with `--health-port[=N]` (or SELF_HOSTED_RUNNER_HEALTH_PORT),
+    // serve an always-200 JSON body {ok, path} on 127.0.0.1 for liveness
+    // probes and self_hosted_runner_read_health (official semantics: "always
+    // returns 200 — read the body for state", runbook §9). One listener per
+    // process (module singleton); EADDRINUSE degrades to a stderr warn +
+    // continue, and the listener is closed again on graceful shutdown.
+    // Port 0 / unset = disabled (official semantics) — the default is zero
+    // behavior change.
+    if (feature('BRIDGE_MODE')) {
+      maybeStartRunnerHealthz().then(handle => {
+        if (handle) {
+          registerCleanup(async () => closeRunnerHealthz())
+        }
+      })
+    }
 
     // If initial prompt is provided, send it through the input stream
     if (initialPrompt) {

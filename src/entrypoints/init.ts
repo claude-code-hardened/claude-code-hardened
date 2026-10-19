@@ -55,6 +55,7 @@ import { getTelemetryAttributes } from '../utils/telemetryAttributes.js'
 import { setShellIfWindows } from '../utils/windowsPaths.js'
 import { initSentry } from '../utils/sentry.js'
 import { initUser } from '../utils/user.js'
+import { validatePolicyLayer } from '../utils/policy/policySettings.js'
 import { initLangfuse, shutdownLangfuse } from '../services/langfuse/index.js'
 import { t } from '../i18n/index.js'
 
@@ -93,6 +94,15 @@ export const init = memoize(async (): Promise<void> => {
     // Full environment variables are applied after trust is established
     const envVarsStart = Date.now()
     applySafeConfigEnvironmentVariables()
+
+    // W4 (R4) — warn-only validation of the policySettings layer, run once
+    // right after the settings/config system comes up. Problems are logged
+    // (warn level via debug + the layer's own debug log) and dropped: this
+    // must never block startup. Enterprise admins surface the same problems
+    // through /doctor.
+    for (const policyProblem of validatePolicyLayer()) {
+      logForDebugging(`[policy] ${policyProblem}`, { level: 'warn' })
+    }
 
     // Apply NODE_EXTRA_CA_CERTS from settings.json to process.env early,
     // before any TLS connections. Bun caches the TLS cert store at boot

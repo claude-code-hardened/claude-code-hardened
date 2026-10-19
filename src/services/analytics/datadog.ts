@@ -67,6 +67,57 @@ const DATADOG_ALLOWED_EVENTS = new Set([
   'tengu_team_mem_sync_push',
   'tengu_team_mem_sync_started',
   'tengu_team_mem_entries_capped',
+  // --- W8 (#59) whitelist extension: CCH-side event allowlist over the
+  // real logEvent call sites in this repo (grep 'logEvent(' over src/).
+  // The MECHANISM mirrors the official 0511-chunk-dyqmyxqn/telemetry/
+  // events.js allowlist normalization, but the NAMES are this repo's own:
+  // official 0511 carries 205 event names and only 2 of the extended
+  // names below appear there (tengu_mcp_list_changed /
+  // tengu_mcp_server_connection_failed) — this is NOT an official
+  // alignment. Data-only addition; the reporting mechanism is unchanged.
+  // retry/fallback family
+  'tengu_api_retry',
+  'tengu_api_persistent_retry_wait',
+  'tengu_streaming_fallback_to_non_streaming',
+  'tengu_api_model_not_found_fallback_triggered',
+  'tengu_api_opus_fallback_triggered',
+  'tengu_nonstreaming_fallback_started',
+  'tengu_nonstreaming_fallback_error',
+  'tengu_oauth_token_refresh_lock_retry',
+  'tengu_oauth_token_refresh_lock_retry_limit_reached',
+  'tengu_oauth_token_refresh_lock_error',
+  'tengu_issue_fallback',
+  'tengu_issue_failed',
+  // error / timeout family
+  'tengu_streaming_error',
+  'tengu_streaming_idle_timeout',
+  'tengu_config_parse_error',
+  'tengu_version_check_failure',
+  'tengu_bridge_heartbeat_error',
+  'tengu_bridge_fatal_error',
+  'tengu_bridge_registration_failed',
+  'tengu_bridge_session_timeout',
+  'tengu_mcp_ide_server_connection_failed',
+  'tengu_mcp_tool_call_auth_error',
+  'tengu_file_upload_failed',
+  'tengu_schedule_failed',
+  'tengu_session_resumed',
+  // spawn family (bridge spawn surface)
+  'tengu_bridge_spawn_mode_chosen',
+  'tengu_bridge_spawn_mode_toggled',
+  // notification / refusal / sandbox families
+  'tengu_notification_method_used',
+  'tengu_refusal_api_response',
+  'tengu_sandbox_network_dialog_result',
+  // MCP distribution health — the only two names in this extension block
+  // that also appear in the official 0511 allowlist
+  'tengu_mcp_list_changed',
+  'tengu_mcp_server_connection_failed',
+  // session-loop odds and ends seen on every session
+  'tengu_plan_exit',
+  'tengu_config_changed',
+  'tengu_continue',
+  'tengu_copy',
 ])
 
 const TAG_FIELDS = [

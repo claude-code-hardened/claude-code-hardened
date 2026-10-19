@@ -132,6 +132,26 @@ export const SandboxSettingsSchema = lazySchema(() =>
             '**Reduces security** — opens a potential data exfiltration vector through the trustd service. Default: false',
         ),
       excludedCommands: z.array(z.string()).optional(),
+      // Strict-mode gates (enterprise policy shape): when strictSandboxMode
+      // is on, dangerouslyDisableSandbox is refused outright unless the
+      // command is on an explicit allowlist; unsandboxedCommandsDisabled is
+      // the hard no-escape flag (independent of allowUnsandboxedCommands —
+      // either one set false disables the escape hatch).
+      strictSandboxMode: z
+        .boolean()
+        .optional()
+        .describe(
+          'Managed-deployment strict mode: commands may not opt out of the ' +
+            'sandbox via dangerouslyDisableSandbox; calls are refused unless ' +
+            'explicitly allowlisted by policy.',
+        ),
+      unsandboxedCommandsDisabled: z
+        .boolean()
+        .optional()
+        .describe(
+          'Hard-disable the dangerouslyDisableSandbox escape hatch, ' +
+            'independently of allowUnsandboxedCommands. Default: false.',
+        ),
       ripgrep: z
         .object({
           command: z.string(),
