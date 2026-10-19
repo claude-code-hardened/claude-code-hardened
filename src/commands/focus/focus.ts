@@ -8,12 +8,24 @@
  * persisted preference cannot change what is drawn on screen yet. Every
  * message below says exactly that instead of claiming an active focus
  * view — the stored record is a preference, not a live behavior.
+ *
+ * Persistence goes through src/utils/safeJsonFile.ts: atomic tmp+rename
+ * writes, strict reads (a corrupt store is quarantined to a .corrupt-* backup
+ * and logged, then surfaces as "off" — an empty table — instead of throwing
+ * the /focus command into an error), and a same-directory advisory
+ * `<file>.lock` around the read-modify-write so two concurrent /focus
+ * invocations cannot lose each other's update.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { LocalCommandCall } from '../../types/command.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
+import {
+  readJsonFileStrict,
+  StoreCorruptError,
+  withStoreLock,
+  writeJsonFileAtomic,
+} from '../../utils/safeJsonFile.js'
 import { FOCUS_USAGE, parseFocusArgs } from './args.js'
 
 export interface FocusModeRecord {
@@ -30,16 +42,19 @@ export function getFocusModePath(): string {
 }
 
 export function isFocusModeEnabled(): boolean {
-  const path = getFocusModePath()
-  if (!existsSync(path)) return false
+  let parsed: unknown | null
   try {
-    const parsed = JSON.parse(
-      readFileSync(path, 'utf8'),
-    ) as FocusModeRecord | null
-    return parsed?.enabled === true
-  } catch {
-    return false
+    parsed = readJsonFileStrict(getFocusModePath())
+  } catch (e) {
+    if (e instanceof StoreCorruptError) {
+      // Already quarantined + logged inside readJsonFileStrict. The store
+      // surfaces as an empty table (the preference reads as "off") — the
+      // raw bytes stay recoverable at e.backupPath.
+      return false
+    }
+    throw e
   }
+  return (parsed as FocusModeRecord | null)?.enabled === true
 }
 
 function writeRecord(enabled: boolean): void {
@@ -47,12 +62,9 @@ function writeRecord(enabled: boolean): void {
     enabled,
     updatedAt: new Date().toISOString(),
   }
-  mkdirSync(getClaudeConfigHomeDir(), { recursive: true })
-  writeFileSync(
-    getFocusModePath(),
-    `${JSON.stringify(record, null, 2)}\n`,
-    'utf8',
-  )
+  // Atomic write (tmp + rename); concurrency is serialized by the caller's
+  // withStoreLock below — never nest withStoreLock (it is not reentrant).
+  writeJsonFileAtomic(getFocusModePath(), record)
 }
 
 /** Pure copy builder for the on/off confirmation (persisted preference only). */
@@ -87,10 +99,27 @@ export function buildFocusStatusMessage(enabled: boolean): string {
   ].join('\n')
 }
 
+/** Locked read-modify-write: set the preference and report what it was. */
 function setFocus(enabled: boolean): string {
-  const was = isFocusModeEnabled()
-  writeRecord(enabled)
-  return buildFocusSetMessage(enabled, was)
+  return withStoreLock(getFocusModePath(), () => {
+    const was = isFocusModeEnabled()
+    writeRecord(enabled)
+    return buildFocusSetMessage(enabled, was)
+  })
+}
+
+/**
+ * Locked toggle: the new value is decided INSIDE the lock so two concurrent
+ * toggles cannot both observe the same previous state and write the same
+ * value (a lost update).
+ */
+function setFocusToggle(): string {
+  return withStoreLock(getFocusModePath(), () => {
+    const was = isFocusModeEnabled()
+    const enabled = !was
+    writeRecord(enabled)
+    return buildFocusSetMessage(enabled, was)
+  })
 }
 
 function status(): string {
@@ -101,7 +130,7 @@ export const call: LocalCommandCall = async rawArgs => {
   const args = parseFocusArgs(rawArgs)
   switch (args.action) {
     case 'toggle':
-      return { type: 'text', value: setFocus(!isFocusModeEnabled()) }
+      return { type: 'text', value: setFocusToggle() }
     case 'on':
       return { type: 'text', value: setFocus(true) }
     case 'off':

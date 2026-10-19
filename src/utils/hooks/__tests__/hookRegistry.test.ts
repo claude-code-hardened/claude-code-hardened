@@ -9,7 +9,6 @@ import {
   replaceMainThreadHook,
   resetMainThreadHookRegistry,
 } from '../hookRegistry.js'
-
 const originalEnv = { ...process.env }
 
 afterEach(() => {
@@ -139,5 +138,38 @@ describe('hookRegistry (main-thread registry)', () => {
 
     await dispatchMainThreadHookEvent('PreModelSwitch', {})
     expect(fired).toEqual(['after-boom'])
+  })
+
+  test('dispatch returns handler verdicts (W7 round 2 item 5)', async () => {
+    registerMainThreadHook({
+      name: 'policy-hook',
+      events: ['PreModelSwitch'],
+      callback: () => ({
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'nope',
+      }),
+    })
+    registerMainThreadHook({
+      name: 'silent-hook',
+      events: ['PreModelSwitch'],
+      // void return — must not produce a verdict entry.
+      callback: () => {},
+    })
+    registerMainThreadHook({
+      name: 'allow-hook',
+      events: ['PreModelSwitch'],
+      callback: () => ({ permissionDecision: 'allow' }),
+    })
+
+    const results = await dispatchMainThreadHookEvent('PreModelSwitch', {})
+    expect(results).toHaveLength(2)
+    expect(results[0]).toMatchObject({
+      hook: 'policy-hook',
+      verdict: { permissionDecision: 'deny', permissionDecisionReason: 'nope' },
+    })
+    expect(results[1]).toMatchObject({
+      hook: 'allow-hook',
+      verdict: { permissionDecision: 'allow' },
+    })
   })
 })

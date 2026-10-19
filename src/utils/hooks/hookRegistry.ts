@@ -3,11 +3,16 @@
  *
  * An in-process registry for main-loop lifecycle hooks, in the same spirit as
  * the post-sampling hook registry (`postSamplingHooks.ts`) but with the full
- * register / replace / clear API surface. It is intentionally separate from
- * the settings-driven hook matchers (`hooksSettings.ts`, `sessionHooks.ts`):
- * entries here are programmatic, ephemeral, and dispatched synchronously by
- * the lifecycle emitters (`lifecycleHookEvents.ts` — the single consumption
- * point wired into the bridge model-switch and prompt-ingress paths).
+ * register / replace / clear API surface.
+ *
+ * ARCHITECTURE DEBT (W7 round 2, declared): this registry and the
+ * settings-driven hook matchers (`hooksSettings.ts`, `sessionHooks.ts` — the
+ * `settings.json` "hooks" pipe that execs shell/HTTP/prompt hooks) COEXIST
+ * WITHOUT SEMANTIC INTEROP. Entries here never flow into the settings pipe
+ * and settings hooks never flow into this registry; the two share event
+ * *names* but not configuration, matching, or delivery guarantees. Anything
+ * registered programatically (bridge, SDK faces, the lifecycle trio) is only
+ * reachable via dispatchMainThreadHookEvent — not via `settings.json` hooks.
  *
  * Forwarding semantics (block 4): entries may declare which origins they
  * accept. When CLAUDE_CODE_DISABLE_HOOK_FORWARDING is set, events marked as
@@ -15,6 +20,10 @@
  * CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING is set, plugin-origin entries are
  * skipped for forwarded events. Locally-originated dispatch is never gated —
  * the kill switches must not break the local loop.
+ *
+ * `forwarded` is RESERVED FOR PEER FORWARDING (NOT WIRED): no production
+ * emission site passes `forwarded: true` today (only tests do). The gate is
+ * a quarantine layer for a remote-peer relay that has not been built.
  */
 
 import { toError } from '../errors.js'
@@ -27,9 +36,30 @@ import { logForDebugging } from '../debug.js'
 
 export type MainThreadHookOrigin = 'local' | 'plugin'
 
+/**
+ * A handler may return a structured verdict (e.g. PreModelSwitch's
+ * permissionDecision allow/deny/ask per the official hook output schema,
+ * 0004-chunk-zrkp23rq/module-005-uncategorized.js:3843). Returning a value is
+ * how a handler makes its decision OBSERVABLE; it does not change dispatch —
+ * the lifecycle emitters decide what to do with verdicts (they log discarded
+ * deny-style verdicts, see lifecycleHookEvents.ts).
+ */
+export type MainThreadHookVerdict = Record<string, unknown>
+
 export type MainThreadHookHandler = (
   payload: Record<string, unknown>,
-) => void | Promise<void>
+) =>
+  | undefined
+  | MainThreadHookVerdict
+  | Promise<MainThreadHookVerdict | undefined>
+
+export type MainThreadHookDispatchResult = {
+  /** The hook that produced the verdict. */
+  hook: string
+  id: string
+  /** The returned verdict object. */
+  verdict: MainThreadHookVerdict
+}
 
 export type MainThreadHook = {
   /** Stable id (returned by registerMainThreadHook, used by replace/remove). */
@@ -46,7 +76,8 @@ export type MainThreadHook = {
 export type DispatchMainThreadHookEventOptions = {
   /**
    * True when the event was relayed from a remote/bridge session. Forwarded
-   * dispatch honors both forwarding kill switches.
+   * dispatch honors both forwarding kill switches. RESERVED (not wired):
+   * no production caller sets this yet — see the header note.
    */
   forwarded?: boolean
 }
@@ -134,31 +165,45 @@ export function resetMainThreadHookRegistry(): number {
  * Single dispatch consumption point. Fires every hook registered for the
  * event (serially, awaited). A hook error is logged and does not break the
  * remaining dispatch — mirrors executePostSamplingHooks.
+ *
+ * Returns the verdicts returned by handlers (skipping void). The caller —
+ * the lifecycle emitters — decides what a verdict means; this registry only
+ * relays it.
  */
 export async function dispatchMainThreadHookEvent(
   event: string,
   payload: Record<string, unknown> = {},
   options: DispatchMainThreadHookEventOptions = {},
-): Promise<void> {
+): Promise<MainThreadHookDispatchResult[]> {
   const forwarded = options.forwarded === true
   const hooks = getMainThreadHooks(event)
+  const dispatchResults: MainThreadHookDispatchResult[] = []
   for (const hook of hooks) {
-    if (forwarded && isHookForwardingDisabled()) {
-      logForDebugging(
-        `[hookRegistry] Skipped ${hook.name} for forwarded ${event}: hook forwarding disabled`,
-      )
-      continue
-    }
-    if (forwarded && hook.origin === 'plugin' && isPluginForwardingDisabled()) {
-      logForDebugging(
-        `[hookRegistry] Skipped plugin hook ${hook.name} for forwarded ${event}: plugin forwarding disabled`,
-      )
-      continue
+    // Forward-gating converged into a single skip decision: the event-level
+    // hook kill switch applies to every hook, the plugin-origin gate only to
+    // plugin entries. Local dispatch is never gated.
+    if (forwarded) {
+      const hookGateHits = isHookForwardingDisabled()
+      const pluginGateHits =
+        hook.origin === 'plugin' && isPluginForwardingDisabled()
+      if (hookGateHits || pluginGateHits) {
+        // Precedence note: when both gates are set the hook-level gate is
+        // the one that dropped the dispatch (checked first).
+        const byHookGate = hookGateHits || !pluginGateHits
+        logForDebugging(
+          `[hookRegistry] Skipped ${byHookGate ? '' : 'plugin hook '}${hook.name} for forwarded ${event}: ${byHookGate ? 'hook' : 'plugin'} forwarding disabled`,
+        )
+        continue
+      }
     }
     try {
-      await hook.callback(payload)
+      const verdict = await hook.callback(payload)
+      if (verdict && typeof verdict === 'object') {
+        dispatchResults.push({ hook: hook.name, id: hook.id, verdict })
+      }
     } catch (error) {
       logError(toError(error))
     }
   }
+  return dispatchResults
 }

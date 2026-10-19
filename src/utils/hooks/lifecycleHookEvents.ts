@@ -30,18 +30,31 @@
  *     (src/commands/model/model.tsx, source 'command').
  *   - SDK -p set_model control request → same emitters (src/cli/print.ts,
  *     source 'sdk').
+ *   - API fallback switch mid-turn → same emitters, source 'auto'
+ *     (src/query.ts FallbackTriggeredError branch; official any-cause
+ *     PostModelSwitch contract, 0461 anchor below).
  *
  * Observability-only downgrade (R7, declared): the official PreModelSwitch
  * contract allows a deny permissionDecision to CANCEL the switch. The emitters
  * here are fire-and-forget void — no verdict is returned to any caller, so
  * registered hooks observe but cannot block a model switch on these paths.
+ *
+ * Deny observability (W7 round 2, item 5): handlers may still RETURN their
+ * official verdicts (PreModelSwitch permissionDecision deny/ask; generic
+ * `decision: "block"` — 0004-chunk-zrkp23rq/module-005-uncategorized.js:3843).
+ * The emitters cannot honor them (above), but they no longer vanish: each
+ * deny-style verdict is logged (debug face) and counted — both in a
+ * process-local counter (`getDiscardedLifecycleVerdictCounts`) and by a
+ * numeric tengu event (`tengu_lifecycle_hook_verdict_discarded`).
  */
 
 import type { HookEvent } from 'src/entrypoints/agentSdkTypes.js'
 import { logForDebugging } from '../debug.js'
+import { logEvent } from '../../services/analytics/index.js'
 import {
   dispatchMainThreadHookEvent,
   registerMainThreadHook,
+  type MainThreadHookDispatchResult,
   type MainThreadHookHandler,
 } from './hookRegistry.js'
 
@@ -120,6 +133,71 @@ export function registerLifecycleHook(params: {
 
 let builtinHookIds: string[] | null = null
 
+// ============================================================================
+// Discarded-verdict observability (W7 round 2, item 5)
+// ============================================================================
+
+/** Per-event count of deny-style verdicts that were logged and discarded. */
+const discardedVerdictCounts: Record<string, number> = {}
+
+/** Snapshot of the discarded-verdict counters (event_log face, in-memory). */
+export function getDiscardedLifecycleVerdictCounts(): Record<string, number> {
+  return { ...discardedVerdictCounts }
+}
+
+/** Test seam — zero the discarded-verdict counters. */
+export function resetDiscardedLifecycleVerdictCountsForTest(): void {
+  for (const key of Object.keys(discardedVerdictCounts)) {
+    delete discardedVerdictCounts[key]
+  }
+}
+
+/**
+ * A verdict that, per the official hook output schema, would change the
+ * event's outcome: PreModelSwitch permissionDecision deny/ask (0004:3843)
+ * or the generic decision:"block". PostModelSwitch carries additionalContext
+ * only and has no deny face.
+ */
+function isDenyStyleVerdict(verdict: Record<string, unknown>): boolean {
+  const permissionDecision = verdict['permissionDecision']
+  if (permissionDecision === 'deny' || permissionDecision === 'ask') {
+    return true
+  }
+  return verdict['decision'] === 'block'
+}
+
+/**
+ * Make deny-style verdicts observable without enforcing them: one debug line
+ * per verdict (the exact outcome the hook wanted, quote-embedded) plus a
+ * counter bump on both the numeric tengu face and the process-local
+ * counters. Never throws into the emit path.
+ */
+function logDiscardedVerdicts(
+  event: string,
+  results: readonly MainThreadHookDispatchResult[],
+): void {
+  const denied = results.filter(result => isDenyStyleVerdict(result.verdict))
+  if (denied.length === 0) return
+  for (const result of denied) {
+    let rendered: string
+    try {
+      rendered = JSON.stringify(result.verdict)
+    } catch {
+      rendered = '[unserializable verdict]'
+    }
+    logForDebugging(
+      `[lifecycleHooks] ${event} verdict from ${result.hook} DISCARDED ` +
+        `(observability-only downgrade — a deny here does not cancel): ${rendered}`,
+    )
+  }
+  discardedVerdictCounts[event] =
+    (discardedVerdictCounts[event] ?? 0) + denied.length
+  // Numeric-only metadata (analytics face forbids string values).
+  logEvent('tengu_lifecycle_hook_verdict_discarded', {
+    [event]: denied.length,
+  })
+}
+
 /**
  * Registers one real main-thread hook per lifecycle event (a debug
  * observability sink) exactly once per process. R7 review: before this, the
@@ -166,7 +244,10 @@ export async function emitPreModelSwitch(payload: {
   source?: 'command' | 'picker' | 'sdk' | 'auto' | 'resume'
 }): Promise<void> {
   ensureBuiltinLifecycleHookRegistered()
-  await dispatchMainThreadHookEvent(PRE_MODEL_SWITCH_EVENT, { ...payload })
+  const results = await dispatchMainThreadHookEvent(PRE_MODEL_SWITCH_EVENT, {
+    ...payload,
+  })
+  logDiscardedVerdicts(PRE_MODEL_SWITCH_EVENT, results)
   logForDebugging(
     `[lifecycleHooks] PreModelSwitch ${payload.fromModel ?? '?'} → ${payload.toModel ?? '?'}`,
   )
@@ -179,7 +260,13 @@ export async function emitPostModelSwitch(payload: {
   source?: 'command' | 'picker' | 'sdk' | 'auto' | 'resume'
 }): Promise<void> {
   ensureBuiltinLifecycleHookRegistered()
-  await dispatchMainThreadHookEvent(POST_MODEL_SWITCH_EVENT, { ...payload })
+  // PostModelSwitch has no deny face (additionalContext only), but a
+  // decision:"block" verdict from an overreaching hook is still made
+  // observable rather than silently dropped.
+  const results = await dispatchMainThreadHookEvent(POST_MODEL_SWITCH_EVENT, {
+    ...payload,
+  })
+  logDiscardedVerdicts(POST_MODEL_SWITCH_EVENT, results)
   logForDebugging(
     `[lifecycleHooks] PostModelSwitch → ${payload.toModel ?? '?'}`,
   )
@@ -199,7 +286,11 @@ export async function emitUserPromptExpansion(payload: {
   suppressOriginalPrompt?: boolean
 }): Promise<void> {
   ensureBuiltinLifecycleHookRegistered()
-  await dispatchMainThreadHookEvent(USER_PROMPT_EXPANSION_EVENT, {
-    ...payload,
-  })
+  const results = await dispatchMainThreadHookEvent(
+    USER_PROMPT_EXPANSION_EVENT,
+    {
+      ...payload,
+    },
+  )
+  logDiscardedVerdicts(USER_PROMPT_EXPANSION_EVENT, results)
 }

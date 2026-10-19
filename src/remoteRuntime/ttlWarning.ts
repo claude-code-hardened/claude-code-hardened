@@ -24,6 +24,13 @@
  * token TTL and the time elapsed on the local clock since the last
  * successful token refresh so tests and the doctor entry can drive it
  * deterministically (see runnerDoctor.ts check `token_refresh_clock_skew`).
+ *
+ * CCH extension (W8 round 2, item 8): the official source (0239 runbook,
+ * :267/:281) only describes the refresh being SCHEDULED at the 80%-TTL
+ * point and clock skew throwing that schedule off — nothing past it. The
+ * escalated "80%-TTL refresh missed (100% ... elapsed)" wording below is a
+ * CCH-side diagnostic extension, NOT official verbatim text; it exists so
+ * an already-missed refresh window is distinguishable from an upcoming one.
  */
 
 /** Fraction of the token TTL at which the refresh-schedule warning fires. */

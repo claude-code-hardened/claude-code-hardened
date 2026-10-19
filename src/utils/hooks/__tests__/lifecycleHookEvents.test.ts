@@ -8,10 +8,12 @@ import {
   emitPreModelSwitch,
   emitUserPromptExpansion,
   ensureBuiltinLifecycleHookRegistered,
+  getDiscardedLifecycleVerdictCounts,
   isExtendedHookEventName,
   isLifecycleHookEvent,
   registerLifecycleHook,
   resetBuiltinLifecycleHookForTest,
+  resetDiscardedLifecycleVerdictCountsForTest,
 } from '../lifecycleHookEvents.js'
 import {
   getMainThreadHooks,
@@ -24,6 +26,7 @@ beforeEach(() => {
   // The built-in latch and the registry must reset together: ensure… latches
   // its ids once per process, while afterEach clears the registry.
   resetBuiltinLifecycleHookForTest()
+  resetDiscardedLifecycleVerdictCountsForTest()
 })
 
 afterEach(() => {
@@ -143,5 +146,58 @@ describe('lifecycleHookEvents (PreModelSwitch/PostModelSwitch/UserPromptExpansio
     await emitUserPromptExpansion({ originalPrompt: 'x', expandedPrompt: 'x' })
     // The user hook and the built-in sink both ran without error.
     expect(fired).toBe(1)
+  })
+
+  test('deny-style verdicts are counted as discarded, not enforced (W7 round 2 item 5)', async () => {
+    registerLifecycleHook({
+      name: 'denier',
+      events: [PRE_MODEL_SWITCH_EVENT],
+      callback: () => ({
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'quiet hours',
+      }),
+    })
+
+    await emitPreModelSwitch({
+      fromModel: 'sonnet',
+      toModel: 'opus',
+      source: 'auto',
+    })
+
+    const counts = getDiscardedLifecycleVerdictCounts()
+    expect(counts[PRE_MODEL_SWITCH_EVENT]).toBe(1)
+    // The downgrade means the switch "went through" — nothing throws, the
+    // emit resolves regardless of the deny.
+  })
+
+  test('generic decision:"block" verdicts count for the expansion event too', async () => {
+    registerLifecycleHook({
+      name: 'expansion-blocker',
+      events: [USER_PROMPT_EXPANSION_EVENT],
+      callback: () => ({ decision: 'block', reason: 'no' }),
+    })
+    registerLifecycleHook({
+      name: 'benign',
+      events: [USER_PROMPT_EXPANSION_EVENT],
+      callback: () => ({ additionalContext: 'fyi' }),
+    })
+
+    await emitUserPromptExpansion({
+      originalPrompt: 'a',
+      expandedPrompt: 'a',
+    })
+
+    const counts = getDiscardedLifecycleVerdictCounts()
+    expect(counts[USER_PROMPT_EXPANSION_EVENT]).toBe(1)
+  })
+
+  test('allow/ask-free verdicts do not bump the discarded counters', async () => {
+    registerLifecycleHook({
+      name: 'allow',
+      events: [POST_MODEL_SWITCH_EVENT],
+      callback: () => ({ additionalContext: 'ok' }),
+    })
+    await emitPostModelSwitch({ toModel: 'opus', source: 'auto' })
+    expect(getDiscardedLifecycleVerdictCounts()).toEqual({})
   })
 })

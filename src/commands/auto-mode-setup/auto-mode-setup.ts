@@ -13,12 +13,25 @@
  * wizard/proposal/apply flags are parsed (see args.ts) but answered with
  * an explicit "not supported in this build" message; they never mutate
  * the marker.
+ *
+ * Persistence goes through src/utils/safeJsonFile.ts: atomic tmp+rename
+ * writes, strict reads (a corrupt marker is quarantined to a .corrupt-*
+ * backup and logged, then reads back as "not set up" — an empty table —
+ * instead of throwing), shape-refusal for valid-JSON-but-wrong-shape
+ * records, and a same-directory advisory `<file>.lock` around the
+ * disable-path read-modify-write.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { LocalCommandCall } from '../../types/command.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
+import {
+  readJsonFileStrict,
+  rejectCorruptJsonFile,
+  StoreCorruptError,
+  withStoreLock,
+  writeJsonFileAtomic,
+} from '../../utils/safeJsonFile.js'
 import { AUTO_MODE_SETUP_USAGE, parseAutoModeSetupArgs } from './args.js'
 
 export interface AutoModeSetupRecord {
@@ -32,15 +45,27 @@ export function getAutoModeSetupPath(): string {
 
 export function loadAutoModeSetup(): AutoModeSetupRecord | null {
   const path = getAutoModeSetupPath()
-  if (!existsSync(path)) return null
   try {
-    const parsed = JSON.parse(
-      readFileSync(path, 'utf8'),
-    ) as AutoModeSetupRecord | null
-    if (!parsed || typeof parsed.enabled !== 'boolean') return null
-    return parsed
-  } catch {
-    return null
+    const parsed = readJsonFileStrict(path)
+    if (parsed === null) return null
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      typeof (parsed as AutoModeSetupRecord).enabled !== 'boolean'
+    ) {
+      // Valid JSON, wrong shape — same refusal as unparseable bytes.
+      rejectCorruptJsonFile(path, 'not an auto-mode-setup record')
+    }
+    return parsed as AutoModeSetupRecord
+  } catch (e) {
+    if (e instanceof StoreCorruptError) {
+      // Already quarantined + logged (readJsonFileStrict for parse failures,
+      // rejectCorruptJsonFile for shape refusals); the marker reads as
+      // "not set up" (empty table) and the raw bytes stay recoverable at
+      // e.backupPath.
+      return null
+    }
+    throw e
   }
 }
 
@@ -49,12 +74,9 @@ function writeRecord(enabled: boolean): void {
     enabled,
     updatedAt: new Date().toISOString(),
   }
-  mkdirSync(getClaudeConfigHomeDir(), { recursive: true })
-  writeFileSync(
-    getAutoModeSetupPath(),
-    `${JSON.stringify(record, null, 2)}\n`,
-    'utf8',
-  )
+  // Atomic write (tmp + rename); concurrency is serialized by the caller's
+  // withStoreLock below — never nest withStoreLock (it is not reentrant).
+  writeJsonFileAtomic(getAutoModeSetupPath(), record)
 }
 
 function status(): string {
@@ -98,9 +120,14 @@ export const call: LocalCommandCall = async rawArgs => {
       }
     }
     case 'disable': {
-      if (loadAutoModeSetup()?.enabled) {
-        writeRecord(false)
-      }
+      // Locked read-modify-write: the "was set up?" read and the clear write
+      // happen under one advisory lock so a concurrent enable/disable pair
+      // cannot interleave (lost update).
+      withStoreLock(getAutoModeSetupPath(), () => {
+        if (loadAutoModeSetup()?.enabled) {
+          writeRecord(false)
+        }
+      })
       return {
         type: 'text',
         value: [

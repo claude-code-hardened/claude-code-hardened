@@ -38,6 +38,20 @@
  *
  * Exit code: 0 when no check failed, 1 when any check failed (warnings
  * do not fail the doctor). `--json` prints the machine-readable form.
+ *
+ * Unknown-subcommand behavior (W8 round 2, item 9): the official entry
+ * `z(e,r)` (0239-chunk-bxerm1mk/module-003-uncategorized.js:391-397) always
+ * spawns the doctor WIZARD — its `--help` text says "Any extra args are
+ * passed to the underlying Claude Code session", and the spliced argv
+ * (`[...c,...h,"--append-system-prompt",s,"--tools",g,
+ * "--permission-mode","default",...e]`) forwards arbitrary extra args into
+ * that wizard child. CCH tightens this to FAIL-FAST: only
+ * `doctor [--json]` argv matches (`matchRunnerDoctorArgv`); anything else
+ * makes the `claude self-hosted-runner ...` fast-path print
+ * "Unknown <sub> subcommand — usage: claude <sub> doctor [--json]" and exit
+ * 1 (cli.tsx fast-path, the caller of matchRunnerDoctorArgv) instead of
+ * booting a wizard session with forwarded args. No wizard process exists in
+ * CCH, so forwarding would silently mis-run.
  */
 
 import { access, constants } from 'fs/promises'
