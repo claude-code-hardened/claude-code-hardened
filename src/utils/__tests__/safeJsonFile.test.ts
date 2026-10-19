@@ -167,11 +167,14 @@ describe('withStoreLock — advisory read-modify-write serialization', () => {
   test('two child processes × fast loop → no lost update (create race)', async () => {
     const path = join(freshDir(), 'counter.json')
     // Child script: bumps the shared counter under the store lock.
+    // The import path is derived from THIS test file's location (not a
+    // hard-coded machine path) so the fixture resolves on any CI checkout.
     const childScript = join(dir, 'child.ts')
+    const safeJsonFileModulePath = join(import.meta.dir, '..', 'safeJsonFile.ts')
     writeFileSync(
       childScript,
       `
-import { readJsonFileStrict, withStoreLock, writeJsonFileAtomic } from ${JSON.stringify('/root/xiaocongyu66-claude-code/src/utils/safeJsonFile.ts')}
+import { readJsonFileStrict, withStoreLock, writeJsonFileAtomic } from ${JSON.stringify(safeJsonFileModulePath)}
 const storePath = process.argv[2]
 for (let i = 0; i < 10; i++) {
   withStoreLock(storePath, () => {
