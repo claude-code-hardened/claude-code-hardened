@@ -33,6 +33,7 @@
 
 import { randomUUID } from 'crypto'
 import { logForDebugging } from '../../../utils/debug.js'
+import { isEnvTruthy } from '../../../utils/envUtils.js'
 
 export const STREAM_IDLE_TIMEOUT_ENV = 'CLAUDE_CODE_STREAM_IDLE_TIMEOUT_MS'
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
@@ -46,6 +47,56 @@ export function getStreamIdleTimeoutMs(): number {
     return DEFAULT_STREAM_IDLE_TIMEOUT_MS
   }
   return parsed
+}
+
+// ── Official watchdog-gate face (reverse-284, same face as STREAM_WATCHDOG) ──
+// Mirrors the OpenAI layer's registration: the official core hosts the byte
+// watchdog gate (mC(): env wins when defined, default ON), its bedrock
+// variant, and API_FORCE_IDLE_TIMEOUT on the same streaming-stall face.
+
+/** Official `mC()` gate: env wins when defined; default ON. */
+export const BYTE_WATCHDOG_ENV = 'CLAUDE_ENABLE_BYTE_WATCHDOG'
+
+/** CLAUDE_ENABLE_BYTE_WATCHDOG — byte-watchdog on/off (default on). */
+export function isByteWatchdogEnabled(): boolean {
+  const raw = process.env[BYTE_WATCHDOG_ENV]
+  if (raw === undefined) return true
+  return isEnvTruthy(raw)
+}
+
+/**
+ * Official bedrock-provider variant of the byte-watchdog gate
+ * (CLAUDE_ENABLE_BYTE_WATCHDOG_BEDROCK). CCH has no bedrock-routed provider
+ * on this compatible layer — bedrock runs through the first-party claude.ts
+ * face — so the env is registered on this same watchdog face and folded into
+ * the provider gate: an explicit value overrides, otherwise the shared
+ * CLAUDE_ENABLE_BYTE_WATCHDOG decision applies.
+ */
+export const BYTE_WATCHDOG_BEDROCK_ENV = 'CLAUDE_ENABLE_BYTE_WATCHDOG_BEDROCK'
+
+/** CLAUDE_ENABLE_BYTE_WATCHDOG_BEDROCK — bedrock variant of the gate. */
+export function isByteWatchdogEnabledForBedrock(): boolean {
+  const raw = process.env[BYTE_WATCHDOG_BEDROCK_ENV]
+  if (raw !== undefined) return isEnvTruthy(raw)
+  return isByteWatchdogEnabled()
+}
+
+/**
+ * Official transport face (reverse-284 `bi()`): API_FORCE_IDLE_TIMEOUT drops
+ * the transport-level timeout from API fetches so only a body idle watchdog
+ * can kill a stalled connection. The genai SDK here has no request timeout
+ * at all and the silence watchdog below is always armed when enabled — the
+ * official `hasBodyIdleWatchdog || truthy(env)` r-condition is satisfied
+ * structurally. The env is registered on this face for parity/diagnostics;
+ * isIdleTimeoutForced() marks requests whose authoritative body-stall guard
+ * is the idle watchdog, surfaced in watchdog abort logs.
+ */
+export const API_FORCE_IDLE_TIMEOUT_ENV = 'API_FORCE_IDLE_TIMEOUT'
+
+/** API_FORCE_IDLE_TIMEOUT — idle watchdog is the authoritative body guard. */
+export function isIdleTimeoutForced(): boolean {
+  const raw = process.env[API_FORCE_IDLE_TIMEOUT_ENV]
+  return raw !== undefined && isEnvTruthy(raw)
 }
 
 // Official-parity establishment guard, mirroring the OpenAI layer
@@ -156,6 +207,9 @@ export function createStreamWatchdog(params: {
   const idleTimeoutMs = getStreamIdleTimeoutMs()
   const firstByteTimeoutMs =
     params.firstByteTimeoutMs ?? getStreamFirstByteTimeoutMs()
+  // Official mC() gate: the byte watchdog is default-on; the env wins when
+  // defined. Gate-off = the documented "0 = disabled" passthrough.
+  const byteWatchdogEnabled = isByteWatchdogEnabled()
   const startedAt = Date.now()
 
   // Registered at "started": before the SDK hands out its stream. The entry
@@ -201,7 +255,10 @@ export function createStreamWatchdog(params: {
       `[Gemini] Stream idle watchdog: no stream data for ` +
         `${Math.round(activeWindowMs / 1000)}s — aborting model=` +
         `${params.model}, request=${requestId}, url=${params.url}, ` +
-        `elapsed=${Date.now() - startedAt}ms`,
+        `elapsed=${Date.now() - startedAt}ms` +
+        // API_FORCE_IDLE_TIMEOUT parity note: the silence watchdog is the
+        // sole body-stall guard on this request.
+        `${isIdleTimeoutForced() ? ' (API_FORCE_IDLE_TIMEOUT)' : ''}`,
       { level: 'warn' },
     )
     controller.abort(
@@ -232,7 +289,10 @@ export function createStreamWatchdog(params: {
     if (unref) unref.call(timer)
   }
 
-  if (idleTimeoutMs > 0 && firstByteTimeoutMs > 0) {
+  if (byteWatchdogEnabled && idleTimeoutMs > 0 && firstByteTimeoutMs > 0) {
+    // idle=0 or the byte gate off means the watchdog is fully off — the
+    // documented "0 = disabled" contract wins over the first-byte guard
+    // (no half-armed states).
     armTimer()
   }
 
@@ -274,7 +334,7 @@ export function createStreamWatchdog(params: {
     // which window was armed at creation; the idle cadence takes over (or
     // nothing, when the watchdog is disabled).
     activeWindowMs = idleTimeoutMs
-    if (idleTimeoutMs <= 0) {
+    if (!byteWatchdogEnabled || idleTimeoutMs <= 0) {
       disarmTimer()
       // Watchdog disabled — silent passthrough; still settle the registry.
       try {

@@ -17,6 +17,8 @@ import type { AgentId } from '../../../types/ids.js'
 import type { Tools } from '../../../Tool.js'
 import { getSessionId } from '../../../bootstrap/state.js'
 import { withConnectionRetry } from 'src/services/api/connectionRetry.js'
+import type { ConnectionRetryStatus } from 'src/services/api/connectionRetry.js'
+import { retryStatusMessage } from 'src/services/api/connectionRetry.js'
 import {
   releaseOnStreamEnd,
   withProviderSlot,
@@ -85,6 +87,35 @@ import {
   isDeferredTool,
   SEARCH_EXTRA_TOOLS_TOOL_NAME,
 } from '@claude-code-hardened/builtin-tools/tools/SearchExtraToolsTool/prompt.js'
+
+/**
+ * "Retrying-in" surfaces for the connection retry layer. The debug line
+ * keeps the historical trace; `retryStatusMessage` renders the official
+ * system/api_error row ("Retrying in Xs… (attempt n/N)"). Establishment
+ * retries happen before any stream event exists and the retry loop runs
+ * inside an awaited callback, so the generator cannot yield mid-await —
+ * each notice is buffered and replayed into the message stream right after
+ * the stream is secured (both the ChatGPT and chat-completions paths).
+ */
+function logRetryIn({
+  attempt,
+  maxRetries,
+  retryInMs,
+}: ConnectionRetryStatus): void {
+  logForDebugging(
+    `[OpenAI] Retrying-in ${Math.round(retryInMs / 100) / 10}s ` +
+      `(attempt ${attempt}/${maxRetries})`,
+  )
+}
+
+function collectRetryStatus(
+  notices: SystemAPIErrorMessage[],
+): (status: ConnectionRetryStatus) => void {
+  return status => {
+    logRetryIn(status)
+    notices.push(retryStatusMessage(status))
+  }
+}
 
 function convertToResponsesReasoningEffort(
   effortValue: unknown,
@@ -388,6 +419,10 @@ export async function* queryModelOpenAI(
     // watchdog: its signal replaces the raw one in create() and the upstream
     // abort signal stays linked through it.
     let adaptedStream: AsyncGenerator<BetaRawMessageStreamEvent, void>
+    // Establishment-retry notices (official g0 payloads) buffered during the
+    // awaited retry loops (both paths), replayed into the message stream once
+    // the stream is secured.
+    const retryNotices: SystemAPIErrorMessage[] = []
     if (useChatGPTResponses) {
       // Establishment-only connection retry (official SDK semantics —
       // connection-class failures retry, mid-stream errors never do).
@@ -413,7 +448,11 @@ export async function* queryModelOpenAI(
                   fetchOverride:
                     options.fetchOverride as unknown as typeof fetch,
                 }),
-              { signal, source: options.querySource },
+              {
+                signal,
+                source: options.querySource,
+                onRetryStatus: collectRetryStatus(retryNotices),
+              },
             )
           return releaseOnStreamEnd(
             adaptResponsesStreamToAnthropic(stream, openaiModel),
@@ -473,7 +512,11 @@ export async function* queryModelOpenAI(
                 throw error
               }
             },
-            { signal, source: options.querySource },
+            {
+              signal,
+              source: options.querySource,
+              onRetryStatus: collectRetryStatus(retryNotices),
+            },
           )
           return releaseOnStreamEnd(
             adaptOpenAIStreamToAnthropic(
@@ -487,6 +530,11 @@ export async function* queryModelOpenAI(
         signal,
       )
     }
+
+    // The stream is secured — replay the buffered establishment-retry rows
+    // (official g0 face) so the user sees the retry history in-stream.
+    for (const notice of retryNotices) yield notice
+    retryNotices.length = 0
 
     // 12. Convert OpenAI stream to Anthropic events, then process into
     //     AssistantMessage + StreamEvent (matching the Anthropic path behavior)

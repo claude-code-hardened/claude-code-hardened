@@ -5,10 +5,20 @@ import { debugMock } from '../../../../tests/mocks/debug.js'
 // shared debug module before the module under test loads (tests/mocks convention).
 mock.module('src/utils/debug.ts', debugMock)
 
+import type { ConnectionRetryStatus } from '../connectionRetry.js'
 import {
   isProviderConnectionRetryable,
+  resolveConnectionMaxRetries,
+  resolveUnavailableOuterRetries,
+  RetryAfterTooLongError,
   withConnectionRetry,
 } from '../connectionRetry.js'
+
+/** Restore one env var after a test (undefined → unset). */
+function restoreEnv(key: string, previous: string | undefined): void {
+  if (previous === undefined) delete process.env[key]
+  else process.env[key] = previous
+}
 
 describe('isProviderConnectionRetryable', () => {
   test('user abort (signal aborted) is never retryable', () => {
@@ -199,7 +209,7 @@ describe('withConnectionRetry', () => {
     expect(attempts).toBe(1)
   })
 
-  test('retry-after-ms header merges as max(header, base) per official XD', async () => {
+  test('retry-after header fully overrides the curve (0032 retryRequest)', async () => {
     const sleeps: number[] = []
     let attempts = 0
     await withConnectionRetry(
@@ -215,13 +225,12 @@ describe('withConnectionRetry', () => {
       },
       { sleep: async ms => void sleeps.push(ms) },
     )
-    // official XD: max(retry-after, round(base·(1+rand·0.25))) — base at
-    // attempt 1 is 500ms, so a smaller 250ms header cannot win the max.
-    expect(sleeps.length).toBe(1)
-    expect(sleeps[0]!).toBeGreaterThanOrEqual(500)
-    expect(sleeps[0]!).toBeLessThanOrEqual(630)
+    // 0032 retryRequest: the header wins outright — `if (o === void 0)`
+    // guards the computed default, never a max(header, base) merge. The
+    // 250ms header must survive even though the attempt-1 curve is 500ms.
+    expect(sleeps).toEqual([250])
 
-    // a larger header (5s) does win the max
+    // a larger header (5s) likewise passes through untouched
     const big: number[] = []
     let tries = 0
     await withConnectionRetry(
@@ -253,13 +262,415 @@ describe('withConnectionRetry', () => {
       },
       { maxRetries: 6, sleep: async ms => void sleeps.push(ms) },
     )
-    // attempt N delay = round(min(0.5 * 2^(N-1), 20s) * (1 + rand*0.25)) —
-    // official XD formula: additive jitter UP 0~+25%, cap 20s (nIe=20000)
-    const base = [500, 1000, 2000, 4000, 8000, 16000]
+    // 0032 calculateDefaultRetryTimeoutMillis: attempt N delay =
+    // min(0.5 * 2^(N-1), 8s) * (1 - rand*0.25) — downward-only jitter,
+    // SDK-layer cap 8s (not the 20s wrapper constant).
+    const base = [500, 1000, 2000, 4000, 8000, 8000]
     expect(sleeps.length).toBe(6)
     sleeps.forEach((ms, i) => {
-      expect(ms).toBeGreaterThanOrEqual(base[i]!)
-      expect(ms).toBeLessThanOrEqual(Math.round(base[i]! * 1.26))
+      expect(ms).toBeGreaterThanOrEqual(Math.round(base[i]! * 0.75))
+      expect(ms).toBeLessThanOrEqual(base[i]!)
     })
+  })
+
+  test('onRetryStatus reports the official payload per retry', async () => {
+    const notices: ConnectionRetryStatus[] = []
+    let attempts = 0
+    const failure = Object.assign(new Error('throttled'), { status: 429 })
+    await withConnectionRetry(
+      async () => {
+        attempts++
+        if (attempts === 1) throw failure
+        return 'ok'
+      },
+      {
+        maxRetries: 3,
+        sleep: async () => {},
+        onRetryStatus: s => void notices.push(s),
+      },
+    )
+    expect(notices.length).toBe(1)
+    expect(notices[0]!.attempt).toBe(1)
+    expect(notices[0]!.maxRetries).toBe(3)
+    // 0032 curve at attempt 1: 500ms * (1 - rand*0.25) → [375, 500]
+    expect(notices[0]!.retryInMs).toBeGreaterThanOrEqual(375)
+    expect(notices[0]!.retryInMs).toBeLessThanOrEqual(500)
+    // official module-006 payload: {kind:'retrying', error, deadline}
+    expect(notices[0]!.kind).toBe('retrying')
+    expect(notices[0]!.error).toBe(failure)
+    expect(typeof notices[0]!.deadline).toBe('number')
+    expect(notices[0]!.deadline).toBeGreaterThan(0)
+  })
+})
+
+describe('resolveConnectionMaxRetries (official cIe chain)', () => {
+  test('env unset + watchdog off → official EEo=10 floor', () => {
+    expect(resolveConnectionMaxRetries(undefined, {})).toBe(10)
+  })
+
+  test('env unset + retry watchdog on → official REo=300', () => {
+    expect(
+      resolveConnectionMaxRetries(undefined, {
+        CLAUDE_CODE_RETRY_WATCHDOG: '1',
+      }),
+    ).toBe(300)
+  })
+
+  test('explicit call-site override wins over env (settings face)', () => {
+    expect(
+      resolveConnectionMaxRetries(2, {
+        CLAUDE_CODE_MAX_RETRIES: '7',
+        CLAUDE_CODE_RETRY_WATCHDOG: '1',
+      }),
+    ).toBe(2)
+  })
+
+  test('CLAUDE_CODE_MAX_RETRIES set → env value honored', () => {
+    expect(
+      resolveConnectionMaxRetries(undefined, { CLAUDE_CODE_MAX_RETRIES: '7' }),
+    ).toBe(7)
+  })
+
+  test('budget above fuse eIe=15 without watchdog clamps to 15', () => {
+    expect(
+      resolveConnectionMaxRetries(undefined, { CLAUDE_CODE_MAX_RETRIES: '50' }),
+    ).toBe(15)
+  })
+
+  test('explicit face override is exempt from the fuse (lCo: maxRetries ?? cIe)', () => {
+    expect(resolveConnectionMaxRetries(20, {})).toBe(20)
+    expect(
+      resolveConnectionMaxRetries(40, { CLAUDE_CODE_MAX_RETRIES: '2' }),
+    ).toBe(40)
+  })
+
+  test('budget above fuse with watchdog passes through unclamped', () => {
+    expect(
+      resolveConnectionMaxRetries(undefined, {
+        CLAUDE_CODE_MAX_RETRIES: '50',
+        CLAUDE_CODE_RETRY_WATCHDOG: 'true',
+      }),
+    ).toBe(50)
+  })
+
+  test('watchdog env uses raw truthiness: any non-empty string counts (Pq)', () => {
+    // Official Pq() returns a.CLAUDE_CODE_RETRY_WATCHDOG verbatim — the
+    // string 'false' is truthy, unlike isEnvTruthy parsing.
+    expect(
+      resolveConnectionMaxRetries(undefined, {
+        CLAUDE_CODE_RETRY_WATCHDOG: 'false',
+      }),
+    ).toBe(300)
+    expect(
+      resolveConnectionMaxRetries(undefined, {
+        CLAUDE_CODE_RETRY_WATCHDOG: '0',
+      }),
+    ).toBe(300)
+    expect(
+      resolveConnectionMaxRetries(undefined, {
+        CLAUDE_CODE_RETRY_WATCHDOG: '',
+      }),
+    ).toBe(10)
+  })
+})
+
+describe('resolveUnavailableOuterRetries (official vWo face)', () => {
+  const ENV = 'CLAUDE_CODE_UNAVAILABLE_OUTER_RETRIES'
+  const withEnv = (value: string | undefined) => {
+    const previous = process.env[ENV]
+    if (value === undefined) delete process.env[ENV]
+    else process.env[ENV] = value
+    return previous
+  }
+  const restore = (previous: string | undefined) => {
+    if (previous === undefined) delete process.env[ENV]
+    else process.env[ENV] = previous
+  }
+
+  test('env unset → official vZe=0 default (outer layer off)', () => {
+    const previous = withEnv(undefined)
+    try {
+      expect(resolveUnavailableOuterRetries()).toBe(0)
+    } finally {
+      restore(previous)
+    }
+  })
+
+  test('a set value is honored', () => {
+    const previous = withEnv('3')
+    try {
+      expect(resolveUnavailableOuterRetries()).toBe(3)
+    } finally {
+      restore(previous)
+    }
+  })
+
+  test('>10 falls back to default-off (vWo honors only 0..10, no clamping)', () => {
+    const previous = withEnv('20')
+    try {
+      expect(resolveUnavailableOuterRetries()).toBe(0)
+    } finally {
+      restore(previous)
+    }
+  })
+
+  test('garbage or negative values fall back to default-off', () => {
+    const previous = withEnv('abc')
+    try {
+      expect(resolveUnavailableOuterRetries()).toBe(0)
+      process.env[ENV] = '-1'
+      expect(resolveUnavailableOuterRetries()).toBe(0)
+    } finally {
+      restore(previous)
+    }
+  })
+})
+
+describe('withConnectionRetry outer retries (unavailableOuterRetries)', () => {
+  const ENV = 'CLAUDE_CODE_UNAVAILABLE_OUTER_RETRIES'
+  const withEnv = (value: string | undefined) => {
+    const previous = process.env[ENV]
+    if (value === undefined) delete process.env[ENV]
+    else process.env[ENV] = value
+    return previous
+  }
+
+  test('overload class gets N extra rounds past the exhausted budget', async () => {
+    const previous = withEnv('2')
+    try {
+      let attempts = 0
+      const sleeps: number[] = []
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          if (attempts < 3) {
+            throw Object.assign(new Error('overloaded'), { status: 529 })
+          }
+          return 'ok'
+        },
+        { maxRetries: 0, sleep: async ms => void sleeps.push(ms) },
+      )
+      expect(result).toBe('ok')
+      // 1 establishment + 2 outer rounds — the inner budget (0) added none
+      expect(attempts).toBe(3)
+      // classifier-face curve: min(2000 * 2^(n-1), 10s) + floored
+      // additive 0~25% jitter — its own curve, not the inner SDK one
+      expect(sleeps[0]).toBeGreaterThanOrEqual(2000)
+      expect(sleeps[0]).toBeLessThanOrEqual(2500)
+      expect(sleeps[1]).toBeGreaterThanOrEqual(4000)
+      expect(sleeps[1]).toBeLessThanOrEqual(5000)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('default off: exhausted budget throws the terminal overload error', async () => {
+    const previous = withEnv(undefined)
+    try {
+      let attempts = 0
+      const terminal = Object.assign(new Error('overloaded'), { status: 529 })
+      await expect(
+        withConnectionRetry(
+          async () => {
+            attempts++
+            throw terminal
+          },
+          { maxRetries: 1, sleep: async () => {} },
+        ),
+      ).rejects.toBe(terminal)
+      expect(attempts).toBe(2)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('503 is not the official rP overload class — no outer rounds', async () => {
+    const previous = withEnv('1')
+    try {
+      let attempts = 0
+      const terminal = Object.assign(new Error('service unavailable'), {
+        status: 503,
+      })
+      // rP (module-006) is 529 / overloaded_error only: a 503 stays a plain
+      // 5xx (inner-budget material) and grants zero outer rounds.
+      await expect(
+        withConnectionRetry(
+          async () => {
+            attempts++
+            throw terminal
+          },
+          { maxRetries: 0, sleep: async () => {} },
+        ),
+      ).rejects.toBe(terminal)
+      expect(attempts).toBe(1)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('non-overload class gets no outer rounds', async () => {
+    const previous = withEnv('5')
+    try {
+      let attempts = 0
+      const terminal = Object.assign(new Error('relay gone'), {
+        code: 'ECONNREFUSED',
+      })
+      await expect(
+        withConnectionRetry(
+          async () => {
+            attempts++
+            throw terminal
+          },
+          { maxRetries: 1, sleep: async () => {} },
+        ),
+      ).rejects.toBe(terminal)
+      expect(attempts).toBe(2)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+})
+
+describe('withConnectionRetry retry-after-too-long fuse', () => {
+  const WATCHDOG = 'CLAUDE_CODE_RETRY_WATCHDOG'
+
+  test('header wait >60s without the watchdog throws RetryAfterTooLongError', async () => {
+    const previous = process.env[WATCHDOG]
+    delete process.env[WATCHDOG]
+    let attempts = 0
+    const sleeps: number[] = []
+    const failure = Object.assign(new Error('rate limited'), {
+      status: 429,
+      headers: { 'retry-after-ms': '90000' },
+    })
+    try {
+      const caught = await withConnectionRetry(
+        async () => {
+          attempts++
+          throw failure
+        },
+        { maxRetries: 3, sleep: async ms => void sleeps.push(ms) },
+      ).catch((e: unknown) => e)
+      expect(caught).toBeInstanceOf(RetryAfterTooLongError)
+      expect((caught as RetryAfterTooLongError).delayMs).toBe(90000)
+      expect((caught as RetryAfterTooLongError).originalError).toBe(failure)
+      expect(attempts).toBe(1)
+      expect(sleeps).toEqual([])
+    } finally {
+      restoreEnv(WATCHDOG, previous)
+    }
+  })
+
+  test('watchdog-on sessions take the min(un, oIe) wait instead of fusing', async () => {
+    const previous = process.env[WATCHDOG]
+    process.env[WATCHDOG] = '1'
+    let attempts = 0
+    const sleeps: number[] = []
+    try {
+      await withConnectionRetry(
+        async () => {
+          attempts++
+          if (attempts === 1) {
+            throw Object.assign(new Error('rate limited'), {
+              status: 429,
+              headers: { 'retry-after-ms': '90000' },
+            })
+          }
+          return 'ok'
+        },
+        { maxRetries: 3, sleep: async ms => void sleeps.push(ms) },
+      )
+      expect(attempts).toBe(2)
+      expect(sleeps).toEqual([90000])
+    } finally {
+      restoreEnv(WATCHDOG, previous)
+    }
+  })
+})
+
+describe('withConnectionRetry 401 token-cache refresh retry-once', () => {
+  const ENV = 'OPENAI_AUTH_MODE'
+
+  test('401 with the ChatGPT auth face retries exactly once', async () => {
+    const previous = process.env[ENV]
+    process.env[ENV] = 'chatgpt'
+    try {
+      let attempts = 0
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          if (attempts === 1) {
+            throw Object.assign(new Error('unauthorized'), { status: 401 })
+          }
+          return 'ok'
+        },
+        { maxRetries: 0, sleep: async () => {} },
+      )
+      expect(result).toBe('ok')
+      expect(attempts).toBe(2)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('fail-closed 401 rewrap (codex shape) also refreshes once', async () => {
+    const previous = process.env[ENV]
+    process.env[ENV] = 'chatgpt'
+    try {
+      let attempts = 0
+      await withConnectionRetry(
+        async () => {
+          attempts++
+          if (attempts === 1) {
+            throw new Error('ChatGPT Responses API request failed (401)', {
+              cause: { status: 401, message: 'unauthorized' },
+            })
+          }
+          return 'ok'
+        },
+        { maxRetries: 0, sleep: async () => {} },
+      )
+      expect(attempts).toBe(2)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('a second 401 is terminal (retry-once semantics)', async () => {
+    const previous = process.env[ENV]
+    process.env[ENV] = 'chatgpt'
+    try {
+      let attempts = 0
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          throw Object.assign(new Error('still unauthorized'), { status: 401 })
+        },
+        { maxRetries: 3, sleep: async () => {} },
+      ).catch(e => e)
+      expect(attempts).toBe(2)
+      expect((result as { status?: number }).status).toBe(401)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('401 without a refreshable credential face escapes immediately', async () => {
+    const previous = process.env[ENV]
+    delete process.env[ENV]
+    try {
+      let attempts = 0
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          throw Object.assign(new Error('unauthorized'), { status: 401 })
+        },
+        { maxRetries: 3, sleep: async () => {} },
+      ).catch(e => e)
+      expect(attempts).toBe(1)
+      expect((result as { status?: number }).status).toBe(401)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
   })
 })

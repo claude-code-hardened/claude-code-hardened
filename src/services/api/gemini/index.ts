@@ -33,6 +33,8 @@ import {
   projectGeminiStream,
 } from './client.js'
 import { withConnectionRetry } from 'src/services/api/connectionRetry.js'
+import type { ConnectionRetryStatus } from 'src/services/api/connectionRetry.js'
+import { retryStatusMessage } from 'src/services/api/connectionRetry.js'
 import {
   releaseOnStreamEnd,
   withProviderSlot,
@@ -46,6 +48,35 @@ import {
   anthropicToolChoiceToGemini,
   GEMINI_THOUGHT_SIGNATURE_FIELD,
 } from '@ant/model-provider'
+
+/**
+ * "Retrying-in" surfaces for the connection retry layer. The debug line
+ * keeps the historical trace; `retryStatusMessage` renders the official
+ * system/api_error row ("Retrying in Xs… (attempt n/N)"). Establishment
+ * retries happen before any stream event exists and the retry loop runs
+ * inside an awaited callback, so the generator cannot yield mid-await —
+ * each notice is buffered and replayed into the message stream right after
+ * the stream is secured.
+ */
+function logRetryIn({
+  attempt,
+  maxRetries,
+  retryInMs,
+}: ConnectionRetryStatus): void {
+  logForDebugging(
+    `[Gemini] Retrying-in ${Math.round(retryInMs / 100) / 10}s ` +
+      `(attempt ${attempt}/${maxRetries})`,
+  )
+}
+
+function collectRetryStatus(
+  notices: SystemAPIErrorMessage[],
+): (status: ConnectionRetryStatus) => void {
+  return status => {
+    logRetryIn(status)
+    notices.push(retryStatusMessage(status))
+  }
+}
 
 export async function* queryModelGemini(
   messages: Message[],
@@ -105,6 +136,10 @@ export async function* queryModelGemini(
     // (releaseOnStreamEnd finally — closing it closes the adaptation chain
     // and the watchdog-wrapped stream, whose settle fires in the same
     // teardown).
+    // Establishment-retry notices (official g0 payloads) buffered during the
+    // awaited retry loop, replayed into the message stream once the stream
+    // is secured.
+    const retryNotices: SystemAPIErrorMessage[] = []
     const adaptedStream = await withProviderSlot(
       'gemini',
       async release => {
@@ -161,7 +196,11 @@ export async function* queryModelGemini(
               throw error
             }
           },
-          { signal, source: options.querySource },
+          {
+            signal,
+            source: options.querySource,
+            onRetryStatus: collectRetryStatus(retryNotices),
+          },
         )
 
         logForDebugging(
@@ -182,6 +221,11 @@ export async function* queryModelGemini(
     let partialMessage: BetaMessage | null = null
     let ttftMs = 0
     const start = Date.now()
+
+    // The stream is secured — replay the buffered establishment-retry rows
+    // (official g0 face) so the user sees the retry history in-stream.
+    for (const notice of retryNotices) yield notice
+    retryNotices.length = 0
 
     for await (const event of adaptedStream) {
       switch (event.type) {
