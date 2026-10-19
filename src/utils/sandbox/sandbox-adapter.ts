@@ -32,6 +32,11 @@ import {
 import { logForDebugging } from '../debug.js'
 import { expandPath } from '../path.js'
 import { getPlatform, type Platform } from '../platform.js'
+import {
+  areUnsandboxedCommandsAllowedIn,
+  areUnsandboxedCommandsDisabledIn,
+  isStrictSandboxModeConfiguredIn,
+} from './sandboxDecision.js'
 import { settingsChangeDetector } from '../settings/changeDetector.js'
 import { SETTING_SOURCES, type SettingSource } from '../settings/constants.js'
 import { getManagedSettingsDropInDir } from '../settings/managedPath.js'
@@ -468,8 +473,18 @@ function isAutoAllowBashIfSandboxedEnabled(): boolean {
 }
 
 function areUnsandboxedCommandsAllowed(): boolean {
-  const settings = getSettings_DEPRECATED()
-  return settings?.sandbox?.allowUnsandboxedCommands ?? true
+  // W4: decision logic lives in sandboxDecision.ts (pure, unit-testable);
+  // unsandboxedCommandsDisabled is the hard no-escape flag — when set, the
+  // escape hatch is closed regardless of allowUnsandboxedCommands.
+  return areUnsandboxedCommandsAllowedIn(getSettings_DEPRECATED())
+}
+
+function isStrictSandboxModeConfigured(): boolean {
+  return isStrictSandboxModeConfiguredIn(getSettings_DEPRECATED())
+}
+
+function areUnsandboxedCommandsDisabled(): boolean {
+  return areUnsandboxedCommandsDisabledIn(getSettings_DEPRECATED())
 }
 
 function isSandboxRequired(): boolean {
@@ -883,6 +898,8 @@ export interface ISandboxManager {
   checkDependencies(): SandboxDependencyCheck
   isAutoAllowBashIfSandboxedEnabled(): boolean
   areUnsandboxedCommandsAllowed(): boolean
+  isStrictSandboxModeConfigured(): boolean
+  areUnsandboxedCommandsDisabled(): boolean
   isSandboxRequired(): boolean
   areSandboxSettingsLockedByPolicy(): boolean
   setSandboxSettings(options: {
@@ -929,6 +946,8 @@ export const SandboxManager: ISandboxManager = {
   getSandboxUnavailableReason,
   isAutoAllowBashIfSandboxedEnabled,
   areUnsandboxedCommandsAllowed,
+  isStrictSandboxModeConfigured,
+  areUnsandboxedCommandsDisabled,
   isSandboxRequired,
   areSandboxSettingsLockedByPolicy,
   setSandboxSettings,
