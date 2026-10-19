@@ -170,7 +170,11 @@ describe('withStoreLock — advisory read-modify-write serialization', () => {
     // The import path is derived from THIS test file's location (not a
     // hard-coded machine path) so the fixture resolves on any CI checkout.
     const childScript = join(dir, 'child.ts')
-    const safeJsonFileModulePath = join(import.meta.dir, '..', 'safeJsonFile.ts')
+    const safeJsonFileModulePath = join(
+      import.meta.dir,
+      '..',
+      'safeJsonFile.ts',
+    )
     writeFileSync(
       childScript,
       `
