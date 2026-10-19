@@ -44,3 +44,31 @@ export function getBridgeBaseUrl(): string {
 export function isSelfHostedBridge(): boolean {
   return !!getBridgeBaseUrlOverride()
 }
+
+/**
+ * Slack tag token (work package W8, task #59, block 4).
+ *
+ * Official anchor: docs/reverse-284/decompiled 0011-chunk-bxerm1mk
+ * /module-003-env-vars.js + 0052-chunk-bxerm1mk/config/env-vars.js —
+ * `CLAUDE_CODE_SLACK_TAG_TOKEN` is listed in the official env-var surface
+ * alongside the other secret bearer tokens (it also appears in the
+ * secret-redaction lists, so it must never be logged or echoed).
+ *
+ * Read face lives here (notification/bridge env surface): the token tags
+ * Slack-side notification fanout for bridge-managed sessions. No consumer
+ * ships in this build yet — the getter is the registered export point so
+ * a notification bridge can adopt it without redefining the env name.
+ * Undefined means "not configured".
+ */
+export const SLACK_TAG_TOKEN_ENV = 'CLAUDE_CODE_SLACK_TAG_TOKEN'
+
+/**
+ * Redaction-list member (official anchor: 0011-chunk-bxerm1mk
+ * /module-004-uncategorized.js:1946 — `CLAUDE_CODE_SLACK_TAG_TOKEN`
+ * appears in the official secret-redaction env list next to
+ * CLAUDE_CODE_OAUTH_TOKEN et al.). Any log/debug/redact pipeline hitting
+ * this value must strip it, never echo it.
+ */
+export function getSlackTagToken(): string | undefined {
+  return process.env[SLACK_TAG_TOKEN_ENV] || undefined
+}

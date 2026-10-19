@@ -27,6 +27,11 @@ import { stripDisplayTagsAllowEmpty } from '../utils/displayTags.js'
 import { errorMessage } from '../utils/errors.js'
 import type { PermissionMode } from '../utils/permissions/PermissionMode.js'
 import { jsonParse } from '../utils/slowOperations.js'
+import {
+  emitPostModelSwitch,
+  emitPreModelSwitch,
+  emitUserPromptExpansion,
+} from '../utils/hooks/lifecycleHookEvents.js'
 import type { ReplBridgeTransport } from './replBridgeTransport.js'
 import {
   BASH_INPUT_TAG,
@@ -285,6 +290,22 @@ export function handleIngressMessage(
       logEvent('tengu_bridge_message_received', {
         is_repl: true,
       })
+      // W7 #58 UserPromptExpansion emission face — BRIDGE INBOUND ONLY
+      // (R7 honesty fix): this is not a real expansion site. Remote prompts
+      // arrive already expanded on claude.ai, so original === expanded here;
+      // the LOCAL prompt path (handlePromptSubmit's paste-ref expansion,
+      // processUserInput) never emits this event. Firing here merely makes
+      // relayed prompts observable to registry hooks; no expansion semantics
+      // (additionalContext/suppressOriginalPrompt) can arise on this path.
+      // Fire-and-forget — never blocks ingest.
+      const inboundPrompt = (parsed as { message?: { content?: unknown } })
+        .message?.content
+      if (typeof inboundPrompt === 'string' && inboundPrompt.length > 0) {
+        void emitUserPromptExpansion({
+          originalPrompt: inboundPrompt,
+          expandedPrompt: inboundPrompt,
+        })
+      }
       // Fire-and-forget — handler may be async (attachment resolution).
       void onInboundMessage?.(parsed)
     } else {
@@ -402,8 +423,14 @@ export function handleServerControlRequest(
       }
       break
 
-    case 'set_model':
+    case 'set_model': {
+      // W7 #58: lifecycle hook emissions around the model-switch surface
+      // (official PreModelSwitch/PostModelSwitch, source 'sdk' — arrived via
+      // the control protocol). Fire-and-forget; the hook registry logs its
+      // own errors so the control_response path stays synchronous and safe.
+      void emitPreModelSwitch({ toModel: req.model, source: 'sdk' })
       onSetModel?.(req.model)
+      void emitPostModelSwitch({ toModel: req.model, source: 'sdk' })
       response = {
         type: 'control_response',
         response: {
@@ -412,6 +439,7 @@ export function handleServerControlRequest(
         },
       }
       break
+    }
 
     case 'set_max_thinking_tokens':
       onSetMaxThinkingTokens?.(req.max_thinking_tokens ?? null)

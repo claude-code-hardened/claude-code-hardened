@@ -69,6 +69,7 @@ import {
 import { logBridgeSkip } from './debugUtils.js'
 import { checkEnvLessBridgeMinVersion } from './envLessBridgeConfig.js'
 import { getPollIntervalConfig } from './pollConfig.js'
+import { isBridgeReattachOutboundOnly } from './reattachEnv.js'
 import type { BridgeState, ReplBridgeHandle } from './replBridge.js'
 import { initBridgeCore } from './replBridge.js'
 import { setCseShimGate } from './sessionIdCompat.js'
@@ -454,7 +455,10 @@ export async function initReplBridge(
       onSetMaxThinkingTokens,
       onSetPermissionMode,
       onStateChange,
-      outboundOnly,
+      // W7 #58: CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY forces the outbound-only
+      // control profile for the reattached session (v2 threads it down to
+      // handleServerControlRequest, which then rejects mutable requests).
+      outboundOnly: outboundOnly || isBridgeReattachOutboundOnly(),
       tags,
     })
   }

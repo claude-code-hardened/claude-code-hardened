@@ -36,6 +36,7 @@ import { createCapacityWake } from './capacityWake.js'
 import { describeAxiosError } from './debugUtils.js'
 import { createTokenRefreshScheduler } from './jwtUtils.js'
 import { getPollIntervalConfig } from './pollConfig.js'
+import { consumeBridgeReattachEnv } from './reattachEnv.js'
 import { toCompatSessionId, toInfraSessionId } from './sessionIdCompat.js'
 import { createSessionSpawner, safeFilenameId } from './sessionRunner.js'
 import { getTrustedDeviceToken } from './trustedDevice.js'
@@ -2192,6 +2193,19 @@ export async function bridgeMain(args: string[]): Promise<void> {
     // clear the RIGHT file on deterministic failure — otherwise --continue
     // would keep hitting the same dead session. May be a worktree sibling.
     resumePointerDir = pointerDir
+  }
+
+  // Disconnect-reattach env (W7 #58): CLAUDE_BRIDGE_REATTACH_SESSION beats
+  // the crash-recovery pointer (official: `B = oe ?? Je`), and the raw vars
+  // are deleted after read so respawned children don't reattach by accident.
+  // Consumed once here (the resume/reconnect surface); the outbound-only
+  // profile is re-read lazily by initReplBridge via isBridgeReattachOutboundOnly.
+  const reattach = consumeBridgeReattachEnv()
+  if (reattach.sessionId) {
+    logForDebugging(
+      `[bridge:init] CLAUDE_BRIDGE_REATTACH_SESSION override: ${reattach.sessionId} (pointerderived=${resumeSessionId})`,
+    )
+    resumeSessionId = reattach.sessionId
   }
 
   // In production, baseUrl is the Anthropic API (from OAuth config).

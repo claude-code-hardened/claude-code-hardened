@@ -93,6 +93,7 @@ export const DEFAULT_BUILD_FEATURES = [
   // observation accumulation remain operator-discretion concerns.
   'EXPERIMENTAL_SKILL_SEARCH', // 技能搜索（bounded caches 已修复 overflow，内存问题已解决）
   'EXPERIMENTAL_SEARCH_EXTRA_TOOLS', // 工具搜索预取管道（TF-IDF 索引 + inter-turn 异步预取）
+  // 'SKILLS_SYNC', // 灰度：claude.ai synced-skills 云联动（W5 #56）。默认关闭：云端依赖面（claude.ai skills health/sync）按环境以 FEATURE_SKILLS_SYNC=1 单独开启；本地面（<configHome>/synced-skills/ 离线加载，src/skills/syncedSkills.ts）不受此门控、始终可用。API base 可用 CLAUDE_CODE_SKILLS_API_BASE 覆盖（自托管代理）。
   // 'SKILL_LEARNING',
   // P3: poor mode
   'POOR', // 穷鬼模式，跳过 extract_memories/prompt_suggestion 减少消耗
@@ -106,3 +107,22 @@ export const DEFAULT_BUILD_FEATURES = [
   // strict completion/blocked audit. See src/services/goal.
   'GOAL',
 ] as const
+
+/**
+ * W7 (#58) 灰度 env gate 组（注册面登记，非构建 feature——不入
+ * DEFAULT_BUILD_FEATURES，避免为灰度开关触发重打包）。
+ *
+ * 官方锚点：docs/reverse-284/decompiled 0043-chunk-zrkp23rq
+ * /module-003-env-vars.js 将如下 10 个双词代号 env 开关并排枚举
+ * （THRIFTY_SONIC 另见 0082-chunk-dxsxk16b/config/env-vars.js）。
+ * 官方构建默认全关，按环境以 CLAUDE_CODE_<NAME>=1 开流通车。
+ * 同列表中的 CLAUDE_CODE_SIMPLE / SIMPLE_SYSTEM_PROMPT 是普通布尔旋钮
+ * （--bare / 系统提示词替换），不属于灰度组，故不收录。
+ *
+ *   CLAUDE_CODE_BASALT_COVE / THRIFTY_SONIC / COZY_TEAPOT / GORSE_PLOVER /
+ *   AMBER_ASTROLABE / BISON_CAIRN / LARCH_CISTERN / WILLOW_TERN /
+ *   PARCHMENT_FERN / BREEZY_HORIZON
+ *
+ * 运行时读取面：src/utils/env/grayGates.ts（isGrayGateEnabled /
+ * getEnabledGrayGates，默认 off——unset 与显式 '0' 均为关）。
+ */
