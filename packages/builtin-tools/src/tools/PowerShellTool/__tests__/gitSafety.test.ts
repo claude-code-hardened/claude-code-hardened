@@ -3,7 +3,13 @@ import { mock, describe, expect, test } from 'bun:test'
 // Mock dependencies before import
 const mockCwd = '/Users/test/project'
 
+// Complete cwd.js export set — mock.module is process-global and a partial
+// mock breaks unrelated files loaded later that import the other real named
+// exports (e.g. the R4 sandboxDecision tests pull the Bash decision chain,
+// which needs pwd()).
 mock.module('src/utils/cwd.js', () => ({
+  runWithCwdOverride: (_cwd: string, fn: <T>() => T) => fn(),
+  pwd: () => mockCwd,
   getCwd: () => mockCwd,
 }))
 

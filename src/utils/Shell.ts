@@ -34,6 +34,10 @@ import { onCwdChangedForHooks } from './hooks/fileChangedWatcher.js'
 import { getClaudeTempDirName } from './permissions/filesystem.js'
 import { getPlatform } from './platform.js'
 import { SandboxManager } from './sandbox/sandbox-adapter.js'
+import {
+  buildCustomNetworkConfig,
+  type SandboxNetworkLists,
+} from './sandbox/networkLists.js'
 import { invalidateSessionEnvCache } from './sessionEnvironment.js'
 import { createBashShellProvider } from './shell/bashProvider.js'
 import { getCachedPowerShellPath } from './shell/powershellDetection.js'
@@ -209,6 +213,13 @@ export type ExecOptions = {
   shouldAutoBackground?: boolean
   /** When provided, stdout is piped (not sent to file) and this callback fires on each data chunk. */
   onStdout?: (data: string) => void
+  /**
+   * W4 (#55): per-call sandbox network lists ({ allow, deny } host patterns)
+   * merged into SandboxManager.wrapWithSandbox customConfig.network on top of
+   * the session restriction config. Only consumed when the command actually
+   * runs sandboxed.
+   */
+  networkLists?: SandboxNetworkLists
 }
 
 /**
@@ -228,6 +239,7 @@ export async function exec(
     shouldUseSandbox,
     shouldAutoBackground,
     onStdout,
+    networkLists,
   } = options ?? {}
   const commandTimeout = timeout || DEFAULT_TIMEOUT
 
@@ -295,10 +307,24 @@ export async function exec(
   const sandboxBinShell = isSandboxedPowerShell ? '/bin/sh' : binShell
 
   if (shouldUseSandbox) {
+    // W4 (#55): per-call network lists ({ allow, deny }) merge on top of the
+    // session network restriction config via wrapWithSandbox customConfig.
+    // getNetworkRestrictionConfig() exposes the session policy as the
+    // allowedHosts/deniedHosts status view — buildCustomNetworkConfig maps it
+    // onto the SandboxRuntimeConfig allowedDomains/deniedDomains shape before
+    // merging. No lists → customConfig stays undefined (historical shape).
+    // Enforcement-layer precedence (deny over allow, policy caps) is owned by
+    // sandbox-runtime, not by this merge.
+    const perCallNetwork = networkLists
+      ? buildCustomNetworkConfig(
+          SandboxManager.getNetworkRestrictionConfig(),
+          networkLists,
+        )
+      : undefined
     commandString = await SandboxManager.wrapWithSandbox(
       commandString,
       sandboxBinShell,
-      undefined,
+      perCallNetwork ? { network: perCallNetwork } : undefined,
       abortSignal,
     )
     // Create sandbox temp directory for sandboxed processes with secure permissions

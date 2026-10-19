@@ -20,11 +20,15 @@ export const taskRegistryMock = {
   recordTaskHeartbeat: () => {},
   recordTaskHeartbeats: () => {},
   getTaskHandleRecord: () => undefined,
+  // CCH #52/#44: framework.ts 的 still-running 快照面读取的表视图。
+  getAllTaskHandleRecords: () => [],
+  hydrateTaskRegistry: () => {},
   getTaskRegistryDiagnostics: () => ({
     handles: [],
     undelivered: [],
     suspicious: [],
   }),
   consumeUndeliveredTerminalTasks: () => [],
+  peekUndeliveredTerminalTasks: () => [],
   reapSuspiciousTasks: () => [],
 }

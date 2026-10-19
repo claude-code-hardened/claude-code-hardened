@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import type { QueuedCommand } from '../types/textInputTypes.js'
 import {
+  hasUserIntentCommandsInQueue,
   getCommandQueueSnapshot,
   subscribeToCommandQueue,
 } from '../utils/messageQueueManager.js'
@@ -48,7 +49,11 @@ export function useQueueProcessor({
   useEffect(() => {
     if (isQueryActive) return
     if (hasActiveLocalJsxUI) return
-    if (queueSnapshot.length === 0) return
+    // 官方 so() = hasUserIntentCommandsInQueue（module-006:9229）:passive
+    // 通知（CCH #50/#52，如主会话 userResumeNotice）入上下文但不算 user
+    // intent、不触发新 query 轮——纯 passive 队列不 wake，留待下一个真实
+    // 唤因（用户输入/其他 task-notification）随轮入上下文。
+    if (!hasUserIntentCommandsInQueue()) return
 
     // Reservation is now owned by handlePromptSubmit (inside executeUserInput's
     // try block). The sync chain executeQueuedInput → handlePromptSubmit →

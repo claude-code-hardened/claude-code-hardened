@@ -127,9 +127,65 @@ function containsExcludedCommand(command: string): boolean {
   return false
 }
 
-export function shouldUseSandbox(input: Partial<SandboxInput>): boolean {
+/** Sandbox execution mode decided for one tool call. */
+export type SandboxDecisionMode = 'sandbox' | 'unsandboxed' | 'refuse'
+
+/** Why a refused command is rejected outright (official tn 0051:729). */
+export type SandboxDecisionReason = 'sandbox_unavailable' | 'policy_disabled'
+
+export type SandboxDecision = {
+  mode: SandboxDecisionMode
+  reason?: SandboxDecisionReason
+}
+
+/**
+ * Official tn(0051:729) decision semantics, including the refuse face.
+ *
+ * When the strict/closed managed-policy gate hits (strictSandboxMode
+ * configured, or the model's dangerouslyDisableSandbox opt-out denied by
+ * unsandboxedCommandsDisabled) AND the sandbox cannot actually be provided
+ * (unsupported platform, or sandbox.enabled pinned but dependencies missing —
+ * getSandboxUnavailableReason() non-undefined), the command is refused
+ * outright instead of being forced into a sandbox that fails to materialize
+ * and then silently falling through to a bare-metal run.
+ *
+ * Boundary (official four-condition gate includes `enabled`): a globally
+ * disabled sandbox (isSandboxingEnabled() false with no availability error)
+ * is plain non-enforcement — no refuse, plain unsandboxed execution.
+ */
+export function evaluateSandboxDecision(
+  input: Partial<SandboxInput>,
+): SandboxDecision {
+  const strict = SandboxManager.isStrictSandboxModeConfigured()
+  // The escape hatch is closed for this call: the model tried to opt out and
+  // policy denies unsandboxed execution (unsandboxedCommandsDisabled / closed
+  // allowUnsandboxedCommands).
+  const optOutDenied =
+    input.dangerouslyDisableSandbox === true &&
+    SandboxManager.areUnsandboxedCommandsDisabled()
+
+  if (strict || optOutDenied) {
+    const sandboxUnavailable =
+      !SandboxManager.isSupportedPlatform() ||
+      SandboxManager.getSandboxUnavailableReason() !== undefined
+    if (sandboxUnavailable) {
+      return {
+        mode: 'refuse',
+        reason: strict ? 'sandbox_unavailable' : 'policy_disabled',
+      }
+    }
+  }
+
+  // Below this line the pre-W4 decision, verbatim; `mode: 'unsandboxed'` maps
+  // to the old `return false` and `mode: 'sandbox'` to `return true`.
   if (!SandboxManager.isSandboxingEnabled()) {
-    return false
+    return { mode: 'unsandboxed' }
+  }
+
+  // Strict managed mode (W4): the model's dangerouslyDisableSandbox opt-out
+  // is ignored outright; policy decides, not the tool call.
+  if (input.dangerouslyDisableSandbox && strict) {
+    return { mode: 'sandbox' }
   }
 
   // Don't sandbox if explicitly overridden AND unsandboxed commands are allowed by policy
@@ -137,17 +193,21 @@ export function shouldUseSandbox(input: Partial<SandboxInput>): boolean {
     input.dangerouslyDisableSandbox &&
     SandboxManager.areUnsandboxedCommandsAllowed()
   ) {
-    return false
+    return { mode: 'unsandboxed' }
   }
 
   if (!input.command) {
-    return false
+    return { mode: 'unsandboxed' }
   }
 
   // Don't sandbox if the command contains user-configured excluded commands
   if (containsExcludedCommand(input.command)) {
-    return false
+    return { mode: 'unsandboxed' }
   }
 
-  return true
+  return { mode: 'sandbox' }
+}
+
+export function shouldUseSandbox(input: Partial<SandboxInput>): boolean {
+  return evaluateSandboxDecision(input).mode === 'sandbox'
 }

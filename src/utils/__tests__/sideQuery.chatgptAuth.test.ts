@@ -253,8 +253,9 @@ describe('sideQuery OpenAI ChatGPT OAuth path', () => {
       type: 'function',
       name: 'classify_result',
     })
+    const firstFetchUrl = capturedFetch!.url
 
-    const toolUse = result.content.find(
+    const firstToolUse = result.content.find(
       (
         b,
       ): b is {
@@ -264,13 +265,34 @@ describe('sideQuery OpenAI ChatGPT OAuth path', () => {
         input: unknown
       } => b.type === 'tool_use',
     )
-    expect(toolUse).toBeDefined()
-    expect(toolUse!.name).toBe('classify_result')
-    expect(toolUse!.input).toEqual({ shouldBlock: false, reason: 'ok' })
+    expect(firstToolUse).toBeDefined()
+    expect(firstToolUse!.name).toBe('classify_result')
+    expect(firstToolUse!.input).toEqual({ shouldBlock: false, reason: 'ok' })
     expect(result.stop_reason).toBe('tool_use')
     expect(result.usage.input_tokens).toBe(11)
     expect(result.usage.output_tokens).toBe(7)
-  })
+
+    // Codex sharedClient epoch (responsesAdapter fetchRef mechanism): a
+    // second call in the SAME (auth, accountId, fetch-identity) epoch reuses
+    // the cached client — still zero Chat-Completions client builds, and the
+    // captured fetch stays the shared-epoch one (same URL, same auth header).
+    capturedFetch = null
+    const second = await sideQuery({
+      querySource: 'auto_mode',
+      model: 'gpt-5.5',
+      system: 'You are a classifier.',
+      messages: [{ role: 'user', content: 'classify this action' }],
+      tools: [classifierTool as never],
+      tool_choice: { type: 'tool', name: 'classify_result' },
+      max_tokens: 256,
+    })
+    expect(getOpenAIClientCallCount).toBe(0)
+    expect(capturedFetch).not.toBeNull()
+    expect(capturedFetch!.url).toBe(firstFetchUrl)
+    expect(capturedFetch!.headers.authorization).toMatch(/^Bearer \S+/)
+    expect(second.usage.input_tokens).toBe(11)
+    expect(second.usage.output_tokens).toBe(7)
+  }, 20_000)
 
   test('official API key mode uses a session cache key and normalized usage', async () => {
     delete process.env.OPENAI_AUTH_MODE
@@ -357,5 +379,5 @@ describe('sideQuery OpenAI ChatGPT OAuth path', () => {
       }),
     ).rejects.toThrow(/ChatGPT Responses API request failed \(401\)/)
     expect(getOpenAIClientCallCount).toBe(0)
-  })
+  }, 20_000)
 })

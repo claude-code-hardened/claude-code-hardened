@@ -132,6 +132,82 @@ export type SendMessageToolOutput =
 
 const UDS_INLINE_TOKEN_MARKER = '#token='
 
+// ── CCH #52 (R1-low): 转发链护栏对齐官方 hop 准入双口径 ─────────────────
+// 官方真源 docs/reverse-284/decompiled/0258-chunk-116j5z58/
+// module-005-uncategorized.js:117 `Tan={...maxSelfHops:10,maxChainLength:28}`
+// + :121 `g(d,o)`：链长 > maxChainLength → "hop-runaway"；链中自会话 id
+// 出现次数 ≥ maxSelfHops → "hop-loop"；且仅 peer origin 参检（官方 vr 的
+// 准入检查只对 origin.kind==="peer" 生效）。
+// CCH 落法（保留 Map 记账结构）：Map 值由标量深度升级为该 agent 的 hop
+// 链（string[]）；转发时 nextChain = 源链 + [源 id]，接收方自引命中数按
+// 链内等值计数。主会话（getAgentId() 未设）非 peer origin，不限不记。
+// 自造的 forwardChain=5 单口径退役。
+export const MAX_SELF_HOPS = 10
+export const MAX_CHAIN_LENGTH = 28
+/** 防泄漏：链表超过软上限时整体清零（重置后级联重新计数，护栏依然收敛）。 */
+const FORWARD_CHAIN_MAP_SOFT_LIMIT = 256
+
+const EMPTY_CHAIN: readonly string[] = Object.freeze([])
+
+const forwardChains = new Map<string, readonly string[]>()
+
+export type ForwardHopVerdict = {
+  admitted: boolean
+  reason?: 'hop-runaway' | 'hop-loop'
+}
+
+/** 官方 0258:121 g() 的链上自引计数（ownTokens ∩ hopChain）。 */
+export function countSelfHops(
+  chain: readonly string[],
+  selfId: string,
+): number {
+  return chain.reduce((n, id) => (id === selfId ? n + 1 : n), 0)
+}
+
+/**
+ * 官方 0258:121 g() 等价判定：链长超限 → "hop-runaway"；接收方自会话
+ * 在链中出现 ≥ maxSelfHops 次（互踢循环）→ "hop-loop"。
+ */
+export function checkForwardHopAdmission(
+  nextChain: readonly string[],
+  receiverAgentId: string,
+): ForwardHopVerdict {
+  if (nextChain.length > MAX_CHAIN_LENGTH) {
+    return { admitted: false, reason: 'hop-runaway' }
+  }
+  if (countSelfHops(nextChain, receiverAgentId) >= MAX_SELF_HOPS) {
+    return { admitted: false, reason: 'hop-loop' }
+  }
+  return { admitted: true }
+}
+
+/**
+ * CCH #52 hop 链读取（call() 内联护栏用；导出面供 SendMessageTool 的
+ * forwardChain 单测在无 ToolUseContext 的环境下覆盖链数学——call() 路由
+ * 分支依赖的 isLocalAgentTask 绑定在全量并发跑里会被
+ * tests/mocks/localAgentTask 的 process-global mock 特化）。
+ */
+export function forwardChainOf(agentId: string | undefined): readonly string[] {
+  return agentId !== undefined && agentId.length > 0
+    ? (forwardChains.get(agentId) ?? EMPTY_CHAIN)
+    : EMPTY_CHAIN
+}
+
+export function recordForwardChain(
+  targetAgentId: string,
+  chain: readonly string[],
+): void {
+  if (forwardChains.size >= FORWARD_CHAIN_MAP_SOFT_LIMIT) {
+    forwardChains.clear()
+  }
+  forwardChains.set(targetAgentId, chain)
+}
+
+/** 测试缝：清转发链记账。 */
+export function _resetForwardChainForTest(): void {
+  forwardChains.clear()
+}
+
 function stripInlineUdsToken(target: string): string {
   const markerIndex = target.indexOf(UDS_INLINE_TOKEN_MARKER)
   return markerIndex === -1 ? target : target.slice(0, markerIndex)
@@ -913,6 +989,32 @@ export const SendMessageTool: Tool<InputSchema, SendMessageToolOutput> =
         const registered = appState.agentNameRegistry.get(input.to)
         const agentId = registered ?? toAgentId(input.to)
         if (agentId) {
+          // CCH #52 (R1-low): 官方 hop 准入双口径（0258:117/121）——仅
+          // peer origin 参检：主会话转发不限不记；agent 转发帶链入链，
+          // hop-runaway（链长>28）/ hop-loop（自引≥10）即拒。运行中队列
+          // 投递 + 停滞/被逐出 agent 的自动复活都从这条路径走。
+          const sourceAgentId = getAgentId()
+          if (sourceAgentId !== undefined && sourceAgentId.length > 0) {
+            const sourceChain = forwardChainOf(sourceAgentId)
+            const nextChain = [...sourceChain, sourceAgentId]
+            const verdict = checkForwardHopAdmission(nextChain, agentId)
+            if (!verdict.admitted) {
+              logForDebugging(
+                `[SendMessageTool] forward chain rejected (${verdict.reason}) forwarding to ${input.to} (${agentId}, chain=${nextChain.join('->')}); rejecting`,
+              )
+              const detail =
+                verdict.reason === 'hop-runaway'
+                  ? `forward chain exceeded the max length (${nextChain.length} hops > ${MAX_CHAIN_LENGTH})`
+                  : `the message would pass through ${input.to} a ${countSelfHops(nextChain, agentId) + 1}th time, exceeding max self-hops (${MAX_SELF_HOPS})`
+              return {
+                data: {
+                  success: false,
+                  message: `Forward rejected (${verdict.reason}): ${detail} — not forwarding to ${input.to}. Deliver your result back to the requester instead of relaying.`,
+                },
+              }
+            }
+            recordForwardChain(agentId, nextChain)
+          }
           const task = appState.tasks[agentId]
           if (isLocalAgentTask(task) && !isMainSessionTask(task)) {
             if (task.status === 'running') {

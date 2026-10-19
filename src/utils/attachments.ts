@@ -32,6 +32,7 @@ import { countCharInString } from './stringUtils.js'
 import { uniq } from './array.js'
 import { getFsImplementation } from './fsOperations.js'
 import { readdir, stat } from 'fs/promises'
+import { shouldSkipAttachmentsForCommand } from './messageQueueManager.js'
 import type { IDESelection } from '../hooks/useIdeSelection.js'
 import { TODO_WRITE_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/TodoWriteTool/constants.js'
 import { TASK_CREATE_TOOL_NAME } from '@claude-code-hardened/builtin-tools/tools/TaskCreateTool/constants.js'
@@ -1123,7 +1124,14 @@ export async function getQueuedCommandAttachments(
   )
   return Promise.all(
     filtered.map(async _ => {
-      const imageBlocks = await buildImageContentBlocks(_.pastedContents)
+      // CCH #50/#52: 官方 skipAttachments 信封位（官方 Trt，
+      // module-006:2116 ——该类命令不参与附件收集；官方 resume/bulk 通知
+      // 均带 skipAttachments:!0）→ 跳过图片块/粘贴 id 收集，文本本体照进
+      // 上下文。
+      const skipAttachments = shouldSkipAttachmentsForCommand(_)
+      const imageBlocks = skipAttachments
+        ? []
+        : await buildImageContentBlocks(_.pastedContents)
       let prompt: string | Array<ContentBlockParam> = _.value
       if (imageBlocks.length > 0) {
         // Build content block array with text + images so the model sees them
@@ -1137,7 +1145,9 @@ export async function getQueuedCommandAttachments(
         type: 'queued_command' as const,
         prompt,
         source_uuid: _.uuid,
-        imagePasteIds: getImagePasteIds(_.pastedContents),
+        imagePasteIds: skipAttachments
+          ? undefined
+          : getImagePasteIds(_.pastedContents),
         commandMode: _.mode,
         origin: _.origin,
         isMeta: _.isMeta,

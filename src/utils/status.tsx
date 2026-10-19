@@ -17,6 +17,8 @@ import { getMTLSConfig } from './mtls.js';
 import { checkInstall } from './nativeInstaller/index.js';
 import { getProxyUrl } from './proxy.js';
 import { SandboxManager } from './sandbox/sandbox-adapter.js';
+import { getSecureStorageConfigDir, hasGatewayTokenConfigured } from './security/env.js';
+import { hasClientCertConfigured } from './security/mtls.js';
 import { getSettingsWithAllErrors } from './settings/allErrors.js';
 import { getEnabledSettingSources, getSettingSourceDisplayNameCapitalized } from './settings/constants.js';
 import { getManagedFileSettingsPresence, getPolicySettingsOrigin, getSettingsForSource } from './settings/settings.js';
@@ -420,20 +422,34 @@ export function buildAPIProviderProperties(): Property[] {
       value: process.env.NODE_EXTRA_CA_CERTS,
     });
   }
-  if (mtlsConfig) {
-    if (mtlsConfig.cert && process.env.CLAUDE_CODE_CLIENT_CERT) {
-      properties.push({
-        label: 'mTLS client cert',
-        value: process.env.CLAUDE_CODE_CLIENT_CERT,
-      });
-    }
-
-    if (mtlsConfig.key && process.env.CLAUDE_CODE_CLIENT_KEY) {
-      properties.push({
-        label: 'mTLS client key',
-        value: process.env.CLAUDE_CODE_CLIENT_KEY,
-      });
-    }
+  // W4 (R4): security env presence is probed through the audited security
+  // layer (src/utils/security/{env,mtls}.ts) instead of bare process.env
+  // string reads — no secret material is rendered, presence only.
+  if (hasClientCertConfigured()) {
+    properties.push({
+      label: 'mTLS client cert',
+      value: 'configured (client certificate + key validated)',
+    });
+  } else if (mtlsConfig && (mtlsConfig.cert || mtlsConfig.key)) {
+    // Legacy lenient path: material loaded but the strict validated-bundle
+    // probe rejected it (missing piece, non-PEM, unparseable key).
+    properties.push({
+      label: 'mTLS client cert',
+      value: 'present but not fully validated (see /doctor)',
+    });
+  }
+  if (hasGatewayTokenConfigured()) {
+    properties.push({
+      label: 'Gateway token',
+      value: 'configured',
+    });
+  }
+  const secureStorageConfigDir = getSecureStorageConfigDir();
+  if (secureStorageConfigDir) {
+    properties.push({
+      label: 'Secure storage dir',
+      value: secureStorageConfigDir,
+    });
   }
 
   return properties;

@@ -65,7 +65,7 @@ import { interpretCommandResult } from './commandSemantics.js';
 import { clampTimeoutMs, getMaxTimeoutMs, getSimplePrompt } from './prompt.js';
 import { checkReadOnlyConstraints } from './readOnlyValidation.js';
 import { parseSedEditCommand } from './sedEditParser.js';
-import { shouldUseSandbox } from './shouldUseSandbox.js';
+import { evaluateSandboxDecision, shouldUseSandbox } from './shouldUseSandbox.js';
 import { BASH_TOOL_NAME } from './toolName.js';
 import {
   BackgroundHint,
@@ -323,6 +323,23 @@ For commands that are harder to parse at a glance (piped commands, obscure flags
     dangerouslyDisableSandbox: semanticBoolean(z.boolean().optional()).describe(
       'Set this to true to dangerously override sandbox mode and run commands without sandboxing.',
     ),
+    // W4 (#55): official sandboxNetworkLists(e) tool input — per-call network
+    // allow/deny host lists applied while the command is sandboxed. At the
+    // call face these flow into src/utils/Shell.ts exec({ networkLists }),
+    // whose SandboxManager.wrapWithSandbox(..., customConfig.network) call
+    // merges them on top of the session restriction config
+    // (buildCustomNetworkConfig in src/utils/sandbox/networkLists.js). Only
+    // consumed when the command actually runs sandboxed; enforcement-layer
+    // precedence (deny over allow, policy caps) is owned by sandbox-runtime.
+    sandboxNetworkLists: z
+      .object({
+        allow: z.array(z.string()).optional(),
+        deny: z.array(z.string()).optional(),
+      })
+      .optional()
+      .describe(
+        'Optional host lists applied to this command while it runs in the sandbox: allow patterns grant network access, deny patterns block it. Ignored when the command is not sandboxed.',
+      ),
     _simulatedSedEdit: z
       .object({
         filePath: z.string(),
@@ -660,6 +677,22 @@ export const BashTool = buildTool({
           errorCode: 10,
         };
       }
+    }
+    // W4 (R4) — official tn(0051:729) refuse semantics. Under a strict/closed
+    // managed policy, a command whose sandbox cannot actually be provided is
+    // refused outright instead of being forced into a sandbox that silently
+    // fails and falls through to a bare-metal run. A globally disabled sandbox
+    // (no availability error) is plain non-enforcement and never refuses.
+    const sandboxDecision = evaluateSandboxDecision(input);
+    if (sandboxDecision.mode === 'refuse') {
+      return {
+        result: false,
+        message:
+          sandboxDecision.reason === 'policy_disabled'
+            ? 'unsandboxed commands are disabled by policy'
+            : 'sandbox unavailable under strict managed policy',
+        errorCode: 10,
+      };
     }
     return { result: true };
   },
@@ -1050,6 +1083,9 @@ async function* runShellCommand({
     preventCwdChanges,
     shouldUseSandbox: shouldUseSandbox(input),
     shouldAutoBackground,
+    // W4 (#55): per-call sandbox network lists — merged into wrapWithSandbox
+    // customConfig.network by Shell.exec when the command runs sandboxed.
+    networkLists: input.sandboxNetworkLists,
   });
 
   // Start the command execution

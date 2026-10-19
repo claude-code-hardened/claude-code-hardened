@@ -48,7 +48,7 @@ import {
   getToolResultPath,
   PREVIEW_SIZE_BYTES,
 } from 'src/utils/toolResultStorage.js';
-import { shouldUseSandbox } from '../BashTool/shouldUseSandbox.js';
+import { shouldUseSandboxForPowerShell } from './sandboxDecision.js';
 import { BackgroundHint } from '../BashTool/UI.js';
 import {
   buildImageToolResult,
@@ -856,10 +856,15 @@ async function* runPowerShellCommand({
       // Sandbox works on Linux/macOS/WSL2 — pwsh there is a native binary and
       // SandboxManager.wrapWithSandbox wraps it same as bash (Shell.ts uses
       // /bin/sh for the outer spawn to parse the POSIX-quoted bwrap/sandbox-exec
-      // string). On Windows native, sandbox is unsupported; shouldUseSandbox()
+      // string). On Windows native, sandbox is unsupported; the decision
       // returns false via isSandboxingEnabled() → isSupportedPlatform() → false.
       // The explicit platform check is redundant-but-obvious.
-      shouldUseSandbox: getPlatform() === 'windows' ? false : shouldUseSandbox({ command, dangerouslyDisableSandbox }),
+      // shouldUseSandboxForPowerShell (R4 #0051) applies the strict managed-
+      // mode gate first: sandbox.strictSandboxMode configured → the model's
+      // dangerouslyDisableSandbox opt-out is ignored outright and the call is
+      // forced through the sandbox branch, same as BashTool.
+      shouldUseSandbox:
+        getPlatform() === 'windows' ? false : shouldUseSandboxForPowerShell({ command, dangerouslyDisableSandbox }),
       shouldAutoBackground,
     });
   } catch (e) {
