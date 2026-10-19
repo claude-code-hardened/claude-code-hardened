@@ -77,6 +77,18 @@ export type PermissionRule = {
   source: PermissionRuleSource
   ruleBehavior: PermissionBehavior
   ruleValue: PermissionRuleValue
+  /**
+   * Alternate tool names this rule also targets (upstream anchor 0023
+   * module-007: `aliasSkillToolNames`). Rules packaged for a differently-named
+   * tool variant still apply to those variant names — e.g. a rule authored
+   * with `aliasSkillToolNames: ['Skill']` matches SkillTool's `Skill(name)`
+   * invocations even when the rule's `toolName` itself is something else.
+   *
+   * Rules parsed from settings strings never carry aliases (undefined);
+   * programmatic rule producers (SDK/session rules, packaged policy) may set
+   * them. Honour by src/utils/permissions/permissions.ts: ruleTargetsToolName.
+   */
+  aliasSkillToolNames?: string[]
 }
 
 // ============================================================================

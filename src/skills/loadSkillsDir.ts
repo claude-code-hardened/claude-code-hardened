@@ -63,6 +63,7 @@ import { isRestrictedToPluginOnly } from '../utils/settings/pluginOnlyPolicy.js'
 import { HooksSchema, type HooksSettings } from '../utils/settings/types.js'
 import { createSignal } from '../utils/signal.js'
 import { registerMCPSkillBuilders } from './mcpSkillBuilders.js'
+import { loadSyncedSkills, mergeSkillRegistry } from './syncedSkills.js'
 
 export type LoadedFrom =
   | 'commands_DEPRECATED'
@@ -71,6 +72,7 @@ export type LoadedFrom =
   | 'managed'
   | 'bundled'
   | 'mcp'
+  | 'syncedSkills'
 
 /**
  * Returns a claude config directory path for a given source.
@@ -682,6 +684,7 @@ export const getSkillDirCommands = memoize(
       projectSkillsNested,
       additionalSkillsNested,
       legacyCommands,
+      syncedSkills,
     ] = await Promise.all([
       isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_POLICY_SKILLS)
         ? Promise.resolve([])
@@ -711,6 +714,12 @@ export const getSkillDirCommands = memoize(
       // here when skills are locked — these ARE skills, regardless of the
       // directory they load from.
       skillsLocked ? Promise.resolve([]) : loadSkillsFromCommandsDir(cwd),
+      // Synced claude.ai skills (offline local face, <configHome>/synced-skills/).
+      // Treated as user-surface: skipped under skillsLocked or when
+      // userSettings are disabled, matching the userSkills gate above.
+      isSettingSourceEnabled('userSettings') && !skillsLocked
+        ? loadSyncedSkills()
+        : Promise.resolve([]),
     ])
 
     // Flatten and combine all skills
@@ -768,10 +777,15 @@ export const getSkillDirCommands = memoize(
       logForDebugging(`Deduplicated ${duplicatesRemoved} skills (same file)`)
     }
 
+    // Synced skills merge AFTER local dedup: local-first order with
+    // name/identifier/alias collision drop (anchor 0025 module-003 Rl/Zu),
+    // so a synced skill never shadows a locally-loaded one.
+    const mergedSkills = mergeSkillRegistry(deduplicatedSkills, syncedSkills)
+
     // Separate conditional skills (with paths frontmatter) from unconditional ones
     const unconditionalSkills: Command[] = []
     const newConditionalSkills: Command[] = []
-    for (const skill of deduplicatedSkills) {
+    for (const skill of mergedSkills) {
       if (
         skill.type === 'prompt' &&
         skill.paths &&
@@ -796,7 +810,7 @@ export const getSkillDirCommands = memoize(
     }
 
     logForDebugging(
-      `Loaded ${deduplicatedSkills.length} unique skills (${unconditionalSkills.length} unconditional, ${newConditionalSkills.length} conditional, managed: ${managedSkills.length}, user: ${userSkills.length}, project: ${projectSkillsNested.flat().length}, additional: ${additionalSkillsNested.flat().length}, legacy commands: ${legacyCommands.length})`,
+      `Loaded ${mergedSkills.length} unique skills (${unconditionalSkills.length} unconditional, ${newConditionalSkills.length} conditional, managed: ${managedSkills.length}, user: ${userSkills.length}, project: ${projectSkillsNested.flat().length}, additional: ${additionalSkillsNested.flat().length}, legacy commands: ${legacyCommands.length}, synced: ${syncedSkills.length})`,
     )
 
     return unconditionalSkills

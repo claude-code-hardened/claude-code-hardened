@@ -57,6 +57,7 @@ import {
 } from './permissionRuleParser.js'
 import {
   deletePermissionRuleFromSettings,
+  getSettingsToolAliases,
   type PermissionRuleFromEditableSettings,
   shouldAllowManagedPermissionRulesOnly,
 } from './permissionsLoader.js'
@@ -237,6 +238,29 @@ export function getAskRules(context: ToolPermissionContext): PermissionRule[] {
 }
 
 /**
+ * Whether a rule targets the given tool name — directly, through a declared
+ * `aliasSkillToolNames` entry (upstream anchor 0023 module-007, `m1`/`hh`:
+ * rules may declare alternate tool names they also match), or through the
+ * settings `toolAliases` map (alias -> canonical tool name; a rule authored
+ * against the canonical name also matches calls emitted under the alias, so
+ * `{"Skill": "SkillTool"}` + `deny SkillTool` hits a `Skill(name)` call).
+ *
+ * Shared by whole-tool matching (toolMatchesRule) and content-rule matching
+ * (getRuleByContentsForToolName).
+ */
+export function ruleTargetsToolName(
+  rule: PermissionRule,
+  toolName: string,
+): boolean {
+  if (rule.ruleValue.toolName === toolName) return true
+  if (rule.aliasSkillToolNames?.includes(toolName) === true) return true
+  // Settings `toolAliases` face (R5 aliasSkillToolNames unparked) — single
+  // hop, self-aliases are a no-op by construction.
+  const aliases = getSettingsToolAliases()
+  return aliases[toolName] === rule.ruleValue.toolName
+}
+
+/**
  * Check if the entire tool matches a rule
  * For example, this matches "Bash" but not "Bash(prefix:*)" for BashTool
  * This also matches MCP tools with a server name, e.g. the rule "mcp__server1"
@@ -256,8 +280,8 @@ function toolMatchesRule(
   // builtins should not match their MCP replacements.
   const nameForRuleMatch = getToolNameForPermissionCheck(tool)
 
-  // Direct tool name match
-  if (rule.ruleValue.toolName === nameForRuleMatch) {
+  // Direct tool name match, plus declared aliasSkillToolNames (anchor 0023)
+  if (ruleTargetsToolName(rule, nameForRuleMatch)) {
     return true
   }
 
@@ -357,11 +381,27 @@ export function getRuleByContentsForTool(
   tool: Tool,
   behavior: PermissionBehavior,
 ): Map<string, PermissionRule> {
-  return getRuleByContentsForToolName(
-    context,
-    getToolNameForPermissionCheck(tool),
-    behavior,
-  )
+  // Anchor 0023 `hh`: content rules are matched against the tool's canonical
+  // name and every alias it can be addressed by.
+  const canonicalName = getToolNameForPermissionCheck(tool)
+  const candidateNames =
+    tool.aliases === undefined
+      ? [canonicalName]
+      : [canonicalName, ...tool.aliases]
+
+  const merged = new Map<string, PermissionRule>()
+  for (const candidateName of candidateNames) {
+    for (const [ruleContent, rule] of getRuleByContentsForToolName(
+      context,
+      candidateName,
+      behavior,
+    )) {
+      if (!merged.has(ruleContent)) {
+        merged.set(ruleContent, rule)
+      }
+    }
+  }
+  return merged
 }
 
 // Used to break circular dependency where a Tool calls this function
@@ -384,8 +424,10 @@ export function getRuleByContentsForToolName(
       break
   }
   for (const rule of rules) {
+    // Direct toolName match or declared aliasSkillToolNames entry (anchor
+    // 0023 `hh`: content rules packaged under an alias name still apply).
     if (
-      rule.ruleValue.toolName === toolName &&
+      ruleTargetsToolName(rule, toolName) &&
       rule.ruleValue.ruleContent !== undefined &&
       rule.ruleBehavior === behavior
     ) {

@@ -365,6 +365,12 @@ export const SettingsSchema = lazySchema(() =>
       permissions: PermissionsSchema()
         .optional()
         .describe('Tool usage permissions configuration'),
+      toolAliases: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe(
+          'Map of tool-name aliases consumed by permission-rule matching: a tool call emitted under an alias name also matches rules written for the mapped (canonical) tool name — e.g. {"Skill": "SkillTool"} makes deny rules for SkillTool hit Skill(name) calls. Single-hop (no chains). CCH: permission matching face only (official also resolves the execution path — see official toolAliases).',
+        ),
       modelType: z
         .enum(['anthropic', 'openai', 'gemini', 'grok'])
         .optional()

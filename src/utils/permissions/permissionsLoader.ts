@@ -83,12 +83,10 @@ function getSettingsForSourceLenient_FOR_EDITING_ONLY_NOT_FOR_READING(
 }
 
 /**
- * Converts permissions JSON to an array of PermissionRule objects
- * @param data The parsed permissions data
- * @param source The source of these rules
- * @returns Array of PermissionRule objects
+ * Converts permissions JSON to an array of PermissionRule objects.
+ * Exported for tests — pure over its (data, source) inputs.
  */
-function settingsJsonToRules(
+export function settingsJsonToRules(
   data: SettingsJson | null,
   source: PermissionRuleSource,
 ): PermissionRule[] {
@@ -97,20 +95,73 @@ function settingsJsonToRules(
   }
 
   const { permissions } = data
+  // R5 aliasSkillToolNames wiring: rules parsed from settings strings pick up
+  // the top-level `toolAliases` map (alias -> canonical tool name), so a rule
+  // authored against the canonical name genuinely matches calls emitted under
+  // the alias. Rules whose toolName is an alias entry carry no aliases.
+  const toolAliases = data.toolAliases ?? {}
+  const aliasesForRule = (toolName: string): string[] | undefined => {
+    const aliases = Object.keys(toolAliases).filter(
+      alias => alias !== toolName && toolAliases[alias] === toolName,
+    )
+    return aliases.length > 0 ? aliases : undefined
+  }
+
   const rules: PermissionRule[] = []
   for (const behavior of SUPPORTED_RULE_BEHAVIORS) {
     const behaviorArray = permissions[behavior]
     if (behaviorArray) {
       for (const ruleString of behaviorArray) {
+        const ruleValue = permissionRuleValueFromString(ruleString)
         rules.push({
           source,
           ruleBehavior: behavior,
-          ruleValue: permissionRuleValueFromString(ruleString),
+          ruleValue,
+          aliasSkillToolNames: aliasesForRule(ruleValue.toolName),
         })
       }
     }
   }
   return rules
+}
+
+// ---------------------------------------------------------------------------
+// toolAliases face (R5 aliasSkillToolNames unparked)
+// ---------------------------------------------------------------------------
+
+/**
+ * Test seam — when set, getSettingsToolAliases returns exactly this map
+ * instead of reading settings sources; null restores live settings reads.
+ */
+let toolAliasesOverrideForTest: Record<string, string> | null = null
+
+export function setToolAliasesForTest(
+  map: Record<string, string> | null,
+): void {
+  toolAliasesOverrideForTest = map
+}
+
+/**
+ * Merged top-level `toolAliases` map (alias -> canonical tool name) across
+ * enabled settings sources, first source wins per alias key. Single-hop by
+ * definition of the map shape — callers must not expand chains.
+ */
+export function getToolAliasesForSource(
+  data: SettingsJson | null,
+): Record<string, string> {
+  return data?.toolAliases ?? {}
+}
+
+export function getSettingsToolAliases(): Record<string, string> {
+  if (toolAliasesOverrideForTest !== null) return toolAliasesOverrideForTest
+  const merged: Record<string, string> = {}
+  for (const source of getEnabledSettingSources()) {
+    const aliases = getToolAliasesForSource(getSettingsForSource(source))
+    for (const [alias, real] of Object.entries(aliases)) {
+      if (!(alias in merged)) merged[alias] = real
+    }
+  }
+  return merged
 }
 
 /**
