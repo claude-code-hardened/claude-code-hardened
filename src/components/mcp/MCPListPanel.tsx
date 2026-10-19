@@ -11,6 +11,7 @@ import { plural } from '../../utils/stringUtils.js';
 import { ConfigurableShortcutHint } from '../ConfigurableShortcutHint.js';
 import { Byline, Dialog, KeyboardShortcutHint } from '@anthropic/ink';
 import { McpParsingWarnings } from './McpParsingWarnings.js';
+import { isServerHealthUnhealthy } from './utils/healthStatus.js';
 import type { AgentMcpServerInfo, ServerInfo } from './types.js';
 
 type Props = {
@@ -170,8 +171,16 @@ export function MCPListPanel({
       statusIcon = color('inactive', theme)(figures.radioOff);
       statusText = t('disabled');
     } else if (server.client.type === 'connected') {
-      statusIcon = color('success', theme)(figures.tick);
-      statusText = t('connected');
+      if (isServerHealthUnhealthy(server)) {
+        // W6 (Q6): the health-check runtime mark (healthCheck.ts, opt-in via
+        // CLAUDE_CODE_MCP_HEALTH_CHECK) is surfaced on the connected row —
+        // an unhealthy server still shows its tools but is failing pings.
+        statusIcon = color('warning', theme)(figures.triangleUpOutline);
+        statusText = t('connected (unhealthy)');
+      } else {
+        statusIcon = color('success', theme)(figures.tick);
+        statusText = t('connected');
+      }
     } else if (server.client.type === 'pending') {
       statusIcon = color('inactive', theme)(figures.radioOff);
       const { reconnectAttempt, maxReconnectAttempts } = server.client;

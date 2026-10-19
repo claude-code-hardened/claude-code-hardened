@@ -45,6 +45,10 @@ import {
   PROMPT_TOO_LONG_ERROR_MESSAGE,
   isPromptTooLongMessage,
 } from './services/api/errors.js'
+import {
+  emitPostModelSwitch,
+  emitPreModelSwitch,
+} from './utils/hooks/lifecycleHookEvents.js'
 import { logAntError, logForDebugging } from './utils/debug.js'
 import {
   createUserMessage,
@@ -1257,6 +1261,26 @@ async function* queryLoop(
             currentModel = fallbackModel
             attemptWithFallback = true
 
+            // W7 round-2 item 4: the fallback switch is a real model switch,
+            // so the lifecycle hook trio fires here too. Official anchor
+            // (decompiled): PostModelSwitch input is emitted for "the session
+            // model chang[ing] (any cause)" with from_model/to_model/
+            // requested_model/source/context_tokens (0461-chunk-dyqmyxqn/
+            // core/context-manager.js:40-51), and the API-level trigger enum
+            // for this turn-switch is model_fallback's
+            // ["model_not_found","permission_denied","overloaded",
+            // "server_error","last_resort","model_blocked"]
+            // (0009-chunk-j18026mh/module-004-uncategorized.js:704). Pre/
+            // Post pair mirrors the /model and set_model switch sites; the
+            // source is the reserved 'auto' (availability-driven, not a user
+            // command). Observability-only: hooks observe the switch, they
+            // cannot deny it here (see lifecycleHookEvents.ts R7 note).
+            await emitPreModelSwitch({
+              fromModel: innerError.originalModel,
+              toModel: fallbackModel,
+              source: 'auto',
+            })
+
             // Clear assistant messages since we'll retry the entire request
             yield* yieldMissingToolResultBlocks(
               assistantMessages,
@@ -1281,6 +1305,14 @@ async function* queryLoop(
 
             // Update tool use context with new model
             toolUseContext.options.mainLoopModel = fallbackModel
+
+            // The switch has applied — PostModelSwitch (any-cause contract,
+            // 0461 anchor above).
+            await emitPostModelSwitch({
+              fromModel: innerError.originalModel,
+              toModel: fallbackModel,
+              source: 'auto',
+            })
 
             // Thinking signatures are model-bound: replaying a protected-thinking
             // block (e.g. capybara) to an unprotected fallback (e.g. opus) 400s.

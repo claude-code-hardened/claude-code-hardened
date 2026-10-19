@@ -95,13 +95,22 @@ export type TaskHandleInput = {
   /** 官方 parked 语义：静默完成挂表。 */
   quietlyParked?: boolean
   /**
-   * CCH #52/#46 官方复活位（0001-chunk-xrzcaagk/module-006-uncategorized.js
-   * `$M`：resume 落点 `quietlyParked===true → {notified:false, quietlyParked:false}`）。
-   * 复活路径显式传入：清除 quietlyParked，并把已冻结的终态句柄重开为
-   * input.status（非终态时）——终态冻结防的是快照链迟到写诈尸，不拦
-   * 用户/上游发起的真实复活。
+   * CCH #52/#46 复活位（0001-chunk-xrzcaagk/module-006-uncategorized.js
+   * :8428 `$M` resume 落点原文：`g.quietlyParked===!0 →
+   * n.update(e,(U)=>({...U,notified:!1,quietlyParked:!1}))`）。
+   * 收敛（Q2 复核原文）：**仅**既有记录 quietlyParked===true 时清
+   * parked/notified 双位、**不动 status**——上一版顺带重开终态句柄是超宽
+   * 面（$M 复活通知路从不改 status）。resume 需要把句柄重开为 running 的
+   * 面另走 reopenRunning 显式路径（非官方 $M 语义，见
+   * resumeAgentBackground 的调用注释）。
    */
   unpark?: boolean
+  /**
+   * resume 重开显式路径（CCH 接线面，非官方 $M）：把已冻结的终态句柄重开
+   * 为 input.status（非终态时）——终态冻结防的是快照链迟到写诈尸，不拦
+   * 用户/上游发起的真实复活；与官方 $M 的静默清停车位（unpark）分开。
+   */
+  reopenRunning?: boolean
   /** 测试/接线点可对齐 AppState 的 startTime。 */
   startedAt?: number
   /** 测试用时钟缝。 */
@@ -194,7 +203,8 @@ function writeSnapshot(record: TaskHandleRecord): void {
 /**
  * 中央句柄表 upsert：spawn 建表 + 每次 status 迁移/标志位变化改写。
  * 已终态句柄不接受非终态回迁（快照链的迟到写不能诈尸）；例外是
- * input.unpark?:true 的显式复活位（官方 $M 语义，见 TaskHandleInput）。
+ * input.reopenRunning?:true 的 resume 显式重开路径（非官方 $M 语义，见
+ * TaskHandleInput.unpark/reopenRunning 的分工注释）。
  */
 export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
   const now = input.updatedAt ?? Date.now()
@@ -202,9 +212,13 @@ export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
   const prevTerminal =
     existing !== undefined && isTerminalHandleStatus(existing.status)
   const nextTerminal = isTerminalHandleStatus(input.status)
-  // CCH #52/#46 官方 $M 复活位：显式 unpark 清 parked 并可重开终态句柄。
+  // resume 显式重开（Q2 收敛：与官方 $M unpark 分开——重开 running 的面
+  // 只走本路径，unpark 仅清停车位）。
   const allowReopen =
-    input.unpark === true && existing !== undefined && !nextTerminal
+    input.reopenRunning === true && existing !== undefined && !nextTerminal
+  // 官方 $M（:8428）原文：`g.quietlyParked===!0 → {notified:!1,
+  // quietlyParked:!1}` —— 仅 parked===true 时清位；未挂表的句柄不动。
+  const unparkParked = input.unpark === true && existing?.quietlyParked === true
   let record: TaskHandleRecord
 
   if (existing === undefined) {
@@ -223,13 +237,13 @@ export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
   } else {
     // 终态冻结：进终态后拒绝一切 status 迁移（回迁非终态与异种终态互踩
     // 都拒绝——completed→failed 的迟到写同样是诈尸），仅放行 notified/
-    // parked/updatedAt 等元数据位。唯一例外是官方 $M 复活路径的显式
-    // unpark：真实复活把句柄重开为非终态（并清 parked/notified）。
+    // parked/updatedAt 等元数据位。唯一例外是 resume 接线面的显式
+    // reopenRunning：真实复活把句柄重开为非终态（并清 parked/notified）。
     const status =
-      prevTerminal && existing!.status !== input.status && !allowReopen
-        ? existing!.status
+      prevTerminal && existing.status !== input.status && !allowReopen
+        ? existing.status
         : input.status
-    const reopened = allowReopen && existing!.status !== status
+    const reopened = allowReopen && existing.status !== status
     record = {
       ...existing,
       type: input.type,
@@ -239,14 +253,23 @@ export function recordTaskHandle(input: TaskHandleInput): TaskHandleRecord {
       // 复活重开：上一轮的终态成因不带走（exitKind 只见证最近一次终态）。
       exitKind: reopened ? undefined : (input.exitKind ?? existing.exitKind),
       // not 传即保留：补投位（consume）与接线点的已送达位互不回退。
-      // 官方 $M：复活需要重置 notified（新生命周期的死讯/补投位归零）。
+      // 官方 $M notice-face：复活需重置 notified（新生命周期的死讯/补投
+      // 位归零）；unpark 同句式（{notified:!1, quietlyParked:!1}）→ 仅
+      // parked===true 时双清，未挂表的句柄 notified 保留既有值。
       notified: reopened
         ? (input.notified ?? false)
-        : (input.notified ?? existing.notified),
-      // 官方 $M：复活落点显式清 quietlyParked。
-      quietlyParked: input.unpark
-        ? false
-        : (input.quietlyParked ?? existing.quietlyParked),
+        : unparkParked
+          ? false
+          : (input.notified ?? existing.notified),
+      // 官方 $M：仅 quietlyParked===true 时清 parked（不挂表不动）。
+      // resume 重开（reopened）同属新生命周期：上一轮 parked 位不带入
+      // （否则重开的 running 句柄仍挂 quietlyParked，渲染面/消费面按
+      // 已处理吞掉复活视图）。
+      quietlyParked: reopened
+        ? (input.quietlyParked ?? false)
+        : unparkParked
+          ? false
+          : (input.quietlyParked ?? existing.quietlyParked),
       startedAt: existing.startedAt,
       updatedAt: Math.max(now, existing.updatedAt),
     }

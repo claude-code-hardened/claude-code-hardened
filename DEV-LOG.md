@@ -1016,3 +1016,13 @@ GrowthBook 功能开关系统原为 Anthropic 内部构建设计，硬编码 SDK
 
 非空字段才写入，保存后立即生效（`onDone()` 触发 `onChangeAPIKey()` 刷新 API 客户端）。
 
+
+---
+
+## Hook 架构债披露 + "forward gate 消费"表述纠正 (2026-10-19, W7 复审 Q7)
+
+**架构债（声明）：** `src/utils/hooks/hookRegistry.ts`（程序化主线程 hook 注册表，消费方为 `lifecycleHookEvents.ts` 的 Pre/PostModelSwitch、UserPromptExpansion 三事件）与 settings hooks 管道（`hooksSettings.ts` / `sessionHooks.ts`，即 `settings.json` "hooks" 字段驱动的 exec shell/HTTP/prompt hook）**并存且语义不互通**：两者共享事件名命名空间，但配置、匹配、派发、结果消费互不相通。程序化注册的 hook 不会进入 settings 管道，settings hooks 也不会进入 hookRegistry（已声明于 hookRegistry.ts 头注释）。
+
+**表述纠正：** 此前 commit 级别描述把 forwarding kill-switch（`CLAUDE_CODE_DISABLE_HOOK_FORWARDING` / `CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING`）说成"forward gate 消费"。准确表述是：dispatch 的 `forwarded` 选项目前**没有任何生产发射源**（全仓 grep 仅测试传 `forwarded:true`），gate 是为 peer forwarding（远端/桥接会话中继）预留的隔离层——**reserved for peer forwarding (not wired)**，不是一条已接线的消费链。W7 二轮已将该分支收敛为单一 gate 判定并在头注释声明预留状态。
+
+**同轮相关：** fallback 模型切换（`src/query.ts` FallbackTriggeredError 分支）现以 `source: 'auto'` 双发 Pre/PostModelSwitch（官方 any-cause PostModelSwitch 契约，0461-chunk-dyqmyxqn/core/context-manager.js:40-51）；三事件 handler 返回的 deny 类 verdict（PreModelSwitch permissionDecision deny/ask、decision:"block"，0004-chunk-zrkp23rq/module-005-uncategorized.js:3843）不取消动作（R7 observability-only 声明不变），但已计入 debug 日志与 `tengu_lifecycle_hook_verdict_discarded` 计数（`getDiscardedLifecycleVerdictCounts()`）。

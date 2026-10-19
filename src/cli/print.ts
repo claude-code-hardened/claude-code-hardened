@@ -45,6 +45,7 @@ import {
   dequeueAllMatching,
   enqueue,
   hasCommandsInQueue,
+  isUserIntentCommand,
   peek,
   subscribeToCommandQueue,
   getCommandsByMaxPriority,
@@ -1968,6 +1969,14 @@ function runHeadlessStreaming(
     // Defined outside the try block so it's accessible in the post-finally
     // queue re-checks at the bottom of run().
     const isMainThread = (cmd: QueuedCommand) => cmd.agentId === undefined
+    // 官方 so() 唤醒门（module-006:9229 `g.some(Ro=>!_b(Ro)&&Ro.passive!==!0)`
+    // 的 CCH 消费面同判据 isUserIntentCommand）：passive 通知入上下文但不算
+    // user intent——不 dequeue 起新 ask() 轮、不阻塞 do-while 等待门/主动
+    // tick 面。纯 passive 队列留待下一个真实唤因随轮入上下文（与
+    // useQueueProcessor 的 hasUserIntentCommandsInQueue 门同口径；若任一
+    // gate 仍放行 passive，"drain 不过 → 门放行 → 再 drain" 会自持成环）。
+    const isWakingMainThread = (cmd: QueuedCommand) =>
+      isMainThread(cmd) && isUserIntentCommand(cmd)
 
     try {
       let command: QueuedCommand | undefined
@@ -1978,7 +1987,7 @@ function runHeadlessStreaming(
       // ask() call so messages that queued up during a long turn coalesce
       // into a single follow-up turn instead of N separate turns.
       const drainCommandQueue = async () => {
-        while ((command = dequeue(isMainThread))) {
+        while ((command = dequeue(isWakingMainThread))) {
           if (
             command.mode !== 'prompt' &&
             command.mode !== 'orphaned-permission' &&
@@ -2494,7 +2503,7 @@ function runHeadlessStreaming(
           const hasRunningBg = getRunningTasks(state).some(
             t => isBackgroundTask(t) && t.type !== 'in_process_teammate',
           )
-          const hasMainThreadQueued = peek(isMainThread) !== undefined
+          const hasMainThreadQueued = peek(isWakingMainThread) !== undefined
           if (hasRunningBg || hasMainThreadQueued) {
             waitingForAgents = true
             if (!hasMainThreadQueued) {
@@ -2575,12 +2584,14 @@ function runHeadlessStreaming(
     }
 
     // Proactive tick: if proactive is active and queue is empty, inject a tick
+    // （isWakingMainThread：parked passive 通知不算 user intent，不抑制
+    // 主动 tick——同 so() 门。）
     if (
       (feature('PROACTIVE') || feature('KAIROS')) &&
       proactiveModule?.isProactiveActive() &&
       !proactiveModule.isProactivePaused()
     ) {
-      if (peek(isMainThread) === undefined && !inputClosed) {
+      if (peek(isWakingMainThread) === undefined && !inputClosed) {
         scheduleProactiveTick!()
         return
       }
@@ -2591,7 +2602,9 @@ function runHeadlessStreaming(
     // undefined and `running = false` above. In that case the caller
     // saw `running === true` and returned immediately, leaving the
     // message stranded in the queue with no one to process it.
-    if (peek(isMainThread) !== undefined) {
+    // isWakingMainThread 口径：纯 passive 队列不 re-spin run()（同上
+    // so() 门——否则 passive-only 队列会在 drain 不过 → re-run 间自旋）。
+    if (peek(isWakingMainThread) !== undefined) {
       void run()
       return
     }
