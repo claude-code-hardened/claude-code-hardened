@@ -1,3 +1,6 @@
+// Locale pin FIRST: /loops body copy now goes through t(); keep any future
+// copy assertions on the English pass-through on translated machines.
+import '../../../../tests/mocks/localeEn.js'
 import { describe, expect, test } from 'bun:test'
 import { LOOPS_USAGE, parseLoopsArgs, parseSchedule } from '../args.js'
 

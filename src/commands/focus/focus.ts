@@ -27,6 +27,7 @@ import {
   writeJsonFileAtomic,
 } from '../../utils/safeJsonFile.js'
 import { FOCUS_USAGE, parseFocusArgs } from './args.js'
+import { t } from '../../i18n/index.js'
 
 export interface FocusModeRecord {
   enabled: boolean
@@ -34,8 +35,9 @@ export interface FocusModeRecord {
 }
 
 /** Renderer honesty note shared by the enable/disable/status surfaces. */
-export const FOCUS_RENDERER_NOTE =
-  'The focus view renderer is not wired in this build — the conversation keeps rendering in the full view. The preference is stored so a future build can honor it.'
+export const FOCUS_RENDERER_NOTE = t(
+  'The focus view renderer is not wired in this build — the conversation keeps rendering in the full view. The preference is stored so a future build can honor it.',
+)
 
 export function getFocusModePath(): string {
   return join(getClaudeConfigHomeDir(), 'focus-mode.json')
@@ -69,17 +71,23 @@ function writeRecord(enabled: boolean): void {
 
 /** Pure copy builder for the on/off confirmation (persisted preference only). */
 export function buildFocusSetMessage(enabled: boolean, was: boolean): string {
+  const state = enabled ? 'on' : 'off'
   return [
-    `## Focus view preference ${enabled ? 'on' : 'off'}`,
+    t('## Focus view preference {{state}}', { state }),
     '',
     enabled
-      ? 'Saved: in focus view only your prompt and a summary of each response would be shown.'
-      : 'Saved: the full conversation view is used.',
-    was === enabled ? '(Preference was already set this way.)' : undefined,
+      ? t(
+          'Saved: in focus view only your prompt and a summary of each response would be shown.',
+        )
+      : t('Saved: the full conversation view is used.'),
+    was === enabled ? t('(Preference was already set this way.)') : undefined,
     '',
-    `Note: ${FOCUS_RENDERER_NOTE}`,
+    t('Note: {{note}}', { note: FOCUS_RENDERER_NOTE }),
     '',
-    `Change it: /focus ${enabled ? 'off' : 'on'}  Record: ${getFocusModePath()}`,
+    t('Change it: /focus {{toggle}}  Record: {{record}}', {
+      toggle: enabled ? 'off' : 'on',
+      record: getFocusModePath(),
+    }),
   ]
     .filter(line => line !== undefined)
     .join('\n')
@@ -87,15 +95,18 @@ export function buildFocusSetMessage(enabled: boolean, was: boolean): string {
 
 /** Pure copy builder for the status surface. */
 export function buildFocusStatusMessage(enabled: boolean): string {
+  const state = enabled ? 'on' : 'off'
   return [
-    '## Focus view',
+    t('## Focus view'),
     '',
-    `  State:  ${enabled ? 'on' : 'off'} (stored preference)`,
-    `  Record: ${getFocusModePath()}`,
+    t('  State:  {{state}} (stored preference)', { state }),
+    t('  Record: {{record}}', { record: getFocusModePath() }),
     '',
-    `  Note: ${FOCUS_RENDERER_NOTE}`,
+    t('  Note: {{note}}', { note: FOCUS_RENDERER_NOTE }),
     '',
-    `Change it: /focus ${enabled ? 'off' : 'on'}`,
+    t('Change it: /focus {{toggle}}', {
+      toggle: enabled ? 'off' : 'on',
+    }),
   ].join('\n')
 }
 

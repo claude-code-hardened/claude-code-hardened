@@ -1,3 +1,6 @@
+import '../../../../tests/mocks/localeEn.js'
+// Locale pin FIRST: keeps every t() below on the English pass-through even
+// on machines whose LANG selects a translated locale pack.
 import { describe, expect, test } from 'bun:test'
 import { USAGE_LINK, parseUsageCreditsArgs } from '../args.js'
 import { formatAdminRequestCopy, formatUsageSummary } from '../usage-credits.js'

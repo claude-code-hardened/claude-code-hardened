@@ -24,6 +24,7 @@ import {
   writeJsonFileAtomic,
 } from '../../utils/safeJsonFile.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
+import { t } from '../../i18n/index.js'
 import { LOOPS_USAGE, parseLoopsArgs } from './args.js'
 
 export interface LoopDefinition {
@@ -73,20 +74,21 @@ function listLoops(): LocalCommandResult {
     return {
       type: 'text',
       value: [
-        'No loops defined.',
+        t('No loops defined.'),
         '',
-        'Create one: /loops create @every 30m check the CI status',
+        t('Create one: /loops create @every 30m check the CI status'),
       ].join('\n'),
     }
   }
   return {
     type: 'text',
     value: [
-      'Loops:',
+      t('Loops:'),
       ...loops.map(formatLoop),
       '',
-      'Recording only — no scheduler is wired in this build; saved loops',
-      'do not fire on their own.',
+      t(
+        'Recording only — no scheduler is wired in this build; saved loops\ndo not fire on their own.',
+      ),
     ].join('\n'),
   }
 }
@@ -107,14 +109,14 @@ function createLoop(
   return {
     type: 'text',
     value: [
-      `Loop recorded: ${loop.id}`,
-      `  schedule: ${loop.schedule}`,
-      `  prompt:   ${loop.prompt}`,
+      t('Loop recorded: {{id}}', { id: loop.id }),
+      t('  schedule: {{schedule}}', { schedule: loop.schedule }),
+      t('  prompt:   {{prompt}}', { prompt: loop.prompt }),
       '',
-      'Recording only; scheduler not wired — the record (including the',
-      'parsed interval) is stored in loops.json under the Claude config',
-      'home, but nothing evaluates or fires it in this build.',
-      'Delete it: /loops delete <id>',
+      t(
+        'Recording only; scheduler not wired — the record (including the\nparsed interval) is stored in loops.json under the Claude config\nhome, but nothing evaluates or fires it in this build.',
+      ),
+      t('Delete it: /loops delete {{id}}', { id: loop.id }),
     ].join('\n'),
   }
 }
@@ -123,10 +125,10 @@ function deleteLoop(id: string): LocalCommandResult {
   const loops = loadLoops()
   const remaining = loops.filter(l => l.id !== id)
   if (remaining.length === loops.length) {
-    return { type: 'text', value: `No loop with id "${id}".` }
+    return { type: 'text', value: t('No loop with id "{{id}}".', { id }) }
   }
   saveLoops(remaining)
-  return { type: 'text', value: `Loop deleted: ${id}` }
+  return { type: 'text', value: t('Loop deleted: {{id}}', { id }) }
 }
 
 export const call: LocalCommandCall = async rawArgs => {

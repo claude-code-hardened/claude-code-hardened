@@ -1,3 +1,6 @@
+// Locale pin FIRST (before any module with module-scope t() calls): keeps the
+// copy assertions below on the English pass-through on translated machines.
+import '../../../../tests/mocks/localeEn.js'
 import { describe, expect, test, mock, afterEach } from 'bun:test'
 import {
   existsSync,
