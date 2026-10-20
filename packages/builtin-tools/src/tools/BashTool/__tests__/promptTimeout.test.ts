@@ -63,14 +63,17 @@ describe('clampTimeoutMs', () => {
     expect(clampTimeoutMs(1000)).toBe(1000)
   })
 
-  test('max env below default is floored at the default', () => {
+  test('explicit timeout below the default is NOT lifted (official upper-bound semantics)', () => {
     cleanEnv()
+    // Official `Rxo` (reverse-284 _ALL.js:7381):
+    // `Math.min(typeof o === "number" && o > 0 ? o : default, max)` —
+    // BASH_DEFAULT_TIMEOUT_MS is only the fallback for 0/absent values, never
+    // a floor. A deliberate short probe timeout (2s) must not be dragged to
+    // the default (120s) by an env default.
     process.env.BASH_DEFAULT_TIMEOUT_MS = '120000'
-    process.env.BASH_MAX_TIMEOUT_MS = '100'
-    // getMaxBashTimeoutMs() floors the max at the default, and defaults
-    // above the ceiling are NOT clamped down (parity with PowerShellTool).
-    expect(clampTimeoutMs(5_000)).toBe(120_000)
-    expect(clampTimeoutMs(600_000)).toBe(120_000)
+    expect(clampTimeoutMs(2_000)).toBe(2_000)
+    expect(clampTimeoutMs(5_000)).toBe(5_000)
+    expect(clampTimeoutMs(undefined)).toBe(120_000)
   })
 
   test('BASH_DEFAULT_TIMEOUT_MS env override changes the fallback', () => {

@@ -86,20 +86,53 @@ function makeShellCommand(
 }
 
 describe('ShellCommand #doKill', () => {
+  const savedEscalation = process.env.CLAUDE_CODE_KILL_ESCALATION_MS
+
   beforeEach(() => {
     treeKillCalls.length = 0
+    delete process.env.CLAUDE_CODE_KILL_ESCALATION_MS
   })
 
-  test('timeout sends SIGTERM first, then SIGKILL after the 400ms grace window', async () => {
-    const child = makeFakeChild(42_000)
+  afterAll(() => {
+    if (savedEscalation === undefined) {
+      delete process.env.CLAUDE_CODE_KILL_ESCALATION_MS
+    } else {
+      process.env.CLAUDE_CODE_KILL_ESCALATION_MS = savedEscalation
+    }
+  })
+
+  test('timeout sends SIGTERM first and holds the default 1500ms grace before SIGKILL', async () => {
+    // Official grace window is 1500ms (reverse-284 ShellCommand kill path,
+    // `BJt=1500`). Well inside the window there must be NO escalation yet.
+    const child = makeFakeChild(46_000)
     const shellCommand = makeShellCommand(child, 10)
     const resultPromise = shellCommand.result
 
     await Bun.sleep(50)
+    expect(treeKillCalls).toEqual([{ pid: 46_000, signal: 'SIGTERM' }])
+
+    await Bun.sleep(250)
+    // Still inside the 1500ms grace — only the polite SIGTERM so far.
+    expect(treeKillCalls).toEqual([{ pid: 46_000, signal: 'SIGTERM' }])
+
+    // End the command for real — cancels the pending escalation timer so it
+    // cannot leak into later tests' treeKillCalls.
+    child.emit('exit', 143, 'SIGTERM')
+    await resultPromise
+    expect(treeKillCalls.map(call => call.signal)).toEqual(['SIGTERM'])
+  })
+
+  test('timeout escalates to SIGKILL after the grace window (CLAUDE_CODE_KILL_ESCALATION_MS override)', async () => {
+    process.env.CLAUDE_CODE_KILL_ESCALATION_MS = '60'
+    const child = makeFakeChild(42_000)
+    const shellCommand = makeShellCommand(child, 10)
+    const resultPromise = shellCommand.result
+
+    await Bun.sleep(20)
     // Stage 1 only — no immediate SIGKILL storm.
     expect(treeKillCalls).toEqual([{ pid: 42_000, signal: 'SIGTERM' }])
 
-    await Bun.sleep(450)
+    await Bun.sleep(300)
     expect(treeKillCalls).toEqual([
       { pid: 42_000, signal: 'SIGTERM' },
       { pid: 42_000, signal: 'SIGKILL' },

@@ -58,7 +58,19 @@ const SIGKILL = 137
 const SIGTERM = 143
 
 // Grace window after the initial SIGTERM before escalating to SIGKILL.
-const KILL_ESCALATION_MS = 400
+// 官方对位（reverse-284 _ALL.js，ShellCommand kill 路径 #E）：同文件的
+// `var sH=137,rqe=143,BJt=1500,UJt=100` — SIGTERM→SIGKILL 升级窗 = 1500ms，
+// 树枚举轮询间隔 100ms（UJt）。审查清单写的 5000ms 属于别的杀局点
+// （execa forceKillAfterTimeout Ko=5000、hook checkout、rg --files 管道、
+// tmux host），官方 BashTool ShellCommand 本体的升级常数是 1500。
+// CCH 扩展：CLAUDE_CODE_KILL_ESCALATION_MS 环境变量可覆盖（运维逃生口），
+// 缺省严格对齐官方 1500。
+const KILL_ESCALATION_MS_DEFAULT = 1500
+
+function getKillEscalationMs(): number {
+  const raw = Number(process.env.CLAUDE_CODE_KILL_ESCALATION_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : KILL_ESCALATION_MS_DEFAULT
+}
 
 function logTreeKillFailure(pid: number, signal: string, error?: Error): void {
   if (error) {
@@ -439,7 +451,7 @@ class ShellCommandImpl implements ShellCommand {
         // of reporting a code the process was never allowed to produce;
         // processes that swallow SIGTERM may never emit a clean 'exit'.
         this.#resolveExitCode(SIGKILL)
-      }, KILL_ESCALATION_MS)
+      }, getKillEscalationMs())
       escalationTimer.unref()
       this.#killEscalationTimer = escalationTimer
       return

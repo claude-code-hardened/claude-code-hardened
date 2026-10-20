@@ -33,28 +33,22 @@ export function getMaxTimeoutMs(): number {
 }
 
 /**
- * Clamp a model-supplied timeout: 0 / negative / undefined fall back to the
- * default; values above the max are capped at the max (parity with
- * PowerShellTool.tsx runPowerShellCommand's clamp). 当用户显式配置了
- * BASH_DEFAULT_TIMEOUT_MS 时，它同时充当最小预算——低于 default 的显式
- * timeout 会被抬到 default（未配置 default 时不干预，模型值原样透传）。
+ * Clamp a model-supplied timeout (official `Rxo`, reverse-284 _ALL.js:7381):
+ * `timeout: Math.min(typeof o === "number" && o > 0 ? o : mRe(), W)` —
+ * an explicit timeout is an UPPER BOUND to the max, and the
+ * BASH_DEFAULT_TIMEOUT_MS env only supplies the value when the model omits
+ * 0 / negative / NaN. There is no lift-to-default branch: a deliberate short
+ * probe timeout (e.g. 2s) passes through (max-clamped only). 当用户显式配置
+ * 了 BASH_DEFAULT_TIMEOUT_MS 时它仅是缺省值，不抬高显式 timeout——旧行为
+ * `timeout < parsedDefault → parsedDefault` 是 CCH 独有偏差，已删。
  */
 export function clampTimeoutMs(timeout: number | undefined): number {
+  // 官方防护面：非数字 / 0 / 负值 → default（NaN 比较为 false 自然落此）。
   if (!timeout || timeout <= 0) {
     return getDefaultTimeoutMs()
   }
-  const max = getMaxTimeoutMs()
-  if (timeout > max) {
-    return max
-  }
-  const defaultEnv = process.env.BASH_DEFAULT_TIMEOUT_MS
-  if (defaultEnv) {
-    const parsedDefault = parseInt(defaultEnv, 10)
-    if (!isNaN(parsedDefault) && parsedDefault > 0 && timeout < parsedDefault) {
-      return parsedDefault
-    }
-  }
-  return timeout
+  // official: Math.min(effective, W) — max 仍可被 BASH_MAX_TIMEOUT_MS 配置。
+  return Math.min(timeout, getMaxTimeoutMs())
 }
 
 function getBackgroundUsageNote(): string | null {
