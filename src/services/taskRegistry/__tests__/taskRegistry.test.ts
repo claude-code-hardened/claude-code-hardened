@@ -1,32 +1,33 @@
 /**
  * Tests for src/services/taskRegistry/taskRegistry.ts — CCH #38 中央任务
- * 句柄注册表（官方对齐：docs/reverse-284/decompiled/0002-chunk-zrkp23rq/
+ * 句柄注册表（官方忠实还原：docs/reverse-284/decompiled/
+ * 0001-chunk-xrzcaagk/module-006-uncategorized.js:8420 `g.taskRegistry=n`
+ * 进程内活表 / :8428 `$M` 对 !h.notified 补投一次；0002-chunk-zrkp23rq/
  * module-005-uncategorized.js:3417 起的 handle 渲染面 status/notified/
- * quietlyParked；0001-chunk-xrzcaagk/module-006-uncategorized.js:1919/
- * 2116/2186 的 task-notification 队列 origin 语义 —— 句柄表为本体，通知
- * 只是视图，死后补投轮询可达）。
+ * quietlyParked；0001:1919/2116/2186 的 task-notification 队列 origin 语义
+ * —— 句柄表为本体，通知只是视图）。
  *
- * 覆盖：状态迁移落盘快照 / 死讯补投取走置位回写 / reaper 超时判定 /
- * 落盘写失败不抛（console.debug 兜底）。
+ * CCH 审查修复 Round 回归官方进程内语义：磁盘快照层（落盘 + hydrate 回放）
+ * 整体退役，留下的问题类（陈年回放/僵尸 running/写竞态/GC）由构造消除。
+ *
+ * 覆盖：状态迁移（内存）/ 死讯补投取走置位 / reaper 超时判定 /
+ * 进程死亡即表清空（无启动回放）。
  */
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdir, readFile, rm, stat, writeFile } from 'fs/promises'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
-  _flushTaskRegistrySnapshotsForTest,
   _resetTaskRegistryForTest,
-  consumeUndeliveredTerminalTasks,
+  deliverOnResume,
   getAllTaskHandleRecords,
   getTaskHandleRecord,
   getTaskRegistryDiagnostics,
-  getTaskSnapshotPath,
   peekUndeliveredTerminalTasks,
   reapSuspiciousTasks,
   recordTaskHandle,
   recordTaskHeartbeat,
   recordTaskHeartbeats,
-  sanitizeTaskHandleId,
 } from '../taskRegistry.js'
 
 let tempDir: string
@@ -39,7 +40,7 @@ beforeEach(async () => {
     `task-registry-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   )
   await mkdir(tempDir, { recursive: true })
-  // 指向一个（将要创建的）目录；写失败用例单独再指到文件路径。
+  // 指向一个（将要创建的）目录，隔离测试期间的注册表环境变量。
   process.env.CLAUDE_CONFIG_DIR = join(tempDir, 'config')
   await _resetTaskRegistryForTest()
 })
@@ -54,8 +55,8 @@ afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-describe('taskRegistry — 状态迁移落盘', () => {
-  test('spawn 建 running 句柄并全量落盘，终态迁移后快照更新', async () => {
+describe('taskRegistry — 状态迁移（进程内活表）', () => {
+  test('spawn 建 running 句柄，终态迁移补 exitKind', () => {
     const t0 = 1_700_000_000_000
     recordTaskHandle({
       id: 'b1test01',
@@ -66,11 +67,7 @@ describe('taskRegistry — 状态迁移落盘', () => {
       updatedAt: t0,
     })
 
-    await _flushTaskRegistrySnapshotsForTest()
-    const path = getTaskSnapshotPath('b1test01')
-    expect(path.endsWith(join('tasks', 'b1test01.state.json'))).toBe(true)
-
-    const spawned = JSON.parse(await readFile(path, 'utf8'))
+    const spawned = getTaskHandleRecord('b1test01')
     expect(spawned).toMatchObject({
       id: 'b1test01',
       type: 'local_bash',
@@ -81,25 +78,21 @@ describe('taskRegistry — 状态迁移落盘', () => {
       updatedAt: t0,
     })
 
-    // 状态迁移：running → completed（全量落盘，含 exitKind / updatedAt）
-    recordTaskHandle({
+    // 状态迁移：running → completed（exitKind 缺省按 status 补）
+    const terminal = recordTaskHandle({
       id: 'b1test01',
       type: 'local_bash',
       status: 'completed',
-      exitKind: 'completed',
       updatedAt: t0 + 5000,
     })
-    await _flushTaskRegistrySnapshotsForTest()
-
-    const terminal = JSON.parse(await readFile(path, 'utf8'))
     expect(terminal.status).toBe('completed')
-    expect(terminal.notified).toBe(false)
     expect(terminal.exitKind).toBe('completed')
     expect(terminal.updatedAt).toBe(t0 + 5000)
     expect(terminal.startedAt).toBe(t0)
+    expect(getAllTaskHandleRecords()).toHaveLength(1)
   })
 
-  test('终态句柄不接受非终态回迁（快照链的迟到写不能诈尸）', async () => {
+  test('终态句柄不接受非终态回迁（迟到写不能诈尸）', () => {
     recordTaskHandle({
       id: 'a9dead01',
       type: 'local_agent',
@@ -115,19 +108,9 @@ describe('taskRegistry — 状态迁移落盘', () => {
 
     const record = getTaskHandleRecord('a9dead01')
     expect(record?.status).toBe('failed')
-    await _flushTaskRegistrySnapshotsForTest()
-    const onDisk = JSON.parse(
-      await readFile(getTaskSnapshotPath('a9dead01'), 'utf8'),
-    )
-    expect(onDisk.status).toBe('failed')
   })
 
-  test('快照文件 id 做路径安全清洗', () => {
-    expect(sanitizeTaskHandleId('../../evil')).toBe('------evil')
-    expect(getTaskSnapshotPath('../x')).not.toContain('..')
-  })
-
-  test('quietlyParked 终态句柄直接视为已送达（官方 parked 挂表语义）', async () => {
+  test('quietlyParked 终态句柄直接视为已送达（官方 parked 挂表语义）', () => {
     recordTaskHandle({
       id: 'a8park01',
       type: 'local_agent',
@@ -136,79 +119,52 @@ describe('taskRegistry — 状态迁移落盘', () => {
       updatedAt: 42,
     })
     expect(getTaskHandleRecord('a8park01')?.notified).toBe(true)
-    expect(consumeUndeliveredTerminalTasks()).toEqual([])
-
-    await _flushTaskRegistrySnapshotsForTest()
-    const onDisk = JSON.parse(
-      await readFile(getTaskSnapshotPath('a8park01'), 'utf8'),
-    )
-    expect(onDisk.quietlyParked).toBe(true)
-    expect(onDisk.notified).toBe(true)
+    expect(peekUndeliveredTerminalTasks()).toEqual([])
   })
 })
 
-describe('taskRegistry — 死讯补投', () => {
-  test('终态且 notified=false 的清单取走即置 notified=true 并回写快照', async () => {
+describe('taskRegistry — 死讯面（官方 $M !h.notified 的只读观察）', () => {
+  test('终态且 notified=false 的清单按 id/type/status 透出（含 exitKind）', () => {
     const t0 = 1_700_000_000_000
-    recordTaskHandle({
-      id: 'a1test01',
-      type: 'local_agent',
-      status: 'running',
-      description: 'subagent',
-      startedAt: t0,
-      updatedAt: t0,
-    })
-    recordTaskHandle({
-      id: 'b2test02',
-      type: 'local_bash',
-      status: 'running',
-      description: 'bg shell',
-      startedAt: t0,
-      updatedAt: t0,
-    })
-    // 一死一活：死讯面只认终态
     recordTaskHandle({
       id: 'a1test01',
       type: 'local_agent',
       status: 'failed',
       exitKind: 'failed',
-      updatedAt: t0 + 10,
+      description: 'lost agent',
+      updatedAt: t0,
     })
-
     expect(peekUndeliveredTerminalTasks()).toEqual([
-      { id: 'a1test01', status: 'failed', exitKind: 'failed' },
+      {
+        id: 'a1test01',
+        type: 'local_agent',
+        status: 'failed',
+        exitKind: 'failed',
+      },
     ])
+    // 只读：peek 不置位
+    expect(getTaskHandleRecord('a1test01')?.notified).toBe(false)
 
-    const delivered = consumeUndeliveredTerminalTasks()
-    expect(delivered).toEqual([
-      { id: 'a1test01', status: 'failed', exitKind: 'failed' },
+    // 诊断构建面看到同一清单
+    expect(getTaskRegistryDiagnostics().undelivered).toEqual([
+      {
+        id: 'a1test01',
+        type: 'local_agent',
+        status: 'failed',
+        exitKind: 'failed',
+      },
     ])
-    // 取走后再取为空，句柄补投位置 true
-    expect(consumeUndeliveredTerminalTasks()).toEqual([])
-    expect(getTaskHandleRecord('a1test01')?.notified).toBe(true)
-
-    await _flushTaskRegistrySnapshotsForTest()
-    const onDisk = JSON.parse(
-      await readFile(getTaskSnapshotPath('a1test01'), 'utf8'),
-    )
-    expect(onDisk.notified).toBe(true)
-    expect(onDisk.status).toBe('failed')
-    // 存活句柄不受影响
-    expect(getTaskHandleRecord('b2test02')?.notified).toBe(false)
-    expect(getTaskHandleRecord('b2test02')?.status).toBe('running')
   })
 
-  test('压置 notified 的句柄不出现在补投面（kill 静默路）', () => {
+  test('压置 notified 的句柄不出现在未投面（正常送达/kill 静默路）', () => {
     recordTaskHandle({
-      id: 'b3stop01',
-      type: 'local_bash',
+      id: 'a2silent1',
+      type: 'local_agent',
       status: 'killed',
       exitKind: 'killed',
       notified: true,
-      updatedAt: 7,
     })
     expect(peekUndeliveredTerminalTasks()).toEqual([])
-    expect(consumeUndeliveredTerminalTasks()).toEqual([])
   })
 })
 
@@ -300,48 +256,100 @@ describe('taskRegistry — reaper', () => {
   })
 })
 
-describe('taskRegistry — 写失败不抛', () => {
-  test('CLAUDE_CONFIG_DIR 指向文件（ENOTDIR）时内存表照常工作，console.debug 兜底', async () => {
-    const blockFile = join(tempDir, 'not-a-dir')
-    await writeFile(blockFile, 'this is a file, not a config dir')
-    process.env.CLAUDE_CONFIG_DIR = blockFile
+// ─── CCH 审查修复 Round：回归官方进程内语义（落盘扩展整体删除） ──────────────
 
-    const debugSpy = spyOn(console, 'debug')
-    try {
-      expect(() =>
-        recordTaskHandle({
-          id: 'b9boom01',
-          type: 'local_bash',
-          status: 'running',
-          description: 'doomed snapshot',
-          updatedAt: 5,
-        }),
-      ).not.toThrow()
+describe('taskRegistry — 新会话启动零回放（官方 :8420 表随 session 消亡）', () => {
+  test('进程死亡 = 表清空：重建后死讯不补投、无任何启动回放', () => {
+    const t0 = 1_700_000_000_000
+    recordTaskHandle({
+      id: 'abghost1',
+      type: 'local_agent',
+      status: 'failed',
+      exitKind: 'failed',
+      updatedAt: t0,
+    })
+    expect(peekUndeliveredTerminalTasks()).toHaveLength(1)
+    // 模拟进程重启（内存表清空）—— 官方语义下该句柄及其死讯随旧进程消亡，
+    // 新进程不做任何回放（陈年通知回放类缺陷由构造消除）。
+    return _resetTaskRegistryForTest().then(() => {
+      expect(peekUndeliveredTerminalTasks()).toEqual([])
+      expect(getTaskHandleRecord('abghost1')).toBeUndefined()
+      expect(getTaskRegistryDiagnostics().handles).toEqual([])
+    })
+  })
+})
 
-      // 状态迁移照常（内存），死讯面照常
-      recordTaskHandle({
-        id: 'b9boom01',
-        type: 'local_bash',
-        status: 'failed',
-        exitKind: 'failed',
-        updatedAt: 9,
-      })
-      expect(getAllTaskHandleRecords()).toHaveLength(1)
-      expect(consumeUndeliveredTerminalTasks()).toEqual([
-        { id: 'b9boom01', status: 'failed', exitKind: 'failed' },
-      ])
+describe('taskRegistry — deliverOnResume：resume 咽喉单点补投（官方 :8428 $M 形态）', () => {
+  test('!notified 终态句柄：取走置位并返回尸讯记录（含描述/输出文件/终态成因）', () => {
+    const t0 = 1_700_000_000_000
+    recordTaskHandle({
+      id: 'abresum01',
+      type: 'local_agent',
+      status: 'killed',
+      exitKind: 'killed',
+      description: 'stopped scout',
+      outputFile: '/tmp/agent-output/abresum01.txt',
+      updatedAt: t0,
+    })
 
-      // 等写链消化完：只 catch 兜底，不冒 unhandled rejection
-      await _flushTaskRegistrySnapshotsForTest()
-      expect(
-        debugSpy.mock.calls.some(call =>
-          String(call[0]).includes('taskRegistry'),
-        ),
-      ).toBe(true)
-      // 快照确实没写出来（目录不可建）
-      await expect(stat(getTaskSnapshotPath('b9boom01'))).rejects.toThrow()
-    } finally {
-      debugSpy.mockRestore()
-    }
+    const corpse = deliverOnResume('abresum01')
+    expect(corpse).toMatchObject({
+      id: 'abresum01',
+      type: 'local_agent',
+      status: 'killed',
+      exitKind: 'killed',
+      description: 'stopped scout',
+      outputFile: '/tmp/agent-output/abresum01.txt',
+      notified: true,
+    })
+    // 单点结清：同一句柄二次取走为空
+    expect(deliverOnResume('abresum01')).toBeUndefined()
+    expect(peekUndeliveredTerminalTasks()).toEqual([])
+  })
+
+  test('单点而非全局：其它未投句柄不被连带广播/置位', () => {
+    recordTaskHandle({
+      id: 'abresum02',
+      type: 'local_agent',
+      status: 'failed',
+      exitKind: 'failed',
+      description: 'should stay parked',
+      updatedAt: Date.now(),
+    })
+    recordTaskHandle({
+      id: 'abresum03',
+      type: 'local_agent',
+      status: 'failed',
+      exitKind: 'failed',
+      description: 'other corpse',
+      updatedAt: Date.now(),
+    })
+
+    // 显式 resume 只作用于 abresum02 这一个 taskId
+    expect(deliverOnResume('abresum02')).toMatchObject({ id: 'abresum02' })
+    // abresum03 保持 !notified、仍在未投面（官方 $M 无目录扫描/全局补投）
+    expect(getTaskHandleRecord('abresum03')?.notified).toBe(false)
+    expect(peekUndeliveredTerminalTasks().map(t => t.id)).toEqual(['abresum03'])
+  })
+
+  test('已投/非终态/未知句柄 no-op（官方 $M 只对 !h.notified 面动作）', () => {
+    recordTaskHandle({
+      id: 'abresum04',
+      type: 'local_agent',
+      status: 'completed',
+      exitKind: 'completed',
+      notified: true,
+      updatedAt: Date.now(),
+    })
+    recordTaskHandle({
+      id: 'abresum05',
+      type: 'local_agent',
+      status: 'running',
+      updatedAt: Date.now(),
+    })
+    expect(deliverOnResume('abresum04')).toBeUndefined()
+    expect(deliverOnResume('abresum05')).toBeUndefined()
+    expect(deliverOnResume('abresum-unknown')).toBeUndefined()
+    expect(getTaskHandleRecord('abresum05')?.notified).toBe(false)
   })
 })

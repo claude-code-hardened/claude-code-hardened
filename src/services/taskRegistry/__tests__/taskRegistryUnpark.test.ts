@@ -15,9 +15,9 @@ import { mkdir, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
-  _flushTaskRegistrySnapshotsForTest,
   _resetTaskRegistryForTest,
   getTaskHandleRecord,
+  peekUndeliveredTerminalTasks,
   recordTaskHandle,
 } from '../taskRegistry.js'
 
@@ -46,7 +46,7 @@ afterEach(async () => {
 })
 
 describe('recordTaskHandle unpark（官方 $M 静默清停，不碰 status）', () => {
-  test('unpark 仅在 quietlyParked===true 时清 parked/notified，status 不改', () => {
+  test('unpark 仅在 quietlyParked===true 时清 parked 位，status 不改；终态保留已投位', () => {
     // 静默批量 kill → 终态 + parked 挂表（markAgentsNotified 落法）
     recordTaskHandle({
       id: 'b9parked1',
@@ -60,7 +60,10 @@ describe('recordTaskHandle unpark（官方 $M 静默清停，不碰 status）', 
     expect(parked?.quietlyParked).toBe(true)
     expect(parked?.notified).toBe(true)
 
-    // $M unpark：{notified:!1, quietlyParked:!1}，status 保持 killed
+    // $M unpark：{quietlyParked:!1}，status 保持 killed。
+    // CCH 审查修复（unpark 死讯环）：官方 $M（:8428）清位后同函数内立即读
+    // result 投正文，无悬置窗口；CCH 接线面缺位，终态句柄若同步清 notified
+    // 会被下一轮 consume 当"从未送达的死讯"重投 —— 故终态保留已投位。
     const record = recordTaskHandle({
       id: 'b9parked1',
       type: 'local_agent',
@@ -70,7 +73,9 @@ describe('recordTaskHandle unpark（官方 $M 静默清停，不碰 status）', 
     })
     expect(record.status).toBe('killed')
     expect(record.quietlyParked).toBe(false)
-    expect(record.notified).toBe(false)
+    expect(record.notified).toBe(true)
+    // 保留已投位后不再出现在死讯补投面（无回放环）
+    expect(peekUndeliveredTerminalTasks()).toEqual([])
     // 终态成因仍见证最近一次终态（句柄未被重开）
     expect(record.exitKind).toBe('killed')
   })
@@ -95,7 +100,7 @@ describe('recordTaskHandle unpark（官方 $M 静默清停，不碰 status）', 
     expect(record.notified).toBe(false)
   })
 
-  test('unpark 也不能重开冻结终态（重开走 reopenRunning 显式路径）', () => {
+  test('unpark 也不能重开冻结终态（重开走 reopenRunning 显式路径），终态保留已投位', () => {
     recordTaskHandle({
       id: 'd2frozen1',
       type: 'local_agent',
@@ -110,11 +115,12 @@ describe('recordTaskHandle unpark（官方 $M 静默清停，不碰 status）', 
       description: 'builder',
       unpark: true,
     })
-    // unpark：parked/notified 双清，但 status 冻结在 completed（迟到写
-    // 不能诈尸；$M 复活通知路从不改 status）
+    // unpark：parked 清位，但 status 冻结在 completed（迟到写
+    // 不能诈尸；$M 复活通知路从不改 status）；终态句柄不同步清
+    // notified（不制造假死讯）。
     expect(record.status).toBe('completed')
     expect(record.quietlyParked).toBe(false)
-    expect(record.notified).toBe(false)
+    expect(record.notified).toBe(true)
   })
 
   test('reopenRunning 显式重开冻结句柄为 running（resume 接线面）', () => {
@@ -177,6 +183,5 @@ describe('recordTaskHandle unpark（官方 $M 静默清停，不碰 status）', 
     expect(terminal.exitKind).toBe('completed')
     // 复活后的新一轮死讯从 notified=false 重新计数（补投面可达）
     expect(terminal.notified).toBe(false)
-    await _flushTaskRegistrySnapshotsForTest()
   })
 })

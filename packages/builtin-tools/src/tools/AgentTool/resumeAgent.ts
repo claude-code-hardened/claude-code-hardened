@@ -25,7 +25,10 @@ import {
 } from 'src/utils/sessionStorage.js'
 import { buildEffectiveSystemPrompt } from 'src/utils/systemPrompt.js'
 import type { SystemPrompt } from 'src/utils/systemPromptType.js'
-import { recordTaskHandle } from 'src/services/taskRegistry/taskRegistry.js'
+import {
+  deliverOnResume,
+  recordTaskHandle,
+} from 'src/services/taskRegistry/taskRegistry.js'
 import { getTaskOutputPath } from 'src/utils/task/diskOutput.js'
 import { getParentSessionId } from 'src/utils/teammate.js'
 import { reconstructForSubagentResume } from 'src/utils/toolResultStorage.js'
@@ -212,6 +215,25 @@ export async function resumeAgentBackground({
   // 清停车位、不动 status）：unpark 现为纯 $M 静默清停；把已冻结终态句柄
   // 重开为 running 走显式 reopenRunning 接线路（registerAsyncAgent 的
   // running 写在已冻结句柄上会被终态冻结吞掉，复活路必须显式重开）。
+  //
+  // CCH 审查修复（官方 $M 咽喉单点补投还原）：显式 resume 即官方 :8428
+  // `$M(e,n,…)` 的 CCH 对应咽喉 —— 重开前对句柄表内 !notified 的终态句柄
+  // 单点补投一次尸讯（读 description/outputFile 组正文，等价官方 $ot 的
+  // `Background agent "<desc>" was stopped by user` 信封），随后不再回放。
+  // 无目录扫描、无全局补投、无跨会话广播（进程死亡 = 表清空）。
+  const corpse = deliverOnResume(agentId)
+  if (corpse) {
+    const { enqueuePendingNotification } = await import(
+      'src/utils/messageQueueManager.js'
+    )
+    enqueuePendingNotification({
+      value:
+        `<system-reminder>Background agent "${corpse.description}" (${corpse.id}) was stopped by user — its result was never delivered.` +
+        `${corpse.outputFile ? ` Partial output: ${corpse.outputFile}.` : ''} It is being resumed now.</system-reminder>`,
+      mode: 'task-notification',
+      priority: 'next',
+    })
+  }
   recordTaskHandle({
     id: agentId,
     type: 'local_agent',

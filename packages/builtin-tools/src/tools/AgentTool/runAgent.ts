@@ -327,28 +327,44 @@ export async function* runAgent(
     })
     yield* runAgentCapped(...wrappedArgs)
     terminalRecorded = true
+    // CCH 审查修复（CRITICAL 陈年通知回放）：wrapper 是此 handle 的消费边界
+    // 记账点 —— 走到这里，结局已经沿消费边界送达（同步 = tool_result 正文；
+    // 后台 = runAsyncAgentLifecycle 的 enqueueAgentNotification），所以终态
+    // 必须压 notified:true。缺位会让活表死讯面把已送达的 completed 当
+    // "从未送达"再报一次假死讯（"its result was never delivered"）。
+    // 官方对齐（0001-chunk-xrzcaagk/module-006-uncategorized.js:8428 $M）：
+    // 补投只属于 !h.notified 的真实未投面，已送达不欠死讯。
     recordTaskHandle({
       id: handleId,
       type: 'local_agent',
       status: 'completed',
       exitKind: 'completed',
+      notified: true,
     })
   } catch (error) {
     terminalRecorded = true
+    // 同上：错误沿 rethrow 送达（同步 error tool_result / 异步
+    // failAsyncAgent + enqueueAgentNotification）——非待补投死讯。
     recordTaskHandle({
       id: handleId,
       type: 'local_agent',
       status: 'failed',
       exitKind: 'failed',
+      notified: true,
     })
     throw error
   } finally {
     if (!terminalRecorded) {
+      // .return() 遗弃面（后台化 / 父会话取消）：收尾同样已随消费边界的
+      // 收据送达 —— 后台化 = async_launched tool_result + 后台续跑的真实
+      // 通知；取消 = abort 透传到消费方。压 notified，防 kill 被死讯面
+      // 当作 "never delivered" 假悲报。
       recordTaskHandle({
         id: handleId,
         type: 'local_agent',
         status: 'killed',
         exitKind: 'killed',
+        notified: true,
       })
     }
     releaseAgentSlot()
