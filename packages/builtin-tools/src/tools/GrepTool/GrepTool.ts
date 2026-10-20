@@ -472,6 +472,9 @@ async function nativeGrepOutput(
       mode: 'Content',
       context: hadContext,
       showLineNumbers,
+      // 官方 uOn 的 binary 提示行数据源（native quit 偏移面；渲染条件 =
+      // 该文件有产出行，Content 模式限定——rg -c/-l 不打提示）。
+      binaryNotices: result.binaryNotices,
     })
     const lines = rendered === '' ? [] : rendered.split('\n')
     const { items: limitedResults, appliedLimit } = applyHeadLimit(

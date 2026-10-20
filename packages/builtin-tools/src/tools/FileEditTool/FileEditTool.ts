@@ -303,13 +303,21 @@ export const FileEditTool = buildTool({
 
     // Read-before-edit guard: the file exists (checked above) but was never
     // read. Reject it here in validate instead of failing later in call()
-    // with the misleading "modified since read" message (same guard and
-    // errorCode style as NotebookEditTool).
+    // with the misleading "modified since read" message.
+    // 官方对位（reverse-284 _ALL.js:12211，Edit validateInput）：not-read →
+    // `{result:false, behavior:"ask", message:zBt, meta:{isFilePathAbsolute},
+    // errorCode:6}` — ask 面 + errorCode 6 + isFilePathAbsolute meta 三要素
+    // 与官方一致（errorCode 9/no-ask 是 NotebookEditTool 的同语义分支，
+    // _ALL.js:12220，不属于 Edit 的错误码位）。errorCode 6 会进
+    // tengu_tool_use_error 遥测（toolExecution.ts:739），改码会破坏映射。
     if (!readTimestamp) {
       return {
         result: false,
         behavior: 'ask',
         message: FILE_NOT_READ_ERROR,
+        meta: {
+          isFilePathAbsolute: String(isAbsolute(file_path)),
+        },
         errorCode: 6,
       }
     }
