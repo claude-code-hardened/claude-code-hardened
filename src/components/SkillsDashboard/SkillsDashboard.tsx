@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Box, Text } from '@anthropic/ink';
 import { logForDebugging } from '../../utils/debug.js';
+import { t } from '../../i18n/index.js';
 import { formatTokens } from '../../utils/format.js';
 import { useSkillsDashboard, type UseSkillsDashboardOptions } from './useSkillsDashboard.js';
 
@@ -12,6 +13,7 @@ import { useSkillsDashboard, type UseSkillsDashboardOptions } from './useSkillsD
  *
  * Data assembly lives in useSkillsDashboard; this component is presentation
  * only and forwards caller options (getSkills / fetchImpl overrides) through.
+ * UI copy goes through t() (natural-key i18n; fix-item 7).
  */
 
 export type SkillsDashboardProps = UseSkillsDashboardOptions;
@@ -22,7 +24,7 @@ export function SkillsDashboard(props: SkillsDashboardProps): React.ReactNode {
   if (state === 'loading') {
     return (
       <Box flexDirection="column">
-        <Text dimColor>Loading skills…</Text>
+        <Text dimColor>{t('Loading skills…')}</Text>
       </Box>
     );
   }
@@ -31,16 +33,16 @@ export function SkillsDashboard(props: SkillsDashboardProps): React.ReactNode {
     logForDebugging(`[skills-dashboard] render error state: ${error}`);
     return (
       <Box flexDirection="column">
-        <Text color="error">Failed to load skills: {error}</Text>
+        <Text color="error">{t('Failed to load skills: {{error}}', { error: error ?? '' })}</Text>
       </Box>
     );
   }
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Text bold>Skills ({rows.length})</Text>
+      <Text bold>{t('Skills ({{count}})', { count: rows.length })}</Text>
       {rows.length === 0 ? (
-        <Text dimColor>No skills loaded.</Text>
+        <Text dimColor>{t('No skills loaded.')}</Text>
       ) : (
         rows.map(row => (
           <Box key={row.identifier} gap={2}>
@@ -53,12 +55,14 @@ export function SkillsDashboard(props: SkillsDashboardProps): React.ReactNode {
             <Box width={12} flexShrink={0}>
               <Text dimColor>{formatTokens(row.contextTokens)}</Text>
             </Box>
-            <Text dimColor>{row.health ?? (cloudHealthEnabled ? '—' : 'local')}</Text>
+            <Text dimColor>{row.health ?? (cloudHealthEnabled ? '—' : t('local'))}</Text>
           </Box>
         ))
       )}
       <Text dimColor>
-        {cloudHealthEnabled ? `Cloud health: ${apiBase}` : 'Cloud health off (SKILLS_SYNC disabled)'}
+        {cloudHealthEnabled
+          ? t('Cloud health: {{base}}', { base: apiBase })
+          : t('Cloud health off (SKILLS_SYNC disabled)')}
       </Text>
     </Box>
   );
