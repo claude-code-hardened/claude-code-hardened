@@ -777,7 +777,19 @@ export async function main() {
     if (process.argv.includes('-p') || process.argv.includes('--print')) {
       return;
     }
-    process.exit(0);
+    // Interactive mode: exit through the graceful-shutdown path instead of a
+    // bare process.exit(0). gracefulShutdown ends in forceExit(0) (same exit
+    // code), but first it runs runCleanupFunctions — which includes the
+    // sessionStorage flush. The write queue drains on a 100ms debounce, so
+    // the tail of the transcript was regularly still queued when
+    // process.exit(0) fired, losing the last lines. gracefulShutdown is
+    // re-entrancy-guarded (shutdownInProgress), so this coexists with the
+    // SIGINT handler installed by setupGracefulShutdown() during init.
+    void gracefulShutdown(0).catch(() => {
+      // Failsafe inside gracefulShutdown force-exits; if it somehow threw
+      // before arming it, fall back to the previous synchronous behavior.
+      process.exit(0);
+    });
   });
   profileCheckpoint('main_warning_handler_initialized');
 
@@ -4830,6 +4842,7 @@ async function run(): Promise<CommanderCommand> {
           const { printBanner } = await import('./server/serverBanner.js');
           const { createServerLogger } = await import('./server/serverLog.js');
           const { writeServerLock, removeServerLock, probeRunningServer } = await import('./server/lockfile.js');
+          const { urlHostFor } = await import('./server/bindHost.js');
 
           const existing = await probeRunningServer();
           if (existing) {
@@ -4877,9 +4890,7 @@ async function run(): Promise<CommanderCommand> {
               pid: process.pid,
               port: actualPort,
               host: config.host,
-              httpUrl: config.unix
-                ? `unix:${config.unix}`
-                : `http://${config.host === '0.0.0.0' || config.host === '::' ? '127.0.0.1' : config.host}:${actualPort}`,
+              httpUrl: config.unix ? `unix:${config.unix}` : `http://${urlHostFor(config.host)}:${actualPort}`,
               startedAt: Date.now(),
             });
           } catch (err) {
