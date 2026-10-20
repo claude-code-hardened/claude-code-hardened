@@ -118,6 +118,14 @@ const DATADOG_ALLOWED_EVENTS = new Set([
   'tengu_config_changed',
   'tengu_continue',
   'tengu_copy',
+  // lifecycle hook verdict observability (round 3, item 5): emitted by
+  // src/utils/hooks/lifecycleHookEvents.ts logDiscardedVerdicts() whenever a
+  // deny-style PreModelSwitch/PostModelSwitch/UserPromptExpansion verdict is
+  // observed on a fire-and-forget surface but cannot be enforced there.
+  // Without this whitelist entry the logEvent call was unreachable on the
+  // Datadog face (declared in the W7 lifecycle block) — the counters stayed
+  // process-local only.
+  'tengu_lifecycle_hook_verdict_discarded',
 ])
 
 const TAG_FIELDS = [

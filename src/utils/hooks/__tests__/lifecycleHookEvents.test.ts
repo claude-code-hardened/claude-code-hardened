@@ -9,6 +9,7 @@ import {
   emitUserPromptExpansion,
   ensureBuiltinLifecycleHookRegistered,
   getDiscardedLifecycleVerdictCounts,
+  getPreModelSwitchDenial,
   isExtendedHookEventName,
   isLifecycleHookEvent,
   registerLifecycleHook,
@@ -168,6 +169,108 @@ describe('lifecycleHookEvents (PreModelSwitch/PostModelSwitch/UserPromptExpansio
     expect(counts[PRE_MODEL_SWITCH_EVENT]).toBe(1)
     // The downgrade means the switch "went through" — nothing throws, the
     // emit resolves regardless of the deny.
+  })
+
+  test('emitPreModelSwitch returns the dispatch results so callers can read verdicts back (round 3 item 4)', async () => {
+    registerLifecycleHook({
+      name: 'denier',
+      events: [PRE_MODEL_SWITCH_EVENT],
+      callback: () => ({
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'quiet hours',
+      }),
+    })
+
+    const results = await emitPreModelSwitch({
+      fromModel: 'sonnet',
+      toModel: 'opus',
+      source: 'auto',
+    })
+    expect(results).toHaveLength(1)
+    expect(results[0]?.hook).toBe('denier')
+    expect(results[0]?.verdict['permissionDecision']).toBe('deny')
+  })
+
+  test('getPreModelSwitchDenial enforces the official contract: deny cancels, block cancels, ask/allow do NOT', () => {
+    // Official: 0004-chunk-zrkp23rq/module-005-uncategorized.js:698 — "Same
+    // contract as PreToolUse: allow proceeds ..., deny cancels the switch";
+    // :3843 — the shared root decision face is approve/block.
+    expect(
+      getPreModelSwitchDenial([
+        {
+          hook: 'h',
+          id: '1',
+          verdict: {
+            permissionDecision: 'deny',
+            permissionDecisionReason: 'no',
+          },
+        },
+      ]),
+    ).toEqual({ hook: 'h', decision: 'deny', reason: 'no' })
+    expect(
+      getPreModelSwitchDenial([
+        {
+          hook: 'h',
+          id: '1',
+          verdict: { decision: 'block', reason: 'off hours' },
+        },
+      ]),
+    ).toEqual({ hook: 'h', decision: 'block', reason: 'off hours' })
+    // ask has no interactive face on /model — observability-only (declared).
+    expect(
+      getPreModelSwitchDenial([
+        { hook: 'h', id: '1', verdict: { permissionDecision: 'ask' } },
+      ]),
+    ).toBeNull()
+    expect(
+      getPreModelSwitchDenial([
+        { hook: 'h', id: '1', verdict: { permissionDecision: 'allow' } },
+      ]),
+    ).toBeNull()
+    expect(getPreModelSwitchDenial([])).toBeNull()
+  })
+
+  test('getPreModelSwitchDenial falls back to the generic reason and flags a missing one', () => {
+    expect(
+      getPreModelSwitchDenial([
+        {
+          hook: 'h',
+          id: '1',
+          verdict: { decision: 'block', reason: 'gen reason' },
+        },
+      ])?.reason,
+    ).toBe('gen reason')
+    expect(
+      getPreModelSwitchDenial([
+        { hook: 'h', id: '1', verdict: { decision: 'block' } },
+      ])?.reason,
+    ).toBe('(no reason given)')
+    const first = getPreModelSwitchDenial([
+      { hook: 'first', id: '1', verdict: { permissionDecision: 'allow' } },
+      { hook: 'second', id: '2', verdict: { permissionDecision: 'deny' } },
+    ])
+    // First BLOCKING verdict in registration order wins.
+    expect(first?.hook).toBe('second')
+  })
+
+  test('enforced deny verdicts (enforceDeny) are honored, NOT counted as discarded', async () => {
+    registerLifecycleHook({
+      name: 'denier',
+      events: [PRE_MODEL_SWITCH_EVENT],
+      callback: () => ({
+        permissionDecision: 'deny',
+        permissionDecisionReason: 'quiet hours',
+      }),
+    })
+
+    await emitPreModelSwitch(
+      { fromModel: 'sonnet', toModel: 'opus', source: 'picker' },
+      { enforceDeny: true },
+    )
+
+    // The local /model path blocked the switch on this verdict — it took
+    // effect, so counting it as "discarded" would be a lie.
+    expect(getDiscardedLifecycleVerdictCounts()).toEqual({})
   })
 
   test('generic decision:"block" verdicts count for the expansion event too', async () => {

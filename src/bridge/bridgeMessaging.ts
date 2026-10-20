@@ -375,6 +375,23 @@ export function handleServerControlRequest(
 
   let response: SDKControlResponse
 
+  // Shared response face for the synchronous tail below and for the
+  // set_model path (whose response is sent after the awaited lifecycle
+  // emissions). Both log through rcLog/debug so server-observed answers
+  // stay uniformly recorded.
+  const sendResponse = (resp: SDKControlResponse): void => {
+    const event = { ...resp, session_id: sessionId }
+    void transport.write(event)
+    rcLog(
+      `control_response: subtype=${req.subtype}` +
+        ` request_id=${request.request_id}` +
+        ` result=${(resp.response as { subtype?: string }).subtype}`,
+    )
+    logForDebugging(
+      `[bridge:repl] Sent control_response for ${req.subtype} request_id=${request.request_id} result=${(resp.response as { subtype?: string }).subtype}`,
+    )
+  }
+
   // Outbound-only: reply error for mutable requests so claude.ai doesn't show
   // false success. initialize must still succeed (server kills the connection
   // if it doesn't — see comment above).
@@ -424,21 +441,45 @@ export function handleServerControlRequest(
       break
 
     case 'set_model': {
-      // W7 #58: lifecycle hook emissions around the model-switch surface
-      // (official PreModelSwitch/PostModelSwitch, source 'sdk' — arrived via
-      // the control protocol). Fire-and-forget; the hook registry logs its
-      // own errors so the control_response path stays synchronous and safe.
-      void emitPreModelSwitch({ toModel: req.model, source: 'sdk' })
-      onSetModel?.(req.model)
-      void emitPostModelSwitch({ toModel: req.model, source: 'sdk' })
-      response = {
-        type: 'control_response',
-        response: {
-          subtype: 'success',
-          request_id: request.request_id,
-        },
+      // W7 #58 + review round 3: officially the set_model control path
+      // answers only after the switch verdict settles — the decompiled
+      // handler takes the onSetModel verdict promise and awaits it via
+      // de({verdict,...}) before replying success/error, denying the switch
+      // via subtype:'error' on a refused verdict
+      // (0165-chunk-dyqmyxqn/module-004-uncategorized.js:79, set_model case
+      // + deadlineMs). CCH keeps the response here a plain success (DECLARED
+      // DIFFERENCES: the onSetModel callback is void and the
+      // fire-and-forget emission contract holds — deny verdicts are observed
+      // and counted, never enforced on this surface; the local /model
+      // command path is where the official deny-cancels contract IS
+      // enforced, see lifecycleHookEvents.ts getPreModelSwitchDenial), but
+      // the emission ORDER is aligned with the official await paradigm (same
+      // shape as the G3 query.ts double emission): PreModelSwitch runs to
+      // completion BEFORE the model applies and PostModelSwitch fires after
+      // — previously the voided emitPre raced behind onSetModel, so hooks
+      // observed a "pre" event for an already-applied switch.
+      const respondAfterSwitches = async (): Promise<void> => {
+        try {
+          await emitPreModelSwitch({ toModel: req.model, source: 'sdk' })
+          onSetModel?.(req.model)
+          await emitPostModelSwitch({ toModel: req.model, source: 'sdk' })
+        } catch (err) {
+          // Hook collaborators must not strand the server without an
+          // answer: the response below still reflects the applied switch.
+          logForDebugging(
+            `[bridge:repl] set_model lifecycle emission failed (continuing): ${errorMessage(err)}`,
+          )
+        }
+        sendResponse({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: request.request_id,
+          },
+        })
       }
-      break
+      void respondAfterSwitches()
+      return
     }
 
     case 'set_max_thinking_tokens':
@@ -510,16 +551,7 @@ export function handleServerControlRequest(
       }
   }
 
-  const event = { ...response, session_id: sessionId }
-  void transport.write(event)
-  rcLog(
-    `control_response: subtype=${req.subtype}` +
-      ` request_id=${request.request_id}` +
-      ` result=${(response.response as { subtype?: string }).subtype}`,
-  )
-  logForDebugging(
-    `[bridge:repl] Sent control_response for ${req.subtype} request_id=${request.request_id} result=${(response.response as { subtype?: string }).subtype}`,
-  )
+  sendResponse(response)
 }
 
 // ─── Result message (for session archival on teardown) ───────────────────────
