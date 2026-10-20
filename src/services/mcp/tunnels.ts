@@ -86,7 +86,17 @@ export interface TunnelsClientOptions {
   /** API base, e.g. https://api.anthropic.com. Defaults to the configured
    * first-party BASE_API_URL (honors staging/local overrides). */
   baseUrl?: string
-  /** Bearer credential. Defaults to the OAuth access token when available. */
+  /** Bearer credential.
+   *
+   * NO default resolution in this build (this comment previously claimed the
+   * OAuth access token was picked up automatically — it never was: the
+   * authorization header is only attached when the caller passes a token,
+   * see the request() header assembly). Official parity note (0032-chunk-
+   * dyqmyxqn model-provider/anthropic.js): the official tunnels routes run
+   * on `this._client` — the ambient Anthropic SDK client — and inherit
+   * whatever credential that client carries; the CCH standalone fetch client
+   * has no ambient client object to inherit, so the caller owns the token
+   * (e.g. the session's OAuth access token). */
   accessToken?: string
   /** Injectable fetch for tests / proxies. */
   fetchFn?: typeof fetch

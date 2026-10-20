@@ -298,6 +298,14 @@ export function getAcceptedSkillIdsPath(): string {
  * Reads the persisted accepted id set. Degradates to an empty set on ENOENT /
  * unreadable / malformed payloads — acceptance state is advisory, never
  * blocking.
+ *
+ * WIRING STATUS (honest declaration, fix-item 4): the persisted accept set is
+ * NOT consumed by any production surface yet — read/write/toggle are only
+ * exercised by tests. The official consumer is the interactive
+ * select/deselect UI over the skill list (0025 module-003 `Zu` toggle inside
+ * the plugin/skills menu); until a CCH surface both writes the set and gates
+ * skill visibility/loading on it, these exports stay intentionally unwired —
+ * wiring a write-only toggle would persist state nothing reads.
  */
 export async function readAcceptedSkillIds(): Promise<Set<string>> {
   const fs = getFsImplementation()
@@ -382,6 +390,9 @@ export function computeEffectiveAcceptedSkillIds(
  * Toggle-on adds the id. Toggle-off removes it AND its alias expansions —
  * except an alias that a local skill occupies, so a local skill and its
  * same-name synced sibling keep co-existing as distinct ids in the set.
+ *
+ * WIRING STATUS: test-only today (see readAcceptedSkillIds above) — no
+ * production UI calls this until a gating consumer exists.
  */
 export function toggleAcceptedSkillId(
   accepted: ReadonlySet<string>,
