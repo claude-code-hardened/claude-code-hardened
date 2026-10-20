@@ -687,10 +687,14 @@ async function sideQueryViaOpenAICompatible(
 
   // API-key / OpenAI-compatible / Grok: Chat Completions
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+  // maxRetries 改为请求级传递（W1：官方 0032-chunk-dyqmyxqn/
+  // module-005-uncategorized.js:706 `o=s.maxRetries??this.maxRetries` 每请求
+  // 覆盖语义）——共享缓存 client 恒以 maxRetries:0 构造（openai/client.ts
+  // double-billing 契约），预算经 create 的 RequestOptions 下达；旧实现经
+  // 构造参数下达，先建缓存者的预算压住后来者（最坏 0 预算 vs 3×外层 10）。
+  const sideQueryMaxRetries = opts.maxRetries ?? 2
   const client: import('openai').default =
-    provider === 'grok'
-      ? getGrokClient({ maxRetries: opts.maxRetries ?? 2 })
-      : getOpenAIClient({ maxRetries: opts.maxRetries ?? 2 })
+    provider === 'grok' ? getGrokClient() : getOpenAIClient()
 
   const start = Date.now()
 
@@ -715,7 +719,12 @@ async function sideQueryViaOpenAICompatible(
 
   const response = await client.chat.completions.create(
     requestParams as unknown as import('openai/resources/chat/completions/completions.mjs').ChatCompletionCreateParamsNonStreaming,
-    { signal },
+    {
+      signal,
+      // 请求级重试预算（官方 0032:706 每请求覆盖面）：side query 的独立
+      // 预算在 create 第二参下达，与流式主循环的 maxRetries:0 契约互斥。
+      maxRetries: sideQueryMaxRetries,
+    },
   )
 
   const choice = response.choices[0]

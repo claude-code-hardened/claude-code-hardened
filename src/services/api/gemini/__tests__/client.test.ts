@@ -189,6 +189,41 @@ describe('getGeminiClient', () => {
     })
     expect(a).not.toBe(b)
   })
+
+  // ── W1：缓存命中前 options 等价校验（0032:706 每请求覆盖面）─────────
+
+  test('fetchOverride call does not poison the cache', async () => {
+    const { getGeminiClient } = await loadClient()
+    setEnv('GEMINI_API_KEY', 'test-key')
+
+    const plain = getGeminiClient()
+    const fetchLike = async () => new Response()
+    const withOverride = getGeminiClient({
+      fetchOverride: Object.assign(fetchLike, { preconnect: async () => {} }),
+    })
+    // override 构建的 client 不入缓存：随后普通调用仍是原缓存实例。
+    expect(withOverride).not.toBe(plain)
+    expect(getGeminiClient()).toBe(plain)
+  })
+
+  test('a process-level fetch swap rebuilds the shared client', async () => {
+    const { getGeminiClient } = await loadClient()
+    setEnv('GEMINI_API_KEY', 'test-key')
+
+    const original = globalThis.fetch
+    try {
+      const plain = getGeminiClient()
+      // globalThis.fetch 是进程级可替换面（测试注入/代理链路切换）：
+      // 捕获引用不一致必须重建，否则旧 fetch 的行为泄漏给新调用方。
+      globalThis.fetch = Object.assign(async () => new Response(), {
+        preconnect: async () => {},
+      })
+      const rebuilt = getGeminiClient()
+      expect(rebuilt).not.toBe(plain)
+    } finally {
+      globalThis.fetch = original
+    }
+  })
 })
 
 // ─── body → SDK config translation ──────────────────────────────────────────

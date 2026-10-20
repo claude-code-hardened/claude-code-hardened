@@ -29,6 +29,7 @@ mock.module('src/services/analytics/index.js', () => ({
 let getOpenAIClientCallCount = 0
 let chatCompletionsCreateCount = 0
 let lastChatCompletionsArgs: Record<string, unknown> | null = null
+let lastChatCompletionsOptions: Record<string, unknown> | null = null
 let chatCompletionsUsage: Record<string, unknown> = {}
 
 mock.module('src/services/api/openai/client.js', () => ({
@@ -37,9 +38,13 @@ mock.module('src/services/api/openai/client.js', () => ({
     return {
       chat: {
         completions: {
-          create: async (args: Record<string, unknown>) => {
+          create: async (
+            args: Record<string, unknown>,
+            options?: Record<string, unknown>,
+          ) => {
             chatCompletionsCreateCount++
             lastChatCompletionsArgs = args
+            lastChatCompletionsOptions = options ?? null
             return {
               id: 'chatcmpl_test',
               choices: [
@@ -79,6 +84,9 @@ mock.module('src/services/api/openai/chatgptAuth.js', () => ({
     accountId: 'acct_test',
   }),
   removeChatGPTAuth: async () => {},
+  // W2.4 invalidate 面（Egt nextForce 等价）：responsesAdapter 经
+  // invalidateCachedCodexClient 调用；本文件路径不走 401 刷新，空实现。
+  invalidateChatGPTTokenCache: () => {},
   requestChatGPTDeviceCode: async () => {
     throw new Error('not used')
   },
@@ -160,6 +168,7 @@ beforeEach(() => {
   getOpenAIClientCallCount = 0
   chatCompletionsCreateCount = 0
   lastChatCompletionsArgs = null
+  lastChatCompletionsOptions = null
   chatCompletionsUsage = { prompt_tokens: 3, completion_tokens: 2 }
   capturedFetch = null
   enableOpenAIProvider()
@@ -357,6 +366,34 @@ describe('sideQuery OpenAI ChatGPT OAuth path', () => {
     expect(result.usage.input_tokens).toBe(400)
     expect(result.usage.cache_read_input_tokens).toBe(600)
     expect(result.usage.cache_creation_input_tokens).toBe(0)
+  })
+
+  test('side query retry budget rides request-level RequestOptions (W1: 0032:706 per-request override)', async () => {
+    // W1 修复面：sideQuery 的重试预算不再经 client 构造参数下达（那会被
+    // 先建缓存者的 client 吞掉——缓存恒 maxRetries:0），而是走官方
+    // `o=s.maxRetries??this.maxRetries` 的请求级覆盖：create 第二参。
+    delete process.env.OPENAI_AUTH_MODE
+    delete process.env.OPENAI_BASE_URL
+    process.env.OPENAI_API_KEY = 'sk-test-not-real'
+    const { sideQuery } = await import('../sideQuery.js')
+
+    await sideQuery({
+      querySource: 'auto_mode',
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(chatCompletionsCreateCount).toBe(1)
+    // 缺省预算 2（SideQueryOptions.maxRetries default）。
+    expect(lastChatCompletionsOptions?.maxRetries).toBe(2)
+
+    await sideQuery({
+      querySource: 'auto_mode',
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+      maxRetries: 5,
+    })
+    expect(chatCompletionsCreateCount).toBe(2)
+    expect(lastChatCompletionsOptions?.maxRetries).toBe(5)
   })
 
   test('ChatGPT OAuth request failure propagates for fail-closed classifiers', async () => {

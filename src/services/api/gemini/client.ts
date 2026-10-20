@@ -92,7 +92,19 @@ function wrapFetchForProxy(base: typeof fetch): typeof fetch {
   return wrapped as unknown as typeof fetch
 }
 
-let cachedClient: GoogleGenAI | null = null
+/**
+ * Cached shared client + the base fetch identity captured at build time.
+ * 命中前 options 等价校验（W1，openai/grok 同面）：带 fetchOverride 的
+ * 调用永不命中/不入缓存（注入面是调用方私有——query 转储包装、测试
+ * hook）；不带 override 时比对进程 fetch 身份（globalThis.fetch 可被
+ * 测试/代理链路整体替换，捕获引用不一致即重建，否则旧 fetch 的行为会
+ * 泄漏给新调用方）。
+ */
+let cachedClient: {
+  client: GoogleGenAI
+  /** base fetch captured at build time (fetchOverride ?? globalThis.fetch) */
+  fetchRef: typeof fetch
+} | null = null
 
 /**
  * Build (once) the SDK client. Mirrors getOpenAIClient: no total-duration
@@ -103,11 +115,12 @@ let cachedClient: GoogleGenAI | null = null
 export function getGeminiClient(options?: {
   fetchOverride?: typeof fetch
 }): GoogleGenAI {
-  if (cachedClient) return cachedClient
+  const baseFetch = options?.fetchOverride ?? (globalThis.fetch as typeof fetch)
+  if (cachedClient && cachedClient.fetchRef === baseFetch) {
+    return cachedClient.client
+  }
 
   const { baseUrl, apiVersion } = getGeminiEndpoint()
-
-  const baseFetch = options?.fetchOverride ?? (globalThis.fetch as typeof fetch)
 
   const client = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY || '',
@@ -128,8 +141,9 @@ export function getGeminiClient(options?: {
     },
   })
 
+  // 带 fetchOverride 构建的 client 是调用方私有面，不入缓存。
   if (!options?.fetchOverride) {
-    cachedClient = client
+    cachedClient = { client, fetchRef: baseFetch }
   }
 
   return client
