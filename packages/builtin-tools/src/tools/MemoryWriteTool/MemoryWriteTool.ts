@@ -4,8 +4,8 @@ import { buildTool, type ToolDef } from 'src/Tool.js'
 import { lazySchema } from 'src/utils/lazySchema.js'
 import { MAX_MEMORY_DOC_BYTES, MEMORY_WRITE_TOOL_NAME } from './constants.js'
 import {
-  getDefaultStoreName,
-  isValidMemoryStoreName,
+  checkStoreWritable,
+  resolveStoreAccess,
   resolveMemoryEntryPath,
   serializeMemoryDoc,
   writeFileAtomic,
@@ -31,7 +31,7 @@ const inputSchema = lazySchema(() =>
       .regex(new RegExp(STORE_REGEX_STRING))
       .optional()
       .describe(
-        'Memory store name. Defaults to the project-scoped store derived from the current project directory. Same root as LocalMemoryRecall.',
+        'Memory store name. Defaults to the project-scoped store derived from the current project directory. Must be a store available in this session (the project store or an existing store in the shared local-memory root); writes land in the project store only.',
       ),
     path: z
       .string()
@@ -43,7 +43,7 @@ const inputSchema = lazySchema(() =>
     content: z
       .string()
       .min(1)
-      .describe('Markdown body of the document (max 1 MB).'),
+      .describe('Markdown body of the document (max 102400 bytes).'),
     name: z
       .string()
       .max(128)
@@ -95,15 +95,54 @@ export const MemoryWriteTool = buildTool({
   toAutoClassifierInput(input) {
     return `write ${input.store ?? ''}:${input.path ?? ''}: ${input.content.slice(0, 80)}`
   },
+  /**
+   * checkPermissions 面（官方无 CCH 的 canUseTool 透写——官方 2.8.4 对
+   * memory_write 是 refused/read-only；CCH 保留写入属超出官方的扩展，按
+   * 任务约定必须过 canUseTool 权限门）：
+   *   - store 不在本会话可用集 → deny（官方 unknown_store 文案）
+   *   - store 非当前项目默认 store → deny（官方 read_only 文案）
+   *   - 其余 → ask：真权限交互门（规则 allow 可越过，deny 规则可封）。
+   */
+  async checkPermissions(input: Input) {
+    const resolved = resolveStoreAccess(input.store)
+    if (resolved.error !== undefined) {
+      return {
+        behavior: 'deny' as const,
+        message: resolved.error,
+        decisionReason: { type: 'other' as const, reason: 'unknown_store' },
+      }
+    }
+    const writeRefusal = checkStoreWritable(resolved.store)
+    if (writeRefusal !== undefined) {
+      return {
+        behavior: 'deny' as const,
+        message: writeRefusal,
+        decisionReason: { type: 'other' as const, reason: 'read_only_store' },
+      }
+    }
+    return {
+      behavior: 'ask' as const,
+      message: `Allow saving to memory store "${resolved.store}" (${input.path})?`,
+      decisionReason: {
+        type: 'other' as const,
+        reason: 'memory_write_requires_approval',
+      },
+    }
+  },
   async call(input: Input) {
     try {
-      // 默认 store 必须先于校验解析：未显式传 store 时应落到
-      // project-scoped 默认 store，而不是拿 undefined/'' 去撞校验。
-      const store = input.store ?? getDefaultStoreName()
-      if (!isValidMemoryStoreName(store)) {
-        return {
-          data: { error: `Invalid store name: '${input.store}'` },
-        }
+      // 官方 connected-store 面（reverse-284 _ALL.js:5230 Eit）：store 缺省落
+      // 项目默认；显式 store 必须在本会话可用集内，否则 refused/unknown_store。
+      const resolved = resolveStoreAccess(input.store)
+      if (resolved.error !== undefined) {
+        return { data: { error: resolved.error } }
+      }
+      const store = resolved.store
+      // 官方 writable 面（n && !a.writable → refused/read_only）：白名单内
+      // 的共享/project-* store 一律拒写，只有当前项目默认 store 可写。
+      const writeRefusal = checkStoreWritable(store)
+      if (writeRefusal !== undefined) {
+        return { data: { error: writeRefusal } }
       }
       if (Buffer.byteLength(input.content, 'utf8') > MAX_MEMORY_DOC_BYTES) {
         return {

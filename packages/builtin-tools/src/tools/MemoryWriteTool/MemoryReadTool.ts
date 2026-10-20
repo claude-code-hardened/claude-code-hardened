@@ -3,10 +3,9 @@ import { buildTool, type ToolDef } from 'src/Tool.js'
 import { lazySchema } from 'src/utils/lazySchema.js'
 import { MAX_MEMORY_READ_BYTES, MEMORY_READ_TOOL_NAME } from './constants.js'
 import {
-  getDefaultStoreName,
-  isValidMemoryStoreName,
   readMemoryDocBounded,
   resolveMemoryEntryPath,
+  resolveStoreAccess,
 } from './store.js'
 import { renderMemoryReadResult, renderToolUseMessage } from './UI.js'
 
@@ -63,6 +62,22 @@ export const MemoryReadTool = buildTool({
   toAutoClassifierInput(input) {
     return `read ${input.store ?? ''}:${input.path ?? ''}`
   },
+  /** 读面：未知 store deny（官方 unknown_store 文案）；其余 passthrough。 */
+  async checkPermissions(input: Input) {
+    const resolved = resolveStoreAccess(input.store)
+    if (resolved.error !== undefined) {
+      return {
+        behavior: 'deny' as const,
+        message: resolved.error,
+        decisionReason: { type: 'other' as const, reason: 'unknown_store' },
+      }
+    }
+    return {
+      behavior: 'passthrough' as const,
+      message:
+        'Memory read access resolved against the session store allowlist.',
+    }
+  },
   async description() {
     return 'Read a single memory document (frontmatter + markdown body) from the project memory store.'
   },
@@ -77,10 +92,13 @@ export const MemoryReadTool = buildTool({
   },
   async call(input: Input) {
     try {
-      if (!isValidMemoryStoreName(input.store ?? '')) {
-        return { data: { error: `Invalid store name: '${input.store}'` } }
+      // 官方 connected-store 面：显式 store 必须在本会话可用集内
+      // （reverse-284 _ALL.js:5230 Eit → refused/unknown_store）。
+      const resolvedStore = resolveStoreAccess(input.store)
+      if (resolvedStore.error !== undefined) {
+        return { data: { error: resolvedStore.error } }
       }
-      const store = input.store ?? getDefaultStoreName()
+      const store = resolvedStore.store
       // Throws on traversal / missing store / symlink escape — caught below.
       let target: string
       try {

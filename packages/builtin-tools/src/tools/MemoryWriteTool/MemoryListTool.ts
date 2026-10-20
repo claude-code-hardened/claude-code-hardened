@@ -2,11 +2,7 @@ import { z } from 'zod/v4'
 import { buildTool, type ToolDef } from 'src/Tool.js'
 import { lazySchema } from 'src/utils/lazySchema.js'
 import { MEMORY_LIST_TOOL_NAME, MAX_LIST_MEMORY_DOCS } from './constants.js'
-import {
-  getDefaultStoreName,
-  isValidMemoryStoreName,
-  listMemoryDocs,
-} from './store.js'
+import { listMemoryDocs, resolveStoreAccess } from './store.js'
 import { renderMemoryListResult, renderToolUseMessage } from './UI.js'
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
@@ -82,10 +78,13 @@ export const MemoryListTool = buildTool({
   },
   async call(input: Input) {
     try {
-      if (!isValidMemoryStoreName(input.store ?? '')) {
-        return { data: { error: `Invalid store name: '${input.store}'` } }
+      // 官方 connected-store 面：显式 store 必须在本会话可用集内
+      // （reverse-284 _ALL.js:5230 Eit → refused/unknown_store）。
+      const resolved = resolveStoreAccess(input.store)
+      if (resolved.error !== undefined) {
+        return { data: { error: resolved.error } }
       }
-      const store = input.store ?? getDefaultStoreName()
+      const store = resolved.store
       const result = listMemoryDocs(store)
       if (result === null) {
         const out: Output = { store, docs: [] }
@@ -103,6 +102,22 @@ export const MemoryListTool = buildTool({
           error: e instanceof Error ? e.message : String(e),
         },
       }
+    }
+  },
+  /** 读面：未知 store deny（官方 unknown_store）；其余 passthrough。 */
+  async checkPermissions(input: Input) {
+    const resolved = resolveStoreAccess(input.store)
+    if (resolved.error !== undefined) {
+      return {
+        behavior: 'deny' as const,
+        message: resolved.error,
+        decisionReason: { type: 'other' as const, reason: 'unknown_store' },
+      }
+    }
+    return {
+      behavior: 'passthrough' as const,
+      message:
+        'Memory list access resolved against the session store allowlist.',
     }
   },
   renderToolUseMessage(input, options) {

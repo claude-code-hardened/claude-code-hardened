@@ -51,6 +51,68 @@ export function isValidMemoryStoreName(store: string): boolean {
   return typeof store === 'string' && STORE_REGEX.test(store)
 }
 
+// ── Store allowlist（官方 connected-store 面）───────────────────────────────
+
+/**
+ * Session-available store set, official 2.8.4 对位（reverse-284 _ALL.js:5230
+ * `Eit({storeId:e,write:n=!1})`）：store 必须属于本会话已连接的 store 集，
+ * 未连接的 id 一律 `refused/unknown_store`（"No memory store with id X is
+ * available in this session. Available stores: …"）。CCH 的"已连接集" =
+ * `getMemoryBaseDir()` 下实际存在的 store 目录（同根，LocalMemoryRecall /
+ * multiStore 写入的都算）∪ 当前 cwd 项目默认 store（尚未落盘时允许创建）。
+ *
+ * 写入面进一步收紧（官方 `n && !a.writable` → refused/read_only，2.8.4 的
+ * 会话 store 对 memory_write 是只读的；CCH 设计保留写入 = 超出官方的扩展，
+ * 仅放开当前项目默认 store 这一个可写面，其余共享/project-* store 拒写）：
+ * 仅默认 store 可写。报告口径：write 面为 CCH 扩展，permission 门 +
+ * 102400 上限对位官方。
+ */
+export function getAvailableMemoryStores(): string[] {
+  const available = new Set<string>()
+  const baseDir = getMemoryBaseDir()
+  try {
+    for (const dirent of readdirSync(baseDir, { withFileTypes: true })) {
+      if (dirent.isDirectory() && !dirent.name.endsWith('.archived')) {
+        available.add(dirent.name)
+      }
+    }
+  } catch {
+    // Root not created yet — only the default store is available then.
+  }
+  available.add(getDefaultStoreName())
+  return [...available].sort()
+}
+
+/**
+ * Resolve a requested store against the allowlist. Returns the effective
+ * store name (default when omitted) or a refusal message mirroring the
+ * official unknown_store wording.
+ */
+export function resolveStoreAccess(store: string | undefined): {
+  store: string
+  error?: string
+} {
+  const effective = store ?? getDefaultStoreName()
+  const available = getAvailableMemoryStores()
+  if (!available.includes(effective)) {
+    return {
+      store: effective,
+      error: `No memory store "${effective}" is available in this session. Available stores: ${available.join(', ')}.`,
+    }
+  }
+  return { store: effective }
+}
+
+/**
+ * Writable-store gate (official read_only 面，收紧为唯一可写 = 项目默认
+ * store；跨项目 project-* / 共享 store 的写入一律拒绝)。
+ */
+export function checkStoreWritable(store: string): string | undefined {
+  const writable = getDefaultStoreName()
+  if (store === writable) return undefined
+  return `The memory store "${store}" is read-only in this session; changes will not persist. Writable stores: ${writable}.`
+}
+
 // ── Root resolution ───────────────────────────────────────────────────────────
 
 let _baseDirCache: { configDir: string; baseDir: string } | undefined
