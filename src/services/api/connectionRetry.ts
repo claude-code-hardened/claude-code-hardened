@@ -228,19 +228,34 @@ export function isProviderConnectionRetryable(
   return RETRYABLE_STATUS.has(status) || status >= 500
 }
 
+/**
+ * Retry-after 间隔解析 — 0032 retryRequest 原文（module-005:706）逐句对齐：
+ *   `let o,i=s?.get("retry-after-ms");if(i){let a=parseFloat(i);
+ *    if(!Number.isNaN(a))o=a}` — retry-after-ms 可解析即赋值（头串非空即
+ *   真分支，含 0 与负值）。
+ *   `let c=s?.get("retry-after");if(c&&!o){...}` — `!o`：o===0 视同缺省，
+ *   retry-after（秒数 / HTTP-date）仍可补位覆盖。
+ *   `if(o===void 0)` 才落计算曲线（calculateDefaultRetryTimeoutMillis）。
+ * 负值不 clamp：官方 `fe(o)`（同文件:209，`setTimeout(…, e)`）对负值即时
+ * 触发 — 语义即「不睡眠直通」，与 0 同属不等待面。
+ */
 function retryAfterMs(error: unknown): number | undefined {
+  let ms: number | undefined
   const asMs = errHeaderOf(error, 'retry-after-ms')
   if (asMs !== undefined) {
     const parsed = Number.parseFloat(asMs)
-    if (!Number.isNaN(parsed)) return parsed
+    if (!Number.isNaN(parsed)) ms = parsed
   }
-  const asSeconds = errHeaderOf(error, 'retry-after')
-  if (asSeconds === undefined) return undefined
-  const seconds = Number.parseFloat(asSeconds)
-  if (!Number.isNaN(seconds)) return seconds * 1000
-  const asDate = Date.parse(asSeconds)
-  if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now())
-  return undefined
+  // 官方 `if(c&&!o)`：ms 头解析为 0（或缺失）时 retry-after 秒数头仍生效。
+  if (!ms) {
+    const asSeconds = errHeaderOf(error, 'retry-after')
+    if (asSeconds === undefined) return ms
+    const seconds = Number.parseFloat(asSeconds)
+    if (!Number.isNaN(seconds)) return seconds * 1000
+    const asDate = Date.parse(asSeconds)
+    if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now())
+  }
+  return ms
 }
 
 function computeBackoffDelayMs(error: unknown, attempt: number): number {
@@ -588,6 +603,11 @@ export async function withConnectionRetry<T>(
   }
   let attempt = 0
   let authRefreshRetrySpent = false
+  // 外层轮独立计数器：官方 :7495 循环原文以独立轮次变量推进
+  // （`for(Er=1;Er<=zo;Er++)…`，Er 不与内层 attempt 混算）。旧实现
+  // `attempt-maxRetries` 在 401 刷新门借走一次 attempt 时会漂移（把第一个
+  // 外层轮算成第 2 轮 → 少拿轮次）。
+  let outerRoundsUsed = 0
   // Retry gate（官方 module-006 循环层两分支，W2.8／W2.9 原文核对：
   // 0001:6798 `if(Tn){U++;let zo=null;if(bt instanceof Pt&&bt.status===429){
   // if(zo=pCo(bt,g),zo!==null&&...rejected)yn=bt}un=zo??Math.min(XD(U,qn,
@@ -599,6 +619,14 @@ export async function withConnectionRetry<T>(
   // - 非 429 分支：watchdog on（Pq）→ min(un, oIe=6h)（补 cap 的"未 cap
   //   侧"——上一版 watchdog-on 直放是真偏差）；watchdog off → un>$Eo 抛。
   const gateDelayMs = (ms: number, failure: unknown): number => {
+    // pCo 取舍声明（0001:3462 原文）：官方循环层 429 面在 XD 曲线前还有一
+    // 道 `zo=pCo(bt,g)` 提示位 —— `function pCo(e,n){let r=e.headers?.get?.(
+    // "anthropic-ratelimit-unified-reset");if(!r)return null;let s=Number(r);
+    // if(!Number.isFinite(s))return null;let g=Math.round(s*1000-n.now());
+    // if(g<=0)return null;return Math.min(g,oIe)}`，`un=zo??min(XD(UEo),oIe)`
+    // —— pCo 命中时**替换**计算延迟。CCH 未消费该头（两个兼容层端点不发
+    // anthropic-ratelimit-unified-reset；恒走 `un=zo??…` 的 XD 回落侧），
+    // 语义保真度损失为 429 延迟最坏不早于官方 reset 时刻——取舍如此声明。
     if (errStatusOf(failure) === 429) {
       return Math.min(ms, OIe_LOOP_DELAY_CAP_MS)
     }
@@ -628,6 +656,43 @@ export async function withConnectionRetry<T>(
       return await operation(attempt)
     } catch (error) {
       const remaining = maxRetries - attempt + 1
+      // 401 refresh gate — official per-request semantics, and official
+      // shouldRetry ORDER (W2.11, 0032-chunk-dyqmyxqn/
+      // module-005-uncategorized.js:706 原文)：`async shouldRetry(e,r){let n=
+      // this._authFlags(r);if(e.status===401&&this._authState.tokenCache&&
+      // n.usedTokenCache&&!n.didRefreshFor401)return n.didRefreshFor401=!0,
+      // this._authState.tokenCache.invalidate(),!0;let s=e.headers.get(
+      // "x-should-retry");…}` — 401 分支先于 x-should-retry veto：旧凭据的
+      // 401 必须消费单次刷新重试，而不是先落进通用可重试面把预算烧光。
+      // 且 makeRequest 对每一类重试统一挂预算门（原文 `if(r&&A)`）—
+      // remaining==0 时 401 不再有「免费一试」，直接落终态/外层面。
+      // 仅当本请求实际从 token cache 取过凭据（usedTokenCache 标记，
+      // codex/OpenAI 的 getValidChatGPTAuth 缓存读取面）且未在本请求刷新
+      // 过，才重试一次，重试前 invalidate 旧缓存。无 per-request 标记的
+      // 调用点保留会话级放宽 isChatGPTAuthEnabled() 作 fallback（取舍已
+      // 在 ConnectionRetryOptions.usedTokenCache 注释声明）。
+      if (
+        errStatusOf(error) === 401 &&
+        remaining > 0 &&
+        !authRefreshRetrySpent &&
+        !options.signal?.aborted &&
+        (options.usedTokenCache !== undefined
+          ? options.usedTokenCache() === true
+          : isChatGPTAuthEnabled())
+      ) {
+        authRefreshRetrySpent = true
+        options.invalidateTokenCache?.()
+        const retryInMs = gateDelayMs(
+          computeBackoffDelayMs(error, attempt),
+          error,
+        )
+        logForDebugging(
+          `connection 401 - refreshing token cache, retrying once${options.source ? ` (${options.source})` : ''}`,
+        )
+        options.onRetryStatus?.(retryStatus(attempt, retryInMs, error))
+        if (!(await sleepBeforeRetry(retryInMs))) throw error
+        continue
+      }
       if (
         remaining > 0 &&
         isProviderConnectionRetryable(error, options.signal)
@@ -650,39 +715,6 @@ export async function withConnectionRetry<T>(
         if (!(await sleepBeforeRetry(retryInMs))) throw error
         continue
       }
-      // 401 refresh gate — official per-request semantics (W2.11,
-      // 0032-chunk-dyqmyxqn/module-005-uncategorized.js:706 `shouldRetry`
-      // 原文: `if(e.status===401&&this._authState.tokenCache&&
-      // n.usedTokenCache&&!n.didRefreshFor401)return n.didRefreshFor401
-      // =!0,this._authState.tokenCache.invalidate(),!0`)：仅当本请求实际
-      // 从 token cache 取过凭据（usedTokenCache 标记，codex/OpenAI 的
-      // getValidChatGPTAuth 缓存读取面）且未在本请求刷新过，才重试一次，
-      // 重试前 invalidate 旧缓存。无 per-request 标记的调用点保留会话级
-      // 放宽 isChatGPTAuthEnabled() 作 fallback（会话级放宽与官方门的
-      // 取舍已在 ConnectionRetryOptions.usedTokenCache 注释声明）。
-      const usedTokenCacheFlag =
-        options.usedTokenCache !== undefined
-          ? options.usedTokenCache() === true
-          : isChatGPTAuthEnabled()
-      if (
-        errStatusOf(error) === 401 &&
-        !authRefreshRetrySpent &&
-        !options.signal?.aborted &&
-        usedTokenCacheFlag
-      ) {
-        authRefreshRetrySpent = true
-        options.invalidateTokenCache?.()
-        const retryInMs = gateDelayMs(
-          computeBackoffDelayMs(error, attempt),
-          error,
-        )
-        logForDebugging(
-          `connection 401 - refreshing token cache, retrying once${options.source ? ` (${options.source})` : ''}`,
-        )
-        options.onRetryStatus?.(retryStatus(attempt, retryInMs, error))
-        if (!(await sleepBeforeRetry(retryInMs))) throw error
-        continue
-      }
       if (remaining > 0) throw error
       // Official outer-retry face (module-006 vWo() unavailableOuterRetries,
       // :7495 循环原文): past the exhausted inner budget, N more rounds
@@ -694,9 +726,8 @@ export async function withConnectionRetry<T>(
       // x-should-retry veto → isProviderConnectionRetryable 拒绝）。每轮
       // 走 classifier-face 曲线（min(TZe·2^(n-1), EZe) + floored additive
       // jitter），独立于内层 SDK 曲线。
-      const outerRound = attempt - maxRetries
       if (
-        outerRound > outerRetries ||
+        outerRoundsUsed + 1 > outerRetries ||
         options.signal?.aborted ||
         !isOuterRetryClassError(error) ||
         retryAfterMs(error) !== undefined ||
@@ -704,6 +735,7 @@ export async function withConnectionRetry<T>(
       ) {
         throw error
       }
+      const outerRound = ++outerRoundsUsed
       const retryInMs = computeOuterBackoffDelayMs(outerRound)
       logForDebugging(
         `connection unavailable (overloaded) - outer retry ${outerRound}/${outerRetries}${options.source ? ` (${options.source})` : ''}`,

@@ -672,10 +672,32 @@ describe('withConnectionRetry 401 token-cache refresh retry-once', () => {
           }
           return 'ok'
         },
-        { maxRetries: 0, sleep: async () => {} },
+        // 官方 makeRequest 预算门（0032:706 `if(r&&A)`）：401 刷新重试也
+        // 消费预算 —— maxRetries=0 时 remaining==0，401 无「免费一试」
+        // （旧实现送的免费尝试已按审查 #3 修正）。
+        { maxRetries: 1, sleep: async () => {} },
       )
       expect(result).toBe('ok')
       expect(attempts).toBe(2)
+    } finally {
+      restoreEnv(ENV, previous)
+    }
+  })
+
+  test('budget exhausted: 401 gets no free attempt (official `if(r&&A)` gate)', async () => {
+    const previous = process.env[ENV]
+    process.env[ENV] = 'chatgpt'
+    try {
+      let attempts = 0
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          throw Object.assign(new Error('unauthorized'), { status: 401 })
+        },
+        { maxRetries: 0, sleep: async () => {} },
+      ).catch(e => e)
+      expect(attempts).toBe(1)
+      expect((result as { status?: number }).status).toBe(401)
     } finally {
       restoreEnv(ENV, previous)
     }
@@ -696,7 +718,7 @@ describe('withConnectionRetry 401 token-cache refresh retry-once', () => {
           }
           return 'ok'
         },
-        { maxRetries: 0, sleep: async () => {} },
+        { maxRetries: 1, sleep: async () => {} },
       )
       expect(attempts).toBe(2)
     } finally {
@@ -793,6 +815,195 @@ describe('withConnectionRetry 401 token-cache refresh retry-once', () => {
       expect((result as { status?: number }).status).toBe(401)
     } finally {
       restoreEnv(ENV, previous)
+    }
+  })
+})
+
+describe('withConnectionRetry 401 gate order (审查 #3: 401 先于 veto 且耗预算)', () => {
+  test('401 + x-should-retry:true consumes the refresh gate, never the generic budget first', async () => {
+    // 官方 shouldRetry 原文（0032:706）：401 分支在 x-should-retry 读取之前
+    // —— 旧 token 的 401 第一跳就走刷新面（invalidate + 单次重试），不以
+    // 通用可重试身份烧第一格预算。
+    let attempts = 0
+    const invalidations: number[] = []
+    const result = await withConnectionRetry(
+      async () => {
+        attempts++
+        if (attempts === 1) {
+          throw Object.assign(new Error('unauthorized (veto says retry)'), {
+            status: 401,
+            headers: { 'x-should-retry': 'true' },
+          })
+        }
+        return 'ok'
+      },
+      {
+        maxRetries: 1,
+        sleep: async () => {},
+        usedTokenCache: () => true,
+        invalidateTokenCache: () => void invalidations.push(1),
+      },
+    )
+    expect(result).toBe('ok')
+    // 新序：refresh-retry 消费 401 门（maxRetries=1 的唯一一格预算）；
+    // attempt 2 成功。旧序：第一格走通用面（without invalidate），401 门
+    // 只在 remaining==0 的免费面上生效——invalidation 时点完全不同。
+    expect(attempts).toBe(2)
+    expect(invalidations).toHaveLength(1)
+  })
+
+  test('spent-refresh 401 without a veto header is terminal (official shouldRetry tail)', async () => {
+    // 官方 shouldRetry 原文（0032:706）：didRefreshFor401 置位后 401 语句
+    // 不再命中，落到 veto/状态尾——`let s=e.headers.get("x-should-retry");
+    // if(s==="true")return!0;if(s==="false")return!1;if(e.status===408)…`
+    // 无头且 401 ∉ {408,409,429,5xx} → 返回 false，不再重试。
+    let attempts = 0
+    const result = await withConnectionRetry(
+      async () => {
+        attempts++
+        throw Object.assign(new Error('still unauthorized'), { status: 401 })
+      },
+      { maxRetries: 3, sleep: async () => {}, usedTokenCache: () => true },
+    ).catch(e => e)
+    // attempt1 走 401 刷新门；attempt2 落 shouldRetry 尾 false → 终态。
+    expect(attempts).toBe(2)
+    expect((result as { status?: number }).status).toBe(401)
+  })
+
+  test('spent-refresh 401 with a live veto retries through the generic face (official `if(s==="true")return!0`)', async () => {
+    // 官方原文：401 分支让位后（didRefreshFor401 已置位），第二个 401 的
+    // x-should-retry:true 仍**返回 true**——通用面在预算内继续重试
+    // （makeRequest `if(r&&A)`），预算烧尽才终态。previous 断言「不复活
+    // 通用面」是反官方的（把 veto 语义改成了 401 拦截）。
+    let attempts = 0
+    const result = await withConnectionRetry(
+      async () => {
+        attempts++
+        throw Object.assign(new Error('still unauthorized'), {
+          status: 401,
+          headers: { 'x-should-retry': 'true' },
+        })
+      },
+      { maxRetries: 3, sleep: async () => {}, usedTokenCache: () => true },
+    ).catch(e => e)
+    // attempt1 = 401 刷新门（预算扣 1）；attempt2-4 = veto 面重试（预算
+    // 扣 3-1=2 格 + 终态）→ 共 4 次尝试。
+    expect(attempts).toBe(4)
+    expect((result as { status?: number }).status).toBe(401)
+  })
+})
+
+describe('retry-after-ms 0/负值语义（审查 #6.1: 官方视 0 为缺省，负值不 clamp）', () => {
+  test('retry-after-ms "0" falls through to the retry-after seconds header (`if(c&&!o)`)', async () => {
+    const sleeps: number[] = []
+    let attempts = 0
+    await withConnectionRetry(
+      async () => {
+        attempts++
+        if (attempts === 1) {
+          throw Object.assign(new Error('throttled'), {
+            status: 503,
+            headers: { 'retry-after-ms': '0', 'retry-after': '3' },
+          })
+        }
+        return 'ok'
+      },
+      { maxRetries: 2, sleep: async ms => void sleeps.push(ms) },
+    )
+    // 官方 retryRequest：`o=0` 后 `if(c&&!o)` 让秒数头补位 —— 3000，非 0。
+    expect(sleeps).toEqual([3000])
+  })
+
+  test('retry-after-ms "0" alone stays 0 (no curve fallback — `o===void 0` never fires)', async () => {
+    const sleeps: number[] = []
+    let attempts = 0
+    await withConnectionRetry(
+      async () => {
+        attempts++
+        if (attempts === 1) {
+          throw Object.assign(new Error('throttled'), {
+            status: 503,
+            headers: { 'retry-after-ms': '0' },
+          })
+        }
+        return 'ok'
+      },
+      { maxRetries: 2, sleep: async ms => void sleeps.push(ms) },
+    )
+    // fe(0) 即时不等待 —— 决不能落回 500ms×(1-jitter) 计算曲线。
+    expect(sleeps).toEqual([0])
+  })
+
+  test('negative retry-after-ms passes through unclamped (fe(negative) = no sleep)', async () => {
+    const sleeps: number[] = []
+    let attempts = 0
+    await withConnectionRetry(
+      async () => {
+        attempts++
+        if (attempts === 1) {
+          throw Object.assign(new Error('throttled'), {
+            status: 503,
+            headers: { 'retry-after-ms': '-250' },
+          })
+        }
+        return 'ok'
+      },
+      { maxRetries: 2, sleep: async ms => void sleeps.push(ms) },
+    )
+    // 官方负值不 clamp：fe(-250) 经 setTimeout 语义为直通；clamp 成 0 或
+    // 反弹回曲线都是偏差面。
+    expect(sleeps).toEqual([-250])
+  })
+})
+
+describe('outer rounds use an independent counter (审查 #6.2: attempt-maxRetries 漂移)', () => {
+  test('a 401-gate retry does not consume an outer round (independent Er counter)', async () => {
+    const ENV = 'CLAUDE_CODE_UNAVAILABLE_OUTER_RETRIES'
+    const previous = process.env[ENV]
+    process.env[ENV] = '1'
+    const authPrevious = process.env.OPENAI_AUTH_MODE
+    delete process.env.OPENAI_AUTH_MODE
+    try {
+      let attempts = 0
+      const sleeps: number[] = []
+      const result = await withConnectionRetry(
+        async () => {
+          attempts++
+          if (attempts === 1) {
+            // 401 刷新门：这时 maxRetries=1 的内层预算还在（remaining=1），
+            // 门内消费一格（官方 makeRequest `if(r&&A)` 统一预算门）。
+            throw Object.assign(new Error('unauthorized'), { status: 401 })
+          }
+          if (attempts === 2) {
+            // 内层预算已尽（remaining==0 → maxRetries-attempt+1 = 0），落
+            // 外层面。旧实现 outerRound = attempt - maxRetries = 1；401 门
+            // 借走 attempt 的组合（免费面时代，attempt 超出 maxRetries+1）
+            // 会把第一个外层轮算成第 2 轮 → 少拿轮。新实现以独立计数器
+            // 推进（官方 :7495 `for(Er=1;Er<=zo;Er++)` 的 Er 面）：round 1
+            // 恒从 TZe=2000 起步。
+            throw Object.assign(new Error('overloaded'), { status: 529 })
+          }
+          return 'ok'
+        },
+        {
+          // 401 门必须拿到预算（remaining>0，免费一试已按审查 #3 移除）。
+          maxRetries: 1,
+          sleep: async ms => void sleeps.push(ms),
+          usedTokenCache: () => true,
+        },
+      )
+      expect(result).toBe('ok')
+      // 1 establishment + 1 401-refresh retry + 1 outer round
+      expect(attempts).toBe(3)
+      // sleeps[0] = 401 门重试的 SDK 曲线（min(0.5·2^0, 8s)·(1-rand·0.25)
+      // → [375, 500]）；sleeps[1] 才是外层轮 classifier 曲线。
+      expect(sleeps).toHaveLength(2)
+      // round 1 = min(2000·2^0, 10s) + 0~25% floored jitter → [2000, 2500]
+      expect(sleeps[1]).toBeGreaterThanOrEqual(2000)
+      expect(sleeps[1]).toBeLessThanOrEqual(2500)
+    } finally {
+      restoreEnv(ENV, previous)
+      restoreEnv('OPENAI_AUTH_MODE', authPrevious)
     }
   })
 })
