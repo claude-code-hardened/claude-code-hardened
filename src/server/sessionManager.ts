@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import type { IncomingMessage } from 'node:http'
@@ -17,6 +17,15 @@ import { WebSocketServer, type WebSocket } from 'ws'
  * running in stream-json mode; its stdout lines are relayed over the
  * session's WebSocket and inbound WebSocket messages are piped to its stdin.
  *
+ * Registry lifecycle (CCH server extension — official 2.8.4 has no HTTP/WSS
+ * session server; verified against docs/reverse-284/ where the only
+ * "sessions" route is the cloud API `/v1/code/sessions/`): a record occupies
+ * a maxSessions slot, so the entry MUST be removed the moment its subprocess
+ * is gone — stopped-forever residue would eventually 503 every new session.
+ * Kill escalation follows the official detached-process backstop pattern
+ * (SIGTERM → grace timer → SIGKILL; see 0001-chunk-xrzcaagk
+ * module-006-uncategorized.js, `BJt=1500` backstop).
+ *
  * TODO(下一代): idle sweep using `opts.idleTimeoutMs` (detached-session
  * expiry) and persistence of SessionIndex entries to
  * ~/.claude/server-sessions.json for cross-restart resume (see types.ts).
@@ -25,7 +34,22 @@ import { WebSocketServer, type WebSocket } from 'ws'
 type ManagedSession = {
   info: SessionInfo
   ws: WebSocket | null
+  /** Epoch ms the record entered 'stopped' (sweep-TTL base). */
+  stoppedAt?: number
 }
+
+/** Grace between the destroy SIGTERM and the SIGKILL backstop. */
+const DEFAULT_KILL_GRACE_MS = 5_000
+
+/** Residual 'stopped' records older than this are swept from the registry. */
+const STOPPED_RECORD_TTL_MS = 5 * 60_000
+
+/** Sweep cadence for 'stopped' residue (belt-and-braces for the exit path). */
+const STOPPED_SWEEP_INTERVAL_MS = 60_000
+
+/** stdout line-buffer cap: a broken child without line breaks must not
+ * grow the relay buffer without bound (tailing entries are dropped lines). */
+const STDOUT_BUFFER_LIMIT_BYTES = 1024 * 1024
 
 export type SessionManagerOpts = {
   idleTimeoutMs?: number
@@ -34,6 +58,8 @@ export type SessionManagerOpts = {
   workspace?: string
   /** Opt-in gate for client-requested --dangerously-skip-permissions. */
   allowDangerousSkipPermissions?: boolean
+  /** SIGTERM→SIGKILL grace for destroySession (testable override). */
+  killGraceMs?: number
 }
 
 export class SessionManager {
@@ -41,6 +67,7 @@ export class SessionManager {
   private opts: SessionManagerOpts
   private sessions = new Map<string, ManagedSession>()
   private wss: WebSocketServer
+  private sweepTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(backend: DangerousBackend, opts: SessionManagerOpts = {}) {
     this.backend = backend
@@ -98,20 +125,38 @@ export class SessionManager {
     const record: ManagedSession = { info, ws: null }
     this.sessions.set(id, record)
 
-    child.on('error', () => {
+    // A dead subprocess must not keep occupying a maxSessions slot: both the
+    // exit and the error path deregister the record (Map.delete is
+    // idempotent, so error+exit double-fire — or destroySession having
+    // removed the entry first — never double-deletes a live record; the ws
+    // close idempotence comes from record.ws being nulled here first).
+    const deregister = (closeCode: 1000 | 1011, reason: string): void => {
       info.status = 'stopped'
-      record.ws?.close(1011, 'subprocess failed to start')
-    })
-    child.on('exit', () => {
-      info.status = 'stopped'
-      record.ws?.close(1000, 'session ended')
+      record.stoppedAt = Date.now()
+      record.ws?.close(closeCode, reason)
       record.ws = null
-    })
+      this.sessions.delete(id)
+    }
+    child.on('error', () => deregister(1011, 'subprocess failed to start'))
+    child.on('exit', () => deregister(1000, 'session ended'))
 
     // stdout line-buffer → WebSocket
     let stdoutBuf = ''
     child.stdout?.on('data', (chunk: Buffer) => {
       stdoutBuf += chunk.toString('utf8')
+      // Bound the relay buffer: a child that never emits '\n' would otherwise
+      // grow it without limit. Prefer dropping complete lines from the head
+      // so the next relayed line is not a truncated JSON fragment.
+      if (stdoutBuf.length > STDOUT_BUFFER_LIMIT_BYTES) {
+        const cut = stdoutBuf.indexOf(
+          '\n',
+          stdoutBuf.length - STDOUT_BUFFER_LIMIT_BYTES,
+        )
+        stdoutBuf =
+          cut !== -1
+            ? stdoutBuf.slice(cut + 1)
+            : stdoutBuf.slice(stdoutBuf.length - STDOUT_BUFFER_LIMIT_BYTES)
+      }
       let idx = stdoutBuf.indexOf('\n')
       while (idx !== -1) {
         const line = stdoutBuf.slice(0, idx).trim()
@@ -125,6 +170,9 @@ export class SessionManager {
     child.stderr?.on('data', (chunk: Buffer) => {
       process.stderr.write(`[server/session ${id.slice(0, 8)}] ${chunk}`)
     })
+
+    // Registry maintenance sweeps run only while sessions exist.
+    this.ensureStoppedSweep()
 
     const base = input.wsBaseUrl ?? 'ws://localhost'
     return { id, wsUrl: `${base}/ws/${id}`, workDir }
@@ -156,16 +204,42 @@ export class SessionManager {
     return true
   }
 
+  /**
+   * SIGTERM first, then a SIGKILL backstop if the subprocess ignores it —
+   * the official detached-process lifecycle escalates the same way
+   * (0001-chunk-xrzcaagk: `Ab(n,"SIGTERM")` + `setTimeout(...,"SIGKILL")`
+   * backstop timer). The backstop timer never keeps the server process alive.
+   */
+  private killEscalating(child: ChildProcess): void {
+    try {
+      child.kill('SIGTERM')
+    } catch (err) {
+      process.stderr.write(
+        `[server] failed to kill session subprocess: ${errorMessage(err)}\n`,
+      )
+    }
+    const graceMs = this.opts.killGraceMs ?? DEFAULT_KILL_GRACE_MS
+    const backstop = setTimeout(() => {
+      try {
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill('SIGKILL')
+        }
+      } catch {
+        // already dead
+      }
+    }, graceMs)
+    backstop.unref()
+    child.once('exit', () => clearTimeout(backstop))
+  }
+
   async destroySession(id: string): Promise<boolean> {
     const record = this.sessions.get(id)
     if (!record) return false
     record.info.status = 'stopped'
-    try {
-      record.info.process?.kill('SIGTERM')
-    } catch (err) {
-      process.stderr.write(
-        `[server] failed to kill session ${id}: ${errorMessage(err)}\n`,
-      )
+    record.stoppedAt = Date.now()
+    const child = record.info.process
+    if (child) {
+      this.killEscalating(child)
     }
     try {
       record.ws?.close(1001, 'session terminated')
@@ -193,6 +267,45 @@ export class SessionManager {
   stop(closeActiveConnections: boolean): void {
     if (closeActiveConnections) {
       void this.destroyAll()
+    }
+    // The HTTP server is stopping: either sessions go with it
+    // (closeActiveConnections) or the process is going away — either way
+    // registry maintenance has nothing left to maintain.
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer)
+      this.sweepTimer = null
+    }
+  }
+
+  /**
+   * Belt-and-braces complement to the exit-path deregistration: any record
+   * that somehow lingers in 'stopped' past the TTL is removed outright, so
+   * dead registry entries can never permanently consume maxSessions slots.
+   */
+  private ensureStoppedSweep(): void {
+    if (this.sweepTimer) return
+    this.sweepTimer = setInterval(
+      () => this.sweepStoppedRecords(),
+      STOPPED_SWEEP_INTERVAL_MS,
+    )
+    // Never block server shutdown on the sweep.
+    this.sweepTimer.unref()
+  }
+
+  private sweepStoppedRecords(): void {
+    const now = Date.now()
+    for (const [id, record] of this.sessions) {
+      if (
+        record.info.status === 'stopped' &&
+        record.stoppedAt !== undefined &&
+        now - record.stoppedAt > STOPPED_RECORD_TTL_MS
+      ) {
+        this.sessions.delete(id)
+      }
+    }
+    if (this.sessions.size === 0 && this.sweepTimer) {
+      clearInterval(this.sweepTimer)
+      this.sweepTimer = null
     }
   }
 }
