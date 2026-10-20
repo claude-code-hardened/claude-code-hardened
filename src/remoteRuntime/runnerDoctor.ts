@@ -55,6 +55,12 @@
  */
 
 import { access, constants } from 'fs/promises'
+import { join } from 'node:path'
+import {
+  readJsonFileStrict,
+  writeJsonFileAtomic,
+} from '../utils/safeJsonFile.js'
+import { getClaudeConfigHomeDir } from '../utils/envUtils.js'
 import { computeTokenRefreshTtlWarning } from './ttlWarning.js'
 import { resolveRunnerHealthPort } from './healthServer.js'
 
@@ -140,21 +146,122 @@ export function evaluateRunnerDependencyChecks(
  * so they are explicitly prefixed `CCH_RUNNER_` and must not be presented
  * as official configuration:
  *   CCH_RUNNER_TOKEN_TTL_SEC  — token/work-order TTL, total seconds
- *   CCH_RUNNER_TOKEN_AGE_MS   — local-clock ms since the last refresh
+ *   CCH_RUNNER_TOKEN_AGE_MS   — local-clock ms since the last refresh.
+ *     ROUND 3 (item 7): the env value is only the INITIAL seed. A value
+ *     baked into a container env never changes, so an age read from env
+ *     alone reports the same frozen number forever and misfires the 80%-TTL
+ *     warning on an actually-refreshed token. The live source of truth is
+ *     the persisted lastRefreshAt marker (see
+ *     getRunnerTokenLastRefreshPath / recordRunnerTokenRefresh); the env
+ *     value is consulted only when no marker exists yet (and can seed one
+ *     via initRunnerTokenRefreshMarkerFromEnv).
  */
 export const RUNNER_TOKEN_TTL_SEC_ENV = 'CCH_RUNNER_TOKEN_TTL_SEC'
 export const RUNNER_TOKEN_AGE_MS_ENV = 'CCH_RUNNER_TOKEN_AGE_MS'
 
+// ─── Persisted token-refresh marker (round 3, item 7) ──────────────────────
+
 /**
- * Config checks — pure (env passthrough): health port parseability and
- * the 80%-TTL token refresh clock-skew check (runbook §2 last row /
- * §9 row 3).
+ * On-disk marker under the Claude config home recording WHEN the runner
+ * token was last refreshed (epoch ms). Preferring it over the static
+ * CCH_RUNNER_TOKEN_AGE_MS env keeps the doctor's 80%-TTL warning anchored
+ * to real refreshes instead of a container-constant initial value.
+ */
+export const RUNNER_TOKEN_REFRESH_MARKER_FILENAME =
+  'runner-token-last-refresh.json'
+
+export function getRunnerTokenLastRefreshPath(): string {
+  return join(getClaudeConfigHomeDir(), RUNNER_TOKEN_REFRESH_MARKER_FILENAME)
+}
+
+type RunnerTokenRefreshMarker = {
+  lastRefreshAt: number
+  updatedAt: string
+}
+
+/**
+ * Record a successful token refresh (epoch ms). No production call-site
+ * exists yet — CCH does not wire the runner token refresh chain (see the
+ * header TODO(coverage) §1) — this is the contract the future refresh flow
+ * (and tests) call so the doctor's TTL warning tracks reality.
+ */
+export function recordRunnerTokenRefresh(nowMs: number = Date.now()): void {
+  const marker: RunnerTokenRefreshMarker = {
+    lastRefreshAt: Math.round(nowMs),
+    updatedAt: new Date(nowMs).toISOString(),
+  }
+  writeJsonFileAtomic(getRunnerTokenLastRefreshPath(), marker)
+}
+
+/**
+ * The persisted lastRefreshAt (epoch ms), or null when absent / unparsable /
+ * shape-mismatched. A corrupt marker is quarantined+logged by
+ * readJsonFileStrict; the doctor then falls back to the env seed instead of
+ * failing the whole config check.
+ */
+export function readRunnerTokenLastRefreshAt(): number | null {
+  try {
+    const parsed: unknown = readJsonFileStrict(getRunnerTokenLastRefreshPath())
+    if (parsed === null || typeof parsed !== 'object') return null
+    const lastRefreshAt = (parsed as Record<string, unknown>)['lastRefreshAt']
+    return typeof lastRefreshAt === 'number' &&
+      Number.isFinite(lastRefreshAt) &&
+      lastRefreshAt > 0
+      ? lastRefreshAt
+      : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Seed the persisted marker from the CCH_RUNNER_TOKEN_AGE_MS env initial
+ * value (env age → derived lastRefreshAt). Only writes when no marker
+ * exists yet. Returns whether a marker was written. For the future runner
+ * bootstrap / refresh flow — the doctor itself stays read-only.
+ */
+export function initRunnerTokenRefreshMarkerFromEnv(
+  env: Record<string, string | undefined> = process.env,
+  nowMs: number = Date.now(),
+): boolean {
+  if (readRunnerTokenLastRefreshAt() !== null) return false
+  const raw = env[RUNNER_TOKEN_AGE_MS_ENV]
+  if (raw === undefined) return false
+  const ageMs = Number.parseFloat(raw)
+  if (!Number.isFinite(ageMs) || ageMs < 0) return false
+  recordRunnerTokenRefresh(nowMs - Math.round(ageMs))
+  return true
+}
+
+/**
+ * Injectable I/O for the config checks so evaluation stays pure and
+ * hermetically testable (the default io reads the real config-home marker).
+ */
+export type RunnerConfigCheckIo = {
+  /** Persisted lastRefreshAt (epoch ms), or null when absent/unreadable. */
+  readLastRefreshAt: () => number | null
+  /** Wall clock in ms. */
+  now: () => number
+}
+
+const DEFAULT_CONFIG_CHECK_IO: RunnerConfigCheckIo = {
+  readLastRefreshAt: readRunnerTokenLastRefreshAt,
+  now: () => Date.now(),
+}
+
+/**
+ * Config checks — health port parseability and the 80%-TTL token refresh
+ * clock-skew check (runbook §2 last row / §9 row 3). Pure with respect to
+ * the injected io: env passthrough + a read-only marker probe. No writes.
  *   SELF_HOSTED_RUNNER_HEALTH_PORT   — /healthz port (0 = disabled)
  *   CCH_RUNNER_TOKEN_TTL_SEC         — CCH-custom; see above
- *   CCH_RUNNER_TOKEN_AGE_MS          — CCH-custom; see above
+ *   CCH_RUNNER_TOKEN_AGE_MS          — CCH-custom INITIAL seed; see above
+ *   <config-home>/runner-token-last-refresh.json — persisted live age
+ *     source, preferred over the env seed (round 3, item 7)
  */
 export function evaluateRunnerConfigChecks(
   env: Record<string, string | undefined> = process.env,
+  io: RunnerConfigCheckIo = DEFAULT_CONFIG_CHECK_IO,
 ): RunnerDoctorCheck[] {
   const checks: RunnerDoctorCheck[] = []
 
@@ -194,9 +301,24 @@ export function evaluateRunnerConfigChecks(
   // failed on an otherwise-healthy runner ... clock skew throws off the
   // 80%-TTL refresh schedule" — the 80% point is where the token refresh
   // is SCHEDULED, not a job deadline).
+  //
+  // Age source priority (round 3, item 7): the PERSISTED lastRefreshAt
+  // marker first — it advances with real refreshes; the env value is only
+  // the initial seed (a container-constant value would report the same
+  // frozen age forever and misfire the warning on a refreshed token).
   const ttlRaw = env[RUNNER_TOKEN_TTL_SEC_ENV]
   const ageRaw = env[RUNNER_TOKEN_AGE_MS_ENV]
-  if (ttlRaw === undefined || ageRaw === undefined) {
+  const lastRefreshAt = io.readLastRefreshAt()
+  let sinceRefreshMs: number | null = null
+  let ageSource = ''
+  if (lastRefreshAt !== null) {
+    sinceRefreshMs = io.now() - lastRefreshAt
+    ageSource = `age from persisted ${RUNNER_TOKEN_REFRESH_MARKER_FILENAME} (lastRefreshAt)`
+  } else if (ageRaw !== undefined) {
+    sinceRefreshMs = Number.parseFloat(ageRaw)
+    ageSource = `age from ${RUNNER_TOKEN_AGE_MS_ENV} (initial seed; no persisted ${RUNNER_TOKEN_REFRESH_MARKER_FILENAME})`
+  }
+  if (ttlRaw === undefined || sinceRefreshMs === null) {
     checks.push({
       name: 'token_refresh_clock_skew',
       category: 'config',
@@ -205,18 +327,21 @@ export function evaluateRunnerConfigChecks(
     })
   } else {
     const ttlSec = Number.parseFloat(ttlRaw)
-    const sinceRefreshMs = Number.parseFloat(ageRaw)
     if (
       !Number.isFinite(ttlSec) ||
       !Number.isFinite(sinceRefreshMs) ||
       ttlSec <= 0 ||
       sinceRefreshMs < 0
     ) {
+      const ageRendered =
+        ageRaw !== undefined
+          ? `'${ageRaw}'`
+          : `${sinceRefreshMs}ms (persisted marker)`
       checks.push({
         name: 'token_refresh_clock_skew',
         category: 'config',
         status: 'fail',
-        detail: `token TTL env does not parse: TTL='${ttlRaw}' age='${ageRaw}' (need TTL > 0 and age >= 0)`,
+        detail: `token TTL env does not parse: TTL='${ttlRaw}' age=${ageRendered} — ${ageSource} (need TTL > 0 and age >= 0; a persisted marker in the future points at host clock skew)`,
       })
     } else {
       const warning = computeTokenRefreshTtlWarning(ttlSec, sinceRefreshMs)
@@ -225,8 +350,9 @@ export function evaluateRunnerConfigChecks(
         category: 'config',
         status: warning === null ? 'ok' : 'warn',
         detail:
-          warning ??
-          `token refresh at ${Math.round((sinceRefreshMs / (ttlSec * 1000)) * 100)}% of its ${ttlSec}s TTL — below the 80% refresh point`,
+          (warning ??
+            `token refresh at ${Math.round((sinceRefreshMs / (ttlSec * 1000)) * 100)}% of its ${ttlSec}s TTL — below the 80% refresh point`) +
+          ` [${ageSource}]`,
       })
     }
   }

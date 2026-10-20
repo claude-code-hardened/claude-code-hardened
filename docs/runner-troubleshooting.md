@@ -94,8 +94,18 @@ curl -sI "$API_BASE/" | grep -i '^date:'   # 服务端时钟
 
 ```bash
 CCH_RUNNER_TOKEN_TTL_SEC=3600 \   # token TTL（秒，>0）
-CCH_RUNNER_TOKEN_AGE_MS=3000000   # 距上次刷新的本地时钟毫秒（>=0）
+CCH_RUNNER_TOKEN_AGE_MS=3000000   # 距上次刷新的本地时钟毫秒（>=0，仅初值）
 ```
+
+**CCH_RUNNER_TOKEN_AGE_MS 只是初值（种子）**：容器 env 恒定不变，单独
+依赖它会让 doctor 永远读到同一个冻结的 age——token 实际已刷新后仍误报
+"刷新逾期"。实时真值是落盘的
+`<CLAUDE_CONFIG_DIR>/runner-token-last-refresh.json`（`lastRefreshAt`
+epoch-ms 字段）：刷新方调用 `recordRunnerTokenRefresh()` 更新（生产刷新
+链尚未接线，见 runnerDoctor.ts TODO(coverage) §1），
+`initRunnerTokenRefreshMarkerFromEnv()` 可用 env 初值播种一次；doctor 的
+`token_refresh_clock_skew` 检查在标记存在时优先读标记，env 仅在无标记时
+兜底。
 
 ## 4. SLACK_TAG_TOKEN（`src/bridge/bridgeConfig.ts`）
 

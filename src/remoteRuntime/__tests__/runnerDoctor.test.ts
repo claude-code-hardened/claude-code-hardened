@@ -1,9 +1,16 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   RUNNER_TOKEN_AGE_MS_ENV,
   RUNNER_TOKEN_TTL_SEC_ENV,
+  getRunnerTokenLastRefreshPath,
+  initRunnerTokenRefreshMarkerFromEnv,
+  readRunnerTokenLastRefreshAt,
+  recordRunnerTokenRefresh,
 } from '../runnerDoctor.js'
-import type { RunnerDoctorProbe } from '../runnerDoctor.js'
+import type { RunnerConfigCheckIo, RunnerDoctorProbe } from '../runnerDoctor.js'
 import {
   evaluateRunnerConfigChecks,
   evaluateRunnerDependencyChecks,
@@ -22,37 +29,52 @@ const EMPTY_PROBE: RunnerDoctorProbe = {
   pathReadable: async () => false,
 }
 
+/** Hermetic io: no persisted marker, fixed clock. */
+const NO_MARKER_IO: RunnerConfigCheckIo = {
+  readLastRefreshAt: () => null,
+  now: () => 1_000_000,
+}
+
 describe('evaluateRunnerConfigChecks', () => {
   test('health port unset warns so probe hits are never assumed', () => {
-    const checks = evaluateRunnerConfigChecks({})
+    const checks = evaluateRunnerConfigChecks({}, NO_MARKER_IO)
     const health = checks.find(c => c.name === 'config_health_port')
     expect(health?.status).toBe('warn')
     expect(health?.category).toBe('config')
   })
 
   test('valid health port is ok; 0 is an explicit disable (warn)', () => {
-    const valid = evaluateRunnerConfigChecks({
-      SELF_HOSTED_RUNNER_HEALTH_PORT: '8080',
-    }).find(c => c.name === 'config_health_port')
+    const valid = evaluateRunnerConfigChecks(
+      {
+        SELF_HOSTED_RUNNER_HEALTH_PORT: '8080',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'config_health_port')
     expect(valid?.status).toBe('ok')
     expect(valid?.detail).toContain('8080')
 
-    const disabled = evaluateRunnerConfigChecks({
-      SELF_HOSTED_RUNNER_HEALTH_PORT: '0',
-    }).find(c => c.name === 'config_health_port')
+    const disabled = evaluateRunnerConfigChecks(
+      {
+        SELF_HOSTED_RUNNER_HEALTH_PORT: '0',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'config_health_port')
     expect(disabled?.status).toBe('warn')
     expect(disabled?.detail).toContain('disabled')
   })
 
   test('unparsable health port fails', () => {
-    const failed = evaluateRunnerConfigChecks({
-      SELF_HOSTED_RUNNER_HEALTH_PORT: 'http',
-    }).find(c => c.name === 'config_health_port')
+    const failed = evaluateRunnerConfigChecks(
+      {
+        SELF_HOSTED_RUNNER_HEALTH_PORT: 'http',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'config_health_port')
     expect(failed?.status).toBe('fail')
   })
 
   test('token TTL unset skips the 80% refresh check as ok', () => {
-    const check = evaluateRunnerConfigChecks({}).find(
+    const check = evaluateRunnerConfigChecks({}, NO_MARKER_IO).find(
       c => c.name === 'token_refresh_clock_skew',
     )
     expect(check?.status).toBe('ok')
@@ -60,46 +82,174 @@ describe('evaluateRunnerConfigChecks', () => {
   })
 
   test('token TTL past the 80% refresh point surfaces the warning text', () => {
-    const check = evaluateRunnerConfigChecks({
-      [RUNNER_TOKEN_TTL_SEC_ENV]: '1000',
-      [RUNNER_TOKEN_AGE_MS_ENV]: '900000',
-    }).find(c => c.name === 'token_refresh_clock_skew')
+    const check = evaluateRunnerConfigChecks(
+      {
+        [RUNNER_TOKEN_TTL_SEC_ENV]: '1000',
+        [RUNNER_TOKEN_AGE_MS_ENV]: '900000',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'token_refresh_clock_skew')
     expect(check?.status).toBe('warn')
     expect(check?.detail).toContain('clock skew')
+    // Env is only the initial seed — the detail says where the age came from.
+    expect(check?.detail).toContain('initial seed')
   })
 
   test('token TTL below the 80% refresh point stays ok; unparsable TTL fails', () => {
-    const okCheck = evaluateRunnerConfigChecks({
-      [RUNNER_TOKEN_TTL_SEC_ENV]: '1000',
-      [RUNNER_TOKEN_AGE_MS_ENV]: '100000',
-    }).find(c => c.name === 'token_refresh_clock_skew')
+    const okCheck = evaluateRunnerConfigChecks(
+      {
+        [RUNNER_TOKEN_TTL_SEC_ENV]: '1000',
+        [RUNNER_TOKEN_AGE_MS_ENV]: '100000',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'token_refresh_clock_skew')
     expect(okCheck?.status).toBe('ok')
 
-    const failed = evaluateRunnerConfigChecks({
-      [RUNNER_TOKEN_TTL_SEC_ENV]: 'abc',
-      [RUNNER_TOKEN_AGE_MS_ENV]: '100000',
-    }).find(c => c.name === 'token_refresh_clock_skew')
+    const failed = evaluateRunnerConfigChecks(
+      {
+        [RUNNER_TOKEN_TTL_SEC_ENV]: 'abc',
+        [RUNNER_TOKEN_AGE_MS_ENV]: '100000',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'token_refresh_clock_skew')
     expect(failed?.status).toBe('fail')
   })
 
   test('NEGATIVE TTL / age values fail instead of silently reporting ok', () => {
-    const negativeTtl = evaluateRunnerConfigChecks({
-      [RUNNER_TOKEN_TTL_SEC_ENV]: '-5',
-      [RUNNER_TOKEN_AGE_MS_ENV]: '100',
-    }).find(c => c.name === 'token_refresh_clock_skew')
+    const negativeTtl = evaluateRunnerConfigChecks(
+      {
+        [RUNNER_TOKEN_TTL_SEC_ENV]: '-5',
+        [RUNNER_TOKEN_AGE_MS_ENV]: '100',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'token_refresh_clock_skew')
     expect(negativeTtl?.status).toBe('fail')
     expect(negativeTtl?.detail).toContain("TTL='-5'")
 
-    const negativeAge = evaluateRunnerConfigChecks({
-      [RUNNER_TOKEN_TTL_SEC_ENV]: '1000',
-      [RUNNER_TOKEN_AGE_MS_ENV]: '-1',
-    }).find(c => c.name === 'token_refresh_clock_skew')
+    const negativeAge = evaluateRunnerConfigChecks(
+      {
+        [RUNNER_TOKEN_TTL_SEC_ENV]: '1000',
+        [RUNNER_TOKEN_AGE_MS_ENV]: '-1',
+      },
+      NO_MARKER_IO,
+    ).find(c => c.name === 'token_refresh_clock_skew')
     expect(negativeAge?.status).toBe('fail')
   })
 
   test('CCH-custom env names are declared, not official surfaces', () => {
     expect(RUNNER_TOKEN_TTL_SEC_ENV).toBe('CCH_RUNNER_TOKEN_TTL_SEC')
     expect(RUNNER_TOKEN_AGE_MS_ENV).toBe('CCH_RUNNER_TOKEN_AGE_MS')
+  })
+
+  test('a persisted lastRefreshAt marker is the LIVE age source, preferred over the static env seed', () => {
+    // ttl 1000s; the marker says the last refresh happened 900s ago — past
+    // the 80% point — while the stale env seed claims 100s (would be ok).
+    // Pre-fix the container-constant env value misfired forever in both
+    // directions; the marker must win.
+    const now = 10_000_000_000
+    const checks = evaluateRunnerConfigChecks(
+      {
+        [RUNNER_TOKEN_TTL_SEC_ENV]: '1000',
+        [RUNNER_TOKEN_AGE_MS_ENV]: '100000',
+      },
+      {
+        readLastRefreshAt: () => now - 900_000,
+        now: () => now,
+      },
+    )
+    const check = checks.find(c => c.name === 'token_refresh_clock_skew')
+    expect(check?.status).toBe('warn')
+    expect(check?.detail).toContain('clock skew')
+    expect(check?.detail).toContain('persisted runner-token-last-refresh.json')
+  })
+
+  test('the marker alone (no age env) drives the check instead of skipping it', () => {
+    const now = 10_000_000_000
+    const check = evaluateRunnerConfigChecks(
+      { [RUNNER_TOKEN_TTL_SEC_ENV]: '1000' },
+      {
+        readLastRefreshAt: () => now - 100_000,
+        now: () => now,
+      },
+    ).find(c => c.name === 'token_refresh_clock_skew')
+    // 10% of TTL — below the refresh point, so ok (not skipped).
+    expect(check?.status).toBe('ok')
+    expect(check?.detail).toContain('below the 80% refresh point')
+  })
+
+  test('a persisted marker in the FUTURE fails as clock skew, not a negative ok', () => {
+    const now = 10_000_000_000
+    const check = evaluateRunnerConfigChecks(
+      { [RUNNER_TOKEN_TTL_SEC_ENV]: '1000' },
+      {
+        readLastRefreshAt: () => now + 60_000,
+        now: () => now,
+      },
+    ).find(c => c.name === 'token_refresh_clock_skew')
+    expect(check?.status).toBe('fail')
+    expect(check?.detail).toContain('clock skew')
+  })
+})
+
+describe('persisted token-refresh marker (round 3, item 7)', () => {
+  let dir: string
+  const previousConfigDir = process.env.CLAUDE_CONFIG_DIR
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'runner-doctor-marker-'))
+    process.env.CLAUDE_CONFIG_DIR = dir
+  })
+
+  afterEach(() => {
+    if (previousConfigDir === undefined) {
+      delete process.env.CLAUDE_CONFIG_DIR
+    } else {
+      process.env.CLAUDE_CONFIG_DIR = previousConfigDir
+    }
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  test('record → read roundtrip persists lastRefreshAt', () => {
+    expect(readRunnerTokenLastRefreshAt()).toBeNull()
+    recordRunnerTokenRefresh(1_234_567)
+    expect(readRunnerTokenLastRefreshAt()).toBe(1_234_567)
+    expect(getRunnerTokenLastRefreshPath()).toContain(dir)
+    const raw = JSON.parse(
+      readFileSync(getRunnerTokenLastRefreshPath(), 'utf8'),
+    ) as { lastRefreshAt: number; updatedAt: string }
+    expect(raw.lastRefreshAt).toBe(1_234_567)
+    expect(raw.updatedAt).toContain('1970')
+  })
+
+  test('initRunnerTokenRefreshMarkerFromEnv seeds the marker from the env initial value, once', () => {
+    expect(
+      initRunnerTokenRefreshMarkerFromEnv(
+        { [RUNNER_TOKEN_AGE_MS_ENV]: '5000' },
+        1_000_000,
+      ),
+    ).toBe(true)
+    // env age 5000ms seeded at now=1_000_000 → lastRefreshAt = 995_000.
+    expect(readRunnerTokenLastRefreshAt()).toBe(995_000)
+    // Second call is a no-op: the marker now owns the truth.
+    expect(
+      initRunnerTokenRefreshMarkerFromEnv(
+        { [RUNNER_TOKEN_AGE_MS_ENV]: '1' },
+        9_999_999,
+      ),
+    ).toBe(false)
+    expect(readRunnerTokenLastRefreshAt()).toBe(995_000)
+    // No env → no seeding.
+    expect(initRunnerTokenRefreshMarkerFromEnv({}, 5)).toBe(false)
+  })
+
+  test('an unparsable env seed refuses to write a marker', () => {
+    expect(
+      initRunnerTokenRefreshMarkerFromEnv(
+        { [RUNNER_TOKEN_AGE_MS_ENV]: 'abc' },
+        1_000_000,
+      ),
+    ).toBe(false)
+    expect(existsSync(getRunnerTokenLastRefreshPath())).toBe(false)
   })
 })
 
