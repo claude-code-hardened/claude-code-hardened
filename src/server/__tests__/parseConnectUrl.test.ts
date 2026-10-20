@@ -35,4 +35,29 @@ describe('parseConnectUrl', () => {
     expect(() => parseConnectUrl('cc://')).toThrow()
     expect(() => parseConnectUrl('cc+unix://')).toThrow()
   })
+
+  test('keeps the canonical bracketed IPv6 authority', () => {
+    const parsed = parseConnectUrl('cc://sk-ant-cc-t@[::1]:8080')
+    expect(parsed.serverUrl).toBe('http://[::1]:8080')
+    expect(parsed.authToken).toBe('sk-ant-cc-t')
+  })
+
+  test('brackets an unbracketed bare IPv6 literal', () => {
+    const parsed = parseConnectUrl('cc://::1')
+    expect(parsed.serverUrl).toBe('http://[::1]')
+  })
+
+  test('splits the trailing port off an unbracketed IPv6 literal', () => {
+    const parsed = parseConnectUrl('cc://::1:8080')
+    expect(parsed.serverUrl).toBe('http://[::1]:8080')
+  })
+
+  test('does not mistake a short IPv6 suffix for a port', () => {
+    // "::80" is an IPv6 address (single colon before the tail) — brackets whole.
+    expect(parseConnectUrl('cc://::80').serverUrl).toBe('http://[::80]')
+    // Plain host:port must be untouched.
+    expect(parseConnectUrl('cc://example.com:8080').serverUrl).toBe(
+      'http://example.com:8080',
+    )
+  })
 })

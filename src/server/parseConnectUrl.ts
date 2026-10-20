@@ -24,6 +24,43 @@ function looksLikeToken(value: string): boolean {
   return TOKEN_PREFIXES.some(prefix => value.startsWith(prefix))
 }
 
+function countColons(value: string): number {
+  return (value.match(/:/g) ?? []).length
+}
+
+/**
+ * Bracket tolerance for the cc:// authority (A6 follow-up): the canonical
+ * IPv6 input is pre-bracketed (`cc://[::1]:8080`) and passes through
+ * unchanged, but an unbracketed literal is also normalized so the built
+ * origin stays parsable — official URL reconstruction does the same
+ * (2.8.4, decompiled/0011-chunk-bxerm1mk/module-004-uncategorized.js:360
+ * Xmt: hostname containing ":" and not already bracketed is wrapped).
+ *
+ * Conventions for the inherently-ambiguous unbracketed form:
+ *   colonCount 0        → plain hostname, unchanged
+ *   colonCount 1        → host:port, unchanged (plain hostname case)
+ *   colonCount ≥ 2      → unbracketed IPv6: bracket the whole authority,
+ *                         except when the tail after the LAST colon is a
+ *                         decimal port (≤5 digits) AND the remaining host
+ *                         still keeps ≥2 colons — then only the host part
+ *                         is bracketed ("::1:8080" → "[::1]:8080" is host
+ *                         ::1 port 8080; bare "::1" stays address-only).
+ * Bracketed form is recommended; users should write cc://[::1]:8080.
+ */
+function normalizeAuthority(authority: string): string {
+  const colons = countColons(authority)
+  if (colons === 0 || authority.startsWith('[') || colons === 1) {
+    return authority
+  }
+  const lastColon = authority.lastIndexOf(':')
+  const tail = authority.slice(lastColon + 1)
+  const host = authority.slice(0, lastColon)
+  if (/^\d{1,5}$/.test(tail) && countColons(host) >= 2) {
+    return `[${host}]:${tail}`
+  }
+  return `[${authority}]`
+}
+
 /**
  * RBo determination: unix-socket transport requires the Bun runtime
  * (`cc+unix://` URLs are only dialable via Bun's fetch/socket support).
@@ -114,7 +151,7 @@ export const parseConnectUrl: (url: string) => {
   }
 
   return {
-    serverUrl: `http://${authority}`,
+    serverUrl: `http://${normalizeAuthority(authority)}`,
     authToken,
     isUnix: false,
   }

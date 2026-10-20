@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream'
 
 import { errorMessage } from '../utils/errors.js'
 import { jsonParse, jsonStringify } from '../utils/slowOperations.js'
+import { urlHostFor } from './bindHost.js'
 import type { ServerConfig } from './types.js'
 
 /**
@@ -196,11 +197,7 @@ export const startServer: (
         // and never reflects an external hostname.
         // A6 audit: a literal IPv6 host (::1 etc.) must be bracketed in the
         // ws URL — `ws://::1:port` parses as invalid.
-        const rawWsHost =
-          !config.host || config.host === '0.0.0.0' || config.host === '::'
-            ? '127.0.0.1'
-            : config.host
-        const wsHost = rawWsHost.includes(':') ? `[${rawWsHost}]` : rawWsHost
+        const wsHost = urlHostFor(config.host)
         const session = await sessionManager.createSession({
           ...(typeof body.cwd === 'string' ? { cwd: body.cwd } : {}),
           ...(body.dangerously_skip_permissions === true && {
