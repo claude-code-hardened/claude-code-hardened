@@ -109,6 +109,17 @@ mock.module('src/services/analytics/index.js', () => ({
   stripProtoFields: (v: unknown) => v,
 }))
 
+// The share command's assertions are written against the ENGLISH source
+// keys — pin t() to identity so the suite is locale-independent (runner
+// locale must not flip these to Chinese/… translations). Same precedent as
+// share-gh.test.ts:144-150.
+const identityT = (key: string, params?: Record<string, unknown>): string =>
+  key.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
+    params && name in params ? String(params[name]) : `{{${name}}}`,
+  )
+mock.module('src/i18n/index.js', () => ({ t: identityT }))
+mock.module('src/i18n/index.ts', () => ({ t: identityT }))
+
 // NOTE: We do NOT mock src/bootstrap/state.js here to avoid interfering with
 // other test files (particularly launchAutofixPr.test.ts). We dynamically
 // import state to get the real session ID for log file path construction.

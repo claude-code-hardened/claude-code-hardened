@@ -175,9 +175,14 @@ const sessionStorageShareFace = async () => {
   }
 }
 {
+  const real = await import('src/utils/sessionStorage.js')
   const face = await sessionStorageShareFace()
-  mock.module('src/utils/sessionStorage.js', () => face)
-  mock.module('src/utils/sessionStorage.ts', () => face)
+  // Full passthrough surface: partial faces registered via mock.module
+  // poison sibling test files that require the untouched exports
+  // (recordFileHistorySnapshot / recordQueueOperation not-found hooks are
+  // load-time failures spread by file import order).
+  mock.module('src/utils/sessionStorage.js', () => ({ ...real, ...face }))
+  mock.module('src/utils/sessionStorage.ts', () => ({ ...real, ...face }))
 }
 
 // ── State ──
