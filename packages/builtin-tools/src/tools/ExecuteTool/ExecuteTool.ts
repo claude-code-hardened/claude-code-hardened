@@ -20,6 +20,215 @@ import { DESCRIPTION, getPrompt } from './prompt.js'
 import { EXECUTE_TOOL_NAME } from './constants.js'
 import { isDeferredTool } from '../SearchExtraToolsTool/prompt.js'
 
+/**
+ * 官方对照（reverse-284 _ALL.js:10321，ToolSearch select 引导文案）：
+ * `. Call ${Ge.name} instead, loading it first with ${Ha} query
+ * "select:${Ge.name}" if it is not loaded yet.` / `. Call ${Ge.name} instead.`
+ * 官方没有委派包装 —— select 之后模型直呼目标工具名，PreToolUse /
+ * PostToolUse / canUseTool 天然命中真名。CCH 保留委派形态（ExecuteExtraTool），
+ * 因此必须在委派执行前后以【目标工具名 + 分解后的输入】重放钩子，线位的
+ * 防线才与官方"直呼工具名"等价。已知形态差异（报告口径）：官方路径下钩子
+ * 进度消息/blockedError 由主管道流式产出；委派路径在 tool.call 内部，进度
+ * 无法回流，改为把 blocking/additionalContext 插为 NewMessages（附件消息），
+ * 决策面（deny/ask/updatedInput）语义保持一致且 allow 从不越权（钩子 allow
+ * 不跳过 canUseTool——反向防线：本路径 always-consult-gate）。
+ */
+
+type PreToolUseReplay =
+  | {
+      behavior: 'deny' | 'ask'
+      message: string
+      updatedInput?: Record<string, unknown>
+    }
+  | { behavior: 'passthrough'; updatedInput?: Record<string, unknown> }
+
+/**
+ * Replay PreToolUse hooks under the TARGET tool's own name with the
+ * decomposed input, mirroring the main pipeline's runPreToolUseHooks
+ * aggregation (deny > ask > allow; hook blockingError ⇒ deny). Returns null
+ * when no hooks produced a decision or input mutation. Hook 'allow'
+ * deliberately does NOT bypass the canUseTool gate here (the delegation path
+ * always consults the gate — matches this tool's pre-existing always-gate
+ * contract), while deny/ask are enforced exactly like the pipeline.
+ *
+ * Dynamic import: src/utils/hooks.ts drags the settings/analytics chains;
+ * loading it lazily keeps ExecuteTool import-time cheap and avoids any
+ * module-init cycles with src/tools.ts. No app state / hook infra failures
+ * are logged and treated as "no hooks" (a context without getAppState has no
+ * hook surface to run).
+ */
+async function replayPreToolUseHooks(
+  targetTool: Tool,
+  params: Record<string, unknown>,
+  context: ToolUseContext,
+  toolUseID: string,
+): Promise<PreToolUseReplay | null> {
+  let appState: unknown
+  try {
+    appState = context.getAppState?.()
+  } catch {
+    // Minimal contexts (subagents/SDK without app state) carry no hook
+    // surface — nothing to replay.
+    return null
+  }
+  if (appState == null) return null
+
+  try {
+    const hooks = await import('src/utils/hooks.js')
+    const permissionMode = (
+      appState as { toolPermissionContext?: { mode?: string } }
+    ).toolPermissionContext?.mode
+    let decision: PreToolUseReplay | null = null
+    let mutatedInput: Record<string, unknown> | undefined
+    for await (const result of hooks.executePreToolHooks(
+      targetTool.name,
+      toolUseID,
+      params,
+      context,
+      permissionMode,
+      context.abortController?.signal,
+      undefined,
+      context.requestPrompt,
+      targetTool.getToolUseSummary?.(params),
+    )) {
+      if (result.blockingError) {
+        return {
+          behavior: 'deny',
+          message: hooks.getPreToolHookBlockingMessage(
+            `PreToolUse:${targetTool.name}`,
+            result.blockingError,
+          ),
+        }
+      }
+      if (result.permissionBehavior === 'deny') {
+        decision = {
+          behavior: 'deny',
+          message:
+            result.hookPermissionDecisionReason ||
+            `Hook PreToolUse:${targetTool.name} denied this tool call`,
+        }
+      } else if (result.permissionBehavior === 'ask' && decision === null) {
+        decision = {
+          behavior: 'ask',
+          message:
+            result.hookPermissionDecisionReason ||
+            `Hook PreToolUse:${targetTool.name} requires approval`,
+          updatedInput:
+            (result.updatedInput as Record<string, unknown> | undefined) ??
+            params,
+        }
+      }
+      // Passthrough mutator: adopt the hook's rewritten input (pipeline
+      // parity — updatedInput without a permission decision flows to the
+      // gate and the tool call).
+      if (
+        result.updatedInput &&
+        result.permissionBehavior === undefined &&
+        typeof result.updatedInput === 'object'
+      ) {
+        mutatedInput = result.updatedInput as Record<string, unknown>
+      }
+    }
+    if (decision !== null) {
+      if (decision.updatedInput === undefined && mutatedInput) {
+        decision.updatedInput = mutatedInput
+      }
+      return decision
+    }
+    if (mutatedInput) {
+      return { behavior: 'passthrough', updatedInput: mutatedInput }
+    }
+    return null
+  } catch (error) {
+    // Hook infrastructure failure — mirror runPreToolUseHooks' outer catch
+    // (log, no crash); the gate + target validation still apply.
+    import('src/utils/debug.js').then(({ logForDebugging }) =>
+      logForDebugging(
+        `ExecuteExtraTool PreToolUse replay failed for ${targetTool.name}: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    )
+    return null
+  }
+}
+
+/**
+ * Fire PostToolUse hooks under the TARGET tool's name after a successful
+ * delegation (official fires them for the real tool name; CCH's pipeline can
+ * only see "ExecuteExtraTool"). Hook outputs that would have been yielded as
+ * stream messages (blocking errors, additional context) come back as
+ * newMessages attachments so the model still receives them.
+ */
+async function replayPostToolUseHooks(
+  targetTool: Tool,
+  params: Record<string, unknown>,
+  toolResponse: unknown,
+  context: ToolUseContext,
+  toolUseID: string,
+): Promise<
+  ReturnType<typeof import('src/utils/messages.js').createUserMessage>[]
+> {
+  let appState: unknown
+  try {
+    appState = context.getAppState?.()
+  } catch {
+    return []
+  }
+  if (appState == null) return []
+
+  const extraMessages: ReturnType<
+    typeof import('src/utils/messages.js').createUserMessage
+  >[] = []
+  try {
+    const [
+      { executePostToolHooks },
+      { createAttachmentMessage },
+      { createUserMessage },
+    ] = await Promise.all([
+      import('src/utils/hooks.js'),
+      import('src/utils/attachments.js'),
+      import('src/utils/messages.js'),
+    ])
+    const permissionMode = (
+      appState as { toolPermissionContext?: { mode?: string } }
+    ).toolPermissionContext?.mode
+    for await (const result of executePostToolHooks(
+      targetTool.name,
+      toolUseID,
+      params,
+      toolResponse,
+      context,
+      permissionMode,
+      context.abortController?.signal,
+    )) {
+      if (result.blockingError) {
+        extraMessages.push(
+          createUserMessage({
+            content: `PostToolUse:${targetTool.name} hook error: ${result.blockingError.blockingError}`,
+          }),
+        )
+      }
+      if (result.additionalContexts && result.additionalContexts.length > 0) {
+        extraMessages.push(
+          createAttachmentMessage({
+            type: 'hook_additional_context',
+            content: result.additionalContexts,
+            hookName: `PostToolUse:${targetTool.name}`,
+            toolUseID,
+            hookEvent: 'PostToolUse',
+          }) as never,
+        )
+      }
+    }
+  } catch (error) {
+    import('src/utils/debug.js').then(({ logForDebugging }) =>
+      logForDebugging(
+        `ExecuteExtraTool PostToolUse replay failed for ${targetTool.name}: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    )
+  }
+  return extraMessages
+}
+
 export const inputSchema = lazySchema(() =>
   z.object({
     tool_name: z
@@ -203,23 +412,46 @@ export const ExecuteTool = buildTool({
       }
     }
 
-    // Check permissions on the target tool
-    const permResult = await targetTool.checkPermissions?.(
+    // Replay PreToolUse hooks under the TARGET tool's own name with the
+    // decomposed input (official has no delegation wrapper — after ToolSearch
+    // select the model calls the tool directly, `_ALL.js:10321` "Call
+    // ${Ge.name} instead" — so CCH must re-bind the hook line to the real
+    // name here or `PreToolUse:Bash|WebFetch` defenses silently miss the
+    // delegated path).
+    const toolUseId = context.toolUseId ?? ''
+    const hookReplay = await replayPreToolUseHooks(
+      targetTool,
+      input.params as Record<string, unknown>,
+      context,
+      toolUseId,
+    )
+    if (hookReplay?.behavior === 'deny') {
+      return deniedDelegation(input.tool_name, hookReplay.message)
+    }
+    if (hookReplay?.behavior === 'passthrough' && hookReplay.updatedInput) {
+      input.params = hookReplay.updatedInput
+    }
+
+    // Target-tool permission surface — folded INTO the canUseTool decision
+    // layer instead of short-circuiting: a deny travels through canUseTool as
+    // `forceDecision`, so QueryEngine's wrapped canUseTool records it in the
+    // permission_denials SDK report (previously this deny returned before
+    // canUseTool ran and the rejection went unreported). Deny enforcement is
+    // also applied below even when a custom canUseTool ignores forceDecision.
+    const targetPermResult = await targetTool.checkPermissions?.(
       input.params as Record<string, unknown>,
       context,
     )
-    if (permResult && permResult.behavior === 'deny') {
-      return deniedDelegation(
-        input.tool_name,
-        permResult.message ?? 'Permission denied',
-      )
-    }
+    const targetPermDeny =
+      targetPermResult && targetPermResult.behavior === 'deny'
+        ? targetPermResult
+        : undefined
 
-    // Authorization gate for the delegation path (permResult !== 'deny').
-    // A delegated call must NEVER execute on the strength of the target
-    // tool's checkPermissions alone: the pipeline's canUseTool also applies
-    // session-level deny/ask rules, permission mode (e.g. don'tAsk → deny,
-    // bypass → allow), defaults, and PermissionRequest hooks. Previously any
+    // Authorization gate for the delegation path. A delegated call must
+    // NEVER execute on the strength of the target tool's checkPermissions
+    // alone: the pipeline's canUseTool also applies session-level deny/ask
+    // rules, permission mode (e.g. don'tAsk → deny, bypass → allow),
+    // defaults, and PermissionRequest hooks. Previously any
     // 'ask'/'passthrough' result skipped the prompt entirely, so tools like
     // WebFetch lost their `domain:` rule enforcement when invoked through
     // ExecuteExtraTool (audit-confirmed authorization bypass).
@@ -233,12 +465,28 @@ export const ExecuteTool = buildTool({
       // non-deny target. Fail closed rather than executing unapproved.
       return deniedDelegation(input.tool_name, 'Permission denied')
     }
+    // forceDecision precedence: a PreToolUse:Target 'ask' rides along as the
+    // pipeline's hook-ask does (dialog shows the hook's message); a target
+    // checkPermissions deny is pre-decided (no point showing an interactive
+    // prompt for a decision already made).
+    const forceDecision =
+      targetPermDeny ??
+      (hookReplay?.behavior === 'ask'
+        ? {
+            behavior: 'ask' as const,
+            message: hookReplay.message,
+            ...(hookReplay.updatedInput !== undefined
+              ? { updatedInput: hookReplay.updatedInput }
+              : {}),
+          }
+        : undefined)
     const decision = await canUseTool(
       targetTool,
       input.params as Record<string, unknown>,
       context,
       parentMessage,
-      context.toolUseId ?? '',
+      toolUseId,
+      forceDecision,
     )
     if (decision.behavior !== 'allow') {
       // 'deny' from rules/mode/hooks, or an unresolved 'ask' (fail-closed —
@@ -246,6 +494,14 @@ export const ExecuteTool = buildTool({
       return deniedDelegation(
         input.tool_name,
         decision.message || 'Permission denied',
+      )
+    }
+    if (targetPermDeny) {
+      // Custom canUseTool implementations may ignore forceDecision; the
+      // target tool's own deny must still stop the delegation.
+      return deniedDelegation(
+        input.tool_name,
+        targetPermDeny.message ?? 'Permission denied',
       )
     }
 
@@ -264,8 +520,27 @@ export const ExecuteTool = buildTool({
       onProgress,
     )
 
+    // PostToolUse 补投：以目标工具名（而非 ExecuteExtraTool）重放，hook
+    // blocking/additionalContext 以 newMessages 形式回传（进度流不可用，
+    // 决策面 Parity 见文件头注）。
+    const hookFollowUps = await replayPostToolUseHooks(
+      targetTool,
+      input.params as Record<string, unknown>,
+      targetResult.data,
+      context,
+      toolUseId,
+    )
+
     return {
       ...targetResult,
+      ...(hookFollowUps.length > 0
+        ? {
+            newMessages: [
+              ...(targetResult.newMessages ?? []),
+              ...hookFollowUps,
+            ],
+          }
+        : {}),
       data: {
         result: targetResult.data,
         tool_name: input.tool_name,
