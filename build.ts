@@ -70,6 +70,12 @@ for (const file of files) {
   if (!file.endsWith('.js')) continue
   const filePath = join(outdir, file)
   const content = await readFile(filePath, 'utf-8')
+  // /g regexes keep `lastIndex` across .test() calls: without a reset the
+  // per-file gate only matches when a hit starts at/after the stale
+  // position left by the previous file, so the Node-compat patch gets
+  // skipped non-deterministically (deterministic bug: scripts/post-build.ts
+  // does exactly this reset before every .test()).
+  BUN_DESTRUCTURE.lastIndex = 0
   if (BUN_DESTRUCTURE.test(content)) {
     await writeFile(
       filePath,
@@ -78,7 +84,6 @@ for (const file of files) {
     bunPatched++
   }
 }
-BUN_DESTRUCTURE.lastIndex = 0
 
 console.log(
   `Bundled ${result.outputs.length} files to ${outdir}/ (patched ${patched} for import.meta.require, ${bunPatched} for Bun destructure)`,
