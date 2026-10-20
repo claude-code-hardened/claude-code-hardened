@@ -200,6 +200,12 @@ export const SANDBOX_REFUSAL_MESSAGES: Record<SandboxDecisionReason, string> = {
  * An enabledPlatforms restriction disables sandboxing for that platform but is
  * NOT part of the strict-refusal category — the gate falls through to the
  * plain unsandboxed path instead of refusing.
+ *
+ * Item 8 — the same official gate requires `ze.isSandboxEnabledInSettings()`
+ * as a precondition (`!…` → null): a sandbox that is not enabled in settings
+ * at all is plain non-enforcement and never refuses, even when the adapter
+ * also reports an availability error. The whole refusal region — including
+ * the optOutDenied face — sits behind that precondition.
  */
 export function evaluateSandboxDecision(
   input: Partial<SandboxInput>,
@@ -212,7 +218,12 @@ export function evaluateSandboxDecision(
     input.dangerouslyDisableSandbox === true &&
     SandboxManager.areUnsandboxedCommandsDisabled()
 
-  if (strict || optOutDenied) {
+  if (
+    (strict || optOutDenied) &&
+    // Official tn `!ze.isSandboxEnabledInSettings()` → null (0051:729): no
+    // enabled-in-settings sandbox, no refusal.
+    SandboxManager.isSandboxEnabledInSettings()
+  ) {
     // R2 (Q4-3): an enabledPlatforms restriction is never a strict-refusal
     // trigger (official tn verbatim above) — treat it as non-refusing and let
     // the isSandboxingEnabled() === false path below run the command

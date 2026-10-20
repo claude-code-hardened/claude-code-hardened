@@ -270,6 +270,25 @@ describe('evaluateSandboxDecision refuse face (W4 R4)', () => {
     ).toEqual({ mode: 'unsandboxed' })
   })
 
+  test('item 8: globally disabled sandbox never refuses even when unavailable (official tn enabled precondition)', () => {
+    sandboxState.enabled = false
+    sandboxState.strictSandboxMode = true
+    sandboxState.platformSupported = false
+    // Official tn(0051:729) `!ze.isSandboxEnabledInSettings()` → null: the
+    // strict refuse face requires the sandbox to be enabled in settings; a
+    // globally disabled sandbox runs plain unsandboxed regardless of any
+    // availability error the adapter reports.
+    expect(
+      evaluateSandboxDecision({
+        command: 'echo hi',
+        dangerouslyDisableSandbox: true,
+      }),
+    ).toEqual({ mode: 'unsandboxed' })
+    expect(evaluateSandboxDecision({ command: 'echo hi' })).toEqual({
+      mode: 'unsandboxed',
+    })
+  })
+
   test('non-strict decisions are unchanged', () => {
     sandboxState.enabled = true
     expect(evaluateSandboxDecision({ command: 'echo hi' })).toEqual({

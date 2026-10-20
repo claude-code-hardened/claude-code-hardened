@@ -158,18 +158,37 @@ describe('evaluateSandboxDecisionForPowerShell refuse face (R2 #0051)', () => {
     )
   })
 
-  test('strict opt-out with unavailable sandbox → still forced to the sandbox branch', () => {
+  test('strict opt-out with unavailable sandbox → refuse, same as Bash (unified surface)', () => {
     sandboxState.enabled = true
     sandboxState.strictSandboxMode = true
     sandboxState.platformSupported = false
-    // Official tn `…||e` keeps the model opt-out out of the tn refusal; the
-    // PowerShell strict gate forces the sandbox branch regardless.
+    // The strict force-sandbox short-circuit is gone: PowerShell delegates to
+    // the shared three-state surface, so the same strict+opt-out+unavailable
+    // input that refuses on Bash (`refuse sandbox_unavailable`, official
+    // validateInput rejects and does not exempt the model opt-out, 0051:731)
+    // refuses here too instead of silently forcing the sandbox branch.
     expect(
       evaluateSandboxDecisionForPowerShell({
         command: 'Write-Host hi',
         dangerouslyDisableSandbox: true,
       }),
-    ).toEqual({ mode: 'sandbox' })
+    ).toEqual({ mode: 'refuse', reason: 'sandbox_unavailable' })
+  })
+
+  test('item 8: sandbox not enabled in settings → never refuses, even unavailable', () => {
+    sandboxState.enabled = false
+    sandboxState.strictSandboxMode = true
+    sandboxState.platformSupported = false
+    // Official tn(0051:729) `!ze.isSandboxEnabledInSettings()` → null: a
+    // globally disabled sandbox is plain non-enforcement, so the shared
+    // decision surface falls through to the unsandboxed path instead of
+    // refusing (the refuse face requires the enabled precondition).
+    expect(
+      evaluateSandboxDecisionForPowerShell({
+        command: 'Write-Host hi',
+        dangerouslyDisableSandbox: true,
+      }),
+    ).toEqual({ mode: 'unsandboxed' })
   })
 
   test('non-strict + unavailable sandbox stays fail-open unsandboxed', () => {
