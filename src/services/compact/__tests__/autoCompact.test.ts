@@ -47,7 +47,13 @@ mock.module('src/services/analytics/index.ts', () => ({
 }))
 
 // bootstrap/state.ts has module-level realpathSync/randomUUID side effects.
+// Partial spread keeps every other export real (the compact graph reaches
+// cwd.ts → bootstrap/state for getCwdState/getOriginalCwd via sessionStorage;
+// a 4-export hand-written mock surfaces as "Export not found" at link time
+// whenever the graph widens — CI /tmp/test3.log族).
+import * as actualBootstrapState from '../../../bootstrap/state.js'
 mock.module('src/bootstrap/state.ts', () => ({
+  ...actualBootstrapState,
   markPostCompaction: () => {},
   getSdkBetas: () => [],
   getStrictToolResultPairing: () => false,
@@ -83,6 +89,8 @@ mock.module('src/utils/slowOperations.ts', () => ({
 // divisor (json → 2), and a divisor-ignoring len/4 mock here leaks into them
 // process-globally (CI /tmp/test2.log:1085 — 40_000/2 became 40_000/4 → the
 // 20k floor rejected a boundary-exact case → clearToolResultProjection null).
+// Full export surface (the realized messages.ts/attachments.ts graph binds
+// more than the estimator — countTokens* must exist or the import link fails).
 mock.module('src/services/tokenEstimation.ts', () => ({
   roughTokenCountEstimation: (text: string, bytesPerToken = 4) =>
     Math.round(text.length / bytesPerToken),
@@ -98,11 +106,31 @@ mock.module('src/services/tokenEstimation.ts', () => ({
   roughTokenCountEstimationForMessage: () => 0,
   roughTokenCountEstimationForFileType: () => 0,
   bytesPerTokenForFileType: () => 4,
+  countTokensPrecise: () => 0,
+  countTokensPreciseForMessages: () => 0,
+  countTokensWithAPI: async () => null,
+  countMessagesTokensWithAPI: async () => null,
+  countTokensViaHaikuFallback: async () => null,
 }))
 
 let compactCalls = 0
+// Full name surface bound anywhere in src for api/claude (the realized
+// sessionStorage → sessionIngress / messages → api/errors / shell-prefix
+// graphs reach several of these; queryModelWithStreaming errored last). Only
+// getMaxOutputTokensForModel is behavior-relevant here (window math).
 mock.module('src/services/api/claude.ts', () => ({
   getMaxOutputTokensForModel: () => 32_000,
+  getAPIMetadata: () => ({}),
+  getExtraBodyParams: () => ({}),
+  getCacheControl: () => undefined,
+  verifyApiKey: async () => null,
+  queryHaiku: async () => null,
+  ln: async () => null,
+  queryModelWithStreaming: async () => null,
+  queryModelWithoutStreaming: async () => null,
+  queryWithModel: async () => null,
+  accumulateUsage: (a: unknown) => a,
+  updateUsage: (a: unknown) => a,
 }))
 mock.module('src/services/analytics/growthbook.ts', () => ({
   getFeatureValue_CACHED_MAY_BE_STALE: () => false,
@@ -110,6 +138,7 @@ mock.module('src/services/analytics/growthbook.ts', () => ({
 }))
 mock.module('src/services/api/promptCacheBreakDetection.ts', () => ({
   notifyCompaction: () => {},
+  notifyCacheDeletion: () => {},
 }))
 mock.module('src/services/SessionMemory/sessionMemoryUtils.ts', () => ({
   setLastSummarizedMessageId: () => {},
@@ -133,6 +162,14 @@ mock.module('src/services/compact/compact.ts', () => ({
     }
   },
   ERROR_MESSAGE_USER_ABORT: 'API Error: Request was aborted.',
+  // Full name surface bound by realized graph modules (postCompactCleanup /
+  // compactWarningState / grouping import the error-message constants and
+  // buildPostCompactMessages — none are exercised here).
+  ERROR_MESSAGE_INCOMPLETE_RESPONSE: 'Incomplete response.',
+  ERROR_MESSAGE_NOT_ENOUGH_MESSAGES: 'Not enough messages.',
+  buildPostCompactMessages: (m: unknown) => m,
+  mergeHookInstructions: (m: unknown) => m,
+  partialCompactConversation: async () => null,
 }))
 
 const {
@@ -464,6 +501,74 @@ describe('autoCompactIfNeeded (AUTO_COMPACT_BREAKER on)', () => {
     expect(event).toBeDefined()
     expect(event?.data.wouldHaveBlocked).toBe(true)
     expect((event?.data.prefixTokens as number) ?? 0).toBeGreaterThan(THRESHOLD)
+  })
+
+  test('prefix overflow with a same-turn refill trip returns the breaker, not the skip', async () => {
+    // M2 regression (official jvr fall-through, byte 9534597 → 9534640):
+    // overflow telemetry must NOT hard-return before the lFn evaluation —
+    // when the rapid-refill breaker trips on the same turn, the result must
+    // carry rapidRefillBreaker (the query loop turns that into the
+    // rapid_refill_breaker_tripped kind + tengu_auto_compact_rapid_refill_breaker
+    // event) instead of the bare overflow skip that swallowed it.
+    setBreakerEnabled(true)
+    loggedEvents.length = 0
+    compactCalls = 0
+    // Prefix.overflow: usage total 1_000_000, tiny content (25 est) →
+    // prefix ≈ 999_975 > 930_000.
+    const messages = [
+      assistantWithUsage({
+        inputTokens: 900_000,
+        cacheReadTokens: 99_000,
+        cacheCreationTokens: 1_000,
+      }),
+      userTextMessage('a'.repeat(100)),
+    ]
+    // lFn trip arithmetic: compacted + turnCounter 1 + 2 prior refills → 3.
+    const result = await call(messages, {
+      compacted: true,
+      turnId: 't',
+      turnCounter: 1,
+      consecutiveRapidRefills: 2,
+    })
+    expect(result.wasCompacted).toBe(false)
+    expect(result.rapidRefillBreaker).toEqual({
+      consecutiveRapidRefills: 3,
+      turnsSincePreviousCompact: 1,
+    })
+    expect(compactCalls).toBe(0)
+    // Both signals fired in the same turn: overflow telemetry AND the trip.
+    expect(
+      loggedEvents.some(e => e.name === 'tengu_auto_compact_prefix_overflow'),
+    ).toBe(true)
+  })
+
+  test('prefix overflow without a trip keeps the CCH no-compact skip', async () => {
+    setBreakerEnabled(true)
+    loggedEvents.length = 0
+    compactCalls = 0
+    const messages = [
+      assistantWithUsage({
+        inputTokens: 900_000,
+        cacheReadTokens: 99_000,
+        cacheCreationTokens: 1_000,
+      }),
+      userTextMessage('a'.repeat(100)),
+    ]
+    // compacted=false → kNn resets to 0 → lFn "proceed".
+    const result = await call(messages, {
+      compacted: false,
+      turnId: 't',
+      turnCounter: 0,
+      consecutiveRapidRefills: 9,
+    })
+    // No trip → the CCH-activated overflow skip applies...
+    expect(result).toEqual({ wasCompacted: false })
+    expect(compactCalls).toBe(0)
+    // ...and the refill count (0) must NOT thread as if a compact happened.
+    expect('consecutiveRapidRefills' in result).toBe(false)
+    expect(
+      loggedEvents.some(e => e.name === 'tengu_auto_compact_prefix_overflow'),
+    ).toBe(true)
   })
 
   test('prefix fitting the threshold still allows the compact', async () => {

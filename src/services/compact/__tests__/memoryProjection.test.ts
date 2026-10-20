@@ -42,6 +42,9 @@ const estimatorMock = () => ({
   countTokensWithAPI: async () => 0,
   countMessagesTokensWithAPI: async () => 0,
   countTokensViaHaikuFallback: async () => 0,
+  // tokens.js (realized in this file's graph) binds this from the mocked
+  // module — a missing entry kills the whole import link.
+  countTokensPreciseForMessages: () => 0,
 })
 mock.module('src/services/tokenEstimation.ts', estimatorMock)
 mock.module('src/services/tokenEstimation.js', estimatorMock)

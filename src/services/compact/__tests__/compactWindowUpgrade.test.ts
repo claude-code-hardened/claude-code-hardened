@@ -8,13 +8,20 @@ const RESUME_WINDOW = 500
 // Mocks — resolved via compact.ts's own import specifiers. The storage layer
 // is data source (not business logic), so mocking it here matches the repo's
 // mock rules: mock the dependency, never the module under test.
+// Partial spread (see sessionTranscript.test.ts / autoCompact.test.ts): the
+// mock.module registry is process-global last-write-wins, and the compact
+// graph now reaches bootstrap/state via cwd.ts (getCwdState) — a hand-written
+// 3-export mock starves sibling files' graphs in shared workers and the full
+// `bun test` run (getCwdState/addSlowOperation missing-export link errors).
 // ---------------------------------------------------------------------------
 
 let mockGetSessionId: () => string | null = () => 'sid-1'
 let mockFullLog: { messages: unknown[] } | null = null
 let lastGetLastSessionLogCalls = 0
 
+import * as actualSessionStorage from '../../../utils/sessionStorage.js'
 mock.module('src/utils/sessionStorage.js', () => ({
+  ...actualSessionStorage,
   RESUME_WINDOW,
   getLastSessionLog: (sid: string) => {
     lastGetLastSessionLogCalls++
@@ -23,12 +30,16 @@ mock.module('src/utils/sessionStorage.js', () => ({
   },
 }))
 
+import * as actualConversationRecovery from '../../../utils/conversationRecovery.js'
 mock.module('src/utils/conversationRecovery.js', () => ({
+  ...actualConversationRecovery,
   deserializeMessages: (messages: unknown[]) => messages as Message[],
 }))
 
 let debugLines: string[] = []
+import * as actualDebug from '../../../utils/debug.js'
 mock.module('src/utils/debug.js', () => ({
+  ...actualDebug,
   logForDebugging: (line: string) => {
     debugLines.push(line)
   },
@@ -42,7 +53,9 @@ mock.module('lodash-es/uniqBy.js', () => ({
   default: (arr: unknown[]) => arr,
 }))
 
+import * as actualBootstrapState from '../../../bootstrap/state.js'
 mock.module('src/bootstrap/state.js', () => ({
+  ...actualBootstrapState,
   getSessionId: () => mockGetSessionId(),
   getInvokedSkillsForAgent: () => new Set(),
   markPostCompaction: () => {},

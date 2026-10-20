@@ -544,45 +544,52 @@ export async function autoCompactIfNeeded(
   // -- 2.9: official 2.1.284 autocompact protections (flag-gated) -----------
   // Guard order mirrors the official autocompact generator (byte 9533695):
   // consecutiveFailures breaker (above) → threshold check (shouldAutoCompact)
-  // → prefix-overflow precheck → rapid-refill breaker → compaction. Flag
-  // off → this block is skipped entirely and behavior is byte-identical to
-  // pre-2.9 (the new result keys are only ever present under the flag).
+  // → prefix-overflow precheck (telemetry + lFn fall-through) → rapid-refill
+  // breaker → compaction. Flag off → this block is skipped entirely and
+  // behavior is byte-identical to pre-2.9 (the new result keys are only ever
+  // present under the flag).
   let consecutiveRapidRefills: number | undefined
   if (isAutoCompactBreakerEnabled()) {
-    // (1) Prefix-overflow precheck. NOTE on official parity: 2.1.284 ships
-    // this as shadow telemetry only — it computes Oko, logs
+    // (1) Prefix-overflow precheck. Official parity note: 2.1.284 ships this
+    // as shadow telemetry — official jvr (byte 9533695) computes Oko, logs
     // tengu_auto_compact_prefix_overflow with wouldHaveBlocked:!0 (byte
-    // 9534597) and then falls through into the compact anyway. CCH
+    // 9534639) and then FALLS THROUGH: no early return, execution continues
+    // straight into the lFn rapid-refill evaluation below (and on into the
+    // compact — officially the attempt still runs; only the measurement is
+    // shadow). CCH aligns that fall-through for the breaker, and additionally
     // activates the behavior the shadow arm was measuring: when the fixed
     // prefix (server-reported request total minus message estimate minus
     // snipTokensFreed — i.e. system prompt + tool defs + non-compactable
-    // context) alone exceeds the threshold, no compaction can fit, so
-    // return without attempting one. The API call runs and surfaces
-    // prompt-too-long through the usual paths (reactiveCompact /
-    // blocking-limit preempt — both consult state downstream of this
-    // return, see query.ts).
+    // context) alone exceeds the threshold, no compaction can fit, so after
+    // the breaker evaluation CCH returns without attempting one (see (2b)).
+    // The API call runs and surfaces prompt-too-long through the usual paths
+    // (reactiveCompact / blocking-limit preempt — both consult state
+    // downstream of this return, see query.ts).
     const overflow = buildPrefixOverflowCheck(messages, model, snipTokensFreed)
     if (overflow) {
       logForDebugging(
         `autocompact: fixed prefix ~${overflow.prefixTokens} > threshold ${overflow.thresholdTokens} — compaction cannot help`,
         { level: 'warn' },
       )
-      // Same event name + payload shape as official (byte 9534597);
+      // Same event name + payload shape as official (byte 9534639);
       // wouldHaveBlocked keeps the official field name for dashboard parity.
       logEvent('tengu_auto_compact_prefix_overflow', {
         ...overflow,
         wouldHaveBlocked: true,
       })
-      return { wasCompacted: false }
+      // Official falls through — evaluation of lFn below is unconditional
+      // once the threshold check passed (byte 9534661: `let ge=lFn(h)`).
     }
 
-    // (2) Rapid-refill breaker (official lFn, byte 8681595; trip log at
+    // (2a) Rapid-refill breaker (official lFn, byte 8681595; trip log at
     // byte 9534953 emits kind "rapid_refill_breaker_tripped"). Fires on
     // consecutive compacts that refill within <3 iterations each — the
     // "successful but worthless compact" dimension orthogonal to the
-    // consecutiveFailures breaker above. The session's threshold telemetry
-    // (tengu_auto_compact_rapid_refill_breaker) is emitted by query.ts on
-    // the same split official 2.1.284 uses (loop-side, byte 15516562).
+    // consecutiveFailures breaker above. Evaluated UNCONDITIONALLY after the
+    // threshold check, overflow or not — returning early on overflow would
+    // swallow the same-turn trip (the query loop emits
+    // tengu_auto_compact_rapid_refill_breaker off this result shape; the
+    // session's threshold telemetry rides the same loop side, byte 15516562).
     const refill = evaluateRapidRefillBreaker(tracking)
     consecutiveRapidRefills = refill.consecutiveRapidRefills
     if (refill.action === 'trip') {
@@ -597,6 +604,13 @@ export async function autoCompactIfNeeded(
           turnsSincePreviousCompact: tracking?.turnCounter ?? -1,
         },
       }
+    }
+
+    // (2b) CCH-activated skip on top of the official shadow telemetry (see
+    // (1)): the fixed prefix alone exceeds the threshold — no compaction can
+    // fit, so return without attempting one.
+    if (overflow) {
+      return { wasCompacted: false }
     }
   }
 
