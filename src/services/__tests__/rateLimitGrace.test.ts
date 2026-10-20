@@ -32,9 +32,12 @@ import {
   graceOnRefused,
   graceSubagentNoteDue,
   markGraceStartNotePlaced,
+  nearLimitThresholdForRateLimitTier,
   observeGraceFromLimitsSnapshot,
   parseUnifiedGraceHeaders,
   resetGraceStateForTests,
+  setRateLimitTierAccessor,
+  setUsageLimitWallActive,
   takeGraceTurnNote,
 } from 'src/services/rateLimitGrace.js'
 
@@ -511,13 +514,14 @@ describe('buildMainTurnGraceNotes', () => {
   })
 
   test('near-limit hint: UI notice + near_limit note when wrap-up is inert', () => {
-    observeFiveHour(0.75, FUTURE_RESET_S)
-    expect(NEAR_LIMIT_5H_UTILIZATION_THRESHOLD).toBe(0.7)
+    // Observations sit above the default-tier threshold (official QDn 0.95).
+    observeFiveHour(0.96, FUTURE_RESET_S)
+    expect(NEAR_LIMIT_5H_UTILIZATION_THRESHOLD).toBe(0.95)
     expect(takeGraceTurnNote(NOW_MS)).toBe(true)
     markGraceStartNotePlaced()
     // A second high-utilization observation with the note already placed:
     // the window latch stays pending (once per window, key = resetsAt).
-    observeFiveHour(0.8, FUTURE_RESET_S)
+    observeFiveHour(0.97, FUTURE_RESET_S)
     const { notes, notices } = buildMainTurnGraceNotes({
       messages: [],
       isNewDepth0Question: true,
@@ -541,7 +545,12 @@ describe('buildMainTurnGraceNotes', () => {
   test('near-limit latch skips below-threshold / covered observations', () => {
     observeFiveHour(NEAR_LIMIT_5H_UTILIZATION_THRESHOLD - 0.01, FUTURE_RESET_S)
     expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(false)
-    observeFiveHour(0.9, FUTURE_RESET_S, { overageStatus: 'allowed' })
+    // Above the threshold but covered by extra usage — still no latch.
+    observeFiveHour(
+      NEAR_LIMIT_5H_UTILIZATION_THRESHOLD + 0.02,
+      FUTURE_RESET_S,
+      { overageStatus: 'allowed' },
+    )
     expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(false)
   })
 
@@ -574,5 +583,80 @@ describe('buildMainTurnGraceNotes', () => {
       now: NOW_MS,
     })
     expect(note).toBeNull()
+  })
+})
+
+// ── Near-limit tier thresholds (official JDn, byte 8660223) ────────────────
+
+describe('nearLimitThresholdForRateLimitTier (official JDn)', () => {
+  test('tier mapping matches the official switch', () => {
+    // case "default_claude_max_5x": return 0.99
+    expect(nearLimitThresholdForRateLimitTier('default_claude_max_5x')).toBe(
+      0.99,
+    )
+    // case "default_claude_max_20x": return 0.9975
+    expect(nearLimitThresholdForRateLimitTier('default_claude_max_20x')).toBe(
+      0.9975,
+    )
+    // default: return QDn (0.95) — null / unknown tiers use the default arm;
+    // the switch is exact-match (official binds on the raw tier string).
+    expect(nearLimitThresholdForRateLimitTier(null)).toBe(0.95)
+    expect(nearLimitThresholdForRateLimitTier(undefined)).toBe(0.95)
+    expect(nearLimitThresholdForRateLimitTier('unknown_tier')).toBe(0.95)
+    expect(nearLimitThresholdForRateLimitTier('DEFAULT_CLAUDE_MAX_5X')).toBe(
+      0.95,
+    )
+  })
+
+  test('near-limit latch consults the injected tier (JDn(Xw()))', () => {
+    setRateLimitTierAccessor(() => 'default_claude_max_5x')
+    // 0.985 < 0.99 → below the max_5x tier threshold, no latch.
+    observeFiveHour(0.985, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(false)
+    // 0.995 >= 0.99 → latches for this 5h window.
+    observeFiveHour(0.995, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(true)
+  })
+
+  test('max_20x tier keeps the hint pending below 0.9975', () => {
+    setRateLimitTierAccessor(() => 'default_claude_max_20x')
+    // Would latch under the 5x tier (0.99) but not the 20x one (0.9975).
+    observeFiveHour(0.993, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(false)
+    observeFiveHour(0.998, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(true)
+  })
+
+  test('a null tier uses the QDn default (0.95)', () => {
+    setRateLimitTierAccessor(() => null)
+    observeFiveHour(0.96, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(true)
+  })
+})
+
+// ── Usage-limit wall gate (official sL, byte 6373029) ──────────────────────
+
+describe('usage-limit wall gate (official sL)', () => {
+  test('wall active suppresses the near-limit latch entirely', () => {
+    setUsageLimitWallActive(true)
+    // Above the default-tier threshold — the sL() term is what blocks.
+    observeFiveHour(0.97, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(false)
+  })
+
+  test('wall inactive (idle phase) restores the latch', () => {
+    setUsageLimitWallActive(false)
+    observeFiveHour(0.97, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(true)
+  })
+
+  test('wall toggling back off re-enables latching for the same window state', () => {
+    setUsageLimitWallActive(true)
+    observeFiveHour(0.97, FUTURE_RESET_S)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(false)
+    // Wall goes idle — the next observation at the same utilization latches.
+    setUsageLimitWallActive(false)
+    observeFiveHour(0.97, FUTURE_RESET_S + 1)
+    expect(consumePendingNearLimitWrapUpHint(NOW_MS)).toBe(true)
   })
 })

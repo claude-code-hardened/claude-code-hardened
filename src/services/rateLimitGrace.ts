@@ -43,11 +43,37 @@ const OVERAGE_IN_USE_HEADER = 'anthropic-ratelimit-unified-overage-in-use'
 const RESET_VALIDITY_TOLERANCE_MS = 1000
 
 /**
- * Near-limit trigger: warn once per 5h window when utilization reaches this.
- * Spec-grace value (the official default gate threshold was higher;
- * see workpackage report).
+ * Near-limit trigger, default tier. Official 2.1.284
+ * (docs/reverse-284/full-source/_ALL.js byte 8660201): `QDn=0.95` — this is
+ * the `default:` arm of the tier switch `JDn` (byte 8660223), which is the
+ * threshold actually consulted when latching the near-limit hint
+ * (`ve=JDn(Xw()); _e.utilization>=ve&&!sL()`, Adt applyResponse, byte
+ * ~8665834). The earlier CCH value (0.7) was a spec-grace stand-in, well
+ * below every official tier.
  */
-export const NEAR_LIMIT_5H_UTILIZATION_THRESHOLD = 0.7
+export const NEAR_LIMIT_5H_UTILIZATION_THRESHOLD = 0.95
+
+/**
+ * Official JDn (byte 8660223): per-tier near-limit 5h-utilization threshold.
+ * The tier comes from official Xw() (byte 3343128) — the OAuth account's
+ * `rateLimitTier`; the CCH equivalent is
+ * `src/utils/auth.ts getRateLimitTier()`:
+ *   - `default_claude_max_5x`  → 0.99
+ *   - `default_claude_max_20x` → 0.9975
+ *   - any other / unknown tier → QDn (= NEAR_LIMIT_5H_UTILIZATION_THRESHOLD)
+ */
+export function nearLimitThresholdForRateLimitTier(
+  rateLimitTier: string | null | undefined,
+): number {
+  switch (rateLimitTier) {
+    case 'default_claude_max_5x':
+      return 0.99
+    case 'default_claude_max_20x':
+      return 0.9975
+    default:
+      return NEAR_LIMIT_5H_UTILIZATION_THRESHOLD
+  }
+}
 
 // ── Injection copy (official strings, character-for-character) ─────────────
 
@@ -353,6 +379,42 @@ export function getGraceWrapUp(): GraceWrapUpState {
 
 // ── Near-limit hint (official Adt/pendingNearLimitWrapUpHint) ──────────────
 
+// Official sL() gate (byte 6373029) and live tier lookup (byte 8665834):
+//   `function sL(){return mr().state.phase==="active"}`
+//   `let ve=JDn(Xw()); if(_e.utilization>=ve&&!sL()){...}`
+// — a latch requires utilization above the per-tier threshold AND the
+// usage-limit wall (low-priority-offer machine; phases idle/armed/active/
+// stale) NOT active: a wall-active session is already heading into its
+// wrap-up flow and must not also latch the softer near-limit hint. CCH has
+// not restored the official wall store, so the gate ships as an injectable
+// flag defaulting to false (official idle phase) with a setter for the
+// future wall adapter and for tests. Same treatment for the tier: Adt
+// resolves it live via auth's Xw(); CCH keeps this module free of the auth
+// import graph (errors.ts pulls rateLimitGrace into the API error path), so
+// the accessor is injected — production wiring happens in
+// installGraceLimitsListener().
+type RateLimitTierAccessor = () => string | null
+
+let usageLimitWallActive = false
+let rateLimitTierAccessor: RateLimitTierAccessor = () => null
+
+/** Official sL() equivalent — true only in the wall's "active" phase. */
+export function isUsageLimitWallActive(): boolean {
+  return usageLimitWallActive
+}
+
+/** Feed the usage-limit wall phase (official `mr().state.phase==="active"`). */
+export function setUsageLimitWallActive(active: boolean): void {
+  usageLimitWallActive = active
+}
+
+/** Inject the live rateLimitTier lookup (official Xw(); default: null tier). */
+export function setRateLimitTierAccessor(
+  accessor: RateLimitTierAccessor,
+): void {
+  rateLimitTierAccessor = accessor
+}
+
 let pendingNearLimitWrapUpHint = false
 let nearLimitWrapUpWindowKey: number | null = null
 
@@ -378,7 +440,14 @@ function updateNearLimitHint(parsed: ParsedGraceHeaders, nowMs: number): void {
   ) {
     return
   }
-  if (parsed.fiveHourUtilization < NEAR_LIMIT_5H_UTILIZATION_THRESHOLD) {
+  // Official `ve=JDn(Xw())` — per-tier threshold (byte 8665834).
+  const threshold = nearLimitThresholdForRateLimitTier(rateLimitTierAccessor())
+  if (parsed.fiveHourUtilization < threshold) {
+    return
+  }
+  // Official `&&!sL()` — wall active (byte 6373029) suppresses the soft hint
+  // entirely: neither latches below nor clears the pending latch.
+  if (usageLimitWallActive) {
     return
   }
   // Covered by extra usage — no wrap-up needed for this window.
@@ -499,6 +568,16 @@ export async function installGraceLimitsListener(): Promise<void> {
     const claudeAiLimits: GraceLimitsModule = await import(
       './claudeAiLimits.js'
     )
+    // Official Adt resolves the tier live via auth's Xw(); inject the CCH
+    // equivalent so nearLimitThresholdForRateLimitTier sees the account tier.
+    // Dynamic import keeps the auth graph out of the API error path when this
+    // module is only used for its pure parts.
+    try {
+      const { getRateLimitTier } = await import('../utils/auth.js')
+      setRateLimitTierAccessor(getRateLimitTier)
+    } catch {
+      // auth unavailable (tests) — the null-tier default (QDn 0.95) applies.
+    }
     claudeAiLimits.statusListeners.add(limits => {
       try {
         observeGraceFromLimitsSnapshot(
@@ -853,4 +932,6 @@ export function resetGraceStateForTests(): void {
   grace.fenceMs = 0
   pendingNearLimitWrapUpHint = false
   nearLimitWrapUpWindowKey = null
+  usageLimitWallActive = false
+  rateLimitTierAccessor = () => null
 }
