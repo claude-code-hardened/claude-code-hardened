@@ -3,10 +3,16 @@ import {
   SKILL_DOCTOR_CATEGORIES,
   SKILL_DOCTOR_SAMPLE,
   categorizeSkillUsage,
+  formatSkillDoctorBuckets,
   formatSkillDoctorReport,
   formatSkillUsageDetail,
   parseSkillDoctorArgs,
 } from '../engine.js'
+import {
+  runSkillDoctor,
+  type SkillDoctorReport,
+} from '../../../skills/skillDoctor.js'
+import type { Command } from '../../../types/command.js'
 
 describe('parseSkillDoctorArgs — /skill-doctor argument surface', () => {
   test('no args means run the report', () => {
@@ -75,5 +81,50 @@ describe('formatSkillDoctorReport — UI copy', () => {
   test('non-empty report ends with the anchored total line', () => {
     const report = formatSkillDoctorReport(SKILL_DOCTOR_SAMPLE)
     expect(report).toContain('Total 45 uses across 3 skills')
+  })
+})
+
+describe('formatSkillDoctorBuckets — official loaded-from four buckets (fix-item 7)', () => {
+  function promptSkill(name: string, loadedFrom: string): Command {
+    return {
+      type: 'prompt',
+      name,
+      description: `${name} skill`,
+      source: 'test-source',
+      loadedFrom,
+      isEnabled: () => true,
+      getPromptForCommand: async () => [],
+    } as unknown as Command
+  }
+
+  test('renders the official buckets from the report', () => {
+    const skills: Command[] = [
+      promptSkill('owned-skill', 'skills'),
+      promptSkill('plug-skill', 'plugin'),
+      promptSkill('mcp-skill', 'mcp'),
+      promptSkill('synced-skill', 'syncedSkills'),
+    ]
+    const report: SkillDoctorReport = runSkillDoctor(skills, {
+      usageLookup: () => ({ usageCount: 0, lastUsedAt: 0 }),
+      now: 1_000_000,
+    })
+    const text = formatSkillDoctorBuckets(report)
+    expect(text).toContain('Loaded but never invoked, by source:')
+    expect(text).toContain('Owned (user-manageable local skills')
+    expect(text).toContain('Contributed by plugins')
+    expect(text).toContain('Surfaced via MCP')
+    expect(text).toContain('Synced from claude.ai')
+    expect(text).toContain('owned-skill [skills]')
+    expect(text).toContain('plug-skill [plugin]')
+    expect(text).toContain('mcp-skill [mcp]')
+    expect(text).toContain('synced-skill [syncedSkills]')
+  })
+
+  test('null when nothing is unused and when no skills are loaded', () => {
+    const used = runSkillDoctor([promptSkill('busy-skill', 'skills')], {
+      usageLookup: () => ({ usageCount: 3, lastUsedAt: Date.now() }),
+    })
+    expect(formatSkillDoctorBuckets(used)).toBeNull()
+    expect(formatSkillDoctorBuckets(runSkillDoctor([], {}))).toBeNull()
   })
 })

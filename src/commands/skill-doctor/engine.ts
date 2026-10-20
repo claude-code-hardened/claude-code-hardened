@@ -10,6 +10,8 @@
  * through createSkillDoctorEngine.
  */
 
+import type { SkillDoctorReport } from '../../skills/skillDoctor.js'
+
 export type SkillUsageRecord = {
   /** Skill command name, as shown in the slash menu. */
   name: string
@@ -141,6 +143,44 @@ export type SkillDoctorArgs =
 
 export const SKILL_DOCTOR_USAGE =
   'Usage: /skill-doctor [demo] — show which loaded skills are unused and costing context'
+
+/**
+ * The official four-bucket view (src/skills/skillDoctor.ts doctorCategory —
+ * anchor zl, 0025 module-003:1002): unused skills grouped by where they were
+ * loaded from (owned / plugin / MCP / synced). The recency categories above
+ * and this source grouping are two engines over the same rows — fix-item 7
+ * renders BOTH: the table below is appended to the report so the doctor
+ * output carries the official loaded-from buckets alongside the recency view
+ * instead of only one of the two.
+ */
+export function formatSkillDoctorBuckets(
+  report: SkillDoctorReport,
+): string | null {
+  if (report.rows.length === 0) return null
+  const sections: [string, typeof report.unusedOwned][] = [
+    [
+      'Owned (user-manageable local skills, add prompt cost every turn)',
+      report.unusedOwned,
+    ],
+    ['Contributed by plugins', report.unusedFromPlugins],
+    ['Surfaced via MCP', report.unusedFromMcp],
+    ['Synced from claude.ai', report.unusedSynced],
+  ]
+  const lines: string[] = ['Loaded but never invoked, by source:']
+  let bucketCount = 0
+  for (const [label, bucket] of sections) {
+    if (bucket.length === 0) continue
+    bucketCount += bucket.length
+    lines.push(`  ${label}:`)
+    for (const row of bucket) {
+      lines.push(
+        `    ${row.name} [${row.loadedFrom}] ~${row.contextTokens} tok`,
+      )
+    }
+  }
+  if (bucketCount === 0) return null
+  return lines.join('\n')
+}
 
 export function parseSkillDoctorArgs(raw: string): SkillDoctorArgs {
   const sub = raw.trim().toLowerCase()

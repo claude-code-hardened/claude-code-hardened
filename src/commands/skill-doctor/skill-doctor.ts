@@ -13,10 +13,14 @@ import type {
   LocalCommandCall,
   LocalCommandResult,
 } from '../../types/command.js'
-import { createSkillDoctorEngine } from '../../skills/skillDoctor.js'
+import {
+  createSkillDoctorEngine,
+  runSkillDoctor,
+} from '../../skills/skillDoctor.js'
 import {
   SKILL_DOCTOR_SAMPLE,
   SKILL_DOCTOR_USAGE,
+  formatSkillDoctorBuckets,
   formatSkillDoctorReport,
   parseSkillDoctorArgs,
 } from './engine.js'
@@ -32,9 +36,21 @@ export const call: LocalCommandCall = async (rawArgs, context) => {
     case 'run': {
       // Real engine over the loaded command registry (skills only — prompt
       // commands). Usage comes from the global-config skillUsage ledger.
-      const engine = createSkillDoctorEngine(() => context.options.commands)
+      // Both doctor engines render: the recency categories (engine.ts) over
+      // the flattened records, plus the official loaded-from four buckets
+      // (skillDoctor.ts doctorCategory, fix-item 7) from the report — one
+      // shared `now` keeps both views on the same 7-day window.
+      const now = Date.now()
+      const report = runSkillDoctor(context.options.commands, { now })
+      const engine = createSkillDoctorEngine(() => context.options.commands, {
+        now,
+      })
       const records = engine.listSkillUsage()
-      return { type: 'text', value: formatSkillDoctorReport(records) }
+      const sections = [formatSkillDoctorReport(records)]
+      const buckets = formatSkillDoctorBuckets(report)
+      if (buckets) sections.push(buckets)
+      if (report.weekTokensNote) sections.push(report.weekTokensNote)
+      return { type: 'text', value: sections.join('\n\n') }
     }
     case 'demo':
       // Sample fixture data so the four-category layout can be reviewed.
