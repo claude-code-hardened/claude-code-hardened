@@ -58,7 +58,11 @@ const LOCK_RETRY_MS = 5
 
 /**
  * A `<name>.lock` older than this is considered abandoned (crashed holder,
- * which leaves no chance to release it) and is seized by the next writer.
+ * which leaves no chance to release it) and is seized by the next writer —
+ * but only after the holder pid recorded in the lock file fails a liveness
+ * check: a LIVE holder that has merely been holding longer than this budget
+ * keeps its lock (the waiter waits; the overall deadline aborts instead of
+ * both writers racing the read-modify-write window).
  * Held locks are not refreshed — critical sections here are single-digit-ms,
  * so this is comfortably above any legitimate hold time.
  */
@@ -66,6 +70,40 @@ export const STORE_LOCK_STALE_MS = 10_000
 
 /** Overall give-up time when a live (non-stale) lock never frees. */
 export const STORE_LOCK_TIMEOUT_MS = 15_000
+
+/**
+ * The holder pid recorded in a lock file (see the advisory write in
+ * withStoreLock) or null when the content carries no parseable pid — a lock
+ * crashed before its pid write, or an externally created one. Any read
+ * failure also surfaces as null: the pid is a refinement, the O_EXCL
+ * existence is the contract.
+ */
+function readLockHolderPid(lockPath: string): number | null {
+  let raw: string
+  try {
+    raw = readFileSync(lockPath, 'utf8')
+  } catch {
+    return null
+  }
+  const match = /^\s*(\d+)/.exec(raw)
+  if (match === null) return null
+  const pid = Number.parseInt(match[1] ?? '', 10)
+  return Number.isFinite(pid) && pid > 0 ? pid : null
+}
+
+/**
+ * Liveness probe for a lock-holder pid: `kill(pid, 0)` performs a
+ * permission-checked existence test without signalling. EPERM counts as
+ * alive (the holder exists under another uid); only ESRCH proves it gone.
+ */
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e: unknown) {
+    return (e as NodeJS.ErrnoException)?.code === 'EPERM'
+  }
+}
 
 function tmpPathFor(path: string): string {
   return `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`
@@ -151,11 +189,19 @@ export function quarantineCorruptFile(path: string): string {
  *
  * Acquires `<name>.lock` by exclusive create (`wx` = O_CREAT|O_EXCL). On
  * EEXIST the lock's mtime is checked: older than STORE_LOCK_STALE_MS → the
- * lock is seized (unlinked and re-created); otherwise the caller sleeps
- * LOCK_RETRY_MS and retries until STORE_LOCK_TIMEOUT_MS, then throws rather
- * than racing a stuck writer. The lock is released (unlink, ENOENT-tolerant)
- * even when `fn` throws. Non-reentrant by design — callers must not nest
- * withStoreLock on the same path.
+ * lock is seized (unlinked and re-created) — but ONLY when the holder pid
+ * recorded inside the lock file fails a liveness probe. A live holder that
+ * has merely exceeded the stale budget keeps its lock (the waiter waits
+ * like for a fresh lock and the overall deadline aborts) — seizing a live
+ * holder's lock would open a read→write double-write window with two
+ * concurrent critical sections. Locks with no parseable pid (crashed before
+ * the pid write, or externally created) keep the old mtime-only seizure:
+ * once such a lock is past staleMs its creator provably had time to die.
+ * Otherwise the caller sleeps LOCK_RETRY_MS and retries until
+ * STORE_LOCK_TIMEOUT_MS, then throws rather than racing a stuck writer. The
+ * lock is released (unlink, ENOENT-tolerant) even when `fn` throws.
+ * Non-reentrant by design — callers must not nest withStoreLock on the same
+ * path.
  */
 export function withStoreLock<T>(
   path: string,
@@ -188,10 +234,25 @@ export function withStoreLock<T>(
         continue
       }
       if (Date.now() - holderMtimeMs > staleMs) {
-        try {
-          unlinkSync(lockPath)
-        } catch {
-          // Another waiter broke the stale lock first — fall through to retry.
+        // Stale-eligible — but age alone is not proof of abandonment: seize
+        // only when the recorded holder pid fails the liveness probe. A
+        // live holder (e.g. one wedged in a slow critical section) keeps
+        // the lock; the deadline below is the escape hatch instead of two
+        // writers racing one store file.
+        const holderPid = readLockHolderPid(lockPath)
+        if (holderPid !== null && isProcessAlive(holderPid)) {
+          Atomics.wait(
+            new Int32Array(new SharedArrayBuffer(4)),
+            0,
+            0,
+            LOCK_RETRY_MS,
+          )
+        } else {
+          try {
+            unlinkSync(lockPath)
+          } catch {
+            // Another waiter broke the stale lock first — fall through to retry.
+          }
         }
       } else {
         Atomics.wait(

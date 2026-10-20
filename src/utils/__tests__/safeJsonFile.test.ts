@@ -154,6 +154,48 @@ describe('withStoreLock — advisory read-modify-write serialization', () => {
     expect(existsSync(lockPath)).toBe(false)
   })
 
+  test('a stale lock whose recorded holder pid is still ALIVE is not seized (no double-write window)', () => {
+    const path = join(freshDir(), 'store.json')
+    const lockPath = `${path}.lock`
+    // Simulate a lock held by a live process (this one) that has blown the
+    // stale budget: pre-fix, the mtime-only seizure would unlink it and let
+    // two writers race the read-modify-write window.
+    writeFileSync(
+      lockPath,
+      `${process.pid} ${new Date().toISOString()}`,
+      'utf8',
+    )
+    const longAgo = new Date(Date.now() - 120_000)
+    utimesSync(lockPath, longAgo, longAgo)
+    expect(() =>
+      withStoreLock(path, () => {}, { timeoutMs: 80, staleMs: 60_000 }),
+    ).toThrow(/timed out acquiring store lock/)
+    // The live holder's lock survived the timed-out waiter.
+    expect(existsSync(lockPath)).toBe(true)
+  })
+
+  test('a stale lock whose recorded holder pid is GONE is still seized (crashed holder)', async () => {
+    const path = join(freshDir(), 'store.json')
+    const lockPath = `${path}.lock`
+    // A pid proven dead: reap a child that exits immediately.
+    const deadChild = Bun.spawn(['true'])
+    await deadChild.exited
+    writeFileSync(
+      lockPath,
+      `${deadChild.pid} ${new Date().toISOString()}`,
+      'utf8',
+    )
+    const longAgo = new Date(Date.now() - 120_000)
+    utimesSync(lockPath, longAgo, longAgo)
+    expect(
+      withStoreLock(path, () => 'seized from dead holder', {
+        timeoutMs: 1_000,
+        staleMs: 60_000,
+      }),
+    ).toBe('seized from dead holder')
+    expect(existsSync(lockPath)).toBe(false)
+  })
+
   test('throws from the critical section still release the lock', () => {
     const path = join(freshDir(), 'store.json')
     expect(() =>
