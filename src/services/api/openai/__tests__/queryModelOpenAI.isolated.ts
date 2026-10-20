@@ -207,10 +207,34 @@ let _lastCreateOptions: Record<string, any> | null = null
 /** In-flight registry snapshot captured inside the mocked create() */
 let _inFlightAtCreate: Array<Record<string, any>> = []
 
+/**
+ * Establishment attempts that fail with a retryable connection-class error
+ * before succeeding. Regression-test injection for the connection-retry
+ * replay window (one failing attempt buffers a g0 "Retrying in Xs" row, so
+ * the adapted stream exists when the replay yields start).
+ */
+let _createFailuresRemaining = 0
+
 mock.module('@ant/model-provider', () => ({
   resolveOpenAIModel: (m: string) => m,
-  adaptOpenAIStreamToAnthropic: (_stream: any, _model: string) =>
-    eventStream(_nextEvents),
+  // Faithful stand-in: drain the (wrapped) SDK stream BEFORE emitting the
+  // scripted events, exactly like the real adapter iterates its input.
+  // Without the drain the watchdog-wrapped generator stays in suspendedStart
+  // — generator-return runs no body finallys there, so its in-flight
+  // registry entry can never settle and the wiring test leaks by
+  // construction.
+  adaptOpenAIStreamToAnthropic: async function* (
+    _stream: unknown,
+    _model: string,
+  ) {
+    const s = _stream as AsyncIterable<unknown> | undefined
+    if (s && typeof (s as any)[Symbol.asyncIterator] === 'function') {
+      for await (const _chunk of s) {
+        void _chunk
+      }
+    }
+    for (const e of _nextEvents) yield e
+  },
   anthropicMessagesToOpenAI: (messages: any[]) =>
     messages.map(msg => ({
       role: msg.message?.role ?? 'user',
@@ -264,6 +288,10 @@ mock.module('../../../../services/analytics/growthbook.js', () => ({
 mock.module('../chatgptAuth.js', () => ({
   isChatGPTAuthEnabled: () => false,
   getValidChatGPTAuth: async () => null,
+  // W2.4 invalidate 面：responsesAdapter 的 invalidateCachedCodexClient
+  // 依赖该绑定（真实 responsesAdapter 与本 mock 链接）；本文件强制走
+  // Chat Completions 路径，空实现。
+  invalidateChatGPTTokenCache: () => {},
 }))
 
 mock.module('bun:bundle', () => ({
@@ -279,6 +307,12 @@ mock.module('../client.js', () => ({
           args: Record<string, any>,
           options?: Record<string, any>,
         ) => {
+          if (_createFailuresRemaining > 0) {
+            _createFailuresRemaining--
+            throw Object.assign(new Error('relay connect ECONNREFUSED'), {
+              code: 'ECONNREFUSED',
+            })
+          }
           _lastCreateArgs = args
           _lastCreateOptions = options ?? null
           const { getInFlightApiRequests } = await import(
@@ -643,7 +677,10 @@ describe('queryModelOpenAI — max_tokens forwarded to request', () => {
       makeMessageStop(),
     ]
 
-    await runQueryModel(_nextEvents)
+    // Hermetic: force the OFFICIAL endpoint determination — a host/base-URL
+    // env exported by the surrounding environment (local relays) must not
+    // downgrade this test to the compatible-provider keying.
+    await runQueryModel(_nextEvents, { OPENAI_BASE_URL: undefined })
 
     expect(_lastCreateArgs).not.toBeNull()
     expect(_lastCreateArgs!.max_tokens).toBe(8192)
@@ -755,6 +792,120 @@ describe('queryModelOpenAI — deferred MCP tool visibility', () => {
       )
     } finally {
       _searchExtraToolsEnabled = false
+    }
+  })
+})
+
+// ─── #31 residual orphan window: teardown guard on the replay window ─────────
+//
+// The establishment-retry rows are REPLAYED via yields after `adaptedStream`
+// exists but before the consumption for-await starts. A consumer .return()
+// at that suspension used to unwind with no enclosing finally reaching the
+// stream — the provider-concurrency slot and the watchdog in-flight registry
+/// leaked and the raw HTTP body hung. The teardown guard closes the adapted
+// chain on that path.
+
+describe('queryModelOpenAI — replay-window teardown guard (#31 orphan window)', () => {
+  test('consumer .return() during the retry-notice replay releases the provider slot and settles the watchdog', async () => {
+    const { getProviderConcurrencyState, resetProviderConcurrencyForTest } =
+      await import('../../../../services/api/providerConcurrency.js')
+    const { getInFlightApiRequests } = await import('../streamWatchdog.js')
+    resetProviderConcurrencyForTest()
+
+    const inFlightBefore = getInFlightApiRequests().length
+
+    // Attempt 1 fails with a retryable connection error (buffers one g0
+    // "Retrying in Xs" row); attempt 2 succeeds — the adapted stream exists
+    // while the buffered rows are replayed.
+    _createFailuresRemaining = 1
+    _nextEvents = []
+
+    try {
+      const { queryModelOpenAI } = await import('../index.js')
+      const options: any = {
+        model: 'test-model',
+        tools: [],
+        agents: [],
+        querySource: 'main_loop',
+        getToolPermissionContext: async () => ({
+          alwaysAllow: [],
+          alwaysDeny: [],
+          needsPermission: [],
+          mode: 'default',
+          isBypassingPermissions: false,
+        }),
+      }
+
+      const gen = queryModelOpenAI(
+        [],
+        { type: 'text', text: '' } as any,
+        [],
+        new AbortController().signal,
+        options,
+      )
+
+      // First pull lands on a replayed retry notice — the generator is now
+      // suspended at the hazard point (adaptedStream exists, for-await not
+      // started, no enclosing finally in the pre-fix code).
+      const first = await gen.next()
+      expect(first.done).toBe(false)
+      const notice = first.value as any
+      expect(notice.type).toBe('system')
+      expect(notice.subtype).toBe('api_error')
+      expect(notice.retryAttempt).toBe(1)
+
+      // The request is in flight and holds its slot at this point.
+      expect(getProviderConcurrencyState('openai')?.active).toBe(1)
+      expect(getInFlightApiRequests().length).toBe(inFlightBefore + 1)
+
+      // Abandon mid-replay — the exact pre-fix leak path.
+      await gen.return(undefined)
+
+      // Teardown travels through fire-and-forget microtask chains
+      // (return() → releaseOnStreamEnd finally → watchdog settle) — poll
+      // briefly instead of asserting synchronously.
+      for (let i = 0; i < 200; i++) {
+        const state = getProviderConcurrencyState('openai')
+        if (
+          (state?.active ?? 1) === 0 &&
+          getInFlightApiRequests().length === inFlightBefore
+        ) {
+          break
+        }
+        await Bun.sleep(5)
+      }
+      expect(getProviderConcurrencyState('openai')?.active).toBe(0)
+      expect(getInFlightApiRequests().length).toBe(inFlightBefore)
+    } finally {
+      _createFailuresRemaining = 0
+    }
+  })
+
+  test('replay followed by normal consumption still streams fully (guard must not close early)', async () => {
+    const { getProviderConcurrencyState, resetProviderConcurrencyForTest } =
+      await import('../../../../services/api/providerConcurrency.js')
+    resetProviderConcurrencyForTest()
+    _createFailuresRemaining = 1
+    try {
+      // Consumed to completion — the slot is released by the normal path
+      // (the guard stayed idle: replayed=true, no early close). A text block
+      // must be present so the message_stop assembly yields one assistant.
+      _nextEvents = [
+        makeMessageStart(),
+        makeContentBlockStart(0, 'text'),
+        makeTextDelta(0, 'Hello'),
+        makeContentBlockStop(0),
+        makeMessageDelta('end_turn', 3),
+        makeMessageStop(),
+      ]
+      const { assistantMessages } = await runQueryModel(_nextEvents)
+      expect(assistantMessages).toHaveLength(1)
+      expect(assistantMessages[0]!.message.stop_reason).toBe('end_turn')
+      // Consumed to completion — the slot is released by the normal path
+      // (the guard stayed idle: replayed=true, no early close).
+      expect(getProviderConcurrencyState('openai')?.active).toBe(0)
+    } finally {
+      _createFailuresRemaining = 0
     }
   })
 })

@@ -24,7 +24,7 @@ import {
   withProviderSlot,
 } from 'src/services/api/providerConcurrency.js'
 import { getOpenAIClient } from './client.js'
-import { createStreamWatchdog } from './streamWatchdog.js'
+import { createStreamWatchdog, type StreamWatchdog } from './streamWatchdog.js'
 import {
   formatOpenAIPromptCacheKey,
   getOfficialOpenAIPromptCacheKey,
@@ -420,6 +420,13 @@ export async function* queryModelOpenAI(
     // watchdog: its signal replaces the raw one in create() and the upstream
     // abort signal stays linked through it.
     let adaptedStream: AsyncGenerator<BetaRawMessageStreamEvent, void>
+    // Replay-window teardown handles (see the TEARDOWN GUARD below). A
+    // suspendedStart async generator's return() runs NO body finallys, so
+    // when consumption never started the releaseOnStreamEnd chain cannot
+    // unwind itself — the slot release and the per-attempt watchdog must be
+    // captured here and torn down explicitly by the guard.
+    let slotRelease: (() => void) | undefined
+    let inFlightWatchdog: StreamWatchdog | undefined
     // Establishment-retry notices (official g0 payloads) buffered during the
     // awaited retry loops (both paths), replayed into the message stream once
     // the stream is secured.
@@ -438,6 +445,7 @@ export async function* queryModelOpenAI(
         adaptedStream = await withProviderSlot(
           'openai',
           async release => {
+            slotRelease = release
             const stream: AsyncIterable<Record<string, unknown>> =
               await withConnectionRetry(
                 () =>
@@ -474,8 +482,10 @@ export async function* queryModelOpenAI(
           signal,
         )
       } else {
+        // maxRetries 不再在构造面下达（官方 0032:706 `o=s.maxRetries??
+        // this.maxRetries` 每请求覆盖语义）：共享缓存 client 恒以
+        // maxRetries:0 构造，主循环重试所有权在 QueryEngine。
         const client = getOpenAIClient({
-          maxRetries: 0,
           fetchOverride: options.fetchOverride as unknown as typeof fetch,
           source: options.querySource,
         })
@@ -489,6 +499,7 @@ export async function* queryModelOpenAI(
         adaptedStream = await withProviderSlot(
           'openai',
           async release => {
+            slotRelease = release
             const { rawStream, watchdog } = await withConnectionRetry(
               async () => {
                 const watchdog = createStreamWatchdog({
@@ -498,6 +509,8 @@ export async function* queryModelOpenAI(
                   model: openaiModel,
                   externalSignal: signal,
                 })
+                // Capture for the replay-window teardown guard (see below).
+                inFlightWatchdog = watchdog
                 try {
                   const rawStream = await client.chat.completions.create(
                     buildOpenAIRequestBody({
@@ -549,7 +562,48 @@ export async function* queryModelOpenAI(
 
     // The stream is secured — replay the buffered establishment-retry rows
     // (official g0 face) so the user sees the retry history in-stream.
-    for (const notice of retryNotices) yield notice
+    //
+    // TEARDOWN GUARD (#31 residual orphan window): these yields suspend the
+    // generator AFTER `adaptedStream` exists but BEFORE the for-await below
+    // takes over its teardown. for-await's abrupt-completion protocol only
+    // closes the inner iterator for yields INSIDE its body, so a consumer
+    // .return() at a replay yield would unwind with NO enclosing finally
+    // reaching the stream: withProviderSlot's release never fires (provider
+    // concurrency slot leaks), watchdog.settle() never runs (in-flight
+    // registry + raw HTTP body leak). The establishment catch above is safe
+    // (adaptedStream not yet assigned), and yields inside/after the for-await
+    // are covered by its own protocol — the replay loop is the only
+    // unprotected suspension window.
+    //
+    // Generator-return alone CANNOT be the fix here: adaptedStream was never
+    // iterated at this point (suspendedStart), and per generator semantics a
+    // return() on a not-yet-started generator executes NO body finallys —
+    // releaseOnStreamEnd's release would still never fire. The teardown
+    // therefore uses the explicitly captured handles (slotRelease,
+    // inFlightWatchdog): abort kills the underlying HTTP request through the
+    // watchdog controller and settles the registry; slotRelease frees the
+    // concurrency slot. Both are idempotent, so the normal path (replayed)
+    // and a later releaseOnStreamEnd unwinding compose safely. The fire and
+    // forget adaptedStream.return() stays as a belt-and-braces close for any
+    // already-started chain; a second return() on a settled generator is a
+    // no-op. Codex-path note: its watchdog lives inside responsesAdapter and
+    // is not captured here — on abandonment its first-byte/idle window still
+    // bounds the connection; the slot is freed by slotRelease either way.
+    let replayed = false
+    try {
+      for (const notice of retryNotices) yield notice
+      replayed = true
+    } finally {
+      if (!replayed) {
+        inFlightWatchdog?.abort(
+          new Error(
+            'OpenAI stream abandoned before consumption (replay-window teardown)',
+          ),
+        )
+        slotRelease?.()
+        void adaptedStream?.return?.().catch(() => {})
+      }
+    }
     retryNotices.length = 0
 
     // 12. Convert OpenAI stream to Anthropic events, then process into

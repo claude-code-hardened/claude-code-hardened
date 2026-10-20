@@ -127,8 +127,9 @@ export async function* queryModelGrok(
     const openaiTools = anthropicToolsToOpenAI(standardTools)
     const openaiToolChoice = anthropicToolChoiceToOpenAI(options.toolChoice)
 
+    // maxRetries 不在构造面下达（官方 0032:706 每请求覆盖语义）——共享
+    // 缓存 client 恒以 maxRetries:0 构造，主循环重试所有权在 QueryEngine。
     const client = getGrokClient({
-      maxRetries: 0,
       fetchOverride: options.fetchOverride as typeof fetch | undefined,
       source: options.querySource,
     })
@@ -154,10 +155,20 @@ export async function* queryModelGrok(
     // W2.12 flush 面：establishment 终抛（budget 已尽 / RetryAfterTooLong /
     // user abort）时先回放缓冲的 "Retrying in Xs…" 行再让终错逃逸。
     let adaptedStream: AsyncGenerator<BetaRawMessageStreamEvent, void>
+    // Replay-window teardown handles (see the TEARDOWN GUARD below). A
+    // suspendedStart async generator's return() runs NO body finallys, so
+    // when consumption never started the releaseOnStreamEnd chain cannot
+    // unwind itself — the slot release and the per-attempt watchdog must be
+    // captured here and torn down explicitly by the guard.
+    let slotRelease: (() => void) | undefined
+    let inFlightWatchdog:
+      | import('../openai/streamWatchdog.js').StreamWatchdog
+      | undefined
     try {
       adaptedStream = await withProviderSlot(
         'grok',
         async release => {
+          slotRelease = release
           const { stream, watchdog } = await withConnectionRetry(
             async () => {
               const watchdog = createStreamWatchdog({
@@ -168,6 +179,8 @@ export async function* queryModelGrok(
                 model: grokModel,
                 externalSignal: signal,
               })
+              // Capture for the replay-window teardown guard (see below).
+              inFlightWatchdog = watchdog
               try {
                 const stream = await client.chat.completions.create(
                   {
@@ -237,7 +250,39 @@ export async function* queryModelGrok(
 
     // The stream is secured — replay the buffered establishment-retry rows
     // (official g0 face) so the user sees the retry history in-stream.
-    for (const notice of retryNotices) yield notice
+    //
+    // TEARDOWN GUARD (#31 residual orphan window, same shape as the OpenAI
+    // layer): these yields suspend the generator AFTER `adaptedStream` exists
+    // but BEFORE the for-await below takes over its teardown — for-await's
+    // abrupt-completion protocol only closes the inner iterator for yields
+    // INSIDE its body, so a consumer .return() at a replay yield would unwind
+    // with NO enclosing finally reaching the stream: withProviderSlot's
+    // release never fires (provider concurrency slot leaks),
+    // watchdog.settle() never runs, the raw HTTP body hangs.
+    //
+    // Generator-return alone CANNOT be the fix: adaptedStream was never
+    // iterated here (suspendedStart), and per generator semantics a return()
+    // on a not-yet-started generator executes NO body finallys. The teardown
+    // uses the captured handles (inFlightWatchdog/slotRelease): abort kills
+    // the HTTP request through the watchdog controller and settles the
+    // registry, slotRelease frees the concurrency slot — both idempotent, so
+    // they compose with the normal releaseOnStreamEnd unwinding on the
+    // started path (replayed=true skips the guard entirely).
+    let replayed = false
+    try {
+      for (const notice of retryNotices) yield notice
+      replayed = true
+    } finally {
+      if (!replayed) {
+        inFlightWatchdog?.abort(
+          new Error(
+            'Grok stream abandoned before consumption (replay-window teardown)',
+          ),
+        )
+        slotRelease?.()
+        void adaptedStream?.return?.().catch(() => {})
+      }
+    }
     retryNotices.length = 0
 
     for await (const event of adaptedStream) {

@@ -1968,9 +1968,16 @@ async function* queryModel(
     // initial fetch(), not the streaming body. Official default is ON
     // (0032 core: CLAUDE_ENABLE_STREAM_WATCHDOG ?? true) — default-off left
     // first-party streams unprotected unless opted in.
+    // W2.5：官方读法（0001-chunk-xrzcaagk/module-006-uncategorized.js:6800
+    // 原文）`Nw=a.CLAUDE_ENABLE_STREAM_WATCHDOG??!0`，消费面同一行：
+    // `wE=Math.min(uWn(Oe()),Nw?_S:1/0)` —— 未设默认 ON（`??!0`）；已设取
+    // **原值 truthiness**（'false'/'0'/'no' 等非空串均为 truthy → ON，仅
+    // '' 为 OFF）。旧 isEnvTruthy 白名单把 'false' 判成 OFF，既背离官方
+    // 语义，也与自家 streamWatchdog.ts isByteWatchdogEnabled 的
+    // `if(raw!==undefined)return Boolean(raw)`（同 mC() W2.7 面）矛盾。
     const streamWatchdogRaw = process.env.CLAUDE_ENABLE_STREAM_WATCHDOG
     const streamWatchdogEnabled =
-      streamWatchdogRaw === undefined ? true : isEnvTruthy(streamWatchdogRaw)
+      streamWatchdogRaw === undefined ? true : Boolean(streamWatchdogRaw)
     const STREAM_IDLE_TIMEOUT_MS =
       parseInt(process.env.CLAUDE_STREAM_IDLE_TIMEOUT_MS || '', 10) || 90_000
     const STREAM_IDLE_WARNING_MS = STREAM_IDLE_TIMEOUT_MS / 2

@@ -194,6 +194,15 @@ export type StreamWatchdog = {
   markEstablished(): void
   /** Idempotently remove the request from the in-flight registry. */
   settle(): void
+  /**
+   * Externally driven teardown for the replay-window abandon path: a
+   * consumer .return() BEFORE the wrapped stream was ever iterated leaves
+   * the wrapped generator in suspendedStart state, where generator-return
+   * runs NO body finallys — the registry never settles and the underlying
+   * HTTP body hangs. The caller must abort the request through the watchdog
+   * controller and settle the registry explicitly. Idempotent with settle().
+   */
+  abort(reason?: unknown): void
 }
 
 function closeIterator(iterator: AsyncIterator<unknown>): void {
@@ -406,11 +415,23 @@ export function createStreamWatchdog(params: {
     inFlightRequests.delete(requestId)
   }
 
+  function abort(reason?: unknown): void {
+    if (settled) return
+    controller.abort(
+      reason ??
+        new Error(
+          'OpenAI stream abandoned before consumption (replay-window teardown)',
+        ),
+    )
+    settle()
+  }
+
   return {
     requestId,
     signal: controller.signal,
     wrap: stream => wrapped(stream),
     markEstablished,
     settle,
+    abort,
   }
 }
