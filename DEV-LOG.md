@@ -1,5 +1,15 @@
 # DEV-LOG
 
+## 会话生命线 / transcript 保真二轮修复 (2026-10-20)
+
+五项修复（bypass 运行期撤销接线、写队列丢条、tombstone 窗口竞态、KAIROS 序列化、SIGINT flush），全部先取证 `docs/reverse-284/` 官方 2.8.4 基准：
+
+- **bypass 运行期撤销接线（超出官方承诺的安全增强，如实声明）**：官方 `0248-chunk-m7ywx1p7/permissions/checker.js` 的 `FLr`（即 `initialPermissionModeFromCLI`）只在启动时做一次组织策略/设置裁决，**没有任何运行期重检面**。CCH 的 `checkAndDisableBypassPermissionsIfNeeded`/`useKickOffCheckAndDisableBypassPermissionsIfNeeded` 此前全仓零调用（死代码），运行期撤销永不生效。本次在 REPL.tsx 挂载该钩子（mount + mode 变化各触发一次，store 内二次复查防竞态），并同步回写 `setSessionBypassPermissionsMode(false)`——官方只在 main.tsx 启动时写该 flag 一次，claudeInChrome/swarm 读它。**差异声明**：这是 CCH 兑现自身代码已声明意图的安全增强，非对齐官方行为；未发明官方没有的轮询面（无 interval，仅 mount/mode-change 触发）。
+- **写队列丢条删除**：官方 `_7t.enqueueWrite`（full-source/_ALL.js，transcript writer 类）push 无上限，且有 `appendsSealedForShutdown` 关机封口（`sealTranscriptAppendsForShutdown` / `shouldSkipPersistence()` 折入）。CCH 此前 queue≥1000 时 splice 丢最老条目且零日志。修法：删丢队上限（官方语义——永不 drop），超 1000 时走一次性 `logError` 背压告警（队列清空后重新武装）；补 `sealAppendsForShutdown()` 关机封口等价物（`enqueueWrite` 短路 + `shouldSkipPersistence()` 折入 + cleanup flush/reAppend 之后调用）。
+- **tombstone × 防抖批写窗口竞态**：`removeMessageByUuid` 动手前先吸干写队列（不能直接用 `flush()`——它会 await pendingWriteCount 归零，与包裹自身的 trackWrite 计数互等死锁），开窗期间 `scheduleDrain` 被抑制，finally 中同步补排窗内新入队条目——防抖 appendFile 不可能再落进 truncate/re-append 位置写窗口。回归测试：并发 remove+append、1200 条入队零丢失（官方写面无丢队，逐条不可丢）。
+- **KAIROS 段写序列化**：`writeSessionTranscriptSegment` 每条独立 try（此前单条不可序列化 Message 令整批 reject，compact.ts 两处 `void` 无 catch → unhandled rejection），失败 `logError`（替换 console.debug，生产可见）；零官方对照面——`session-transcripts/` 每日段文件是 CCH KAIROS 扩展（官方 _ALL.js 零命中），按自身"never throws"契约修正实现与注释；compact.ts 两处 void 调用补 `.catch`。
+- **REPL 态 SIGINT 走 gracefulShutdown**：main.tsx SIGINT 分支由 `process.exit(0)` 改为 `void gracefulShutdown(0)`（退出码语义不变，gracefulShutdown 末尾 forceExit(0)），先跑 `runCleanupFunctions` → sessionStorage flush（drain 100ms 防抖，此前窗口最后一段 transcript 必丢）。print 模式继续让位给 print.ts 自己的处理器；与 setupGracefulShutdown 的 SIGINT 处理器经 shutdownInProgress 幂等共存。
+
 ## bytecode 预编译默认化 + 启动性能靶点 (2026-09-14)
 
 单文件 compile 产物默认启用 JSC bytecode 预编译（`format: 'esm'` + `bytecode: true`，Bun 1.4.0 起支持 ESM 顶层 await / 动态 import，#26402）：
