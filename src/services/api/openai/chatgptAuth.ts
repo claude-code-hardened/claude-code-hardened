@@ -1,4 +1,12 @@
-import { chmod, mkdir, readFile, unlink, writeFile } from 'fs/promises'
+import {
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  unlink,
+  writeFile,
+} from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 import { logForDebugging } from 'src/utils/debug.js'
@@ -158,10 +166,22 @@ async function saveStoredAuth(tokens: ChatGPTAuthTokens): Promise<void> {
     },
     last_refresh: new Date().toISOString(),
   }
-  await writeFile(path, `${JSON.stringify(body, null, 2)}\n`, {
-    mode: 0o600,
-  })
-  await chmod(path, 0o600).catch(() => undefined)
+  // 原子写（W2.2 修法）：先写同目录 tmp 再 rename。直接 writeFile 有两个
+  // 受损面——读取方看到半截 JSON（torn read），以及与外部写入者（codex
+  // CLI 同盘写 auth 文件族）交叠时新值被截断覆盖。rename 在 POSIX 上对
+  // 同目录目标是原子的，读侧永远看到完整旧值或完整新值。
+  // 权限在 rename 前落到 tmp 上：0600 面无窗口期暴露。
+  const tmpPath = `${path}.${process.pid}.${Date.now()}.tmp`
+  try {
+    await writeFile(tmpPath, `${JSON.stringify(body, null, 2)}\n`, {
+      mode: 0o600,
+    })
+    await chmod(tmpPath, 0o600).catch(() => undefined)
+    await rename(tmpPath, path)
+  } catch (error) {
+    await rm(tmpPath, { force: true }).catch(() => undefined)
+    throw error
+  }
 }
 
 async function postJSON<T>(
@@ -336,7 +356,73 @@ export async function removeChatGPTAuth(): Promise<void> {
   })
 }
 
+// ─── Token cache face（W2.1 / W2.4：官方 Egt 等价，0032-chunk-dyqmyxqn/
+// module-002-class-hierarchy.js:7 + module-005-uncategorized.js:692 原文）───
+// 官方 `class Egt{...this.cached=null,this.pendingRefresh=null,this.
+// nextForce=!1,...}`：
+//   invalidate(){this.cached=null,this.nextForce=!0}            — W2.4
+//   refresh(e=!1){if(this.pendingRefresh&&!e)return this.
+//     pendingRefresh;return this.doRefresh(e)}                  — W2.1 单飞
+// CCH 的 token cache 落在磁盘文件（getValidChatGPTAuth 每次读盘），对应
+// 面为：pendingRefresh = 进程内共享刷新 Promise（并发调用者挂同一解析）、
+// nextForce = 强制刷新标志（401 invalidate 后下一次读取强制走 refreshTokens，
+// 非未过期 token 原样重发）、原子写 = saveStoredAuth 的 tmp+rename。
+let pendingTokenRefresh: Promise<ChatGPTAuthTokens> | null = null
+let forceNextTokenRefresh = false
+
+/**
+ * W2.4 invalidate 面：官方 `tokenCache.invalidate()` 的
+ * `this.cached=null,this.nextForce=!0` 等价——下一次
+ * getValidChatGPTAuth() 不看过期曲线，强制经 refreshTokens 换新
+ * （被吊销但未过期的 token 不能原样重发）。当前进程内无 token memo，
+ * 「丢缓存」即由此标志承载。
+ */
+export function invalidateChatGPTTokenCache(): void {
+  forceNextTokenRefresh = true
+}
+
+/**
+ * W2.1 单飞（官方 Egt.refresh 原文：`if(this.pendingRefresh&&!e)return
+ * this.pendingRefresh;return this.doRefresh(e)`）：并发调用共享同一解析
+ * Promise——首个读盘发现过期/被强制的调用者发起刷新并落盘，其余调用者
+ * await 同一 Promise 拿同一份新 token。旧实现并发各自刷新：第二个刷新
+ * 用已被第一个轮换掉的 refresh_token 发起（服务端可能直接吊销会话），
+ * 且交叠的 writeFile 可让旧值落盘晚于新值。force 面忠于官方：强制刷新
+ * 不并入非强制的 pending（`!e` 门），起新的 doRefresh（provider 带
+ * forceRefresh:!0 的 CCH 对应即不看缓存直接刷新）。
+ */
+async function refreshAndStoreTokens(
+  tokens: ChatGPTAuthTokens,
+  force: boolean,
+): Promise<ChatGPTAuthTokens> {
+  if (pendingTokenRefresh && !force) {
+    return pendingTokenRefresh
+  }
+  const pending = (async () => {
+    const fresh = await refreshTokens(tokens)
+    await saveStoredAuth(fresh)
+    return fresh
+  })()
+  pendingTokenRefresh = pending
+  // doRefresh 的清算面（`this.pendingRefresh=null`）：只清自己名下的
+  // pending（force 覆盖场景下后来者已在槽位上，先行者不得越权抹除）。
+  // catch 只为吞掉 derived promise 的二次未处理拒绝——原始拒绝仍由
+  // 调用方经返回值感知（官方解析错误传播面）。
+  void pending
+    .finally(() => {
+      if (pendingTokenRefresh === pending) {
+        pendingTokenRefresh = null
+      }
+    })
+    .catch(() => undefined)
+  return pending
+}
+
 export async function getValidChatGPTAuth(): Promise<ChatGPTAuth> {
+  // 官方 Egt.getToken 原文：`let e=this.nextForce;this.nextForce=!1;...`
+  // —— force 标志读后即清（consume-once）。
+  const force = forceNextTokenRefresh
+  forceNextTokenRefresh = false
   let tokens = await readStoredAuth(authFilePath())
   if (!tokens) {
     tokens = await readStoredAuth(codexAuthFilePath())
@@ -350,9 +436,11 @@ export async function getValidChatGPTAuth(): Promise<ChatGPTAuth> {
     )
   }
   const expiresAt = getTokenExpiryMs(tokens.accessToken)
-  if (expiresAt !== null && expiresAt <= Date.now() + REFRESH_SKEW_MS) {
-    tokens = await refreshTokens(tokens)
-    await saveStoredAuth(tokens)
+  if (
+    force ||
+    (expiresAt !== null && expiresAt <= Date.now() + REFRESH_SKEW_MS)
+  ) {
+    tokens = await refreshAndStoreTokens(tokens, force)
   }
   return {
     accessToken: tokens.accessToken,

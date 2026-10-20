@@ -3,7 +3,10 @@ import OpenAI from 'openai'
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { normalizeOpenAIUsage, type AnthropicUsage } from '@ant/model-provider'
 import { getProxyFetchOptions } from '../../../utils/proxy.js'
-import { getValidChatGPTAuth } from './chatgptAuth.js'
+import {
+  getValidChatGPTAuth,
+  invalidateChatGPTTokenCache,
+} from './chatgptAuth.js'
 import { createStreamWatchdog } from './streamWatchdog.js'
 
 type ResponsesInputItem = Record<string, unknown>
@@ -460,21 +463,76 @@ const CHATGPT_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
  */
 type CodexAuth = Awaited<ReturnType<typeof getValidChatGPTAuth>>
 
-let cachedCodexClient: {
-  key: string
-  client: OpenAI
-  fetchRef: typeof fetch
-} | null = null
+/**
+ * Codex client LRU cache — W6.3：单槽改 LRU(2)。官方 0003-chunk-zrkp23rq/
+ * module-005-uncategorized.js:1291（assumed-role session cache 原文）：
+ *   let R=new Map;
+ *   function D(U){let B=h(U),G={client:e.buildClient(B),credentials:B,
+ *     createdAt:Date.now()};if(R.size>=r)R.delete(R.keys().next().value);
+ *     return R.set(U,G),G}
+ * —— 封顶 Map、超限驱逐最旧键（插入序）；命中条件失效：
+ *   `invalidate:()=>Date.now()-B.createdAt>=Pj&&j(B,G)` + `j(U,B){...
+ *   return R.get(B)===U&&R.delete(B)}`（条件不满足才删）。
+ * CCH 对应：key=token|accountId（键变即条件失效重建，官方 sharedClient 面
+ * `g=h?h.sharedClient:buildClient(...)`，0003 model-provider/anthropic.js:41），
+ * fetch 身份纳入失效判定（globalThis.fetch 是进程级可替换面——测试注入/
+ * 代理链路切换，捕获引用不一致即重建，否则旧 fetch 的行为泄漏给新调用方）。
+ * 容量取 2：token 轮换瞬间（旧/新键交替）保留一份旧池，避免每次刷新都
+ * 丢弃 keep-alive 连接池（chatgpt.com 对并发握手限流，见下 sharedClient 注）。
+ * 429 pCo（anthropic-ratelimit-unified-reset）在 codex 层未消费：chatgpt.com
+ * backend 不发该头，恒走 `un=zo??…` 的 XD 回落侧——取舍声明同
+ * connectionRetry.ts gateDelayMs。
+ */
+const CODEX_CLIENT_CACHE_LIMIT = 2
+let cachedCodexClients: Map<
+  string,
+  { client: OpenAI; fetchRef: typeof fetch }
+> = new Map()
+
+function getCachedCodexClient(
+  cacheKey: string,
+  currentFetch: typeof fetch,
+): OpenAI | null {
+  const hit = cachedCodexClients.get(cacheKey)
+  if (!hit) return null
+  // 条件失效（官方 j(U,B) 面）：fetch 身份漂移的条目按失效删除。
+  if (hit.fetchRef !== currentFetch) {
+    cachedCodexClients.delete(cacheKey)
+    return null
+  }
+  // LRU 触碰：重插到 Map 尾部（插入序 = 最近使用序）。
+  cachedCodexClients.delete(cacheKey)
+  cachedCodexClients.set(cacheKey, hit)
+  return hit.client
+}
+
+function storeCodexClient(
+  cacheKey: string,
+  client: OpenAI,
+  fetchRef: typeof fetch,
+): void {
+  cachedCodexClients.delete(cacheKey)
+  // 官方 D(U) 面驱逐：超限先删最旧键（Map 插入序头元素）再插入。
+  while (cachedCodexClients.size >= CODEX_CLIENT_CACHE_LIMIT) {
+    const oldest = cachedCodexClients.keys().next().value
+    if (oldest === undefined) break
+    cachedCodexClients.delete(oldest)
+  }
+  cachedCodexClients.set(cacheKey, { client, fetchRef })
+}
 
 /**
  * W2.11 invalidate 面（官方 `_authState.tokenCache.invalidate()` 的 CCH
- * 对应，0032-chunk-dyqmyxqn/module-005-uncategorized.js:706 shouldRetry
- * 401 路）：401 刷新重试前丢掉缓存的 codex client——token 无进程内
- * memo（getValidChatGPTAuth 每次从盘读），失效即落在本 client 缓存上，
- * 下一次 establishment 以重读凭据键重建。
+ * 对应，0032-chunk-dyqmyxqn/module-002-class-hierarchy.js:7 Egt 原文
+ * `invalidate(){this.cached=null,this.nextForce=!0}`）：401 刷新重试前——
+ * 1) 丢缓存 codex client（token 键重读重建，keep-alive 池随之换新）；
+ * 2) `nextForce=!0`：强制下一次 getValidChatGPTAuth() 经 refreshTokens
+ *    换新凭据——旧实现在这一步只丢 client 缓存，被吊销但未过期的 token
+ *    原样重发（W2.4），刷新后的 refreshToken 才能让服务端签发新 AT。
  */
 export function invalidateCachedCodexClient(): void {
-  cachedCodexClient = null
+  cachedCodexClients.clear()
+  invalidateChatGPTTokenCache()
 }
 
 function buildCodexClient(
@@ -524,21 +582,19 @@ export async function createChatGPTResponsesStream(params: {
     // agents, connection very slow" shape). Token refresh changes the key
     // → automatic rebuild. fetchOverride (test injection) bypasses cache.
     const cacheKey = `${auth.accessToken}|${auth.accountId ?? ''}`
-    // fetch 身份纳入失效判定：globalThis.fetch 是进程级可替换面（测试注入
-    // /代理运行时切换）——client 构造时捕获了当时 fetch 的引用，缓存命中前
-    // 校验身份，变了就重建（否则旧 fetch 的行为会泄漏给新调用方）。
+    // fetch 身份纳入失效判定（见 cachedCodexClients 注释）。
     const currentFetch = globalThis.fetch
     let client: OpenAI
     if (params.fetchOverride) {
       client = buildCodexClient(auth, params.fetchOverride)
-    } else if (
-      cachedCodexClient?.key === cacheKey &&
-      cachedCodexClient.fetchRef === currentFetch
-    ) {
-      client = cachedCodexClient.client
     } else {
-      client = buildCodexClient(auth)
-      cachedCodexClient = { key: cacheKey, client, fetchRef: currentFetch }
+      const cached = getCachedCodexClient(cacheKey, currentFetch)
+      if (cached) {
+        client = cached
+      } else {
+        client = buildCodexClient(auth)
+        storeCodexClient(cacheKey, client, currentFetch)
+      }
     }
     const created = await client.responses.create(
       params.request as unknown as Parameters<
