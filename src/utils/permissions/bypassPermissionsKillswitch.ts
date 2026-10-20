@@ -2,7 +2,11 @@ import { feature } from 'bun:bundle'
 import { useEffect, useRef } from 'react'
 import { toError } from '../../utils/errors.js'
 import { logError } from '../../utils/log.js'
-import { getIsRemoteMode } from '../../bootstrap/state.js'
+import {
+  getIsRemoteMode,
+  getSessionBypassPermissionsMode,
+  setSessionBypassPermissionsMode,
+} from '../../bootstrap/state.js'
 import {
   useAppState,
   useAppStateStore,
@@ -82,8 +86,17 @@ export function resetBypassPermissionsCheck(): void {
 }
 
 /**
- * Kick the periodic gate check on mount and whenever the permission mode
+ * Kick the bypass-revocation gate on mount and whenever the permission mode
  * changes (mirrors the auto-mode gate hook below).
+ *
+ * Official anchoring (docs/reverse-284, 0248-chunk-m7ywx1p7/permissions/
+ * checker.js — `FLr`): official 2.8.4 adjudicates the bypass policy gate
+ * ONCE at startup and has no runtime re-check face. Wiring this hook is a
+ * CCH safety enhancement that fulfils the intent already declared in this
+ * module's code (settings/organizational-policy revocation of an
+ * in-flight bypass session); it deliberately does NOT invent a polling
+ * loop — the check re-runs only on mount and on permission-mode changes,
+ * with the store-level re-check below guarding against races.
  */
 export function useKickOffCheckAndDisableBypassPermissionsIfNeeded(): void {
   const contextMode = useAppState(s => s.toolPermissionContext.mode)
@@ -94,13 +107,27 @@ export function useKickOffCheckAndDisableBypassPermissionsIfNeeded(): void {
     void checkAndDisableBypassPermissionsIfNeeded(
       store.getState().toolPermissionContext,
       setAppState,
-    ).catch(error => {
-      logError(
-        new Error('Bypass permissions gate check failed', {
-          cause: toError(error),
-        }),
-      )
-    })
+    )
+      .then(() => {
+        // Sync the session-global bypass flag (main.tsx writes it once at
+        // startup via setSessionBypassPermissionsMode). If the gate
+        // downgraded the live session out of bypass, re-check the store
+        // and clear the stale flag so downstream readers (claude-in-chrome
+        // setup, swarm spawn) observe the revocation without a restart.
+        if (
+          store.getState().toolPermissionContext.mode !== 'bypassPermissions' &&
+          getSessionBypassPermissionsMode()
+        ) {
+          setSessionBypassPermissionsMode(false)
+        }
+      })
+      .catch(error => {
+        logError(
+          new Error('Bypass permissions gate check failed', {
+            cause: toError(error),
+          }),
+        )
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contextMode])
 }

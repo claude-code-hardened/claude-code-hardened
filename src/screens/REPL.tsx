@@ -446,6 +446,7 @@ import type { Theme } from 'src/utils/theme.js';
 import {
   checkAndDisableAutoModeIfNeeded,
   useKickOffCheckAndDisableAutoModeIfNeeded,
+  useKickOffCheckAndDisableBypassPermissionsIfNeeded,
 } from 'src/utils/permissions/bypassPermissionsKillswitch.js';
 import { SandboxManager } from 'src/utils/sandbox/sandbox-adapter.js';
 import { SANDBOX_NETWORK_ACCESS_TOOL_NAME } from 'src/cli/structuredIO.js';
@@ -988,6 +989,12 @@ export function REPL({
   );
 
   useKickOffCheckAndDisableAutoModeIfNeeded();
+  // Runtime bypass-revocation gate: re-adjudicates the settings/org-policy
+  // bypass killswitch while the session sits in bypassPermissions and
+  // downgrades + notifies when the verdict changes. Startup-only wiring left
+  // a stale bypass mode that survived until restart. No polling face is
+  // added — retries ride the mount / mode-change effect only.
+  useKickOffCheckAndDisableBypassPermissionsIfNeeded();
 
   const [dynamicMcpConfig, setDynamicMcpConfig] = useState<Record<string, ScopedMcpServerConfig> | undefined>(
     initialDynamicMcpConfig,
