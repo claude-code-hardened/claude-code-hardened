@@ -465,6 +465,12 @@ function getProject(): Project {
         } catch {
           // Best-effort — don't let metadata re-append crash the cleanup
         }
+        // Shutdown seal (official anchor: `sealTranscriptAppendsForShutdown`
+        // in docs/reverse-284). After the exit flush + metadata re-append,
+        // no further transcript append may enqueue — late fire-and-forget
+        // appendEntry callers resolve/no-op instead of writing bytes after
+        // the final drain that nothing would ever flush.
+        project?.sealAppendsForShutdown()
       })
       cleanupRegistered = true
     }
@@ -535,6 +541,12 @@ export function setRemoteIngressUrlForTesting(url: string): void {
 
 const REMOTE_FLUSH_INTERVAL_MS = 10
 
+// High-water mark for per-file write queues — diagnostic threshold only.
+// No entries are dropped at or beyond it (official writer has no cap; see
+// enqueueWrite). The old CCH behavior spliced entries away at 1000, which
+// silently lost transcript bytes with zero logging.
+const QUEUE_HIGH_WATER_MARK = 1000
+
 // Limit the number of cached session-file lookups to prevent unbounded Map growth
 // in long-running daemon / swarm sessions that spawn many sub-agents.
 const MAX_CACHED_SESSION_FILES = 200
@@ -577,6 +589,22 @@ class Project {
   private activeDrain: Promise<void> | null = null
   private FLUSH_INTERVAL_MS = 100
   private readonly MAX_CHUNK_BYTES = 100 * 1024 * 1024
+  // Shutdown seal — official anchor (docs/reverse-284 full-source/_ALL.js,
+  // transcript writer class `_7t`): `enqueueWrite` short-circuits when
+  // `appendsSealedForShutdown` is set, `shouldSkipPersistence()` folds the
+  // seal, and `sealTranscriptAppendsForShutdown()` arms it at shutdown so
+  // late fire-and-forget appends cannot re-dirty the transcript after the
+  // exit flush. Previous CCH state: seal missing entirely.
+  private appendsSealedForShutdown = false
+  // Backpressure telemetry: armed once per sustained crossing of
+  // QUEUE_HIGH_WATER_MARK. Nothing is ever dropped (see enqueueWrite).
+  private queueBackpressureWarned = false
+  // True while removeMessageByUuid's read-truncate-reappend sequence is in
+  // flight. The debounced batch writer must not start a drain inside this
+  // window: an appendFile landing between `truncate(lineStart)` and the
+  // positional re-append of the trailing lines would be overwritten by that
+  // positional write (bytes lost before they were ever readable).
+  private tombstoneWindow = false
 
   constructor() {}
 
@@ -589,6 +617,23 @@ class Project {
     this.activeDrain = null
     this.writeQueues = new Map()
     this.existingSessionFiles = new Map()
+    this.appendsSealedForShutdown = false
+    this.queueBackpressureWarned = false
+    this.tombstoneWindow = false
+  }
+
+  /**
+   * Seal all transcript appends for shutdown.
+   *
+   * Official anchor (docs/reverse-284 full-source/_ALL.js):
+   * `sealAppendsForShutdown(){this.appendsSealedForShutdown=!0}` /
+   * `shouldSkipPersistence(){return Ea()||this.appendsSealedForShutdown}` /
+   * `enqueueWrite` refusing to queue once sealed. After the exit flush has
+   * run, late fire-and-forget `appendEntry` callers (in-flight promises,
+   * async hooks) must not re-enqueue writes nothing will ever drain.
+   */
+  sealAppendsForShutdown(): void {
+    this.appendsSealedForShutdown = true
   }
 
   private incrementPendingWrites(): void {
@@ -616,18 +661,35 @@ class Project {
   }
 
   private enqueueWrite(filePath: string, entry: Entry): Promise<void> {
+    // Shutdown seal: resolve without queueing (official anchor,
+    // docs/reverse-284 full-source/_ALL.js — `enqueueWrite` returns
+    // `Promise.resolve()` once `appendsSealedForShutdown` is set).
+    if (this.appendsSealedForShutdown) {
+      return Promise.resolve()
+    }
     return new Promise<void>(resolve => {
       let queue = this.writeQueues.get(filePath)
       if (!queue) {
         queue = []
         this.writeQueues.set(filePath, queue)
       }
-      // Drop oldest entries when queue exceeds limit to prevent unbounded memory growth
-      if (queue.length >= 1000) {
-        const dropped = queue.splice(0, queue.length - 999)
-        for (const d of dropped) {
-          d.resolve()
-        }
+      // Backpressure telemetry. The official transcript writer has NO
+      // drop-oldest cap (it pushes unconditionally and relies on drain +
+      // the shutdown seal): docs/reverse-284 full-source/_ALL.js
+      // `pushQueueItem`/`enqueueWrite`. The previous CCH cap spliced away
+      // the oldest ≥1000 queued entries silently — successful futures with
+      // lost transcript bytes, production-invisible. Never drop; surface a
+      // sustained-backpressure diagnostic once per crossing instead.
+      if (
+        queue.length >= QUEUE_HIGH_WATER_MARK &&
+        !this.queueBackpressureWarned
+      ) {
+        this.queueBackpressureWarned = true
+        logError(
+          new Error(
+            `sessionStorage write queue backpressure: ${queue.length} entries queued for ${basename(filePath)} — transcript writer is not keeping up (no entries dropped)`,
+          ),
+        )
       }
       queue.push({ entry, resolve })
       this.scheduleDrain()
@@ -635,7 +697,11 @@ class Project {
   }
 
   private scheduleDrain(): void {
-    if (this.flushTimer) {
+    // Tombstone window inhibit: removeMessageByUuid drained the queues and
+    // is mutating the file via truncate + positional re-append. A batch
+    // append landing inside that window would be cut/overwritten by the
+    // positional write. It re-arms the drain itself in its `finally`.
+    if (this.flushTimer || this.tombstoneWindow) {
       return
     }
     this.flushTimer = setTimeout(async () => {
@@ -701,6 +767,11 @@ class Project {
       if (queue.length === 0) {
         this.writeQueues.delete(filePath)
       }
+    }
+    // Queues caught up — re-arm the backpressure diagnostic for the next
+    // sustained crossing.
+    if (this.writeQueues.size === 0) {
+      this.queueBackpressureWarned = false
     }
   }
 
@@ -898,6 +969,28 @@ class Project {
   async removeMessageByUuid(targetUuid: UUID): Promise<void> {
     return this.trackWrite(async () => {
       if (this.sessionFile === null) return
+
+      // Mutual exclusion with the debounced batch writer. The tombstone
+      // does a positional truncate + re-append; a queued batch appendFile
+      // landing between the two would be cut off (truncate) or overwritten
+      // (positional write). Cancel the pending timer, absorb any in-flight
+      // drain, then synchronously empty the queues so every already
+      // enqueued append hits the file BEFORE the tombstone touches bytes.
+      // Flush() cannot be reused here — it awaits pendingWriteCount reaching
+      // 0, which the surrounding trackWrite already incremented (deadlock).
+      if (this.flushTimer) {
+        clearTimeout(this.flushTimer)
+        this.flushTimer = null
+      }
+      if (this.activeDrain) {
+        await this.activeDrain
+      }
+      await this.drainWriteQueue()
+
+      // Open the window: enqueues arriving from here on are held (no timed
+      // drain) and flushed synchronously in the finally below, right after
+      // the tombstone completes — preserving append order.
+      this.tombstoneWindow = true
       try {
         let fileSize = 0
         const fh = await fsOpen(this.sessionFile, 'r+')
@@ -973,6 +1066,17 @@ class Project {
         })
       } catch {
         // Silently ignore errors - the file might not exist yet
+      } finally {
+        this.tombstoneWindow = false
+        // Writes enqueued inside the window were held back by
+        // scheduleDrain's inhibit — flush them now, after the tombstone's
+        // truncate/re-append is complete, so ordering is preserved.
+        const hasHeldWrites = [...this.writeQueues.values()].some(
+          queue => queue.length > 0,
+        )
+        if (hasHeldWrites) {
+          await this.drainWriteQueue()
+        }
       }
     })
   }
@@ -985,6 +1089,12 @@ class Project {
    * test sessions don't pollute the user's --resume list.
    */
   private shouldSkipPersistence(): boolean {
+    // Shutdown seal folds in here exactly like the official writer's
+    // `shouldSkipPersistence(){return Ea()||this.appendsSealedForShutdown}`
+    // (docs/reverse-284 full-source/_ALL.js) — once sealed, appendEntry /
+    // materializeSessionFile skip instead of re-buffering writes that the
+    // exit flush will never drain.
+    if (this.appendsSealedForShutdown) return true
     const allowTestPersistence = isEnvTruthy(
       process.env.TEST_ENABLE_SESSION_PERSISTENCE,
     )
