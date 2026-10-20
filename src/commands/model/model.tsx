@@ -27,7 +27,24 @@ import {
 } from '../../utils/model/model.js';
 import { isModelAllowed } from '../../utils/model/modelAllowlist.js';
 import { validateModel } from '../../utils/model/validateModel.js';
-import { emitPostModelSwitch, emitPreModelSwitch } from '../../utils/hooks/lifecycleHookEvents.js';
+import {
+  type PreModelSwitchDenial,
+  emitPostModelSwitch,
+  emitPreModelSwitch,
+  getPreModelSwitchDenial,
+} from '../../utils/hooks/lifecycleHookEvents.js';
+
+/**
+ * Honest denial echo for the local /model enforcement path: the hook's own
+ * reason is quoted verbatim (official PreModelSwitch contract 0004:698 —
+ * "deny cancels the switch"), never paraphrased into a generic message.
+ */
+function blockedSwitchMessage(model: string | null, denial: PreModelSwitchDenial): string {
+  return (
+    `Model switch to ${chalk.bold(renderModelLabel(model))} was blocked by ` +
+    `PreModelSwitch hook '${denial.hook}' (${denial.decision}): ${denial.reason}`
+  );
+}
 
 function ModelPickerWrapper({
   onDone,
@@ -49,16 +66,28 @@ function ModelPickerWrapper({
     });
   }
 
-  function handleSelect(model: string | null, effort: EffortLevel | undefined): void {
+  async function handleSelect(model: string | null, effort: EffortLevel | undefined): Promise<void> {
     logEvent('tengu_model_command_menu', {
       action: model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       from_model: mainLoopModel as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       to_model: model as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
     });
-    // W7 #58: lifecycle hook emissions around the local /model picker switch
-    // (official PreModelSwitch/PostModelSwitch, source 'picker'). The emitters
-    // are observability-only — hooks observe, they cannot deny-cancel here.
-    void emitPreModelSwitch({ fromModel: mainLoopModel, toModel: model, source: 'picker' });
+    // W7 #58 + round 3 item 4: the local /model picker path READS THE
+    // PreModelSwitch VERDICTS BACK and enforces the official contract
+    // (0009-chunk-j18026mh/module-004-uncategorized.js:698 — "deny cancels
+    // the switch"): a blocking verdict aborts the switch BEFORE the state
+    // changes and the hook's reason is echoed verbatim. (The bridge/SDK
+    // surfaces stay fire-and-forget — declared difference, see
+    // lifecycleHookEvents.ts.)
+    const preResults = await emitPreModelSwitch(
+      { fromModel: mainLoopModel, toModel: model, source: 'picker' },
+      { enforceDeny: true },
+    );
+    const denial = getPreModelSwitchDenial(preResults);
+    if (denial !== null) {
+      onDone(blockedSwitchMessage(model, denial), { display: 'system' });
+      return;
+    }
     setAppState(prev => ({
       ...prev,
       mainLoopModel: model,
@@ -154,13 +183,13 @@ function SetModelAndClose({
 
       // Skip validation for default model
       if (!model) {
-        setModel(null);
+        await setModel(null);
         return;
       }
 
       // Skip validation for known aliases - they're predefined and should work
       if (isKnownAlias(model)) {
-        setModel(model);
+        await setModel(model);
         return;
       }
 
@@ -171,7 +200,7 @@ function SetModelAndClose({
         const { valid, error } = await validateModel(model);
 
         if (valid) {
-          setModel(model);
+          await setModel(model);
         } else {
           onDone(error || `Model '${model}' not found`, {
             display: 'system',
@@ -184,11 +213,21 @@ function SetModelAndClose({
       }
     }
 
-    function setModel(modelValue: string | null): void {
-      // W7 #58: lifecycle hook emissions around the local /model <name> switch
-      // (official PreModelSwitch/PostModelSwitch, source 'command').
-      // Observability-only — hooks cannot deny-cancel this switch.
-      void emitPreModelSwitch({ toModel: modelValue, source: 'command' });
+    async function setModel(modelValue: string | null): Promise<void> {
+      // W7 #58 + round 3 item 4: the local /model <name> path READS THE
+      // PreModelSwitch VERDICTS BACK and enforces the official deny contract
+      // (0004:698 — "deny cancels the switch"): the switch is aborted and
+      // the hook's reason is echoed verbatim. (bridge/SDK fire-and-forget —
+      // declared difference, see lifecycleHookEvents.ts.)
+      const preResults = await emitPreModelSwitch(
+        { fromModel: prevMainLoopModel, toModel: modelValue, source: 'command' },
+        { enforceDeny: true },
+      );
+      const denial = getPreModelSwitchDenial(preResults);
+      if (denial !== null) {
+        onDone(blockedSwitchMessage(modelValue, denial), { display: 'system' });
+        return;
+      }
       setAppState(prev => ({
         ...prev,
         mainLoopModel: modelValue,

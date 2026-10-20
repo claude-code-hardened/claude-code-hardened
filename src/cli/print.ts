@@ -3148,8 +3148,17 @@ function runHeadlessStreaming(
               : requestedModel
           // W7 #58: the SDK -p set_model control path now emits the
           // Pre/PostModelSwitch lifecycle hooks (previously only the bridge
-          // control path fired them). Observability-only — hooks observe but
-          // cannot deny-cancel an SDK-requested switch.
+          // control path fired them). Fire-and-forget WITH A DECLARED
+          // DIFFERENCE: officially the set_model control request awaits its
+          // verdict and refuses the switch on deny
+          // (0165-chunk-dyqmyxqn/module-004-uncategorized.js:79,
+          // de({verdict,deadlineMs,respond})), but this SDK face applies the
+          // model synchronously and cannot roll it back — deny-style
+          // verdicts are observed and counted
+          // (tengu_lifecycle_hook_verdict_discarded), never enforced here.
+          // The official deny-cancels contract IS enforced on the local
+          // /model command path only (lifecycleHookEvents.ts
+          // getPreModelSwitchDenial).
           void emitPreModelSwitch({ toModel: model, source: 'sdk' })
           activeUserSpecifiedModel = model
           setMainLoopModelOverride(model)
