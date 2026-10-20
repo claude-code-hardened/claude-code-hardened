@@ -74,6 +74,19 @@ pub struct GrepResult {
 	/// 管道被取消（searchCancel / timeout）：true = 残表，TS 渲染层据此
 	/// 转为与 rg 支路超时一致的错误面（不静默回残表）。
 	pub cancelled: bool,
+	/// 二进制 quit 提示（NUL 命中 quit 的文件 + quit 字节偏移）。官方对位
+	/// （reverse-284 _ALL.js:9463 uOn）：end 事件带 binary_offset 时追加
+	/// `binary file matches (found "\0" byte around offset N)` 提示行；
+	/// 归宿渲染在 TS 宿主层（Content 模式），本面只报数据。
+	pub binary_notices: Vec<BinaryMatchNotice>,
+}
+
+/// 单文件二进制 quit 记录（路径 + BinaryDetection::quit 命中的字节偏移）。
+#[napi(object)]
+pub struct BinaryMatchNotice {
+	pub path: String,
+	/// napi number（u32 饱和钳位；u64 未实现 FromNapiValue）。
+	pub offset: u32,
 }
 
 /// findGlob options — 对齐 `rg --files --glob --sort=modified --no-ignore --hidden`

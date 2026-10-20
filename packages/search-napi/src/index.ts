@@ -28,9 +28,18 @@
  *                             search root is a single file, like `rg -c FILE`)
  *       files_with_matches   one bare path per line
  *       truncated match      `[Omitted long matching line]` (verbatim rg 14.1.1)
- *     Binary files: the native pipeline uses BinaryDetection::quit(0) and
- *     surfaces no binary metadata, so no "binary file matches" notice is
- *     emitted (rg prints one — accepted v0 divergence, kernel-side).
+ *       binary notice        `path\0binary file matches (found "\0" byte
+ *                             around offset N)` — official uOn emits this on
+ *                             the ripgrep end event when binary_offset is set,
+ *                             only for files that yielded output lines
+ *                             (reverse-284 _ALL.js:9463). 官方截断阈值
+ *                             `U.length>500`（[Omitted long …] 行）原样保留；
+ *                             max_columns 工具面可调是 CCH 既有差异（官方
+ *                             写死 500），注释声明。
+ *     Binary files: the native pipeline runs BinaryDetection::quit(0) and now
+ *     surfaces the quit offset per file (GrepResult.binaryNotices) so the
+ *     host can print the same-text notice the rg subprocess path produced
+ *     (Content mode only — rg -c/-l print no notice).
  */
 import { loadNativeModule } from '../../../src/utils/embeddedNative'
 
@@ -107,6 +116,12 @@ export interface RenderableGrepMatch {
   truncated?: boolean | null
 }
 
+/** Mirror of napi `#[napi(object)] BinaryMatchNotice`. */
+export interface BinaryMatchNoticeLike {
+  path: string
+  offset: number
+}
+
 /** Mirror of napi `#[napi(object)] GrepResult`. */
 export interface GrepResultLike {
   matches: RenderableGrepMatch[]
@@ -117,6 +132,12 @@ export interface GrepResultLike {
   skippedOversized: number
   /** Pipeline was cancelled (searchCancel / timeout) — result is a truncated residual, not a clean empty set. */
   cancelled?: boolean | null
+  /**
+   * Per-file BinaryDetection::quit offsets (older .node payloads lack the
+   * field — undefined degrades to "no notices", matching the v0 divergence
+   * that predates the surfacing).
+   */
+  binaryNotices?: BinaryMatchNoticeLike[] | null
 }
 
 /** Frozen v1 native surface (native/src/lib.rs + types.rs). */
@@ -219,6 +240,14 @@ export interface RenderGrepMatchesOptions {
    * prints a bare count, while a directory target prints `path:count`.
    */
   bareCount?: boolean
+  /**
+   * Native binary-quit surface (GrepResult.binaryNotices). Content mode
+   * only: after a file's rendered lines, the official byte-format notice
+   * `path\0binary file matches (found "\0" byte around offset N)` is
+   * appended — rg prints it only for files that already produced output
+   * lines (official uOn, _ALL.js:9463: `if(Ne && S.length > 0)`).
+   */
+  binaryNotices?: readonly BinaryMatchNoticeLike[] | null
 }
 
 /** Verbatim vendored rg 14.1.1 placeholder for max-columns-capped lines. */
@@ -258,8 +287,38 @@ export function renderGrepMatches(
 
   const withNumbers = options.showLineNumbers !== false
   const lines: string[] = []
+  // Official uOn end-event notice queue (Content mode only, and only for
+  // files that yield at least one rendered line, `S.length > 0`).
+  const noticeByPath = new Map<string, number>()
+  if (mode === 'Content') {
+    for (const notice of options.binaryNotices ?? []) {
+      if (
+        notice &&
+        typeof notice.path === 'string' &&
+        typeof notice.offset === 'number'
+      ) {
+        // first-wins（FileCollector 只记首个 quit 偏移；官方 end 事件每文件
+        // 一条 binary_offset）。
+        if (!noticeByPath.has(notice.path)) {
+          noticeByPath.set(notice.path, notice.offset)
+        }
+      }
+    }
+  }
+  // rg prints the notice only for files that produced output lines
+  // (official uOn `S.length > 0` guard, _ALL.js:9463).
+  const flushNoticeForPath = (path: string | null, emittedLines: number) => {
+    if (path === null || emittedLines === 0) return
+    const offset = noticeByPath.get(path)
+    if (offset !== undefined) {
+      lines.push(
+        `${path}\u0000binary file matches (found "\\0" byte around offset ${offset})`,
+      )
+    }
+  }
   let prevPath: string | null = null
   let prevEndLine = 0
+  let currentGroupLines = 0
   for (const match of matches) {
     const startLine = match.lineNumber - match.before.length
     const endLine = match.lineNumber + match.after.length
@@ -272,6 +331,14 @@ export function renderGrepMatches(
       (match.path !== prevPath || startLine <= 0 || startLine > prevEndLine + 1)
     ) {
       lines.push('--')
+    }
+    // Official parity: the notice rides AFTER the buffered output lines of
+    // the file that hit the binary cutoff — the group boundary is the same
+    // flush point (file change; a same-file gap would already imply the
+    // searcher stopped at the NUL, so treat it as a boundary too).
+    if (match.path !== prevPath) {
+      flushNoticeForPath(prevPath, currentGroupLines)
+      currentGroupLines = 0
     }
     for (let i = 0; i < match.before.length; i++) {
       lines.push(
@@ -302,6 +369,8 @@ export function renderGrepMatches(
     }
     prevPath = match.path
     prevEndLine = endLine
+    currentGroupLines += match.before.length + 1 + match.after.length
   }
+  flushNoticeForPath(prevPath, currentGroupLines)
   return lines.join('\n')
 }

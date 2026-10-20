@@ -280,6 +280,17 @@ fn binary_file_with_nul_byte_is_skipped() {
 	assert_eq!(result.total_matches, 1);
 	assert_eq!(result.files_searched, 2, "二进制文件计入 searched 但无命中");
 	assert_eq!(result.files_with_matches, 1);
+	// 官方 uOn 的 binary 提示面（_ALL.js:9463 end.binary_offset）：quit 文件
+	// 上报首个 NUL 字节偏移；纯文本文件无提示。TS 宿主层渲染
+	// `binary file matches (found "\0" byte around offset N)`（Content 模式）。
+	// 路径面与 matches 行同口径（绝对 lossy path，断言按 ends_with）。
+	assert_eq!(result.binary_notices.len(), 1, "quit 文件上报 binary_offset");
+	assert!(
+		result.binary_notices[0].path.ends_with("bin.dat"),
+		"quit 路径 {:?} 应为 bin.dat",
+		result.binary_notices[0].path
+	);
+	assert_eq!(result.binary_notices[0].offset, 6, "首个 NUL 的字节偏移");
 }
 
 // ---------------------------------------------------------------------------

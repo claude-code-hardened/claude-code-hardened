@@ -34,7 +34,7 @@ use grep_searcher::{
 
 use crate::heart::SearchToken;
 use crate::sanitize::{GlobFilter, build_glob_filter};
-use crate::types::{GrepMatch, GrepOptions, GrepOutputMode, GrepResult};
+use crate::types::{BinaryMatchNotice, GrepMatch, GrepOptions, GrepOutputMode, GrepResult};
 
 /// 超限旗标阈值（对齐 omp MAX_FILE_BYTES=4MiB；新语义仅计数，不再截窗）。
 pub const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
@@ -155,6 +155,8 @@ struct SearchOutcome {
 	/// emitted 预算累计用）。
 	collected: u64,
 	limit_reached: bool,
+	/// BinaryDetection::quit 命中偏移（无则 None，聚合层转 binary_notices）。
+	binary_offset: Option<u64>,
 }
 
 impl SearchOutcome {
@@ -169,6 +171,7 @@ struct FileSearchResult {
 	match_count: u64,
 	collected: u64,
 	limit_reached: bool,
+	binary_offset: Option<u64>,
 }
 
 fn clamp_u32(value: u64) -> u32 {
@@ -291,6 +294,9 @@ struct FileCollector<'m, M: Matcher> {
 	max_columns: Option<usize>,
 	matches: Vec<CollectedMatch>,
 	pending_before: Vec<String>,
+	/// BinaryDetection::quit(b'\0') 命中的首字节偏移（官方 binary_offset 面；
+	/// 同文件二次 quit 不覆盖首个——rg 的 end.binary_offset 语义）。
+	binary_offset: Option<u64>,
 	token: SearchToken,
 }
 
@@ -312,6 +318,7 @@ impl<'m, M: Matcher> FileCollector<'m, M> {
 			max_columns: params.max_columns,
 			matches: Vec::new(),
 			pending_before: Vec::new(),
+			binary_offset: None,
 			token: token.clone(),
 		}
 	}
@@ -322,12 +329,28 @@ impl<'m, M: Matcher> FileCollector<'m, M> {
 			match_count: self.match_count,
 			collected: self.collected,
 			limit_reached: self.limit_reached,
+			binary_offset: self.binary_offset,
 		}
 	}
+
 }
 
 impl<M: Matcher> Sink for FileCollector<'_, M> {
 	type Error = io::Error;
+
+	fn binary_data(
+		&mut self,
+		_searcher: &Searcher,
+		binary_byte_offset: u64,
+	) -> Result<bool, Self::Error> {
+		// BinaryDetection::quit(0) 对位：记录首个 quit 偏移（quit 模式下
+		// searcher 随即终止本文件）；官方 uOn 的提示行即此值
+		// （_ALL.js:9463）。
+		if self.binary_offset.is_none() {
+			self.binary_offset = Some(binary_byte_offset);
+		}
+		Ok(true)
+	}
 
 	fn matched(&mut self, _searcher: &Searcher, mat: &SinkMatch<'_>) -> Result<bool, Self::Error> {
 		if self.limit_reached || self.token.cancelled() {
@@ -547,6 +570,9 @@ fn slice_outcome<M: Matcher + Sync>(
 			match_count: u64::from(matched),
 			collected: u64::from(matched),
 			limit_reached: false,
+			// -l 快路径不跑 searcher：无 quit 探测面（与 rg -l 不打二进制
+			// 提示的外显一致——TS 层只在 Content 模式渲染提示）。
+			binary_offset: None,
 		};
 	}
 	run_search_slice(searcher, matcher, bytes, file_params, token)
@@ -667,6 +693,10 @@ fn search_one_file<M: Matcher + Sync>(
 /// 共享单遍聚合状态（对位 omp PassState 的单遍化）。
 struct PassState {
 	results: Mutex<Vec<FileSearchResult>>,
+	/// BinaryDetection::quit 命中、但未入选输出（match_count==0 且非 -L 反选）
+	/// 的文件：官方 uOn 的提示数据在 end.binary_offset（_ALL.js:9463），
+	/// 是否渲染由 TS 层按“该文件有产出行”（S.length>0）落定，这里只报数据。
+	binary_quit: Mutex<Vec<BinaryMatchNotice>>,
 	files_searched: AtomicU64,
 	skipped_oversized: AtomicU64,
 	emitted: AtomicU64,
@@ -676,6 +706,7 @@ impl PassState {
 	fn new() -> Self {
 		Self {
 			results: Mutex::new(Vec::new()),
+			binary_quit: Mutex::new(Vec::new()),
 			files_searched: AtomicU64::new(0),
 			skipped_oversized: AtomicU64::new(0),
 			emitted: AtomicU64::new(0),
@@ -732,7 +763,18 @@ fn handle_file<M: Matcher + Sync>(
 					match_count: outcome.match_count,
 					collected: outcome.collected,
 					limit_reached: outcome.limit_reached,
+					binary_offset: outcome.binary_offset,
 				});
+			} else if let Some(offset) = outcome.binary_offset {
+				// quit 文件未入选输出（rg quit 面先于首个 match 采集）：偏移仍须
+				// 上报（官方 end.binary_offset 数据面）；入选文件走 FileSearchResult
+				// 携带，聚合层统一收集，两条路互斥不重复。
+				state.binary_quit.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(
+					BinaryMatchNotice {
+						path: candidate.path.to_string_lossy().into_owned(),
+						offset: u32::try_from(offset).unwrap_or(u32::MAX),
+					},
+				);
 			}
 		},
 	}
@@ -972,6 +1014,7 @@ fn run_unbounded_parallel<M: Matcher + Sync>(
 
 fn aggregate_results(
 	results: Vec<FileSearchResult>,
+	quit_only_notices: Vec<BinaryMatchNotice>,
 	params: SearchParams,
 	files_searched: u64,
 	skipped_oversized: u64,
@@ -989,6 +1032,11 @@ fn aggregate_results(
 	// 与 -l 的每文件 1 占位同基面）。
 	let mut inverted_file_base = 0u64;
 
+	// 官方 uOn 的 end.binary_offset 面（_ALL.js:9463）：quit 文件的提示行
+	// 数据源。rg 的提示只在产出行存在时追加（S.length>0）——此处数据面按
+	// “文件入选输出”收集，Content/顺序渲染条件由 TS 层落实。
+	let mut binary_notices: Vec<BinaryMatchNotice> = Vec::new();
+
 	for result in results {
 		if !inverted && result.match_count == 0 {
 			continue;
@@ -1001,6 +1049,13 @@ fn aggregate_results(
 		files_with_matches = files_with_matches.saturating_add(1);
 		total_matches = total_matches.saturating_add(file_match_count);
 		let path = result.path.to_string_lossy().into_owned();
+		if let Some(offset) = result.binary_offset {
+			// u32 饱和钳位（u64 未实现 FromNapiValue；>4GiB 偏移现实不可达）。
+				binary_notices.push(BinaryMatchNotice {
+					path: path.clone(),
+					offset: u32::try_from(offset).unwrap_or(u32::MAX),
+				});
+		}
 		match params.mode {
 			Mode::Content => {
 				for m in result.matches {
@@ -1083,6 +1138,10 @@ fn aggregate_results(
 		limit_reached = files_with_matches > 0;
 	}
 
+	// quit 未入选文件（rg quit 先于 hit 采集）的偏移并入提示面（入选文件已
+	// 携带于 results；两路互斥）。TS 渲染层按“该文件有产出行”决定是否打印。
+	binary_notices.extend(quit_only_notices);
+
 	GrepResult {
 		matches: rows,
 		total_matches: clamp_u32(total_matches),
@@ -1091,6 +1150,7 @@ fn aggregate_results(
 		limit_reached,
 		skipped_oversized: clamp_u32(skipped_oversized),
 		cancelled: false,
+		binary_notices,
 	}
 }
 
@@ -1107,6 +1167,7 @@ fn empty_result(files_searched: u32, skipped_oversized: u32) -> GrepResult {
 		limit_reached: false,
 		skipped_oversized,
 		cancelled: false,
+		binary_notices: vec![],
 	}
 }
 
@@ -1152,6 +1213,8 @@ fn grep_single_file<M: Matcher + Sync>(
 		}
 		let path_str = path.to_string_lossy().into_owned();
 		return GrepResult {
+			// -l 快路径无 quit 探测（同 slice_outcome FSW 面）。
+			binary_notices: vec![],
 			matches: vec![file_row(&path_str)],
 			total_matches: 1,
 			files_with_matches: 1,
@@ -1186,6 +1249,7 @@ fn grep_single_file<M: Matcher + Sync>(
 		}
 		let path_str = path.to_string_lossy().into_owned();
 		return GrepResult {
+			binary_notices: vec![],
 			matches: vec![count_row(&path_str, 0)],
 			total_matches: 0,
 			files_with_matches: 1,
@@ -1211,6 +1275,15 @@ fn grep_single_file<M: Matcher + Sync>(
 	}
 	let limit_reached =
 		outcome.limit_reached || params.max_count.is_some_and(|max| outcome.collected >= max);
+	let binary_notices = outcome
+		.binary_offset
+		.map(|offset| {
+			vec![BinaryMatchNotice {
+				path: path_str.clone(),
+				offset: u32::try_from(offset).unwrap_or(u32::MAX),
+			}]
+		})
+		.unwrap_or_default();
 	GrepResult {
 		matches,
 		total_matches: clamp_u32(outcome.match_count),
@@ -1219,6 +1292,7 @@ fn grep_single_file<M: Matcher + Sync>(
 		limit_reached,
 		skipped_oversized,
 		cancelled: false,
+		binary_notices,
 	}
 }
 
@@ -1576,7 +1650,10 @@ pub fn grep_search_impl(
 		};
 		let files_searched = state.files_searched.load(Ordering::Relaxed);
 		let skipped_oversized = state.skipped_oversized.load(Ordering::Relaxed);
-		aggregate_results(results, params, files_searched, skipped_oversized)
+		let quit_only_notices = std::mem::take(
+			&mut *state.binary_quit.lock().unwrap_or_else(|poisoned| poisoned.into_inner()),
+		);
+		aggregate_results(results, quit_only_notices, params, files_searched, skipped_oversized)
 	};
 	// 统一取消出口：管道任意取消点（searchCancel(key)/全局代际/timeout）
 	// 回填 cancelled —— TS 面据此转错误面，不静默回残表。

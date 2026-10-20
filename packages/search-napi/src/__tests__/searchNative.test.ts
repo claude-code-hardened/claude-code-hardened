@@ -29,6 +29,17 @@ mock.module('bun:bundle', () => ({
 }))
 
 // Dynamic imports AFTER the mocks (mock.module does not hoist).
+// Warm-order guard for a PRE-EXISTING ESM cycle (reproduces on a pristine
+// HEAD checkout under bun test cold load, i.e. not caused by this working
+// tree): cold-init GrepTool.ts → src/utils/permissions/filesystem.js → … →
+// GlobTool/GlobTool.js → GlobTool/UI.tsx, whose module scope re-binds
+// `GrepTool.renderToolResultMessage` (GlobTool/UI.tsx:52) while GrepTool.ts
+// is still initializing → "Cannot access 'GrepTool' before initialization"
+// (TDZ). Initializing GlobTool FIRST (or any shared link of that chain,
+// e.g. src/utils/permissions/filesystem.js) lets the recursive import
+// complete before the binding evaluates. Proper fix lives in GlobTool/UI
+// (make the renderToolResultMessage re-export lazy) — outside this package.
+await import('@claude-code-hardened/builtin-tools/tools/GlobTool/GlobTool.js')
 const { GrepTool, splitContentLine } = await import(
   '../../../../packages/builtin-tools/src/tools/GrepTool/GrepTool'
 )
@@ -135,6 +146,43 @@ describe('renderGrepMatches', () => {
     expect(out).toBe(
       '/proj/a.ts-11-eleven\n/proj/a.ts:12:match\n/proj/a.ts-13-thirteen\n/proj/a.ts-14-fourteen',
     )
+  })
+
+  test('binary notice renders the official uOn text after the file lines', () => {
+    // Official uOn (reverse-284 _ALL.js:9463): on the end event with
+    // binary_offset set, a notice line
+    // `path \0 binary file matches (found "\0" byte around offset N)`
+    // follows the file's buffered output lines (S.length > 0 guard).
+    const out = renderGrepMatches(
+      [
+        buildMatch({ path: 'blob.bin', lineNumber: 2, line: 'text match' }),
+        buildMatch({ path: 'after.txt', lineNumber: 9, line: 'later' }),
+      ],
+      {
+        binaryNotices: [{ path: 'blob.bin', offset: 4096 }],
+      },
+    )
+    expect(out).toBe(
+      'blob.bin:2:text match\nblob.bin\u0000binary file matches (found "\\0" byte around offset 4096)\nafter.txt:9:later',
+    )
+  })
+
+  test('binary notice is withheld for files with no rendered lines and for non-Content modes', () => {
+    const notices = [{ path: 'silent.bin', offset: 7 }]
+    // S.length === 0 → no notice (official guard).
+    expect(renderGrepMatches([], { binaryNotices: notices })).toBe('')
+    // Count mode never carries the notice (rg -c/-l print none).
+    const countOut = renderGrepMatches(
+      [buildMatch({ path: 'c.bin', line: '3' })],
+      { mode: 'Count', binaryNotices: [{ path: 'c.bin', offset: 7 }] },
+    )
+    expect(countOut).toBe('c.bin:3')
+    // FSW mode: bare path only.
+    const fswOut = renderGrepMatches(
+      [buildMatch({ path: 'c.bin', line: '' })],
+      { mode: 'FilesWithMatches', binaryNotices: notices },
+    )
+    expect(fswOut).toBe('c.bin')
   })
 
   test('context mode emits -- between different files, none without context', () => {
