@@ -10,10 +10,26 @@
  */
 import { tmpdir } from 'os'
 import { join } from 'path'
+// Real namespace object — loaded to harvest the COMPLETE export-name surface
+// (211+ named exports). Bun's ESM linking verifies named imports against the
+// mock module's OWN properties at file-load time, so a partial mock that
+// misses any statically imported name (e.g. waitForScrollIdle, consumed via
+// utils/git/gitFilesystem) poisons the whole worker process with
+// "Export named '...' not found" — process-global, order-dependent
+// (mock.module 不可撤). The namespace value is only used for its keys; the
+// Proxy below still hands out noop for every non-overridden export.
+// .js 扩展名（tsconfig allowImportingTsExtensions 未开，.ts 静态导入 TS5097；
+// Bun 运行时把 .js 解析回 .ts 源文件——与 src/ 内部导入约定一致）。
+import * as realBootstrapStateModule from 'src/bootstrap/state.js'
+
+function allRealStateExportNames(): string[] {
+  return Object.keys(realBootstrapStateModule)
+}
 
 export function stateMock() {
   const noop = () => {}
-  return {
+  // Explicit (value-driven) surface — the most commonly imported exports.
+  const explicit: Record<string | symbol, unknown> = {
     // Session identity
     getSessionId: () => 'mock-session-id',
     regenerateSessionId: noop,
@@ -91,6 +107,38 @@ export function stateMock() {
     getSdkAgentProgressSummariesEnabled: () => false,
     addSlowOperation: noop,
   }
+  return withCompleteExportSurface(explicit, noop)
+}
+
+/**
+ * ESM link guard: Bun verifies a consumer's named imports against the mock
+ * module's OWN properties at file-load time (Proxy `get` traps don't help;
+ * a missing name fails the whole worker with "Export named '…' not found").
+ * Fill every real src/bootstrap/state.ts export the mock does not explicitly
+ * drive with a noop (functions) or undefined (consts) so any test file
+ * consuming an unlisted export still resolves — process-wide, in any order.
+ */
+function withCompleteExportSurface(
+  explicit: Record<string | symbol, unknown>,
+  noop: () => void,
+): Record<string | symbol, unknown> {
+  const baseline: Record<string | symbol, unknown> = {}
+  const surface = realBootstrapStateModule as unknown as Record<string, unknown>
+  for (const name of allRealStateExportNames()) {
+    if (name in explicit) continue
+    baseline[name] = typeof surface[name] === 'function' ? noop : undefined
+  }
+  return new Proxy(
+    { ...baseline, ...explicit },
+    {
+      get(target, prop) {
+        if (prop in target) return target[prop]
+        // Unknown state export (new in src/bootstrap/state.ts): safe noop so
+        // consumers never get "undefined is not a function".
+        return noop
+      },
+    },
+  )
 }
 
 /**
@@ -231,13 +279,7 @@ export function functionalStateMock() {
     addSlowOperation: noop,
   }
 
-  return new Proxy(explicit, {
-    get(target, prop) {
-      if (prop in target) return target[prop]
-      // Unknown state export (new in src/bootstrap/state.ts): safe noop that
-      // returns undefined, so consumers never get "undefined is not a
-      // function" when this shim is registered ahead of new test files.
-      return noop
-    },
-  })
+  // Same ESM link guard as stateMock: complete export-name surface + noop
+  // backstop for exports added later (see withCompleteExportSurface).
+  return withCompleteExportSurface(explicit, noop)
 }
