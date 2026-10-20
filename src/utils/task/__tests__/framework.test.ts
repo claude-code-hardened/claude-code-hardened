@@ -44,12 +44,8 @@ const {
   _resetStillRunningReminderForTest,
 } = await import('../framework.js')
 
-const {
-  _resetTaskRegistryForTest,
-  _flushTaskRegistrySnapshotsForTest,
-  recordTaskHandle,
-  getAllTaskHandleRecords,
-} = await import('src/services/taskRegistry/taskRegistry.js')
+const { _resetTaskRegistryForTest, recordTaskHandle, getAllTaskHandleRecords } =
+  await import('src/services/taskRegistry/taskRegistry.js')
 
 let tempDir: string
 let previousConfigDir: string | undefined
@@ -78,7 +74,6 @@ afterEach(async () => {
   } else {
     process.env.CLAUDE_CONFIG_DIR = previousConfigDir
   }
-  await _flushTaskRegistrySnapshotsForTest()
   await rm(tempDir, { recursive: true, force: true })
   sdkEvents.length = 0
 })
@@ -480,5 +475,50 @@ describe('enqueueStillRunningReminder', () => {
     expect(queuedNotifications[0]!.value).toContain(
       'Background agent "driven" (agnt_snap08) is still running',
     )
+  })
+
+  test('信封带 passive（官方 so():9229 排除 passive——纯快照不唤醒 query 轮）', () => {
+    recordTaskHandle({
+      id: 'agnt_pass01',
+      type: 'local_agent',
+      status: 'running',
+      description: 'passive-probe',
+    })
+    expect(enqueueStillRunningReminder()).toBe(true)
+    expect(queuedNotifications).toHaveLength(1)
+    // 缺 passive 时 hasUserIntentCommandsInQueue 把 still-running 误判为
+    // user intent，空闲队列被唤醒成无谓新轮（自激温床）—— 回归门。
+    expect(queuedNotifications[0]!.passive).toBe(true)
+    expect(queuedNotifications[0]!.isMeta).toBe(true)
+    expect(queuedNotifications[0]!.mode).toBe('task-notification')
+  })
+})
+
+// ─── CCH 审查修复（回归官方 :8420/:8428）：死讯不再经附件面广播 ──────────
+
+describe('generateTaskAttachments — 死讯零广播（官方 completed 由 tool_result 送达）', () => {
+  test('未投终态句柄不进入 task_status 附件（补投唯一咽喉 = resume 单点）', async () => {
+    recordTaskHandle({
+      id: 'bshahead01',
+      type: 'local_bash',
+      status: 'failed',
+      exitKind: 'failed',
+      description: 'dead shell, not broadcast',
+    })
+    recordTaskHandle({
+      id: 'bshahead02',
+      type: 'local_agent',
+      status: 'completed',
+      exitKind: 'completed',
+      description: 'delivered in life',
+    })
+    const { attachments } = await generateTaskAttachments({
+      tasks: {},
+    } as any)
+    // 无论未投/已投，死讯面均不出附件——上一版的附件广播是陈年回放与
+    // 自激唤醒的温床；补投收口到 deliverOnResume 单点咽喉。
+    expect(attachments.find(a => a.taskId === 'bshahead01')).toBeUndefined()
+    expect(attachments.find(a => a.taskId === 'bshahead02')).toBeUndefined()
+    expect(attachments).toHaveLength(0)
   })
 })

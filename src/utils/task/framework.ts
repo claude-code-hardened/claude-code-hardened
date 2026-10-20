@@ -1,12 +1,3 @@
-import {
-  OUTPUT_FILE_TAG,
-  STATUS_TAG,
-  SUMMARY_TAG,
-  TASK_ID_TAG,
-  TASK_NOTIFICATION_TAG,
-  TASK_TYPE_TAG,
-  TOOL_USE_ID_TAG,
-} from '../../constants/xml.js'
 import type { AppState } from '../../state/AppState.js'
 import {
   isTerminalTaskStatus,
@@ -16,16 +7,14 @@ import {
 import type { TaskState } from '../../tasks/types.js'
 import { logForDebugging } from '../../utils/debug.js'
 import {
-  consumeUndeliveredTerminalTasks,
   getAllTaskHandleRecords,
-  hydrateTaskRegistry,
   recordTaskHeartbeats,
   type TaskHandleRecord,
 } from '../../services/taskRegistry/taskRegistry.js'
 import { escapeXml } from '../xml.js'
 import { enqueuePendingNotification } from '../messageQueueManager.js'
 import { enqueueSdkEvent } from '../sdkEventQueue.js'
-import { getTaskOutputDelta, getTaskOutputPath } from './diskOutput.js'
+import { getTaskOutputDelta } from './diskOutput.js'
 
 // Standard polling interval for all tasks
 export const POLL_INTERVAL_MS = 1000
@@ -217,20 +206,11 @@ export async function generateTaskAttachments(state: AppState): Promise<{
     // dual delivery (one inline attachment + one separate API turn).
   }
 
-  // CCH #38/#47: 死讯补投的主消费面——终态未被置 notified 的句柄（含重启
-  // 后从快照 hydrate 的孤儿）转为模型可见的 task_status 附件。此前消费点
-  // 挂在 /heapdump 诊断构建（手动/1.5GB 才触发），死讯实质永不达。
-  const deadLetters = consumeUndeliveredTerminalTasks()
-  for (const dead of deadLetters) {
-    attachments.push({
-      type: 'task_status',
-      taskId: dead.id,
-      taskType: 'local_agent',
-      status: dead.status as TaskStatus,
-      description: `[task-registry] subagent ${dead.id} ${dead.status}${dead.exitKind ? ` (${dead.exitKind})` : ''} — its result was never delivered (crash/timeout/kill). Do not assume it finished; resume or redo as needed.`,
-      deltaSummary: null,
-    })
-  }
+  // CCH 审查修复（回归官方 :8420/:8428）：completed/failed/killed 死讯
+  // **不再经附件面广播** —— 官方语义里 completed 结果由 tool_result 直接
+  // 送达，未投死讯的唯一补投咽喉是 deliverOnResume（$M 单点形态，挂
+  // resumeAgent 显式复活点）；进程死亡 = 表清空，零启动回放。本附件面只
+  // 承担 still-running 视图注入与输出增量/逐出记账。
 
   // CCH #52/#44: 子代理列表模型侧视图——每轮把中央句柄表里的 still-running
   // 快照注入给主代理（官方对齐 docs/reverse-284:
@@ -318,7 +298,6 @@ function stillRunningReminderForRecord(record: TaskHandleRecord): string {
  * reminder 信使，官方每任务一信使口径）。
  */
 export function buildStillRunningReminders(): string[] {
-  hydrateTaskRegistry()
   const running = getAllTaskHandleRecords().filter(
     record => record.status === 'running',
   )
@@ -355,6 +334,14 @@ export function enqueueStillRunningReminder(): boolean {
       mode: 'task-notification',
       priority: STILL_RUNNING_PRIORITY,
       isMeta: true,
+      // CCH 审查修复（CRITICAL 僵尸唤醒）：官方 still-running 是 turn 内
+      // task_status 附件（0001-chunk-xrzcaagk/module-006-uncategorized.js
+      // :8781 `Oi([Re({content:…,isMeta:!0})])`），不是唤醒 query 轮的
+      // user-intent 队列命令 —— 官方 so()（:9228
+      // `g.some(Ro=>…&&Ro.passive!==!0)`）把 passive 排除出唤醒判定。
+      // 缺 passive 的入队让 hasUserIntentCommandsInQueue 把 still-running
+      // 误判为用户意图，空闲队列被唤醒成无谓新轮（自激温床）。
+      passive: true,
     })
   }
   return true
@@ -401,63 +388,4 @@ export function applyTaskOffsetsAndEvictions(
     }
     return changed ? { ...prev, tasks: newTasks } : prev
   })
-}
-
-/**
- * Poll all running tasks and check for updates.
- * This is the main polling loop called by the framework.
- */
-export async function pollTasks(
-  getAppState: () => AppState,
-  setAppState: SetAppState,
-): Promise<void> {
-  const state = getAppState()
-  const { attachments, updatedTaskOffsets, evictedTaskIds } =
-    await generateTaskAttachments(state)
-
-  applyTaskOffsetsAndEvictions(setAppState, updatedTaskOffsets, evictedTaskIds)
-
-  // Send notifications for completed tasks
-  for (const attachment of attachments) {
-    enqueueTaskNotification(attachment)
-  }
-}
-
-/**
- * Enqueue a task notification to the message queue.
- */
-function enqueueTaskNotification(attachment: TaskAttachment): void {
-  const statusText = getStatusText(attachment.status)
-
-  const outputPath = getTaskOutputPath(attachment.taskId)
-  const toolUseIdLine = attachment.toolUseId
-    ? `\n<${TOOL_USE_ID_TAG}>${attachment.toolUseId}</${TOOL_USE_ID_TAG}>`
-    : ''
-  const message = `<${TASK_NOTIFICATION_TAG}>
-<${TASK_ID_TAG}>${attachment.taskId}</${TASK_ID_TAG}>${toolUseIdLine}
-<${TASK_TYPE_TAG}>${attachment.taskType}</${TASK_TYPE_TAG}>
-<${OUTPUT_FILE_TAG}>${outputPath}</${OUTPUT_FILE_TAG}>
-<${STATUS_TAG}>${attachment.status}</${STATUS_TAG}>
-<${SUMMARY_TAG}>Task "${attachment.description}" ${statusText}</${SUMMARY_TAG}>
-</${TASK_NOTIFICATION_TAG}>`
-
-  enqueuePendingNotification({ value: message, mode: 'task-notification' })
-}
-
-/**
- * Get human-readable status text.
- */
-function getStatusText(status: TaskStatus): string {
-  switch (status) {
-    case 'completed':
-      return 'completed successfully'
-    case 'failed':
-      return 'failed'
-    case 'killed':
-      return 'was stopped'
-    case 'running':
-      return 'is running'
-    case 'pending':
-      return 'is pending'
-  }
 }
