@@ -10,9 +10,13 @@
 //       cap stays 4 in both modes).
 //   if (entrypointEligible && CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS)
 //     M6r(true) → option descriptions become optional (wording per official W).
-// Official gating: only honored for remote/SDK surfaces —
-// `R = Pn.has(CLAUDE_CODE_ENTRYPOINT) || clientType === 'remote'` — the plain
-// `cli` entrypoint keeps the base schema.
+// Official gating, verbatim (0044 module-003:1402/1413):
+//   `var Pn=new Set(["sdk-ts","sdk-py","sdk-cli","local-agent",
+//     "claude-desktop","claude-desktop-3p"])`
+//   `let R=Pn.has(CLAUDE_CODE_ENTRYPOINT ?? "") || s === "remote"`
+// (s = the derived client type; the "remote" thin-client face also honors the
+// session-ingress token envs, mirroring the same derivation in src/main.tsx).
+// The plain `cli` entrypoint keeps the base schema.
 // Pure module (zod only) so the schema and its tests stay free of the ink
 // dependency chain.
 
@@ -34,17 +38,54 @@ export interface QuestionSchemaFlags {
   optionalDescriptions: boolean
 }
 
-/** Entrypoints that honor the QUESTION_* extensions, per the official gate
- * (remote thin client + SDK entrypoints; plain `cli` excluded). */
-export function isQuestionEntrypointEligible(
+/**
+ * Entrypoints that honor the QUESTION_* extensions — the official `Pn` set,
+ * verbatim (0044 module-003:1402):
+ * `["sdk-ts","sdk-py","sdk-cli","local-agent","claude-desktop",
+ *   "claude-desktop-3p"]`.
+ */
+export const QUESTION_ENTRYPOINTS: ReadonlySet<string> = new Set([
+  'sdk-ts',
+  'sdk-py',
+  'sdk-cli',
+  'local-agent',
+  'claude-desktop',
+  'claude-desktop-3p',
+])
+
+/** Env vars whose presence marks the remote thin-client session (the official
+ * `s === "remote"` face; same derivation as the clientType "remote" branch in
+ * src/main.tsx — session-ingress token envs decide). */
+function isRemoteClientTypeFromEnv(
   entrypoint: string | undefined,
+  env: Record<string, string | undefined>,
 ): boolean {
-  if (!entrypoint) return false
-  return entrypoint === 'remote' || entrypoint.startsWith('sdk')
+  return (
+    entrypoint === 'remote' ||
+    !!env.CLAUDE_CODE_SESSION_ACCESS_TOKEN ||
+    !!env.CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR ||
+    !!env.CLAUDE_SESSION_INGRESS_TOKEN_FILE
+  )
 }
 
+/** Official question-extension gate (0044 module-003:1413, verbatim):
+ * `R = Pn.has(CLAUDE_CODE_ENTRYPOINT ?? "") || s === "remote"`. */
+export function isQuestionEntrypointEligible(
+  entrypoint: string | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return (
+    QUESTION_ENTRYPOINTS.has(entrypoint ?? '') ||
+    isRemoteClientTypeFromEnv(entrypoint, env)
+  )
+}
+
+/** Official truthiness for the QUESTION_* env switches (0044 module-003:1413):
+ * `if (R && CLAUDE_CODE_QUESTION_EXTENDED) O6r(true)` — plain JS truthiness on
+ * the raw string, so ANY non-empty string flips the switch ('0' / 'no' /
+ * 'false' included, as upstream); only unset and '' stay off. */
 function envTruthy(value: string | undefined): boolean {
-  return value === '1' || value === 'true' || value === 'yes'
+  return value !== undefined && value !== ''
 }
 
 /** Read the QUESTION_* env switches. `env` defaults to process.env; pass a
@@ -99,10 +140,13 @@ export type QuestionKind = (typeof QUESTION_KINDS)[number]
  * Builds the per-question schema for the given flag state.
  *
  * Base (extended=false): the historical choice-only question. A `kind` field
- * is SILENTLY STRIPPED at parse time — official fe=Z(C()) semantics (0311
+ * is accepted at parse time and dropped AFTER parse by the tool execution
+ * layer via stripBaseQuestionFaces — official fe=Z(C()) semantics (0311
  * anchor: the base input schema `fe` wraps the base question shape `C()`,
  * which does not declare `kind`, so the default zod object parse drops the
- * unknown key without an error). The kind-scoped form fields
+ * unknown key without an error; the shared-shape schema keeps `kind`
+ * declared, so the equivalent drop happens post-parse instead of at parse).
+ * The kind-scoped form fields
  * (placeholder/min/max/step/defaultValue/unit) stay hard rejections on the
  * base surface: stripping those would silently downgrade typed values.
  *
@@ -121,183 +165,216 @@ export function buildQuestionSchema(flags: QuestionSchemaFlags) {
   // Single object shape in both modes (union-free schema keeps `Question`
   // inference and downstream consumers stable); the refinement decides which
   // fields the active surface accepts.
-  return (
-    z
-      .object({
-        question: z
-          .string()
-          .describe(
-            'The complete question to ask the user. Should be clear, specific, and end with a question mark. Example: "Which library should we use for date formatting?" If multiSelect is true, phrase it accordingly, e.g. "Which features do you want to enable?"',
-          ),
-        header: z
-          .string()
-          .describe(
-            'Very short label displayed as a chip/tag (max 12 chars). Examples: "Auth method", "Library", "Approach".',
-          ),
-        kind: z
-          .enum(QUESTION_KINDS)
-          .optional()
-          .describe(
-            'How the user answers. "choice" (the default when omitted): picks from options. "text": a free-text box, no options — for open-ended input. "number": a slider/stepper between min and max — for quantities. (Extended-question surface only.)',
-          ),
-        description: z
-          .string()
-          .optional()
-          .describe('Optional single helper line shown under the question.'),
-        options: optionSchema
-          .array()
-          .max(4)
-          .default(() => [])
-          .describe(
-            'Choices for a "choice" question: 2-4 distinct options; with multiSelect false they must be mutually exclusive. Omit for "text" and "number" questions (extended surface). There should be no \'Other\' or \'Skip\' option; the form lets the user type their own answer or leave a question unanswered.',
-          ),
-        multiSelect: z
-          .boolean()
-          .default(false)
-          .describe(
-            'Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive. Choice questions only.',
-          ),
-        placeholder: z
-          .string()
-          .optional()
-          .describe(
-            '"text" questions only: placeholder for the empty text box.',
-          ),
-        min: z
-          .number()
-          .optional()
-          .describe('"number" questions only (required there): lowest value.'),
-        max: z
-          .number()
-          .optional()
-          .describe('"number" questions only (required there): highest value.'),
-        step: z
-          .number()
-          .positive()
-          .optional()
-          .describe('"number" questions only: increment between values.'),
-        defaultValue: z
-          .number()
-          .optional()
-          .describe(
-            '"number" questions only: the value the control starts at (within min..max).',
-          ),
-        unit: z
-          .string()
-          .optional()
-          .describe(
-            '"number" questions only: short unit shown next to the value, e.g. "px", "slides", "%".',
-          ),
-      })
-      .superRefine((q, ctx) => {
-        // ── Base surface (extended=false): choice-only, historical contract ──
-        // `kind` itself is NOT rejected here — the official base schema
-        // fe=Z(C()) (0311 anchor) strips the undeclared key at parse time; the
-        // transform below mirrors that strip. Kind-scoped form fields stay
-        // rejected: stripping those would silently downgrade typed values into
-        // an empty choice UI.
-        if (!flags.extended) {
-          for (const field of [
-            'description',
-            'placeholder',
-            'min',
-            'max',
-            'step',
-            'defaultValue',
-            'unit',
-          ] as const) {
-            if (q[field] !== undefined) {
-              ctx.addIssue({
-                code: 'custom',
-                path: [field],
-                message: `${field} applies only to the extended-question surface (CLAUDE_CODE_QUESTION_EXTENDED with a remote/SDK entrypoint).`,
-              })
-            }
-          }
-          if (q.options.length < 2) {
-            ctx.addIssue({
-              code: 'custom',
-              path: ['options'],
-              message: 'A choice question needs 2-4 options.',
-            })
-          }
-          return
-        }
-
-        // ── Extended surface: official 0311 `pe` superRefine ──
-        const kind: QuestionKind = q.kind ?? 'choice'
-        for (const [field, fieldKind] of [
-          ['placeholder', 'text'],
-          ['min', 'number'],
-          ['max', 'number'],
-          ['step', 'number'],
-          ['defaultValue', 'number'],
-          ['unit', 'number'],
+  return z
+    .object({
+      question: z
+        .string()
+        .describe(
+          'The complete question to ask the user. Should be clear, specific, and end with a question mark. Example: "Which library should we use for date formatting?" If multiSelect is true, phrase it accordingly, e.g. "Which features do you want to enable?"',
+        ),
+      header: z
+        .string()
+        .describe(
+          'Very short label displayed as a chip/tag (max 12 chars). Examples: "Auth method", "Library", "Approach".',
+        ),
+      kind: z
+        .enum(QUESTION_KINDS)
+        .optional()
+        .describe(
+          'How the user answers. "choice" (the default when omitted): picks from options. "text": a free-text box, no options — for open-ended input. "number": a slider/stepper between min and max — for quantities. (Extended-question surface only.)',
+        ),
+      description: z
+        .string()
+        .optional()
+        .describe('Optional single helper line shown under the question.'),
+      options: optionSchema
+        .array()
+        .max(4)
+        .default(() => [])
+        .describe(
+          'Choices for a "choice" question: 2-4 distinct options; with multiSelect false they must be mutually exclusive. Omit for "text" and "number" questions (extended surface). There should be no \'Other\' or \'Skip\' option; the form lets the user type their own answer or leave a question unanswered.',
+        ),
+      multiSelect: z
+        .boolean()
+        .default(false)
+        .describe(
+          'Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive. Choice questions only.',
+        ),
+      placeholder: z
+        .string()
+        .optional()
+        .describe('"text" questions only: placeholder for the empty text box.'),
+      min: z
+        .number()
+        .optional()
+        .describe('"number" questions only (required there): lowest value.'),
+      max: z
+        .number()
+        .optional()
+        .describe('"number" questions only (required there): highest value.'),
+      step: z
+        .number()
+        .positive()
+        .optional()
+        .describe('"number" questions only: increment between values.'),
+      defaultValue: z
+        .number()
+        .optional()
+        .describe(
+          '"number" questions only: the value the control starts at (within min..max).',
+        ),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          '"number" questions only: short unit shown next to the value, e.g. "px", "slides", "%".',
+        ),
+    })
+    .superRefine((q, ctx) => {
+      // ── Base surface (extended=false): choice-only, historical contract ──
+      // `kind` itself is NOT rejected here — the official base schema
+      // fe=Z(C()) (0311 anchor) drops the undeclared key at parse time; the
+      // execution layer mirrors that drop post-parse via
+      // stripBaseQuestionFaces. Kind-scoped form fields stay rejected:
+      // stripping those would silently downgrade typed values into an empty
+      // choice UI.
+      if (!flags.extended) {
+        for (const field of [
+          'description',
+          'placeholder',
+          'min',
+          'max',
+          'step',
+          'defaultValue',
+          'unit',
         ] as const) {
-          if (kind !== fieldKind && q[field] !== undefined) {
+          if (q[field] !== undefined) {
             ctx.addIssue({
               code: 'custom',
               path: [field],
-              message: `${field} applies only to "${fieldKind}" questions.`,
+              message: `${field} applies only to the extended-question surface (CLAUDE_CODE_QUESTION_EXTENDED with a remote/SDK entrypoint).`,
             })
           }
         }
-
-        if (kind === 'choice') {
-          if (q.options.length < 2) {
-            ctx.addIssue({
-              code: 'custom',
-              path: ['options'],
-              message:
-                'A choice question needs 2-4 options; use kind "text" for an open-ended question.',
-            })
-          }
-          return
-        }
-
-        if (q.options.length > 0) {
+        if (q.options.length < 2) {
           ctx.addIssue({
             code: 'custom',
             path: ['options'],
-            message: `A "${kind}" question takes no options; remove them or omit kind to ask a choice question.`,
+            message: 'A choice question needs 2-4 options.',
           })
         }
-        if (q.multiSelect) {
+        return
+      }
+
+      // ── Extended surface: official 0311 `pe` superRefine ──
+      const kind: QuestionKind = q.kind ?? 'choice'
+      for (const [field, fieldKind] of [
+        ['placeholder', 'text'],
+        ['min', 'number'],
+        ['max', 'number'],
+        ['step', 'number'],
+        ['defaultValue', 'number'],
+        ['unit', 'number'],
+      ] as const) {
+        if (kind !== fieldKind && q[field] !== undefined) {
           ctx.addIssue({
             code: 'custom',
-            path: ['multiSelect'],
-            message: `multiSelect applies only to choice questions, not "${kind}".`,
+            path: [field],
+            message: `${field} applies only to "${fieldKind}" questions.`,
           })
         }
-        if (kind !== 'number') return
-        const { min, max, defaultValue } = q
-        if (min === undefined || max === undefined || !(min < max)) {
+      }
+
+      if (kind === 'choice') {
+        if (q.options.length < 2) {
           ctx.addIssue({
             code: 'custom',
-            path: ['min'],
+            path: ['options'],
             message:
-              'A number question needs numeric min and max with min < max.',
-          })
-          return
-        }
-        if (
-          defaultValue !== undefined &&
-          (defaultValue < min || defaultValue > max)
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['defaultValue'],
-            message: 'defaultValue must lie within min..max.',
+              'A choice question needs 2-4 options; use kind "text" for an open-ended question.',
           })
         }
-      })
-      // Official fe=Z(C()) semantics (0311 anchor): the base question shape does
-      // not declare `kind`, so the base parse silently drops it instead of
-      // erroring — a base surface call with kind:"text" degrades to the choice
-      // picker, exactly as upstream. Shared object shape keeps the Question
-      // inference intact, so the strip is an explicit base-mode transform.
-      .transform(q =>
-        flags.extended ? q : ({ ...q, kind: undefined } as typeof q),
-      )
-  )
+        return
+      }
+
+      if (q.options.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['options'],
+          message: `A "${kind}" question takes no options; remove them or omit kind to ask a choice question.`,
+        })
+      }
+      if (q.multiSelect) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['multiSelect'],
+          message: `multiSelect applies only to choice questions, not "${kind}".`,
+        })
+      }
+      if (kind !== 'number') return
+      const { min, max, defaultValue } = q
+      if (min === undefined || max === undefined || !(min < max)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['min'],
+          message:
+            'A number question needs numeric min and max with min < max.',
+        })
+        return
+      }
+      if (
+        defaultValue !== undefined &&
+        (defaultValue < min || defaultValue > max)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['defaultValue'],
+          message: 'defaultValue must lie within min..max.',
+        })
+      }
+    })
+  // NOTE: deliberately NO schema-level .transform here. The official base
+  // schema fe=Z(C()) (0311 anchor) omits `kind` from the shape entirely, so
+  // the base parse drops it — but a zod `.transform` makes the schema
+  // unrepresentable: zodToJsonSchema/toJSONSchema throws
+  // "Transforms cannot be represented in JSON Schema" (default
+  // unrepresentable:'throw'), which fires on every toolToAPISchema() call
+  // (src/utils/api.ts) and MCP tool listing (src/entrypoints/mcp.ts)
+  // because this is the only transform-carrying schema in the repo. The
+  // strip is a post-parse concern instead: {@link stripBaseQuestionFaces}
+  // applies the same drop at the tool execution layer (call /
+  // checkPermissions updatedInput), keeping the JSON-Schema-facing schema
+  // transform-free — the representation of kind stays in the schema copy
+  // sent to extended surfaces only, so base-surface behavior is unchanged.
+}
+
+/**
+ * Post-parse base-surface strip — the execution-layer equivalent of the
+ * original schema `.transform(...)` (see the comment above the transform
+ * removal in {@link buildQuestionSchema} and the top-level title strip in the
+ * tool inputSchema).
+ *
+ * Base surface: `kind` is dropped per question (official fe=Z(C()): the base
+ * shape declares no `kind`, so the default parse drops it — a base call with
+ * kind:"text" degrades to the choice picker, exactly as upstream) and `title`
+ * is cleared (official `ye` carries the title on the extended surface; the
+ * base surface never declared it). Extended surface: data passes through
+ * untouched. Applied by the tool AFTER parse (call / checkPermissions
+ * updatedInput), never inside the JSON-Schema-facing schema.
+ */
+export function stripBaseQuestionFaces<
+  I extends {
+    title?: string
+    // Index signature keeps the constraint from becoming a weak type (the
+    // element carries only optional props), so rich z.infer question objects
+    // assign cleanly while inference still preserves their full shape.
+    questions: { kind?: QuestionKind; [key: string]: unknown }[]
+  },
+>(input: I, flags: QuestionSchemaFlags): I {
+  if (flags.extended) return input
+  return {
+    ...input,
+    title: undefined,
+    questions: input.questions.map(q => ({ ...q, kind: undefined })),
+  }
 }

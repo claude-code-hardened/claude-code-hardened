@@ -4,6 +4,7 @@ import { getAllowedChannels, getQuestionPreviewFormat } from 'src/bootstrap/stat
 import { MessageResponse } from 'src/components/MessageResponse.js';
 import { BLACK_CIRCLE } from 'src/constants/figures.js';
 import { getModeColor } from 'src/utils/permissions/PermissionMode.js';
+import { t } from 'src/i18n/index.js';
 import { z } from 'zod/v4';
 import { Box, Text } from '@anthropic/ink';
 import type { Tool } from 'src/Tool.js';
@@ -15,7 +16,12 @@ import {
   DESCRIPTION,
   PREVIEW_FEATURE_PROMPT,
 } from './prompt.js';
-import { BASE_QUESTION_MAX, buildQuestionSchema, getQuestionSchemaFlags } from './questionFlags.js';
+import {
+  BASE_QUESTION_MAX,
+  buildQuestionSchema,
+  getQuestionSchemaFlags,
+  stripBaseQuestionFaces,
+} from './questionFlags.js';
 
 // QUESTION env extensions (CLAUDE_CODE_QUESTION_EXTENDED /
 // CLAUDE_CODE_QUESTION_OPTIONAL_DESCRIPTIONS, official 0311-chunk-dyqmyxqn
@@ -80,13 +86,22 @@ const inputSchema = lazySchema(() =>
     .strictObject({
       // Official 0311 anchor (`ye`): top-level optional single-line heading —
       // "Optional single-line heading shown above the questions, e.g. "Before
-      // I build your deck".". Declared so the strictObject accepts it; the
-      // base surface strips it (the official base fe=Z(C()) carries no title,
-      // so the default object parse drops the unknown key).
+      // I build your deck"." — an extended (remote/SDK form) surface face.
+      // Declared so the strictObject accepts it; on the base surface the
+      // official fe=Z(C()) carries no title, and the strip happens AFTER parse
+      // (stripBaseQuestionFaces in checkPermissions/call) — NOT via a schema
+      // .transform: zod's toJSONSchema throws "Transforms cannot be
+      // represented in JSON Schema" on transformed schemas and every
+      // toolToAPISchema() API round-trip converts this schema.
+      // Honest wording note: this terminal UI does not render the heading
+      // today — the face is only drawn by the remote/SDK form surfaces, and
+      // the description below says so explicitly.
       title: z
         .string()
         .optional()
-        .describe('Optional single-line heading shown above the questions, e.g. "Before I build your deck".'),
+        .describe(
+          'Optional single-line heading shown above the questions on remote/SDK form surfaces, e.g. "Before I build your deck". The terminal UI does not render this heading.',
+        ),
       questions: z
         .array(questionSchema())
         .min(1)
@@ -99,8 +114,7 @@ const inputSchema = lazySchema(() =>
     })
     .refine(UNIQUENESS_REFINE.check, {
       message: UNIQUENESS_REFINE.message,
-    })
-    .transform(data => (getQuestionFlags().extended ? data : { ...data, title: undefined })),
+    }),
 );
 type InputSchema = ReturnType<typeof inputSchema>;
 
@@ -131,7 +145,7 @@ function AskUserQuestionResultMessage({ answers }: { answers: Output['answers'] 
     <Box flexDirection="column" marginTop={1}>
       <Box flexDirection="row">
         <Text color={getModeColor('default')}>{BLACK_CIRCLE}&nbsp;</Text>
-        <Text>User answered Claude&apos;s questions:</Text>
+        <Text>{t("User answered Claude's questions:")}</Text>
       </Box>
       <MessageResponse>
         <Box flexDirection="column">
@@ -253,10 +267,17 @@ export const AskUserQuestionTool: Tool<InputSchema, Output> = buildTool({
     return { result: true };
   },
   async checkPermissions(input) {
+    // Post-parse base-surface strip (schema .transform removed — see
+    // inputSchema/questionFlags): apply the same kind/title drop at the
+    // permission boundary so updatedInput — and everything downstream that
+    // consumes it — sees exactly what the official base fe=Z(C()) parse
+    // produced (no kind, no title).
+    const flags = getQuestionFlags();
+    const stripped = stripBaseQuestionFaces(input, flags);
     return {
       behavior: 'ask' as const,
-      message: 'Answer questions?',
-      updatedInput: input,
+      message: t('Answer questions?'),
+      updatedInput: stripped,
     };
   },
   renderToolUseMessage() {
@@ -272,16 +293,22 @@ export const AskUserQuestionTool: Tool<InputSchema, Output> = buildTool({
     return (
       <Box flexDirection="row" marginTop={1}>
         <Text color={getModeColor('default')}>{BLACK_CIRCLE}&nbsp;</Text>
-        <Text>User declined to answer questions</Text>
+        <Text>{t('User declined to answer questions')}</Text>
       </Box>
     );
   },
   renderToolUseErrorMessage() {
     return null;
   },
-  async call({ questions, answers = {}, annotations }, _context) {
+  async call(input, _context) {
+    // Same strip as checkPermissions: direct SDK callers may reach call()
+    // without the permission round-trip, so the execution boundary re-applies
+    // the base-surface kind/title drop (idempotent — the extended surface
+    // passes through untouched).
+    const flags = getQuestionFlags();
+    const { questions, answers, annotations } = stripBaseQuestionFaces(input, flags);
     return {
-      data: { questions, answers, ...(annotations && { annotations }) },
+      data: { questions, answers: answers ?? {}, ...(annotations && { annotations }) },
     };
   },
   mapToolResultToToolResultBlockParam({ answers, annotations }, toolUseID) {

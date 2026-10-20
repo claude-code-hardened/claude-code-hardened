@@ -15,10 +15,15 @@ import {
   buildQuestionSchema,
   getQuestionSchemaFlags,
   isQuestionEntrypointEligible,
+  QUESTION_ENTRYPOINTS,
   QUESTION_ENTRYPOINT_ENV,
   QUESTION_EXTENDED_ENV,
   QUESTION_OPTIONAL_DESCRIPTIONS_ENV,
+  stripBaseQuestionFaces,
 } from '../questionFlags.js'
+
+const { zodToJsonSchema } = await import('src/utils/zodToJsonSchema.js')
+const { AskUserQuestionTool } = await import('../AskUserQuestionTool.js')
 
 const BASE_FLAGS = { extended: false, optionalDescriptions: false }
 const EXTENDED_FLAGS = { extended: true, optionalDescriptions: false }
@@ -36,17 +41,57 @@ function choiceQuestion() {
 }
 
 describe('isQuestionEntrypointEligible', () => {
-  test('remote and sdk entrypoints are eligible', () => {
-    expect(isQuestionEntrypointEligible('remote')).toBe(true)
-    expect(isQuestionEntrypointEligible('sdk')).toBe(true)
-    expect(isQuestionEntrypointEligible('sdk-1')).toBe(true)
+  test('the official Pn set members are eligible (0044 module-003:1402, verbatim)', () => {
+    // Every member of the official Pn set — and nothing else — is eligible.
+    for (const entrypoint of QUESTION_ENTRYPOINTS) {
+      expect(isQuestionEntrypointEligible(entrypoint, {})).toBe(true)
+    }
+    expect([...QUESTION_ENTRYPOINTS].sort()).toEqual([
+      'claude-desktop',
+      'claude-desktop-3p',
+      'local-agent',
+      'sdk-cli',
+      'sdk-py',
+      'sdk-ts',
+    ])
   })
 
   test('plain cli and unknown entrypoints are not (official gate)', () => {
-    expect(isQuestionEntrypointEligible('cli')).toBe(false)
-    expect(isQuestionEntrypointEligible('vscode')).toBe(false)
-    expect(isQuestionEntrypointEligible(undefined)).toBe(false)
-    expect(isQuestionEntrypointEligible('')).toBe(false)
+    expect(isQuestionEntrypointEligible('cli', {})).toBe(false)
+    // Neither a bare "sdk" prefix match nor arbitrary sdk-* names are in Pn.
+    expect(isQuestionEntrypointEligible('sdk', {})).toBe(false)
+    expect(isQuestionEntrypointEligible('sdk-1', {})).toBe(false)
+    expect(isQuestionEntrypointEligible('claude-vscode', {})).toBe(false)
+    expect(isQuestionEntrypointEligible(undefined, {})).toBe(false)
+    expect(isQuestionEntrypointEligible('', {})).toBe(false)
+  })
+
+  test('the remote thin-client face (s === "remote") is eligible', () => {
+    // entrypoint "remote" itself…
+    expect(isQuestionEntrypointEligible('remote', {})).toBe(true)
+    // …and the clientType-derived remote faces (session-ingress token envs,
+    // the official `P` disjunction in the clientType derivation).
+    expect(
+      isQuestionEntrypointEligible('cli', {
+        CLAUDE_CODE_SESSION_ACCESS_TOKEN: 'x',
+      }),
+    ).toBe(true)
+    expect(
+      isQuestionEntrypointEligible('cli', {
+        CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR: '/dev/fd/9',
+      }),
+    ).toBe(true)
+    expect(
+      isQuestionEntrypointEligible('cli', {
+        CLAUDE_SESSION_INGRESS_TOKEN_FILE: '/tmp/tok',
+      }),
+    ).toBe(true)
+    // Pn members stay eligible regardless of the remote envs.
+    expect(
+      isQuestionEntrypointEligible('sdk-ts', {
+        CLAUDE_CODE_SESSION_ACCESS_TOKEN: undefined,
+      }),
+    ).toBe(true)
   })
 })
 
@@ -75,14 +120,36 @@ describe('getQuestionSchemaFlags', () => {
     ).toEqual({ extended: true, optionalDescriptions: true })
   })
 
-  test('falsy env values keep the base schema', () => {
+  test('official raw-JS truthiness: any non-empty env string flips the switch', () => {
+    // 0044 module-003:1413 `if (R && a.CLAUDE_CODE_QUESTION_EXTENDED)` — raw
+    // string truthiness, so '0' / 'no' / 'false' all enable (upstream parity),
+    // only unset and '' stay off.
     expect(
       getQuestionSchemaFlags({
-        [QUESTION_ENTRYPOINT_ENV]: 'sdk-test',
+        [QUESTION_ENTRYPOINT_ENV]: 'sdk-ts',
         [QUESTION_EXTENDED_ENV]: '0',
         [QUESTION_OPTIONAL_DESCRIPTIONS_ENV]: 'no',
-      }),
-    ).toEqual({ extended: false, optionalDescriptions: false })
+      }).extended,
+    ).toBe(true)
+    expect(
+      getQuestionSchemaFlags({
+        [QUESTION_ENTRYPOINT_ENV]: 'sdk-ts',
+        [QUESTION_EXTENDED_ENV]: 'false',
+      }).optionalDescriptions,
+    ).toBe(false)
+    expect(
+      getQuestionSchemaFlags({
+        [QUESTION_ENTRYPOINT_ENV]: 'sdk-ts',
+        [QUESTION_EXTENDED_ENV]: '',
+      }).extended,
+    ).toBe(false)
+    // Non-members keep the switches off even when the env vars are set.
+    expect(
+      getQuestionSchemaFlags({
+        [QUESTION_ENTRYPOINT_ENV]: 'cli',
+        [QUESTION_EXTENDED_ENV]: '1',
+      }).extended,
+    ).toBe(false)
   })
 })
 
@@ -146,13 +213,14 @@ describe('buildQuestionSchema — base surface', () => {
     expect(schema.safeParse(choiceQuestion()).success).toBe(true)
   })
 
-  test('silently strips kind — official fe=Z(C()) (0311 anchor): base parse drops the undeclared key', () => {
+  test('accepts kind at parse time — the strip is post-parse, not in the schema', () => {
+    // No schema-level .transform (it would make the schema unrepresentable in
+    // JSON Schema): the base superRefine does not reject kind, the parse keeps
+    // it, and {@link stripBaseQuestionFaces} drops it at the execution layer.
     const result = schema.safeParse({ ...choiceQuestion(), kind: 'text' })
     expect(result.success).toBe(true)
     if (result.success) {
-      // The strip means downstream sees no kind — the question degrades to
-      // the choice picker exactly as the official base shape does.
-      expect(result.data.kind).toBeUndefined()
+      expect(result.data.kind).toBe('text')
     }
   })
 
@@ -281,5 +349,85 @@ describe('buildQuestionSchema — extended kind face (official 0311)', () => {
     expect(
       schema.safeParse({ ...choiceQuestion(), multiSelect: true }).success,
     ).toBe(true)
+  })
+})
+
+describe('stripBaseQuestionFaces — post-parse base-surface strip', () => {
+  test('base surface drops kind per question and clears title', () => {
+    const input = {
+      title: 'Before I build your deck',
+      questions: [
+        { ...choiceQuestion(), kind: 'text' as const },
+        // Explicit undefined keeps `kind` declared on both union members so
+        // the post-strip assertions can read the property on either.
+        { ...choiceQuestion(), kind: undefined },
+      ],
+    }
+    const stripped = stripBaseQuestionFaces(input, BASE_FLAGS)
+    expect(stripped.title).toBeUndefined()
+    expect(stripped.questions[0]!.kind).toBeUndefined()
+    expect(stripped.questions[1]!.kind).toBeUndefined()
+    // The rest of the question data survives the strip.
+    expect(stripped.questions[0]!.question).toBe(input.questions[0]!.question)
+  })
+
+  test('extended surface passes the input through untouched', () => {
+    const input = {
+      title: 'Heading',
+      questions: [{ ...choiceQuestion(), kind: 'text' as const }],
+    }
+    expect(stripBaseQuestionFaces(input, EXTENDED_FLAGS)).toBe(input)
+  })
+
+  test('tool call() re-applies the strip (execution boundary equivalence)', async () => {
+    // A base-surface call with a kind face degrades to the choice picker in
+    // the recorded output — the official fe=Z(C()) behavior after the
+    // schema-level transform was removed.
+    const result = await AskUserQuestionTool.call(
+      {
+        title: 'Heading',
+        questions: [{ ...choiceQuestion(), kind: 'text' }],
+        answers: {},
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    )
+    const data = (
+      result as unknown as { data: { questions: { kind?: string }[] } }
+    ).data
+    expect(data.questions[0]!.kind).toBeUndefined()
+  })
+})
+
+describe('AskUserQuestion schemas stay JSON-Schema-representable (transform ban)', () => {
+  // Regression for the CRITICAL "Transforms cannot be represented in JSON
+  // Schema" alert: a schema-level .transform makes toJSONSchema throw
+  // (unrepresentable:'throw') and toolToAPISchema()/MCP listing call it every
+  // API round-trip. The kind/title strip lives post-parse instead.
+  test('input schema converts without throwing, with expected shape', () => {
+    let json: Record<string, unknown>
+    expect(() => {
+      json = zodToJsonSchema(AskUserQuestionTool.inputSchema)
+    }).not.toThrow()
+    expect((json! as { type: string }).type).toBe('object')
+    const properties = (json! as { properties: Record<string, unknown> })
+      .properties
+    expect(properties.questions).toBeDefined()
+    // kind stays declared on the shared-shape schema (extended surfaces read
+    // it from the schema; the base surface strips it post-parse).
+    const questionItems = (
+      properties.questions as { items: { properties: Record<string, unknown> } }
+    ).items.properties
+    expect(questionItems.kind).toBeDefined()
+    expect(properties.title).toBeDefined()
+  })
+
+  test('output schema converts without throwing', () => {
+    let json: Record<string, unknown>
+    expect(() => {
+      json = zodToJsonSchema(AskUserQuestionTool.outputSchema!)
+    }).not.toThrow()
+    expect((json! as { type: string }).type).toBe('object')
   })
 })
