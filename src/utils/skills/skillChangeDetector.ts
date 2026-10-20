@@ -168,6 +168,19 @@ export function dispose(): Promise<void> {
  */
 export const subscribe = skillsChanged.subscribe
 
+/**
+ * Emit the skillsChanged signal from outside the watcher pipeline.
+ *
+ * The watcher debounce (scheduleReload) owns the emit for disk-change events;
+ * the /reload-skills command reuses it after a manual invalidation so REPL
+ * listeners re-render with the reloaded surface (fix for the half-no-op
+ * /reload-skills: clearing only the inner memo left loadAllCommands /
+ * getSkillToolCommands / the skill index stale and never notified listeners).
+ */
+export function notifySkillsChanged(): void {
+  skillsChanged.emit()
+}
+
 async function getWatchablePaths(): Promise<string[]> {
   const fs = getFsImplementation()
   const paths: string[] = []
