@@ -33,6 +33,7 @@ import {
   isLangfuseEnabled,
   recordLLMObservation,
 } from './langfuse/index.js'
+import { createNativeTokenCache } from './nativeTokenCache.js'
 import { getSessionId } from '../bootstrap/state.js'
 import { withTokenCountVCR } from './vcr.js'
 
@@ -223,25 +224,26 @@ export function roughTokenCountEstimation(
 
 // --- Native precise token counting (Rust BPE via token-counter-napi) ---
 
-// Bounded FIFO cache: microCompact's estimateMessageTokens re-counts the same
-// block contents every turn. Map holds references to existing strings, so
-// overhead is pointer-sized per entry, not a copy of the content.
-const NATIVE_TOKEN_CACHE_LIMIT = 512
-const nativeTokenCache = new Map<string, number>()
+// Byte-budgeted LRU keyed by a short content hash (M3): microCompact's
+// estimateMessageTokens re-counts the same block contents every turn, but the
+// cache must not retain the content itself — after MEMORY_PROJECTION releases
+// the tool_result originals (query.ts:626-654, microCompact.ts
+// clearToolResultProjection), the old full-text-keyed 512-entry Map was
+// regularly the last strong-reference holder (potentially hundreds of MB).
+// See src/services/nativeTokenCache.ts for the short-key + byte-cap + LRU
+// contract; hit semantics are unchanged.
+const nativeTokenCounts = createNativeTokenCache()
 
 function nativeCountCached(content: string): number | null {
-  const cached = nativeTokenCache.get(content)
+  const cached = nativeTokenCounts.get(content)
   if (cached !== undefined) {
     return cached
   }
   const count = nativeCountTokens(content)
   if (count === null) return null
-  if (nativeTokenCache.size >= NATIVE_TOKEN_CACHE_LIMIT) {
-    // FIFO eviction — delete the oldest inserted key
-    const oldest = nativeTokenCache.keys().next().value
-    if (oldest !== undefined) nativeTokenCache.delete(oldest)
-  }
-  nativeTokenCache.set(content, count)
+  // set() is a no-op for contents above the per-item budget — oversized
+  // tool_results recompute every time instead of pinning the cache.
+  nativeTokenCounts.set(content, count)
   return count
 }
 
