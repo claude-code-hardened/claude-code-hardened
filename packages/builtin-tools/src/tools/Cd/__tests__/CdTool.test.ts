@@ -1,5 +1,12 @@
-import { AsyncLocalStorage } from 'async_hooks'
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test'
 import {
   mkdirSync,
   mkdtempSync,
@@ -12,7 +19,6 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { debugMock } from '../../../../../../tests/mocks/debug'
 import { logMock } from '../../../../../../tests/mocks/log'
-import { functionalStateMock } from '../../../../../../tests/mocks/state'
 
 // Shell.js / sessionEnvironment / fileChangedWatcher pull the analytics +
 // settings chains; the Cd flow only consumes their three sync entry points.
@@ -27,7 +33,22 @@ const onCwdChangedForHooksMock = mock(
 
 mock.module('src/utils/log.ts', logMock)
 mock.module('src/utils/debug.ts', debugMock)
-mock.module('src/utils/Shell.ts', () => ({ setCwd: setCwdMock }))
+// Shell mock 同样必须携带完整导出面（exec/getShellConfig/getPsProvider…），
+// 否则同进程其他文件（或 CdTool 的传递依赖图）对 Shell 的具名导入在 ESM
+// 链接期报 "Export named 'exec' not found"。真实命名空间仅取 keys 兜底。
+// .js 扩展名（tsconfig allowImportingTsExtensions 未开，.ts 静态导入 TS5097；
+// Bun 运行时把 .js 解析回 .ts 源文件——与 src/ 内部导入约定一致）。
+import * as realShellModule from 'src/utils/Shell.js'
+const shellSnapshot: Record<string, unknown> = { ...realShellModule }
+mock.module('src/utils/Shell.ts', () => {
+  const noop = () => {}
+  const baseline: Record<string, unknown> = {}
+  for (const [name, value] of Object.entries(shellSnapshot)) {
+    if (name === 'setCwd') continue
+    baseline[name] = typeof value === 'function' ? noop : value
+  }
+  return { ...baseline, setCwd: setCwdMock }
+})
 mock.module('src/utils/sessionEnvironment.ts', () => ({
   invalidateSessionEnvCache: invalidateSessionEnvCacheMock,
 }))
@@ -35,43 +56,49 @@ mock.module('src/utils/hooks/fileChangedWatcher.ts', () => ({
   onCwdChangedForHooks: onCwdChangedForHooksMock,
 }))
 
-// Cross-file mock.module pollution（进程级 last-write-wins）：其他测试文件对
-// src/bootstrap/state 注册的 stateMock（getOriginalCwd → '/mock/cwd'，目录在
-// 磁盘上不存在）与对 src/utils/cwd 的桩会泄漏进本文件，使 Cd 的 no-op
-// （"same"）判定与相对路径锚定 stat 到不存在的路径——CI 报
-// `cd: not_found — Path "/mock/cwd" does not exist`。这里重新注册带真实
-// 状态的 mock，锚定到真实存在的目录（realpathSync(process.cwd())）。
-type StateHandle = {
-  setOriginalCwd: (cwd: string) => void
-  setCwdState: (cwd: string) => void
-  getCwdState: () => string
-  getOriginalCwd: () => string
+// 跨文件 mock.module 污染修复（清单 #6）：本文件不再部分替换
+// src/bootstrap/state.ts —— Bun 的 ESM 链接期按 mock 模块的自有属性校验
+// 消费方的具名导入，缺一个导出（如 waitForScrollIdle，经
+// utils/git/gitFilesystem 的静态导入链进 CdTool 的真实依赖图）就让整个
+// worker 抛 "Export named '...' not found"，且 mock 进程级不可撤、任意
+// 顺序皆脆。改用真实模块 + 真实 setter 锚定（ShellCommand.test.ts 同款
+// 快照/还原模式），只保留 Shell / 会话环境 / 钩子看门人等纯接缝 mock。
+import * as bootstrapStateModule from 'src/bootstrap/state.js'
+const bootstrapStateSnapshot: Record<string, unknown> = {
+  ...bootstrapStateModule,
 }
-const stateHandle = functionalStateMock() as unknown as StateHandle
+const { getOriginalCwd, setCwdState } = bootstrapStateModule as unknown as {
+  getOriginalCwd: () => string
+  setCwdState: (cwd: string) => void
+}
 const sessionRoot = realpathSync(process.cwd())
-stateHandle.setOriginalCwd(sessionRoot)
-stateHandle.setCwdState(sessionRoot)
-// mock.module's signature expects a factory; returning the same handle keeps
-// runtime parity with the plain-object form used until now.
-mock.module('src/bootstrap/state.ts', () => stateHandle)
-mock.module('src/bootstrap/state.js', () => stateHandle)
+// 锚定真实存在的目录（相对路径与 "same" 判定都 stat 得到）。
+bootstrapStateModule.setOriginalCwd(sessionRoot)
+bootstrapStateModule.setCwdState(sessionRoot)
 
-const cwdOverrideStorage = new AsyncLocalStorage<string>()
-const cwdMock = () => ({
-  runWithCwdOverride: (cwd: string, fn: () => unknown) =>
-    cwdOverrideStorage.run(cwd, fn as () => never),
-  pwd: () => cwdOverrideStorage.getStore() ?? stateHandle.getCwdState(),
-  getCwd: () => cwdOverrideStorage.getStore() ?? stateHandle.getCwdState(),
-})
-mock.module('src/utils/cwd.ts', cwdMock)
-mock.module('src/utils/cwd.js', cwdMock)
+// cwd 工具链不再 mock：真实 src/utils/cwd.ts 的 holder-shape override 就是
+// 并发修复本体，也是本文件并发测试的被测面。
+const { runWithCwdOverride, getCwd } = await import('src/utils/cwd.js')
 
 const { CdTool } = await import('../CdTool.js')
 const { CD_TOOL_NAME } = await import('../constants.js')
-const { getOriginalCwd, setCwdState } = await import('src/bootstrap/state.js')
 const { TOOL_VALIDATION_CONFIG } = await import(
   'src/utils/settings/toolValidationConfig.js'
 )
+
+afterAll(() => {
+  // 进程卫生（mock.module 之外的真实状态也要还原——快照式恢复，见
+  // ShellCommand.test.ts 同款模式；防其他测试文件读到 Cd 的锚定 cwd）。
+  for (const [name, value] of Object.entries(bootstrapStateSnapshot)) {
+    try {
+      ;(bootstrapStateModule as unknown as Record<string, unknown>)[name] =
+        value
+    } catch {
+      // setter-only exports — restore via the snapshot's captured values is
+      // best effort; the afterEach anchors below cover the cwd pair.
+    }
+  }
+})
 
 type RulesForTest = {
   deny?: string[]
@@ -319,6 +346,78 @@ describe('CdTool', () => {
 
     test('no rules at all allows any directory change', async () => {
       const target = join(tmpDir, 'free')
+      mkdirSync(target)
+
+      const result = await CdTool.call({ path: target }, NO_RULES_CTX)
+
+      expect(result.data.error).toBeUndefined()
+      expect(setCwdMock).toHaveBeenCalledWith(target)
+    })
+
+    test('per-agent cwd override: cd writes the override layer, not the global state', async () => {
+      // 并发竞态修复回归钉：子代理在 runWithCwdOverride 上下文里 cd 时，
+      // 目标必须写 override 层（getCwd 读取优先级一致），绝不写全局
+      // setCwd（否则并发代理互相覆盖工作目录视图）。
+      const target = join(tmpDir, 'agent-one')
+      mkdirSync(target)
+      const agentRoot = join(tmpDir, 'agent-root')
+      mkdirSync(agentRoot)
+
+      await runWithCwdOverride(agentRoot, async () => {
+        const result = await CdTool.call({ path: target }, NO_RULES_CTX)
+
+        expect(result.data.error).toBeUndefined()
+        expect(result.data.directory).toBe(target)
+        // 全局状态写路径绝不能触发。
+        expect(setCwdMock).not.toHaveBeenCalled()
+        // override 层生效：上下文内的 pwd()/getCwd() 看到新目录。
+        expect(getCwd()).toBe(target)
+        // 会话全局状态没有被污染——模拟"另一个代理"的视角（不同
+        // AsyncLocalStorage 上下文，无 override）仍读全局状态（锚定值）。
+        expect(
+          (
+            bootstrapStateModule as unknown as { getCwdState: () => string }
+          ).getCwdState(),
+        ).toBe(sessionRoot)
+      })
+      // 代理上下文结束后，全局状态同样未被污染。
+      expect(setCwdMock).not.toHaveBeenCalled()
+    })
+
+    test('concurrent agents cd racing do not overwrite each other (per-context isolation)', async () => {
+      const dirA = join(tmpDir, 'race-a')
+      const dirB = join(tmpDir, 'race-b')
+      const rootA = join(tmpDir, 'root-a')
+      const rootB = join(tmpDir, 'root-b')
+      for (const dir of [dirA, dirB, rootA, rootB]) mkdirSync(dir)
+
+      await Promise.all([
+        runWithCwdOverride(rootA, async () => {
+          await Bun.sleep(5)
+          const result = await CdTool.call({ path: dirA }, NO_RULES_CTX)
+          expect(result.data.error).toBeUndefined()
+          // A 的最终视图是 A 的目标。
+          expect(getCwd()).toBe(dirA)
+          expect(setCwdMock).not.toHaveBeenCalled()
+        }),
+        runWithCwdOverride(rootB, async () => {
+          await Bun.sleep(1)
+          const result = await CdTool.call({ path: dirB }, NO_RULES_CTX)
+          expect(result.data.error).toBeUndefined()
+          expect(getCwd()).toBe(dirB)
+        }),
+      ])
+      // 全局状态零写入：并发 cd 全程走 override 层。
+      expect(setCwdMock).not.toHaveBeenCalled()
+      expect(
+        (
+          bootstrapStateModule as unknown as { getCwdState: () => string }
+        ).getCwdState(),
+      ).toBe(sessionRoot)
+    })
+
+    test('no override in context: cd still writes the global state (main-session path)', async () => {
+      const target = join(tmpDir, 'main')
       mkdirSync(target)
 
       const result = await CdTool.call({ path: target }, NO_RULES_CTX)

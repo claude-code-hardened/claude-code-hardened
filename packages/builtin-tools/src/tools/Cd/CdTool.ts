@@ -4,7 +4,7 @@ import { z } from 'zod/v4'
 import { getOriginalCwd } from 'src/bootstrap/state.js'
 import type { ToolResultBlockParam } from 'src/Tool.js'
 import { buildTool } from 'src/Tool.js'
-import { getCwd } from 'src/utils/cwd.js'
+import { getCwd, setCwdOverrideForCurrentContext } from 'src/utils/cwd.js'
 import { isENOENT } from 'src/utils/errors.js'
 import { onCwdChangedForHooks } from 'src/utils/hooks/fileChangedWatcher.js'
 import { invalidateSessionEnvCache } from 'src/utils/sessionEnvironment.js'
@@ -414,7 +414,15 @@ export const CdTool = buildTool({
     // Apply — same trio the post-command sync uses in Shell.ts:
     // setCwd (realpath + setCwdState) → invalidate session env cache →
     // CwdChanged hook dispatch (CCH's CwdChanged-equivalent sync point).
-    setCwd(finalCanonical)
+    // 并发竞态修复：getCwd() 优先读 per-agent override（AsyncLocalStorage），
+    // 但 setCwd 一律写全局——多代理并发 cd 时互相覆盖工作目录视图。override
+    // 存在时改写 override 层（holder 原位更新，getCwd 读取优先级一致：
+    // cwdOverrideStorage.getStore()?.value ?? getCwdState()），仅无 override
+    // 的主会话路径写全局状态。
+    const overrideWritten = setCwdOverrideForCurrentContext(finalCanonical)
+    if (!overrideWritten) {
+      setCwd(finalCanonical)
+    }
     invalidateSessionEnvCache()
     void onCwdChangedForHooks(currentDir, finalCanonical)
 
