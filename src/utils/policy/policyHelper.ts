@@ -13,8 +13,10 @@
  *
  * The helper never renders secret material (tokens, keys): before anything is
  * rendered for disk, redactPolicySecrets() deep-clones the policy and replaces
- * the values of entries whose key name contains TOKEN/KEY/SECRET/PHRASE or
- * PASSWORD (case-insensitive) with `<redacted>`. This covers both the
+ * the values of entries whose key name contains TOKEN/KEY/SECRET/PHRASE,
+ * PASSWORD, AUTH, CREDENTIAL, PASSWD or CERT (case-insensitive) with
+ * `<redacted>`; nested objects under paths outside the renderable whitelist
+ * (see KNOWN_RENDERABLE_PATHS) are redacted wholesale. This covers both the
  * flattened registry table and the raw JSON block (W4 R4 hardening — the doc
  * previously claimed admin poetry would keep secrets out; now it is enforced).
  *
@@ -38,21 +40,70 @@ const POLICY_REGISTRY_POWERSHELL_ROOT =
 /** Sentinel written in place of any secret-keyed policy value. */
 export const POLICY_SECRET_REDACTED = '<redacted>'
 
-/** Key-name patterns whose values never reach a written artifact. */
-const SECRET_KEY_PATTERN = /TOKEN|KEY|SECRET|PHRASE|PASSWORD/i
+/**
+ * Redaction authority table (对照表), two faces:
+ *
+ *  1. SECRET_KEY_PATTERN — the key-name denylist. Beyond the original
+ *     TOKEN/KEY/SECRET/PHRASE/PASSWORD families, enterprise policy pastes
+ *     carry credential-bearing keys the original set missed: gateway
+ *     authorization material (the official gateway face names
+ *     ANTHROPIC_AUTH_TOKEN / the `authorization` header as credential
+ *     sources, decompiled 0006-chunk-j18026mh/module-007-uncategorized.js
+ *     gatewayDiscovery: "authorizationSource ... authorization"),
+ *     credential stores (CREDENTIAL), passwd-style entries (PASSWD) and
+ *     certificate material (CERT).
+ *
+ *  2. KNOWN_RENDERABLE_PATHS — the structural whitelist. Key-name matching
+ *     alone cannot enumerate every credential embedding (custom headers,
+ *     URL-embedded credentials, base64 blobs), so any nested object under a
+ *     path NOT registered here (and not secret-keyed) is unverifiable
+ *     content and is redacted WHOLESALE. Deliberately NOT on the list: the
+ *     official `env` settings key — the canonical credential carrier
+ *     (ANTHROPIC_AUTH_TOKEN / ANTHROPIC_CUSTOM_HEADERS with Authorization
+ *     values live there).
+ */
+const SECRET_KEY_PATTERN =
+  /TOKEN|KEY|SECRET|PHRASE|PASSWORD|AUTH|CREDENTIAL|PASSWD|CERT/i
 
-function redactNode(value: unknown): unknown {
+/**
+ * Dotted policy paths whose subtrees are vetted structural content
+ * (booleans, enum strings, rule lists, hook commands) and may render
+ * key-by-key. Anything under these prefixes recurses; every other
+ * object-valued path defaults to `<redacted>`.
+ */
+const KNOWN_RENDERABLE_PATHS = [
+  'sandbox',
+  'sandbox.filesystem',
+  'permissions',
+  'hooks',
+  'statusLine',
+] as const
+
+function isRenderablePath(path: string): boolean {
+  // Exact membership: the whitelist vets specific nesting levels observed in
+  // the official settings face; anything deeper or unknown re-runs the
+  // unknown-content default (whole-object redaction).
+  return (KNOWN_RENDERABLE_PATHS as readonly string[]).includes(path)
+}
+
+function redactNode(value: unknown, path?: string): unknown {
   if (Array.isArray(value)) {
-    return value.map(redactNode)
+    return value.map(element => redactNode(element, path))
   }
   if (value !== null && typeof value === 'object') {
+    // Unknown nested container: not secret-keyed itself and not on the
+    // renderable whitelist — default to redacting the whole object rather
+    // than trusting individually unknown keys.
+    if (path !== undefined && !isRenderablePath(path)) {
+      return POLICY_SECRET_REDACTED
+    }
     const out: Record<string, unknown> = {}
     for (const [key, child] of Object.entries(
       value as Record<string, unknown>,
     )) {
       out[key] = SECRET_KEY_PATTERN.test(key)
         ? POLICY_SECRET_REDACTED
-        : redactNode(child)
+        : redactNode(child, path === undefined ? key : `${path}.${key}`)
     }
     return out
   }
@@ -60,11 +111,16 @@ function redactNode(value: unknown): unknown {
 }
 
 /**
- * Deep-clone the policy with the values of secret-keyed entries — key names
- * containing TOKEN/KEY/SECRET/PHRASE/PASSWORD (case-insensitive), at any
- * depth — replaced with `<redacted>`. Applied to every artifact the helper
- * writes (flattened table, JSON block, registry replay commands), so
- * credentials pasted into a policy block cannot leak into the GPO export.
+ * Deep-clone the policy so no secret material survives into a written
+ * artifact:
+ *  - key names containing TOKEN/KEY/SECRET/PHRASE/PASSWORD/AUTH/CREDENTIAL/
+ *    PASSWD/CERT (case-insensitive), at any depth, become `<redacted>`;
+ *  - nested objects under paths outside the KNOWN_RENDERABLE_PATHS whitelist
+ *    become `<redacted>` wholesale (unknown-content default, see the 对照表
+ *    comment above).
+ * Applied to every artifact the helper writes (flattened table, JSON block,
+ * registry replay commands), so credentials pasted into a policy block
+ * cannot leak into the GPO export.
  */
 export function redactPolicySecrets(
   policy: Record<string, unknown>,

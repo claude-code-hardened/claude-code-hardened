@@ -200,15 +200,100 @@ describe('redactPolicySecrets (W4 R4 on-disk secret filter)', () => {
     expect(safe.clientSecret).toBe(POLICY_SECRET_REDACTED)
     expect(safe.passphrase).toBe(POLICY_SECRET_REDACTED)
     expect(safe.password).toBe(POLICY_SECRET_REDACTED)
-    const nested = safe.nested as Record<string, unknown>
-    expect(nested.api_client_cert_key_pair).toBe(POLICY_SECRET_REDACTED)
-    // Non-secret keys survive untouched, including inside arrays.
-    const list = (safe.remaining as Record<string, unknown>).list as unknown[]
-    expect(list[1]).toBe('keep-string')
-    expect((list[0] as Record<string, unknown>).note).toBe('keep-note')
+    // `nested` is not a whitelisted container → the whole object goes:
+    // the Record-typed sub-object the caller WOULD have received
+    // pre-hardening is replaced wholesale with the sentinel, not merely
+    // filtered key-by-key.
+    expect(safe.nested).toBe(POLICY_SECRET_REDACTED)
+    // Non-secret paths inside RENDERABLE containers survive untouched,
+    // including inside arrays.
     expect(safe.sandbox).toEqual({ enabled: true })
     // Input policy object untouched.
     expect(secretPolicy.gatewayAuthToken).toBe('tok-plain')
+  })
+
+  test('redaction authority table (对照表): extended credential key families', () => {
+    // Families the original TOKEN/KEY/SECRET/PHRASE/PASSWORD pattern missed —
+    // each never reaches a rendered artifact.
+    const safe = redactPolicySecrets({
+      sandbox: { enabled: true },
+      authorization: 'Bearer tok',
+      userCredentials: 'user:pass',
+      passwd: 'hunter4',
+      clientCertificate: '---BEGIN CERT---',
+      CertPath: '/secure/things',
+      AuthTokenEnv: 'tok-env',
+      credentialsFile: 'also-redacted',
+      // AUTH is a prefix family per the review prescription — scalar keys
+      // merely STARTING with it are collateral of the denylist (documented
+      // trade-off; no official policySettings scalar starts with AUTH).
+      authority: 'collaterally-redacted',
+      // A genuinely unmatched structural scalar must survive.
+      preferredNotifChannel: 'iterm2',
+    })
+    expect(safe.authorization).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.userCredentials).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.passwd).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.clientCertificate).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.CertPath).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.AuthTokenEnv).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.credentialsFile).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.authority).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.preferredNotifChannel).toBe('iterm2')
+  })
+
+  test('unknown nested objects default to WHOLESALE redaction (对照表 default)', () => {
+    const safe = redactPolicySecrets({
+      sandbox: { enabled: true },
+      unknownBlock: { anyKey: 'future content', deeper: { nested: true } },
+    })
+    // `unknownBlock` is not on the renderable whitelist — the entire object
+    // is replaced, not merely keys matching the denylist.
+    expect(safe.unknownBlock).toBe(POLICY_SECRET_REDACTED)
+    expect(safe.sandbox).toEqual({ enabled: true })
+  })
+
+  test('the official env block (credential carrier) is a non-member — rendered wholesale as <redacted>', () => {
+    const safe = redactPolicySecrets({
+      sandbox: { enabled: true },
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'sk-token',
+        ANTHROPIC_CUSTOM_HEADERS: '{"Authorization":"Bearer gw"}',
+        ANTHROPIC_BASE_URL: 'https://gw.internal',
+      },
+    })
+    expect(safe.env).toBe(POLICY_SECRET_REDACTED)
+    expect(JSON.stringify(safe)).not.toContain('https://gw.internal')
+  })
+
+  test('renderable whitelisted paths keep their structure (对照表 members)', () => {
+    const safe = redactPolicySecrets({
+      sandbox: {
+        enabled: true,
+        filesystem: {
+          allow: ['/proj'],
+          deny: ['/etc'],
+          extraUnknownObject: { union: 'types' },
+        },
+      },
+      permissions: { defaultMode: 'plan' },
+      hooks: { PostModelSwitch: 'echo done' },
+      statusLine: { type: 'command' },
+    })
+    expect(safe.sandbox).toEqual({
+      enabled: true,
+      filesystem: {
+        allow: ['/proj'],
+        deny: ['/etc'],
+        // Unknown object nested INSIDE a whitelisted path still obeys the
+        // unknown-object default (whitelist prefixes stay whitelist-checked
+        // per key).
+        extraUnknownObject: POLICY_SECRET_REDACTED,
+      },
+    })
+    expect(safe.permissions).toEqual({ defaultMode: 'plan' })
+    expect(safe.hooks).toEqual({ PostModelSwitch: 'echo done' })
+    expect(safe.statusLine).toEqual({ type: 'command' })
   })
 
   test('exports and modules never render secret values on disk', () => {
@@ -218,14 +303,27 @@ describe('redactPolicySecrets (W4 R4 on-disk secret filter)', () => {
     expect(exportsText).not.toContain('sk-secret')
     expect(exportsText).not.toContain('hunter2')
     expect(exportsText).not.toContain('inner-secret')
-    // Non-secret values still render.
-    expect(exportsText).toContain('keep-note')
+    // Whitelisted structural content still renders.
     expect(exportsText).toContain('"enabled": true')
 
     const moduleText = buildPolicyModule(secretPolicy)
     expect(moduleText).toContain(POLICY_SECRET_REDACTED)
     expect(moduleText).not.toContain('tok-plain')
     expect(moduleText).not.toContain('sk-secret')
+  })
+
+  test('extended families never leak through the written artifact either', () => {
+    const leakPolicy = {
+      sandbox: { enabled: true },
+      authorization: 'Bearer gw-token-xyz',
+      env: { ANTHROPIC_CUSTOM_HEADERS: '{"Authorization":"Bearer gw2"}' },
+      unknownVendor: { inlineUrl: 'https://user:pw@host' },
+    }
+    const text = buildPolicyExports(leakPolicy)
+    expect(text).not.toContain('gw-token-xyz')
+    expect(text).not.toContain('gw2')
+    expect(text).not.toContain('user:pw@host')
+    expect(text).toContain(POLICY_SECRET_REDACTED)
   })
 
   test('written artifacts are redacted end to end', () => {
