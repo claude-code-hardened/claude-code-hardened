@@ -26,6 +26,8 @@ import {
   getSessionProjectDir,
 } from '../../bootstrap/state.js'
 import type { Message } from '../../types/message.js'
+import { toError } from '../../utils/errors.js'
+import { logError } from '../../utils/log.js'
 import { getProjectDir } from '../../utils/sessionStorage.js'
 
 type SegmentTrigger = 'compact' | 'date_change'
@@ -97,8 +99,10 @@ function bucketDateFor(message: Message, fallbackDate: string): string {
 /**
  * Append the given messages to the per-day segment JSONL files, bucketed
  * by message timestamp so a multi-day flush lands one line per day file.
- * Fire-and-forget contract: never throws; write failures are surfaced via
- * console.debug only (callers `void`-ignore the returned promise).
+ * Fire-and-forget contract: never throws. Messages that fail to serialize
+ * are logged via logError (production-visible) and skipped — the remaining
+ * messages in the batch still land (one unserializable Message used to
+ * reject the whole batch). Write failures are surfaced via logError too.
  */
 export async function writeSessionTranscriptSegment(
   messages: Message[],
@@ -119,8 +123,26 @@ export async function writeSessionTranscriptSegment(
       sessionId,
       date,
     }
+    let serialized: string
+    try {
+      // Per-message try: a single unserializable entry (circular ref,
+      // BigInt, ...) must not reject the whole batch. Previously the
+      // JSON.stringify ran outside any try, so one bad Message rejected
+      // the promise — and compact.ts's `void` call had no .catch, turning
+      // it into an unhandled rejection while every other message in the
+      // batch was lost.
+      serialized = `${JSON.stringify(line)}\n`
+    } catch (error) {
+      logError(
+        new Error(
+          `[sessionTranscript] failed to serialize message (uuid: ${(message as { uuid?: unknown }).uuid ?? 'unknown'}) — skipping it, writing the rest of the batch`,
+          { cause: toError(error) },
+        ),
+      )
+      continue
+    }
     const lines = linesByDate.get(date) ?? []
-    lines.push(`${JSON.stringify(line)}\n`)
+    lines.push(serialized)
     linesByDate.set(date, lines)
   }
   if (linesByDate.size === 0) {
@@ -137,9 +159,10 @@ export async function writeSessionTranscriptSegment(
       )
     }
   } catch (error) {
-    console.debug(
-      '[sessionTranscript] segment write failed:',
-      error instanceof Error ? error.message : error,
+    logError(
+      new Error('[sessionTranscript] segment write failed', {
+        cause: toError(error),
+      }),
     )
   }
 }
@@ -157,9 +180,10 @@ export function flushOnDateChange(
   _currentDate: string,
 ): void {
   void writeSessionTranscriptSegment(messages, 'date_change').catch(error => {
-    console.debug(
-      '[sessionTranscript] date-change flush failed:',
-      error instanceof Error ? error.message : error,
+    logError(
+      new Error('[sessionTranscript] date-change flush failed', {
+        cause: toError(error),
+      }),
     )
   })
 }

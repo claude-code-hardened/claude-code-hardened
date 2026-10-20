@@ -8,21 +8,22 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  afterAll,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from 'bun:test'
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { logMock } from '../../../../tests/mocks/log'
 import { debugMock } from '../../../../tests/mocks/debug'
 
 // Shared mocks first — log.ts/debug.ts have module-level side effects
 // (see CLAUDE.md mock rules) and are reachable via sessionStorage.
-mock.module('src/utils/log.ts', logMock)
+// logError is wired to a capture array so tests can assert the
+// production-visible failure path (replaces the old console.debug-only
+// channel).
+const logErrorCalls: unknown[] = []
+mock.module('src/utils/log.ts', () => ({
+  ...logMock(),
+  logError: (error: unknown) => {
+    logErrorCalls.push(error)
+  },
+}))
 mock.module('src/utils/debug.ts', debugMock)
 
 // bootstrap/state.ts reads module-level STATE at call time; mocking the
@@ -157,15 +158,47 @@ describe('writeSessionTranscriptSegment', () => {
     expect(flushedLines.at(-1)!['trigger']).toBe('date_change')
   })
 
-  test('never throws when the write fails — logs via console.debug only', async () => {
+  test('skips a single unserializable message and still writes the rest of the batch', async () => {
+    // Regression: JSON.stringify used to run OUTSIDE any try, so one
+    // unserializable Message (circular ref / BigInt) rejected the whole
+    // promise — with compact.ts's bare `void` call that surfaced as an
+    // unhandled rejection and every other message in the batch was lost.
+    projectDirOverride = join(tmpRoot, 'projects', 'proj-badmsg')
+    mkdirSync(projectDirOverride, { recursive: true })
+    createdDirs.push(projectDirOverride)
+
+    const goodA = makeMessage()
+    const goodB = makeMessage()
+    const circular: Record<string, unknown> = { type: 'user' }
+    circular.self = circular // JSON.stringify throws on circular structure
+
+    const result = await writeSessionTranscriptSegment([
+      goodA,
+      circular as unknown as Message,
+      goodB,
+    ])
+    expect(result).toBeUndefined()
+
+    const path = getSegmentFilePath(bucketOf(new Date()))
+    const lines = readLines(path)
+    const serialized = lines.map(l => JSON.stringify(l['transcript']))
+    expect(serialized).toContain(JSON.stringify(goodA))
+    expect(serialized).toContain(JSON.stringify(goodB))
+    expect(lines).toHaveLength(2)
+    // Failure is production-visible via logError (module is mocked here —
+    // capture array asserts the call happened).
+    expect(logErrorCalls.length).toBeGreaterThan(0)
+    logErrorCalls.length = 0
+  })
+
+  test('never throws when the write fails — surfaced via logError, not console.debug', async () => {
     // Point the project dir at a plain FILE: mkdir/append under it fails
-    // with ENOTDIR, exercising the swallow-and-debug path.
+    // with ENOTDIR, exercising the swallow-and-log path.
     const notADir = join(tmpRoot, 'not-a-dir-blocker')
     writeFileSync(notADir, 'blocked', 'utf8')
     projectDirOverride = notADir
     createdDirs.push(notADir)
 
-    const debugSpy = spyOn(console, 'debug')
     try {
       await expect(
         writeSessionTranscriptSegment([makeMessage()]),
@@ -175,9 +208,10 @@ describe('writeSessionTranscriptSegment', () => {
         flushOnDateChange([makeMessage()], bucketOf(new Date())),
       ).not.toThrow()
       await new Promise(resolve => setTimeout(resolve, 100))
-      expect(debugSpy).toHaveBeenCalled()
+      // Failure surfaced through the production log channel.
+      expect(logErrorCalls.length).toBeGreaterThan(0)
     } finally {
-      debugSpy.mockRestore()
+      logErrorCalls.length = 0
     }
   })
 })

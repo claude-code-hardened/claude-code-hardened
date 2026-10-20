@@ -59,7 +59,7 @@ import {
   tokenStatsToStatsigMetrics,
 } from '../../utils/contextAnalysis.js'
 import { logForDebugging } from '../../utils/debug.js'
-import { hasExactErrorMessage } from '../../utils/errors.js'
+import { hasExactErrorMessage, toError } from '../../utils/errors.js'
 import { cacheToObject } from '../../utils/fileStateCache.js'
 import {
   type CacheSafeParams,
@@ -787,9 +787,19 @@ export async function compactConversation(
     reAppendSessionMetadata()
 
     // Write a reduced transcript segment for the pre-compaction messages
-    // (assistant mode only). Fire-and-forget — errors are logged internally.
+    // (assistant mode only). Fire-and-forget — errors are logged internally,
+    // plus a .catch here so a rejection can never surface as an unhandled
+    // promise rejection.
     if (feature('KAIROS')) {
-      void sessionTranscriptModule?.writeSessionTranscriptSegment(messages)
+      sessionTranscriptModule
+        ?.writeSessionTranscriptSegment(messages)
+        .catch(error => {
+          logError(
+            new Error('[sessionTranscript] compact segment flush failed', {
+              cause: toError(error),
+            }),
+          )
+        })
     }
 
     context.onCompactProgress?.({
@@ -1138,9 +1148,15 @@ export async function partialCompactConversation(
     reAppendSessionMetadata()
 
     if (feature('KAIROS')) {
-      void sessionTranscriptModule?.writeSessionTranscriptSegment(
-        messagesToSummarize,
-      )
+      sessionTranscriptModule
+        ?.writeSessionTranscriptSegment(messagesToSummarize)
+        .catch(error => {
+          logError(
+            new Error('[sessionTranscript] compact segment flush failed', {
+              cause: toError(error),
+            }),
+          )
+        })
     }
 
     context.onCompactProgress?.({
